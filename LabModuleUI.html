@@ -1,0 +1,883 @@
+<div id="lab-workspace-view" class="page-section d-none position-relative">
+
+  <div id="lx-loader" class="position-absolute top-0 start-0 w-100 h-100 align-items-center justify-content-center flex-column d-none"
+       style="background:rgba(2,6,23,.8);z-index:1060;border-radius:.5rem;">
+    <div class="spinner-border mb-2" style="color:#f59e0b;"></div>
+    <span class="label-bright small" id="lx-loader-txt">Working…</span>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('workspace-lab');">
+        <i class="fa-solid fa-arrow-left me-1"></i>Back
+      </button>
+      <div>
+        <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-microscope text-warning me-2"></i>Lab Command Center</h3>
+        <div class="label-bright small" id="lx-subtitle">—</div>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-secondary" onclick="LabX.load();" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+      <button class="btn btn-sm fw-semibold" style="background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d;" onclick="LabX.openWalkin();">
+        <i class="fa-solid fa-user-plus me-1"></i>New Walk-in Order
+      </button>
+    </div>
+  </div>
+
+  <div id="lx-msg"></div>
+
+  <div class="lx-kpi-strip mb-3" id="lx-kpis">
+    <div class="lx-kpi" data-k="pendingBill"        onclick="LabX.setTab('BILLING');"><div class="lx-kpi-num" id="lx-k-pendingBill">–</div><div class="lx-kpi-lbl">Pending Bill</div></div>
+    <div class="lx-kpi" data-k="awaitingCollection" onclick="LabX.setTab('COLLECTION');"><div class="lx-kpi-num" id="lx-k-awaitingCollection">–</div><div class="lx-kpi-lbl">Awaiting Collection</div></div>
+    <div class="lx-kpi" data-k="inProcess"          onclick="LabX.setTab('BENCH');"><div class="lx-kpi-num" id="lx-k-inProcess">–</div><div class="lx-kpi-lbl">On the Bench</div></div>
+    <div class="lx-kpi" data-k="awaitingVerify"     onclick="LabX.setTab('VERIFY');"><div class="lx-kpi-num" id="lx-k-awaitingVerify">–</div><div class="lx-kpi-lbl">Awaiting Verify</div></div>
+    <div class="lx-kpi lx-kpi-warn" data-k="overdue" onclick="LabX.setTab('ALL');"><div class="lx-kpi-num" id="lx-k-overdue">–</div><div class="lx-kpi-lbl"><i class="fa-solid fa-stopwatch me-1"></i>Overdue</div></div>
+    <div class="lx-kpi lx-kpi-crit" data-k="criticalPending"><div class="lx-kpi-num" id="lx-k-criticalPending">–</div><div class="lx-kpi-lbl"><i class="fa-solid fa-heart-pulse me-1"></i>Critical Unack.</div></div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap mb-3" id="lx-tabs"></div>
+
+  <div class="input-group mb-3" style="max-width:420px;">
+    <span class="input-group-text" style="background:var(--bg-input);border-color:var(--border-color);color:var(--text-muted);"><i class="fa-solid fa-search"></i></span>
+    <input type="text" id="lx-search" class="form-control form-control-sm" placeholder="Search patient, ID, order, test…" oninput="LabX.render();">
+  </div>
+
+  <div id="lx-cards"></div>
+</div>
+
+<!-- Walk-in Modal -->
+<div class="modal fade" id="lx-walkin-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content lx-modal">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title text-white-force"><i class="fa-solid fa-user-plus me-2 text-warning"></i>New Walk-in Order</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3 mb-1">
+          <div class="col-md-4">
+            <label class="form-label small label-bright">Patient ID <span class="label-bright" style="font-size:.68rem;">(optional)</span></label>
+            <div class="input-group input-group-sm">
+              <input type="text" id="lx-wi-pid" class="form-control form-control-sm" placeholder="LMTVS0001" onkeydown="if(event.key==='Enter')LabX.wiLookup();">
+              <button class="btn" style="background:rgba(34,211,238,.15);border:1px solid #22d3ee;color:#67e8f9;" onclick="LabX.wiLookup();" title="Fetch patient">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            </div>
+          <div class="mb-2">
+            <label class="form-label small label-bright mb-1">Mobile (search)</label>
+            <div class="d-flex gap-2">
+                <input id="lxWiMob" class="form-control form-control-sm" placeholder="Search patient by mobile…">
+                <button class="btn btn-sm" style="background:rgba(34,211,238,.12);border:1px solid #22d3ee;color:#67e8f9;" onclick="LabX.wiMobile()"><i class="fa-solid fa-magnifying-glass"></i></button>
+              </div>
+              <div id="lxWiMobRes" class="mt-1"></div>
+            </div>
+            <div id="lx-wi-lookup-msg" class="small mt-1"></div>
+          </div>
+          <div class="col-md-4"><label class="form-label small label-bright">Patient Name *</label><input type="text" id="lx-wi-name" class="form-control form-control-sm"></div>
+          <div class="col-md-2"><label class="form-label small label-bright">Age</label><input type="number" id="lx-wi-age" class="form-control form-control-sm"></div>
+          <div class="col-md-2"><label class="form-label small label-bright">Gender</label>
+            <select id="lx-wi-gender" class="form-select form-select-sm"><option value="M">Male</option><option value="F">Female</option><option value="O">Other</option></select></div>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-3"><label class="form-label small label-bright">Priority</label>
+            <select id="lx-wi-priority" class="form-select form-select-sm"><option value="ROUTINE">Routine</option><option value="URGENT">Urgent</option><option value="STAT">⚡ STAT</option></select></div>
+          <div class="col-md-9"><label class="form-label small label-bright">Clinical Note</label>
+            <input type="text" id="lx-wi-note" class="form-control form-control-sm" placeholder="optional"></div>
+        </div>
+        <label class="form-label small label-bright">Select Tests *</label>
+        <input type="text" id="lx-wi-search" class="form-control form-control-sm mb-2" placeholder="Filter tests…" oninput="LabX.wiRenderTests();">
+        <div id="lx-wi-tests" class="lx-pickbox"><div class="text-center label-bright small py-3">Loading catalog…</div></div>
+        <div class="mt-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div class="d-flex flex-wrap gap-1" id="lx-wi-chips"></div>
+          <div class="text-white-force fw-bold" id="lx-wi-total" style="font-size:1.05rem;color:#22d3ee!important;">₹0.00</div>
+        </div>
+        <div id="lx-wi-consent" class="mt-2"></div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm fw-semibold" style="background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d;" onclick="LabX.wiSubmit();">
+          <i class="fa-solid fa-paper-plane me-1"></i>Create Order
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Action Panel Modal -->
+<div class="modal fade" id="lx-action-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content lx-modal">
+      <div class="modal-header pb-2" style="border-color:var(--border-color);">
+        <div class="w-100">
+          <div class="d-flex justify-content-between align-items-start">
+            <div id="lx-am-head"></div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="lx-stepper mt-3" id="lx-am-stepper"></div>
+        </div>
+      </div>
+      <div class="modal-body" id="lx-am-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Critical Value Modal -->
+<div class="modal fade" id="lx-crit-modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" style="z-index:1080;">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:var(--bg-card);border:2px solid #f87171;border-radius:16px;box-shadow:0 0 60px rgba(248,113,113,.35);">
+      <div class="modal-body text-center p-4">
+        <div class="lx-pulse mb-3"><i class="fa-solid fa-heart-pulse fa-3x" style="color:#f87171;"></i></div>
+        <h4 class="text-white-force fw-bold">CRITICAL VALUE</h4>
+        <div id="lx-crit-list" class="my-3 text-start"></div>
+        <p class="label-bright small mb-3">NABL ISO 15189: critical values must be communicated to the ordering clinician immediately. A communication log entry is created automatically on submission.</p>
+        <button class="btn btn-danger fw-semibold px-4" data-bs-dismiss="modal"><i class="fa-solid fa-check me-1"></i>Acknowledged — I will inform the clinician</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Report Viewer Modal — iframe srcdoc for correct isolated printing -->
+<div class="modal fade" id="lx-report-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:#020617;border:1px solid var(--border-color);border-radius:12px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title text-white-force fw-bold"><i class="fa-solid fa-file-medical me-2" style="color:#22d3ee;"></i>Lab Report</h5>
+        <div class="d-flex gap-2 ms-auto me-3">
+          <button class="btn btn-sm fw-semibold" style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;" onclick="LabX.printRpt();">
+            <i class="fa-solid fa-print me-1"></i>Print / Save PDF
+          </button>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0" style="min-height:520px;">
+        <iframe id="lx-report-frame" style="width:100%;min-height:560px;border:none;" sandbox="allow-same-origin allow-scripts"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* tube rows (collection stage) */
+.lxTube { display:flex; align-items:center; gap:10px; padding:6px 4px; border-bottom:1px solid var(--border-color); }
+.lxTube:last-child { border-bottom:none; }
+.lxTT { background:var(--bg-input)!important; border:1px solid var(--border-color)!important; color:var(--text-main)!important; }
+
+/* ═══ Lab Command Center — scoped styles ═══ */
+.lx-modal { background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px; }
+
+/* KPI strip */
+.lx-kpi-strip { display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px; }
+.lx-kpi { background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:14px 16px;cursor:pointer;transition:.18s; }
+.lx-kpi:hover { border-color:var(--border-hover);transform:translateY(-2px); }
+.lx-kpi-num { font-size:1.7rem;font-weight:800;color:var(--text-main);line-height:1; }
+.lx-kpi-lbl { font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:6px; }
+.lx-kpi-warn .lx-kpi-num { color:#fbbf24; }
+.lx-kpi-crit { border-color:rgba(248,113,113,.4); }
+.lx-kpi-crit .lx-kpi-num { color:#f87171; }
+.lx-kpi-crit.lx-has-crit { animation:lxGlow 2s infinite; }
+@keyframes lxGlow { 0%,100%{box-shadow:0 0 0 rgba(248,113,113,0);} 50%{box-shadow:0 0 18px rgba(248,113,113,.35);} }
+
+/* tabs */
+.lx-tab { background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:.78rem;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px; }
+.lx-tab:hover { border-color:var(--border-hover);color:var(--text-main); }
+.lx-tab.on { background:var(--accent-purple);border-color:var(--accent-purple);color:#fff; }
+.lx-tab .lx-count { background:rgba(255,255,255,.14);border-radius:10px;padding:0 7px;font-size:.68rem;font-weight:700; }
+
+/* order cards */
+.lx-card { background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;transition:.18s;cursor:pointer; }
+.lx-card:hover { border-color:var(--border-hover);transform:translateX(3px); }
+.lx-card.lx-overdue { border-color:rgba(248,113,113,.55);background:linear-gradient(90deg,rgba(248,113,113,.07),var(--bg-card) 40%); }
+.lx-card.lx-stat { border-left:4px solid #f87171; }
+.lx-avatar { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;flex-shrink:0;color:#fff; }
+.lx-dots { display:flex;gap:4px;align-items:center; }
+.lx-dot { width:9px;height:9px;border-radius:50%;background:var(--bg-input);border:1px solid var(--border-color); }
+.lx-dot.done { background:#10b981;border-color:#10b981; }
+.lx-dot.cur  { background:#f59e0b;border-color:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,.55); }
+.lx-tatbar { height:4px;border-radius:3px;background:var(--bg-input);overflow:hidden;width:90px; }
+.lx-tatbar > div { height:100%;border-radius:3px;background:#10b981;transition:width .3s; }
+.lx-tatbar.warn > div { background:#f59e0b; } .lx-tatbar.over > div { background:#f87171; }
+
+/* badges & pills */
+.lx-badge { font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.3px;white-space:nowrap; }
+.lx-b-STAT   { background:rgba(248,113,113,.18);color:#fca5a5;border:1px solid #f87171; }
+.lx-b-URGENT { background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid #f59e0b; }
+.lx-b-ROUTINE{ background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color); }
+.lx-stage-pill { font-size:.68rem;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--bg-input);color:var(--text-label);border:1px solid var(--border-color); }
+
+/* stepper */
+.lx-stepper { display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:4px; }
+.lx-step { display:flex;align-items:center;flex-shrink:0; }
+.lx-step-node { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;background:var(--bg-input);border:2px solid var(--border-color);color:var(--text-muted); }
+.lx-step.done .lx-step-node { background:#10b981;border-color:#10b981;color:#fff; }
+.lx-step.cur  .lx-step-node { background:#f59e0b;border-color:#f59e0b;color:#0f172a;box-shadow:0 0 10px rgba(245,158,11,.5); }
+.lx-step-lbl { font-size:.64rem;color:var(--text-muted);margin:0 8px 0 6px;white-space:nowrap; }
+.lx-step.done .lx-step-lbl,.lx-step.cur .lx-step-lbl { color:var(--text-main); }
+.lx-step-line { width:26px;height:2px;background:var(--border-color);margin-right:8px; }
+.lx-step.done .lx-step-line { background:#10b981; }
+
+/* pick box & result table */
+.lx-pickbox { background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:10px;max-height:250px;overflow-y:auto; }
+.lx-pick { display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;font-size:.83rem; }
+.lx-pick:hover { background:var(--bg-card); }
+.lx-pick.sel { background:rgba(245,158,11,.1);border-color:#f59e0b; }
+.lx-chip { display:inline-flex;align-items:center;gap:5px;font-size:.74rem;padding:3px 10px;border-radius:20px;background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d; }
+.lx-rtable { width:100%;border-collapse:separate;border-spacing:0; }
+.lx-rtable th { color:var(--text-muted);font-weight:500;font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;padding:7px 8px;background:var(--bg-input); }
+.lx-rtable th:first-child{border-radius:8px 0 0 8px;} .lx-rtable th:last-child{border-radius:0 8px 8px 0;}
+.lx-rtable td { padding:7px 8px;border-bottom:1px solid var(--border-color);font-size:.83rem;vertical-align:middle; }
+.lx-rin { background:var(--bg-input)!important;border:1px solid var(--border-color)!important;color:var(--text-main)!important;border-radius:7px;padding:5px 9px;font-size:.85rem;width:120px;transition:.15s; }
+.lx-rin:focus { outline:none;border-color:var(--accent-purple)!important; }
+.lx-rin.crit { border-color:#f87171!important;color:#fca5a5!important;font-weight:700;background:rgba(248,113,113,.08)!important; }
+.lx-rin.high { border-color:#fb923c!important;color:#fdba74!important; }
+.lx-rin.low  { border-color:#60a5fa!important;color:#93c5fd!important; }
+.lx-f-C { color:#f87171;font-weight:800; } .lx-f-H { color:#fb923c;font-weight:600; }
+.lx-f-L { color:#60a5fa;font-weight:600; } .lx-f-N { color:#10b981; }
+.lx-pulse { animation:lxPulse 1.2s infinite; }
+@keyframes lxPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.12);} }
+.lx-rec-card { background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;margin-bottom:12px;overflow:hidden; }
+.lx-rec-head { padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center; }
+.lx-rec-head:hover { background:var(--bg-input); }
+
+.lx-bill-wrap { border:1px solid var(--border-color); border-radius:12px; overflow:hidden; }
+.lx-bill-line { display:flex; justify-content:space-between; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border-color); }
+.lx-bill-line:last-of-type { border-bottom:none; }
+.lx-bill-total { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:rgba(16,185,129,.06); border-top:2px solid #10b981; }
+.lx-pm { background:var(--bg-input); border:1px solid var(--border-color); color:var(--text-muted); border-radius:8px; padding:6px 12px; font-size:.8rem; cursor:pointer; }
+.lx-pm.on { background:rgba(16,185,129,.15); border-color:#10b981; color:#6ee7b7; }
+
+</style>
+
+<script>
+var LabX = (function () {
+  'use strict';
+
+  /* ── state ── */
+  var _orders = [], _stats = null, _tab = 'ACTIVE'; // Defaults to Active Queue
+  var _catalog = [], _wiSel = {};
+  var _cur = null;
+  var _resRows = [];
+  var _sampN = 0;
+  var _mods = {};
+
+  var TABS = [
+    ['ACTIVE','⚡ Active Queue', ['PENDING','BILLED','RECOLLECT','SAMPLE_COLLECTED','IN_PROCESS','RESULT_ENTERED','VERIFIED']],
+    ['BILLING','💳 Billing', ['PENDING']],
+    ['COLLECTION','🩸 Collection', ['BILLED','RECOLLECT']],
+    ['BENCH','🧪 Bench', ['SAMPLE_COLLECTED','IN_PROCESS']],
+    ['VERIFY','✍️ Verify & Dispatch', ['RESULT_ENTERED','VERIFIED']],
+    ['ARCHIVE','🗄️ Dispatched', ['REPORT_DISPATCHED','AMENDED']]
+  ];
+
+  var STEPS = ['Ordered','Billed','Collected','Bench','Results','Verified','Dispatched'];
+  var AV_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#a855f7','#f472b6','#22d3ee'];
+  var TUBES = [
+    'BLOOD_EDTA|Blood — EDTA (Purple)',
+    'BLOOD_PLAIN|Blood — Plain (Red)',
+    'BLOOD_FLUORIDE|Blood — Fluoride (Grey)',
+    'URINE_RANDOM|Urine — Random',
+    'URINE_24HR|Urine — 24hr',
+    'STOOL|Stool',
+    'SWAB|Swab',
+    'CSF|CSF',
+    'TISSUE|Tissue / Biopsy'
+  ];
+
+  /* ── plumbing ── */
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function spin(m){ var e=$('lx-loader'); if(e){e.classList.remove('d-none');e.classList.add('d-flex');} if($('lx-loader-txt'))$('lx-loader-txt').textContent=m||'Working…'; }
+  function stop(){ var e=$('lx-loader'); if(e){e.classList.add('d-none');e.classList.remove('d-flex');} }
+  function flash(m, ok){
+    var b=$('lx-msg'); if(!b) return;
+    b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'rgba(16,185,129,.4)':'rgba(248,113,113,.5)')+';">'+
+      '<i class="fa-solid '+(ok?'fa-circle-check text-success':'fa-circle-exclamation text-danger')+'"></i>'+
+      '<span class="text-white-force flex-grow-1">'+esc(m)+'</span>'+
+      '<span style="cursor:pointer;color:var(--text-muted);" onclick="this.parentNode.remove();">×</span></div>';
+    if(ok) setTimeout(function(){ if($('lx-msg')) $('lx-msg').innerHTML=''; }, 4500);
+  }
+
+  /* run() — safe spread call, guaranteed error surfacing, never hangs silently */
+  function run(fn, args, onOk, busyMsg){
+    spin(busyMsg||'Working…');
+    var timer=setTimeout(function(){ stop(); flash('Server did not respond for '+fn+'(). Check connection.', false); }, 30000);
+    var runner=google.script.run
+      .withSuccessHandler(function(res){ clearTimeout(timer); stop(); onOk(res); })
+      .withFailureHandler(function(err){ clearTimeout(timer); stop(); flash(fn+'() failed: '+(err&&err.message||err), false); });
+    if(!runner[fn]){ clearTimeout(timer); stop(); flash('Backend function "'+fn+'" not found.', false); return; }
+    runner[fn](...(args || []));
+  }
+
+  function modal(id){ return _mods[id]||(_mods[id]=new bootstrap.Modal($(id))); }
+
+  /* ════════ LOAD & RENDER ════════ */
+  function load(){
+    run('getLabWorkspaceData', [], function(res){
+      if(!res||!res.success){ flash((res&&res.message)||'Workspace load failed.', false); return; }
+      _orders=res.orders||[]; _stats=res.stats||{};
+      _renderKpis(); _renderTabs(); render();
+      if($('lx-subtitle')) $('lx-subtitle').textContent=(_stats.todayTotal||0)+' orders today · '+_orders.length+' in active view';
+    }, 'Loading lab workspace…');
+  }
+
+  function _renderKpis(){
+    if(!_stats) return;
+    ['pendingBill','awaitingCollection','inProcess','awaitingVerify','overdue','criticalPending'].forEach(function(k){
+      var e=$('lx-k-'+k); if(e) e.textContent=_stats[k]!=null?_stats[k]:'–';
+    });
+    var critCard=document.querySelector('.lx-kpi-crit');
+    if(critCard) critCard.classList.toggle('lx-has-crit', (_stats.criticalPending||0)>0);
+  }
+
+  function _tabCount(def){ if(!def[2]) return _orders.length; return _orders.filter(function(o){ return def[2].indexOf(o.status)!==-1; }).length; }
+
+  function _renderTabs(){
+    var h=$('lx-tabs'); if(!h) return;
+    h.innerHTML=TABS.map(function(t){
+      return '<span class="lx-tab'+(_tab===t[0]?' on':'')+'" onclick="LabX.setTab(\''+t[0]+'\');">'+t[1]+' <span class="lx-count">'+_tabCount(t)+'</span></span>';
+    }).join('');
+  }
+  function setTab(t){ _tab=t; _renderTabs(); render(); }
+
+  function render(){
+    var h=$('lx-cards'); if(!h) return;
+    var def=TABS.filter(function(t){return t[0]===_tab;})[0];
+    var q=($('lx-search')&&$('lx-search').value||'').toLowerCase().trim();
+    var list=_orders.filter(function(o){
+      if(def&&def[2]&&def[2].indexOf(o.status)===-1) return false;
+      if(!q) return true;
+      return (o.patientName+' '+o.patientId+' '+o.orderId+' '+o.testNames).toLowerCase().indexOf(q)!==-1;
+    });
+    if(!list.length){ h.innerHTML='<div class="text-center label-bright py-5"><i class="fa-solid fa-mug-hot fa-2x mb-3 d-block"></i>'+(q?'No orders match your search.':'Nothing here right now.')+' </div>'; return; }
+    h.innerHTML=list.map(_card).join('');
+  }
+
+  function _card(o){
+    var initials=(o.patientName||o.patientId||'?').trim().split(/\\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('').toUpperCase();
+    var avColor=AV_COLORS[(o.patientId||'').split('').reduce(function(a,c){return a+c.charCodeAt(0);},0)%AV_COLORS.length];
+    var isDone = (o.status === 'REPORT_DISPATCHED' || o.status === 'AMENDED' || o.status === 'CANCELLED');
+    var dots = STEPS.map(function(s, i) {
+      var cls = isDone ? 'done' : (i < o.stageIdx ? 'done' : (i === o.stageIdx ? 'cur' : ''));
+      return '<span class="lx-dot ' + cls + '" title="' + s + '"></span>';
+    }).join('');
+    var tat='';
+    if(o.tatText){
+      var barCls=o.overdue?'over':(o.tatPct>70?'warn':'');
+      tat='<div class="text-end"><div class="lx-tatbar '+barCls+'"><div style="width:'+o.tatPct+'%;"></div></div>'+
+          '<div style="font-size:.66rem;" class="'+(o.overdue?'text-danger fw-bold':'label-bright')+'">'+esc(o.tatText)+'</div></div>';
+    }
+    var billInfo=o.billStatus==='UNBILLED'?'':'<span class="lx-stage-pill" title="Billing">'+esc(o.billStatus)+(o.billNet?' · ₹'+Number(o.billNet).toFixed(0):'')+' </span>';
+    return '<div class="lx-card'+(o.overdue?' lx-overdue':'')+(o.priority==='STAT'?' lx-stat':'')+'" onclick="LabX.openPanel(\''+o.orderId+'\');">'+
+      '<div class="lx-avatar" style="background:'+avColor+';">'+esc(initials)+'</div>'+
+      '<div class="flex-grow-1 min-width-0">'+
+        '<div class="d-flex align-items-center gap-2 flex-wrap">'+
+          '<span class="text-white-force fw-bold">'+esc(o.patientName||o.patientId)+'</span>'+
+          '<span class="label-bright" style="font-size:.72rem;">'+esc(o.patientId)+' · '+esc(o.gender)+(o.age?' '+esc(o.age):'')+'</span>'+
+          '<span class="lx-badge lx-b-'+esc(o.priority)+'">'+(o.priority==='STAT'?'⚡ ':'')+esc(o.priority)+'</span>'+
+          (o.isRepeat?'<span class="lx-badge lx-b-URGENT">REPEAT</span>':'')+
+        '</div>'+
+        '<div class="label-bright mt-1" style="font-size:.78rem;max-width:560px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+
+          '<i class="fa-solid fa-flask me-1" style="font-size:.66rem;"></i>'+esc(o.testNames)+'</div>'+
+        '<div class="d-flex align-items-center gap-3 mt-2 flex-wrap">'+
+          '<div class="lx-dots">'+dots+'</div>'+
+          '<span class="lx-stage-pill">'+esc(o.status.replace(/_/g,' '))+'</span>'+
+          billInfo+
+          '<span class="label-bright" style="font-size:.68rem;">'+esc(o.source)+' · '+esc(o.createdAt)+'</span>'+
+        '</div>'+
+      '</div>'+
+      tat+
+      '<i class="fa-solid fa-chevron-right label-bright"></i>'+
+    '</div>';
+  }
+
+  /* ════════ ACTION PANEL ════════ */
+  function openPanel(orderId){
+    run('getLabOrderPanel', [orderId], function(res){
+      if(!res||!res.success){ flash((res&&res.message)||'Could not open order.', false); return; }
+      _cur=res.order; _cur._bill=res.bill; _cur._samples=res.samples||[];
+      _renderPanelHead(); _renderStepper();
+      _renderStageBody();
+      modal('lx-action-modal').show();
+    }, 'Opening order…');
+  }
+
+  function _renderPanelHead(){
+    var o=_cur;
+    $('lx-am-head').innerHTML=
+      '<div class="d-flex align-items-center gap-3">'+
+        '<div class="lx-avatar" style="background:#6366f1;">'+esc((o.patientName||'?').trim().split(/\\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('').toUpperCase())+'</div>'+
+        '<div>'+
+          '<div class="text-white-force fw-bold" style="font-size:1.05rem;">'+esc(o.patientName||o.patientId)+
+            ' <span class="lx-badge lx-b-'+esc(o.priority)+' ms-1">'+esc(o.priority)+'</span></div>'+
+          '<div class="label-bright" style="font-size:.76rem;">'+esc(o.patientId)+' · '+esc(o.gender)+(o.age?' '+esc(o.age)+'y':'')+' · <code style="font-size:.7rem;">'+esc(o.orderId)+'</code> · '+esc(o.source)+(o.doctorName?' · Dr. '+esc(o.doctorName):'')+'</div>'+
+          (o.clinicalNote?'<div class="label-bright fst-italic" style="font-size:.74rem;">"'+esc(o.clinicalNote)+'"</div>':'')+
+        '</div>'+
+      '</div>';
+  }
+
+  function _renderStepper(){
+    var idx={PENDING:0,BILLED:1,RECOLLECT:1,SAMPLE_COLLECTED:2,IN_PROCESS:3,RESULT_ENTERED:4,VERIFIED:5,REPORT_DISPATCHED:6,AMENDED:6,CANCELLED:0}[_cur.status]||0;
+    var isDone = (_cur.status === 'REPORT_DISPATCHED' || _cur.status === 'AMENDED');
+    $('lx-am-stepper').innerHTML=STEPS.map(function(s,i){
+      var cls = isDone ? 'done' : (i<idx?'done':(i===idx?'cur':''));
+      return '<div class="lx-step '+cls+'">'+
+        '<div class="lx-step-node">'+(cls==='done'?'<i class="fa-solid fa-check"></i>':(i+1))+'</div>'+
+        '<span class="lx-step-lbl">'+s+'</span>'+
+        (i<STEPS.length-1?'<div class="lx-step-line"></div>':'')+
+      '</div>';
+    }).join('');
+  }
+
+  /* ════════ STAGE BODY ROUTER ════════ */
+  function _renderStageBody(){
+    var b=$('lx-am-body'), s=_cur.status;
+    if(s==='PENDING')                   b.innerHTML=_uiBilling();
+    else if(s==='BILLED'||s==='RECOLLECT'){ b.innerHTML=_uiCollect(s==='RECOLLECT'); setTimeout(function(){ _loadTubes(); },50); }
+    else if(s==='SAMPLE_COLLECTED')     b.innerHTML=_uiReceive();
+    else if(s==='IN_PROCESS'){
+      b.innerHTML='<div id="lx-res-host" class="text-center label-bright py-4"><div class="spinner-border spinner-border-sm me-2"></div>Building entry sheet…</div>';
+      _loadEntrySheet(false);
+    }
+    else if(s==='RESULT_ENTERED'){
+      b.innerHTML='<div id="lx-res-host" class="text-center label-bright py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading results for review…</div>';
+      _loadEntrySheet(true);
+    }
+    else b.innerHTML=_uiDone();
+  }
+
+  /* ════════ PANEL: BILLING ════════ */
+  function _uiBilling(){
+    // ensure catalog is available for pricing; if not, fetch then re-render
+    if(!_catalog.length){
+      run('getOrderableTests',[],function(res){
+        if(res&&res.success){ _catalog=res.tests||[]; if(_cur&&_cur.status==='PENDING') $('lx-am-body').innerHTML=_uiBilling(); }
+      },'');
+    }
+    var ip=(_cur.source==='IP_CASESHEET'||_cur.source==='IP_NOTES');
+    var catById={}; _catalog.forEach(function(t){ catById[t.testId]=t; });
+
+    // build line items from the order's tests
+    var items=(_cur.testIds||[]).map(function(tid){
+      var t=catById[tid];
+      return { name:t?t.testName:tid, price:t?Number(t.price)||0:0,
+               sampleType:t?(t.sampleType||''):'', tat:t?(t.tatMinutes||0):0 };
+    });
+    var gross=items.reduce(function(a,b){ return a+b.price; },0);
+    _cur._gross=gross;
+
+    var lineRows=items.map(function(it){
+      var meta=(it.sampleType?it.sampleType.replace(/_/g,' '):'')+(it.tat?(it.sampleType?' · ':'')+'TAT '+it.tat+'m':'');
+      return '<div class="lx-bill-line">'+
+        '<span class="text-white-force"><i class="fa-solid fa-flask me-2" style="color:#67e8f9;font-size:.74rem;"></i>'+esc(it.name)+
+          (meta?' <span class="label-bright" style="font-size:.68rem;">'+esc(meta)+'</span>':'')+'</span>'+
+        '<span style="color:#22d3ee;font-weight:600;">₹'+it.price.toFixed(2)+'</span>'+
+      '</div>';
+    }).join('');
+
+    var header='<div class="lx-bill-wrap">'+lineRows;
+
+    if(ip){
+      return header+
+        '<div class="lx-bill-total">'+
+          '<span class="text-white-force fw-bold">Total → IP Account</span>'+
+          '<span style="color:#6ee7b7;font-size:1.15rem;font-weight:800;">₹'+gross.toFixed(2)+'</span>'+
+        '</div></div>'+
+        '<div class="mt-3 p-3 rounded" style="background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.35);">'+
+          '<div class="text-white-force mb-2"><i class="fa-solid fa-bed me-2"></i>Inpatient — charges post to the IP account, settled at discharge.</div>'+
+          '<div class="d-flex gap-2">'+
+            '<button class="btn btn-sm fw-semibold" style="background:rgba(14,165,233,.15);border:1px solid #0ea5e9;color:#7dd3fc;" onclick="LabX.doBill(true);"><i class="fa-solid fa-file-invoice me-1"></i>Post ₹'+gross.toFixed(2)+' to IP Account</button>'+
+            '<button class="btn btn-sm" style="border:1px solid #0ea5e9;color:#7dd3fc;background:rgba(14,165,233,.08);" onclick="LabX.printInvoice();"><i class="fa-solid fa-print me-1"></i>Print Invoice</button>'+
+          '</div>'+
+        '</div>';
+    }
+
+    return header+
+      '<div class="px-3 py-3" style="border-top:1px solid var(--border-color);">'+
+        '<div class="d-flex gap-3 align-items-end flex-wrap">'+
+          '<div><label class="form-label small label-bright mb-1">Discount %</label>'+
+            '<input type="number" id="lx-bl-disc" class="form-control form-control-sm" style="width:90px;" value="0" min="0" max="100" oninput="LabX.bCalc()" onfocus="this.select()"></div>'+
+          '<div><label class="form-label small label-bright mb-1">Payment *</label>'+
+            '<div class="d-flex gap-1">'+
+              '<button type="button" id="lx-pm-CASH" class="lx-pm on" onclick="LabX.pm(\'CASH\')">💵 Cash</button>'+
+              '<button type="button" id="lx-pm-UPI"  class="lx-pm" onclick="LabX.pm(\'UPI\')">📱 UPI</button>'+
+              '<button type="button" id="lx-pm-CARD" class="lx-pm" onclick="LabX.pm(\'CARD\')">💳 Card</button>'+
+            '</div></div>'+
+          '<div><label class="form-label small label-bright mb-1">Amount Paid (₹)</label>'+
+            '<input type="number" id="lx-bl-paid" class="form-control form-control-sm" style="width:130px;" placeholder="auto = net"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="lx-bill-total">'+
+        '<span class="text-white-force fw-bold">Net Payable</span>'+
+        '<div class="d-flex align-items-center gap-3">'+
+          '<span id="lx-bl-net" style="color:#6ee7b7;font-size:1.25rem;font-weight:800;">₹'+gross.toFixed(2)+'</span>'+
+          '<button class="btn btn-sm" style="border:1px solid #0ea5e9;color:#7dd3fc;background:rgba(14,165,233,.08);" onclick="LabX.printInvoice();"><i class="fa-solid fa-print me-1"></i>Print Invoice</button>'+
+          '<button class="btn btn-sm fw-bold px-3" style="background:#10b981;color:#fff;border:none;" onclick="LabX.doBill(false);"><i class="fa-solid fa-receipt me-1"></i>Collect & Bill</button>'+
+        '</div>'+
+      '</div></div>';
+  }
+
+  function doBill(isIp){
+    var d={orderId:_cur.orderId};
+    if(!isIp){
+      d.paymentMode=_sPM;
+      d.discountPercent=($('lx-bl-disc')&&$('lx-bl-disc').value)||'0';
+      var p=$('lx-bl-paid')&&$('lx-bl-paid').value;
+      if(p!=='' && p!=null) d.paidAmount=p;
+    }
+    run('generateLabBill',[d],function(res){
+      if(res&&res.success){
+        flash(res.message,true);
+        _printInvoiceAfterBill();        // ← prompt invoice right after billing (Edit 4)
+        _refreshPanel();
+      } else flash((res&&res.message)||'Billing failed.',false);
+    },'Billing…');
+  }
+
+  var _sPM='CASH';
+  function pm(m){ _sPM=m; ['CASH','UPI','CARD'].forEach(function(x){ var b=$('lx-pm-'+x); if(b)b.classList.toggle('on',x===m); }); }
+  function bCalc(){
+    var disc=Math.max(0,Math.min(100,parseFloat(($('lx-bl-disc')&&$('lx-bl-disc').value)||0)||0));
+    var gross=(_cur&&_cur._gross)||0;
+    var net=+(gross-gross*disc/100).toFixed(2);
+    var nl=$('lx-bl-net'); if(nl) nl.textContent='₹'+net.toFixed(2);
+  }
+
+  
+
+  /* ════════ PANEL: COLLECTION ════════ */
+  function _uiCollect(isRec){
+  _sampN=0;
+  return(isRec?'<div class="alert py-2 px-3 small mb-3" style="background:rgba(248,113,113,.1);border:1px solid #f87171;color:#fca5a5;"><i class="fa-solid fa-rotate-left me-1"></i>RECOLLECTION — previous tube(s) rejected. Fresh collection restarts TAT clock.</div>':'')+
+    '<div class="alert py-2 px-3 small mb-3" style="background:rgba(245,158,11,.08);border:1px solid #f59e0b;color:#fcd34d;"><i class="fa-solid fa-id-card me-1"></i><strong>Two-point ID:</strong> Patient states name + DOB. Confirm against <strong>'+esc(_cur.patientName)+' · '+esc(_cur.patientId)+'</strong></div>'+
+    '<div class="p-3 rounded" style="background:var(--bg-input);"><div class="d-flex justify-content-between align-items-center mb-3"><span class="text-white-force fw-semibold">Tubes <span class="label-bright fw-normal ms-1" style="font-size:.73rem;">Auto-suggested from ordered tests — add, delete or change as needed</span></span><button class="btn btn-sm" style="background:rgba(168,85,247,.12);border:1px solid #a855f7;color:#c4b5fd;font-size:.78rem;" onclick="LabX.addTube()"><i class="fa-solid fa-plus me-1"></i>Add Tube</button></div>'+
+    '<div id="lxTubes"></div>'+
+    '<button class="btn btn-sm fw-semibold mt-2" style="background:rgba(168,85,247,.15);border:1px solid #a855f7;color:#c4b5fd;" onclick="LabX.doCollect()"><i class="fa-solid fa-vial me-1"></i>Confirm Collection</button></div>';
+  }
+
+  function _loadTubes(){run('getSuggestedTubes',[_cur.orderId],function(res){var h=$('lxTubes');if(!h)return;h.innerHTML='';_sampN=0;if(res&&res.success&&res.tubes&&res.tubes.length){res.tubes.forEach(function(t){addTube(t.sampleType);});}else{addTube();}},'');
+  }
+
+  function addTube(preType){var n=++_sampN;var h=$('lxTubes');if(!h)return;var sel=String(preType||'');h.insertAdjacentHTML('beforeend','<div class="lxTube" id="lxT-'+n+'"><span class="label-bright fw-semibold" style="width:20px;flex-shrink:0;">'+n+'.</span><select class="form-select form-select-sm lxTT" style="max-width:270px;">'+TUBES.map(function(o){var p=o.split('|');return'<option value="'+p[0]+'"'+(p[0]===sel?' selected':'')+'>'+p[1]+'</option>';}).join('')+'</select><span class="label-bright flex-grow-1 text-center" style="font-size:.7rem;" id="lxBC-'+n+'"></span><button class="btn btn-sm ms-auto" style="border:1px solid var(--border-color);color:#f87171;background:transparent;" onclick="document.getElementById(\'lxT-'+n+'\').remove()"><i class="fa-solid fa-trash"></i></button></div>');}
+
+  function doCollect(){
+    var tubes=[]; document.querySelectorAll('#lxTubes .lxTT').forEach(function(s){tubes.push({sampleType:s.value});});
+    if(!tubes.length){ flash('Add at least one tube.',false); return; }
+    run('collectLabSample',[{orderId:_cur.orderId,samples:tubes}],function(res){
+      if(res&&res.success){ flash(res.message,true); _refreshPanel(); } else flash((res&&res.message)||'Collection failed.',false);
+    },'Recording collection…');
+  }
+
+  /* ════════ PANEL: RECEIVE / REJECT ════════ */
+  function _uiReceive(){
+    var samps=(_cur._samples||[]).map(function(s){
+      return '<div class="d-flex justify-content-between align-items-center px-3 py-2 rounded mb-1" style="background:var(--bg-card);border:1px solid var(--border-color);">'+
+        '<span class="text-white-force small"><i class="fa-solid fa-vial me-2" style="color:#a855f7;"></i>'+esc(s.sampleType.replace(/_/g,' '))+'</span>'+
+        '<span class="d-flex gap-3 align-items-center"><code class="label-bright" style="font-size:.7rem;">'+esc(s.barcode)+'</code>'+
+        '<span class="lx-stage-pill">'+esc(s.status)+'</span></span></div>';
+    }).join('');
+    return '<div class="p-3 rounded" style="background:var(--bg-input);">'+
+      '<div class="label-bright small mb-2">SAMPLES IN TRANSIT</div>'+samps+
+      '<div class="d-flex gap-2 mt-3 flex-wrap">'+
+        '<button class="btn btn-sm fw-semibold" style="background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d;" onclick="LabX.doReceive();"><i class="fa-solid fa-flask me-1"></i>Receive at Bench & Start Processing</button>'+
+        '<button class="btn btn-sm" style="border:1px solid #f87171;color:#fca5a5;background:transparent;" onclick="var w=document.getElementById(\'lx-rej\');if(w)w.classList.toggle(\'d-none\');"><i class="fa-solid fa-ban me-1"></i>Reject Sample</button>'+
+      '</div>'+
+      '<div id="lx-rej" class="mt-3 d-none d-flex gap-2 align-items-center flex-wrap">'+
+        '<select id="lx-rej-reason" class="form-select form-select-sm" style="max-width:230px;">'+
+          ['HAEMOLYSED','INSUFFICIENT','WRONG_TUBE','CLOTTED','UNLABELLED','LEAKED'].map(function(r){return '<option value="'+r+'">'+r.replace(/_/g,' ')+'</option>';}).join('')+
+        '</select>'+
+        '<button class="btn btn-sm btn-danger" onclick="LabX.doReject();">Confirm Rejection (raises NCR)</button>'+
+      '</div>'+
+    '</div>';
+  }
+  function doReceive(){
+    run('receiveLabSample',[_cur.orderId],function(res){
+      if(res&&res.success){ flash(res.message,true); _refreshPanel(); } else flash((res&&res.message)||'Receive failed.',false);
+    },'Receiving…');
+  }
+  function doReject(){
+    var samples=_cur._samples||[];
+    if(!samples.length){ flash('No sample to reject.',false); return; }
+    var sid=samples[samples.length-1].sampleId;
+    run('rejectLabSample',[sid, $('lx-rej-reason').value],function(res){
+      if(res&&res.success){ flash(res.message,true); _refreshPanel(); } else flash((res&&res.message)||'Rejection failed.',false);
+    },'Raising NCR…');
+  }
+
+  /* ════════ PANEL: RESULTS / VERIFY ════════ */
+  function _loadEntrySheet(verifyMode){
+    run('buildResultEntrySheet',[_cur.orderId],function(res){
+      var h=$('lx-res-host'); if(!h) return;
+      if(!res||!res.success){ h.innerHTML='<div class="text-danger small py-3">'+esc((res&&res.message)||'Could not build entry sheet.')+'</div>'; return; }
+      _resRows=res.rows||[];
+      h.innerHTML=_uiResults(verifyMode);
+    },'Preparing results…');
+  }
+
+  function _uiResults(verifyMode){
+    if(!_resRows.length) return '<div class="label-bright py-3">No reportable parameters. Check that the ordered tests have parameters defined in the catalog.</div>';
+    var rows=_resRows.map(function(r,i){
+      var prev=r.previousValue!==''?'<span class="label-bright" style="font-size:.74rem;">'+esc(r.previousValue)+(r.previousAt?'<br><span style="opacity:.55;font-size:.64rem;">'+esc(r.previousAt)+'</span>':'')+'</span>':'<span class="label-bright">—</span>';
+      var input;
+      if(verifyMode){
+        input='<span class="lx-f-'+esc(r.currentFlag||'N')+'" style="font-size:.95rem;">'+esc(r.currentValue||'—')+'</span>';
+      } else if(r.resultType==='DESCRIPTIVE'){
+        input='<textarea class="lx-rin" style="width:240px;height:44px;" id="lx-rv-'+i+'" oninput="LabX.onVal('+i+');">'+esc(r.currentValue||'')+'</textarea>';
+      } else if(r.resultType==='QUALITATIVE'){
+        input='<select class="lx-rin" id="lx-rv-'+i+'" style="width:140px;">'+
+          ['','NEGATIVE','POSITIVE','REACTIVE','NON-REACTIVE','TRACE'].map(function(v){return '<option value="'+v+'"'+(r.currentValue===v?' selected':'')+'>'+(v||'— select —')+'</option>';}).join('')+'</select>';
+      } else {
+        input='<input class="lx-rin" id="lx-rv-'+i+'" value="'+esc(r.currentValue||'')+'" inputmode="decimal" oninput="LabX.onVal('+i+');">';
+      }
+      return '<tr>'+
+        '<td class="text-white-force fw-semibold">'+esc(r.parameterName)+'</td>'+
+        '<td>'+input+'</td>'+
+        '<td class="label-bright">'+esc(r.unit||'')+'</td>'+
+        '<td class="label-bright" style="font-size:.74rem;">'+esc(r.refRangeText||'—')+'</td>'+
+        '<td class="text-center"><span id="lx-fl-'+i+'" class="lx-f-'+esc(r.currentFlag||'')+'">'+esc(r.currentFlag||'')+'</span></td>'+
+        '<td>'+prev+'</td>'+
+      '</tr>';
+    }).join('');
+    var html='<table class="lx-rtable"><thead><tr><th>Parameter</th><th>Result</th><th>Unit</th><th>Reference ('+esc(_cur.gender==='F'?'F':'M')+' shown bold)</th><th>Flag</th><th>Previous</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    if(verifyMode){
+      html+='<div class="mt-3 p-3 rounded" style="background:var(--bg-input);">'+
+        '<div class="row g-3">'+
+          '<div class="col-md-7"><label class="form-label small label-bright">Interpretation / Comment</label><textarea id="lx-vf-interp" class="form-control form-control-sm" rows="2"></textarea></div>'+
+          '<div class="col-md-5"><label class="form-label small label-bright">Verifier (Pathologist) *</label><input id="lx-vf-name" class="form-control form-control-sm" placeholder="Dr. name"><div class="label-bright mt-1" style="font-size:.68rem;"><i class="fa-solid fa-fingerprint me-1"></i>Signing generates a SHA-256 attestation hash and locks these results.</div></div>'+
+        '</div>'+
+        '<div class="d-flex gap-2 mt-3">'+
+          '<button class="btn btn-sm fw-semibold" style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;" onclick="LabX.doVerify();"><i class="fa-solid fa-signature me-1"></i>Verify & Digitally Sign</button>'+
+          '<button class="btn btn-sm" style="border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" onclick="LabX.sendBack();"><i class="fa-solid fa-rotate-left me-1"></i>Send Back for Re-entry</button>'+
+        '</div></div>';
+    } else {
+      html+='<div class="d-flex gap-2 mt-3">'+
+        '<button class="btn btn-sm" style="border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" onclick="LabX.saveDraft();"><i class="fa-solid fa-floppy-disk me-1"></i>Save Draft</button>'+
+        '<button class="btn btn-sm fw-semibold" style="background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;" onclick="LabX.submitResults();"><i class="fa-solid fa-paper-plane me-1"></i>Submit for Verification</button>'+
+      '</div>';
+    }
+    return html;
+  }
+
+  function onVal(i){
+    var r=_resRows[i]; if(!r||r.resultType!=='NUMERIC') return;
+    var el=$('lx-rv-'+i); if(!el) return;
+    var v=parseFloat(el.value), fl='';
+    var g=(_cur.gender||'').toUpperCase().charAt(0);
+    var lo=g==='F'?r.femaleRefLow:r.maleRefLow, hi=g==='F'?r.femaleRefHigh:r.maleRefHigh;
+    if(!isNaN(v)){
+      if(r.criticalLow!==''&&r.criticalLow!=null&&v<Number(r.criticalLow)) fl='C';
+      else if(r.criticalHigh!==''&&r.criticalHigh!=null&&v>Number(r.criticalHigh)) fl='C';
+      else if(lo!==''&&lo!=null&&v<Number(lo)) fl='L';
+      else if(hi!==''&&hi!=null&&v>Number(hi)) fl='H';
+      else if((lo!==''&&lo!=null)||(hi!==''&&hi!=null)) fl='N';
+    }
+    var f=$('lx-fl-'+i); if(f){f.textContent=fl;f.className='lx-f-'+fl;}
+    el.className='lx-rin'+(fl==='C'?' crit':fl==='H'?' high':fl==='L'?' low':'');
+  }
+
+  function _gather(){ return _resRows.map(function(r,i){ var el=$('lx-rv-'+i); return {parameterId:r.parameterId, value:el?el.value:''}; }); }
+
+  function saveDraft(){
+    run('saveLabResultsDraft',[{orderId:_cur.orderId,gender:_cur.gender,results:_gather()}],function(res){
+      flash((res&&res.message)||'Saved.',!!(res&&res.success));
+      if(res&&res.success&&res.criticalCount>0) _showCrit();
+    },'Saving draft…');
+  }
+  function submitResults(){
+    run('saveLabResultsDraft',[{orderId:_cur.orderId,gender:_cur.gender,results:_gather()}],function(res){
+      if(!res||!res.success){ flash((res&&res.message)||'Save failed.',false); return; }
+      var hadCrit=res.criticalCount>0;
+      run('submitLabResults',[{orderId:_cur.orderId}],function(r2){
+        if(r2&&r2.success){ flash(r2.message,true); if(hadCrit)_showCrit(); _refreshPanel(); }
+        else flash((r2&&r2.message)||'Submit failed.',false);
+      },'Submitting…');
+    },'Saving…');
+  }
+  function _showCrit(){
+    var items=[];
+    _resRows.forEach(function(r,i){
+      var f=$('lx-fl-'+i);
+      if(f&&f.textContent==='C'){ var v=$('lx-rv-'+i); items.push('<div class="d-flex justify-content-between px-3 py-2 rounded mb-1" style="background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);"><span class="text-white-force fw-semibold">'+esc(r.parameterName)+'</span><span class="lx-f-C">'+esc(v?v.value:'')+' '+esc(r.unit||'')+'</span></div>'); }
+    });
+    $('lx-crit-list').innerHTML=items.join('')||'<div class="label-bright small">Critical values were flagged in the saved results.</div>';
+    modal('lx-crit-modal').show();
+  }
+  function doVerify(){
+    var name=($('lx-vf-name').value||'').trim();
+    if(!name){ flash('Verifier name is required to sign.',false); return; }
+    run('verifyLabResults',[{orderId:_cur.orderId,verifierName:name,interpretation:$('lx-vf-interp').value}],function(res){
+      if(res&&res.success){ flash(res.message,true); _refreshPanel(); } else flash((res&&res.message)||'Verification failed.',false);
+    },'Generating attestation…');
+  }
+  function sendBack(){
+    run('advanceOrderStatus',[_cur.orderId,'IN_PROCESS'],function(res){
+      if(res&&res.success){ flash('Returned for re-entry.',true); _refreshPanel(); } else flash((res&&res.message)||'Failed.',false);
+    },'Returning…');
+  }
+
+  /* ════════ PANEL: DONE — Dispatch & Print ════════ */
+  function _uiDone(){
+    var bill=_cur._bill;
+    var s=_cur.status;
+    var isDispatched=(s==='REPORT_DISPATCHED'||s==='AMENDED');
+    return '<div class="text-center py-4">'+
+      '<i class="fa-solid fa-circle-check fa-3x mb-3" style="color:#10b981;"></i>'+
+      '<h5 class="text-white-force fw-bold">Verified & Digitally Signed</h5>'+
+      '<p class="label-bright small mb-3">Results are locked under an SHA-256 attestation.</p>'+
+      (bill?'<div class="mb-4"><span class="lx-stage-pill">'+esc(bill.category)+' · ₹'+Number(bill.net).toFixed(2)+(bill.receiptNumber?' · '+esc(bill.receiptNumber):'')+' </span></div>':'')+
+      '<div class="d-flex gap-3 justify-content-center mt-3 flex-wrap">'+
+        (!isDispatched?
+          '<button class="btn btn-sm fw-semibold" style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;" onclick="LabX.dispatchReport();"><i class="fa-solid fa-paper-plane me-1"></i>Dispatch Report to EMR</button>':
+          '<button class="btn btn-sm fw-semibold" style="background:rgba(59,130,246,.15);border:1px solid #3b82f6;color:#93c5fd;" onclick="LabX.printRpt();"><i class="fa-solid fa-print me-1"></i>Print / View Report</button>'
+        )+
+        (isDispatched?'':'<button class="btn btn-sm" style="border:1px solid #3b82f6;color:#93c5fd;background:rgba(59,130,246,.08);" onclick="LabX.printRpt();"><i class="fa-solid fa-print me-1"></i>Print Report</button>')+
+        '<button class="btn btn-sm" style="border:1px solid #0ea5e9;color:#7dd3fc;background:rgba(14,165,233,.08);" onclick="LabX.printInvoice();"><i class="fa-solid fa-file-invoice me-1"></i>Print Invoice</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function dispatchReport(){
+    run('advanceOrderStatus',[_cur.orderId,'REPORT_DISPATCHED'],function(res){
+      if(res&&res.success){ flash('Report dispatched to EMR successfully!',true); _refreshPanel(); }
+      else flash('Dispatch failed: '+(res&&res.message),false);
+    },'Dispatching…');
+  }
+
+  function printRpt(){
+  run('getLabReportHtml',[_cur.orderId],function(res){
+    if(!res||!res.success){ flash((res&&res.message)||'Report not ready. Dispatch first.',false); return; }
+    // Open report in a real window — print dialog works reliably here
+    var w=window.open('','_blank','width=850,height=1000');
+    if(!w){ flash('Pop-up blocked. Allow pop-ups for this site, then retry.',false); return; }
+    w.document.open();
+    w.document.write(res.html);
+    w.document.close();
+    w.focus();
+    setTimeout(function(){ try{ w.print(); }catch(e){} }, 600);
+  },'Loading report…');
+  }
+
+  function printInvoice(){run('getLabBillHtml',[_cur.orderId],function(res){if(!res||!res.success){flash((res&&res.message)||'No invoice found.',false);return;}var w=window.open('','_blank','width=820,height=900');w.document.write(res.html);w.document.close();},'Loading invoice…');
+  }
+
+  function _printInvoiceAfterBill(){
+    // small delay so the success flash shows first
+    setTimeout(function(){
+      run('getLabBillHtml',[_cur.orderId],function(res){
+        if(!res||!res.success) return;           // silent — invoice just won't auto-open
+        var w=window.open('','_blank','width=820,height=900');
+        if(!w){ flash('Invoice ready. Allow pop-ups to print it.',true); return; }
+        w.document.write(res.html); w.document.close();
+      },'');
+    }, 400);
+  }
+
+  /* re-open the panel after any state-changing action, and refresh the queue */
+  function _refreshPanel(){
+    var id=_cur?_cur.orderId:null;
+    load();
+    if(id) openPanel(id);
+  }
+
+  /* ════════ WALK-IN ════════ */
+  function openWalkin(){
+    _wiSel={};
+    ['lx-wi-pid','lx-wi-name','lx-wi-age','lx-wi-note','lx-wi-search','lxWiMob'].forEach(function(id){ if($(id)) $(id).value=''; });
+    $('lx-wi-lookup-msg').innerHTML=''; $('lx-wi-consent').innerHTML=''; $('lx-wi-chips').innerHTML=''; $('lx-wi-total').textContent='₹0.00'; $('lxWiMobRes').innerHTML='';
+    modal('lx-walkin-modal').show();
+    if(_catalog.length){ wiRenderTests(); return; }
+    $('lx-wi-tests').innerHTML='<div class="text-center label-bright small py-3"><div class="spinner-border spinner-border-sm me-2"></div>Loading catalog…</div>';
+    run('getOrderableTests',[],function(res){
+      if(!res||!res.success){ $('lx-wi-tests').innerHTML='<div class="text-danger small py-3 text-center">'+esc((res&&res.message)||'Catalog failed to load.')+'</div>'; return; }
+      _catalog=res.tests||[]; wiRenderTests();
+    },'Loading catalog…');
+  }
+
+  function wiLookup(){
+    var pid=($('lx-wi-pid').value||'').trim();
+    if(!pid){ $('lx-wi-lookup-msg').innerHTML='<span class="text-danger">Enter an ID first.</span>'; return; }
+    $('lx-wi-lookup-msg').innerHTML='<span class="label-bright"><div class="spinner-border spinner-border-sm me-1" style="width:12px;height:12px;"></div>Looking up…</span>';
+    run('lookupLabPatient',[pid],function(res){
+      if(res&&res.success){
+        $('lx-wi-name').value=res.patient.name;
+        $('lx-wi-age').value=res.patient.age;
+        $('lx-wi-gender').value=res.patient.gender==='F'?'F':(res.patient.gender==='O'?'O':'M');
+        $('lx-wi-lookup-msg').innerHTML='<span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>'+esc(res.patient.name)+' found'+(res.patient.mobile?' · '+esc(res.patient.mobile):'')+' </span>';
+      } else {
+        $('lx-wi-lookup-msg').innerHTML='<span style="color:#fcd34d;"><i class="fa-solid fa-circle-info me-1"></i>'+esc((res&&res.message)||'Not found')+' — enter details manually.</span>';
+      }
+    },'Looking up patient…');
+  }
+
+  function wiMobile(){
+    var mob=($('lxWiMob').value||'').trim();
+    if(mob.length<4){ $('lxWiMobRes').innerHTML='<span class="text-danger small">Enter at least 4 digits.</span>'; return; }
+    $('lxWiMobRes').innerHTML='<span class="label-bright small"><div class="spinner-border spinner-border-sm me-1" style="width:11px;height:11px;"></div>Searching…</span>';
+    run('searchPatientByMobile',[mob],function(res){
+      if(!res||!res.success){ $('lxWiMobRes').innerHTML='<span style="color:#fcd34d;" class="small"><i class="fa-solid fa-info-circle me-1"></i>'+esc((res&&res.message)||'None found')+'</span>'; return; }
+      $('lxWiMobRes').innerHTML=res.patients.map(function(p){
+        return '<div class="lx-pick" onclick="LabX.wiPick(\''+esc(p.patientId)+'\',\''+esc(String(p.name)).replace(/'/g,"\\'")+'\',\''+esc(p.age)+'\',\''+esc(p.gender)+'\')"><span class="text-white-force">'+esc(p.name)+' <span class="label-bright" style="font-size:.7rem;">'+esc(p.patientId)+' · '+esc(p.mobile)+'</span></span><i class="fa-solid fa-arrow-right label-bright"></i></div>';
+      }).join('');
+    },'');
+  }
+
+  function wiPick(pid,nm,age,gd){
+    $('lx-wi-pid').value=pid;
+    $('lx-wi-name').value=nm;
+    $('lx-wi-age').value=age;
+    $('lx-wi-gender').value=gd==='F'?'F':(gd==='O'?'O':'M');
+    $('lxWiMobRes').innerHTML='<span class="text-success small"><i class="fa-solid fa-circle-check me-1"></i>'+esc(nm)+' selected.</span>';
+  }
+
+
+  function wiRenderTests(){
+    var h=$('lx-wi-tests'); if(!h) return;
+    var q=($('lx-wi-search').value||'').toLowerCase();
+    var list=_catalog.filter(function(t){ return !q||(t.testName+' '+t.testCode+' '+t.department).toLowerCase().indexOf(q)!==-1; });
+    if(!list.length){ h.innerHTML='<div class="text-center label-bright small py-3">No tests match. Manage tests in the Test Catalog.</div>'; return; }
+    h.innerHTML=list.map(function(t){
+      var sel=!!_wiSel[t.testId];
+      var ic=t.testType==='PACKAGE'?'fa-box-open':t.testType==='PANEL'?'fa-layer-group':'fa-flask';
+      return '<div class="lx-pick'+(sel?' sel':'')+'" onclick="LabX.wiToggle(\''+t.testId+'\');">'+
+        '<span class="text-white-force"><i class="fa-solid '+ic+' me-2" style="color:#67e8f9;font-size:.74rem;"></i>'+esc(t.testName)+' <span class="label-bright" style="font-size:.68rem;">'+esc(t.testCode)+'</span>'+(t.requiresConsent?' <span class="lx-badge lx-b-URGENT">Consent</span>':'')+' </span>'+
+        '<span class="d-flex gap-2 align-items-center"><span style="color:#22d3ee;font-size:.8rem;">₹'+Number(t.price).toFixed(0)+'</span>'+(sel?'<i class="fa-solid fa-circle-check text-success"></i>':'<i class="fa-regular fa-circle label-bright"></i>')+' </span>'+
+      '</div>';
+    }).join('');
+  }
+  function wiToggle(id){
+    if(_wiSel[id]) delete _wiSel[id];
+    else { var t=_catalog.filter(function(x){return x.testId===id;})[0]; if(t)_wiSel[id]=t; }
+    wiRenderTests();
+    var ids=Object.keys(_wiSel), total=0, consent=[];
+    ids.forEach(function(k){ total+=Number(_wiSel[k].price); if(_wiSel[k].requiresConsent)consent.push(_wiSel[k].testName); });
+    $('lx-wi-total').textContent='₹'+total.toFixed(2);
+    $('lx-wi-chips').innerHTML=ids.map(function(k){return '<span class="lx-chip">'+esc(_wiSel[k].testName)+' <span style="cursor:pointer;opacity:.7;" onclick="event.stopPropagation();LabX.wiToggle(\''+k+'\');">×</span></span>';}).join('');
+    $('lx-wi-consent').innerHTML=consent.length?'<div class="small" style="color:#fcd34d;"><i class="fa-solid fa-file-signature me-1"></i>Written consent required before collection: '+esc(consent.join(', '))+'</div>':'';
+  }
+  function wiSubmit(){
+    var pid=($('lx-wi-pid').value||'').trim();
+    var nm=($('lx-wi-name').value||'').trim();
+    var ids=Object.keys(_wiSel);
+    if(!nm){ flash('Patient name is required.',false); return; }
+    if(!ids.length){ flash('Select at least one test.',false); return; }
+    var payload={patientId:pid,patientName:nm,age:$('lx-wi-age').value,gender:$('lx-wi-gender').value,mobile:($('lxWiMob')&&$('lxWiMob').value||'').trim(),sourceModule:'WALKIN',testIds:ids,priority:$('lx-wi-priority').value,clinicalNote:$('lx-wi-note').value};
+    run('createLabRequest',[payload],function(res){
+      if(res&&res.success){ modal('lx-walkin-modal').hide(); flash(res.message+(res.requiresConsentFor&&res.requiresConsentFor.length?' — Consent needed: '+res.requiresConsentFor.join(', '):''),true); load(); }
+      else flash((res&&res.message)||'Order creation failed.',false);
+    },'Creating order…');
+  }
+
+  /* ════════ LAB RECORDS ════════ */
+  
+
+  /* ════════ public API ════════ */
+  return{
+    load:load, render:render, setTab:setTab,
+    openPanel:openPanel, doBill:doBill,pm:pm, bCalc:bCalc,
+    addTube:addTube, doCollect:doCollect, doReceive:doReceive, doReject:doReject,
+    onVal:onVal, saveDraft:saveDraft, submitResults:submitResults, doVerify:doVerify, sendBack:sendBack,
+    dispatchReport:dispatchReport, printRpt:printRpt, printInvoice:printInvoice,
+    openWalkin:openWalkin, wiLookup:wiLookup, wiRenderTests:wiRenderTests, wiToggle:wiToggle, wiSubmit:wiSubmit,
+    wiMobile:wiMobile, wiPick:wiPick,
+  };
+})();
+
+</script>

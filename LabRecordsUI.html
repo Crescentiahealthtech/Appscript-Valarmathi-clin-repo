@@ -1,0 +1,375 @@
+<div id="workspace-lab-records" class="page-section d-none position-relative">
+  
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('workspace-lab');">
+        <i class="fa-solid fa-arrow-left me-1"></i>Back
+      </button>
+      <h3 class="fw-bold m-0 text-white-force">
+        <i class="fa-solid fa-folder-open me-2" style="color:#34d399;"></i>Lab Records Archive
+      </h3>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mb-4" style="max-width:520px;">
+    <input type="text" id="lr-query" class="form-control form-control-sm" placeholder="Patient ID, Name, or Mobile Number…" onkeydown="if(event.key==='Enter') LabRecordsApp.searchRecords();">
+    <button class="btn btn-sm fw-semibold px-3" style="background:rgba(52,211,153,.15);border:1px solid #34d399;color:#6ee7b7;" onclick="LabRecordsApp.searchRecords();">
+      <i class="fa-solid fa-search me-1"></i>Search
+    </button>
+  </div>
+
+  <div id="lr-results">
+    <div class="text-center label-bright py-5">
+      <i class="fa-solid fa-magnifying-glass-chart fa-2x mb-3 d-block"></i>
+      Search a patient to view and print their complete lab history.
+    </div>
+  </div>
+</div>
+
+<style>
+/* Scoped Styles for Lab Records */
+.lx-rec-card { background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;margin-bottom:12px;overflow:hidden;transition: border-color 0.2s;}
+.lx-rec-card:hover { border-color: #34d399; }
+.lx-rec-head { padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center; }
+.lx-rec-head:hover { background:var(--bg-input); }
+.lx-rtable { width:100%;border-collapse:separate;border-spacing:0; }
+.lx-rtable th { color:var(--text-muted);font-weight:500;font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;padding:7px 8px;background:var(--bg-input); }
+.lx-rtable th:first-child{border-radius:8px 0 0 8px;} .lx-rtable th:last-child{border-radius:0 8px 8px 0;}
+.lx-rtable td { padding:7px 8px;border-bottom:1px solid var(--border-color);font-size:.83rem;vertical-align:middle;color:var(--text-main); }
+.lx-f-C { color:#f87171;font-weight:800; } 
+.lx-f-H { color:#fb923c;font-weight:600; }
+.lx-f-L { color:#60a5fa;font-weight:600; } 
+.lx-f-N { color:#10b981; }
+
+/* Custom styling for the abnormal toggle */
+.abnormal-switch .form-check-input:checked { background-color: #f87171; border-color: #f87171; }
+</style>
+
+<script>
+var LabRecordsApp = (function () {
+  'use strict';
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function $(id){ return document.getElementById(id); }
+
+  function searchRecords() {
+    var q = ($('lr-query').value || '').trim();
+    if(!q){ 
+      $('lr-results').innerHTML='<div class="text-center label-bright py-4">Please enter a Patient ID, Mobile, or Name to search.</div>'; 
+      return; 
+    }
+    
+    $('lr-results').innerHTML='<div class="text-center label-bright py-4"><div class="spinner-border spinner-border-sm me-2" style="color:#34d399;"></div>Searching Archives for "'+esc(q)+'"…</div>';
+    
+    google.script.run.withSuccessHandler(function(res){
+      if(!res || !res.success){ 
+        $('lr-results').innerHTML='<div class="text-danger small py-3 text-center">'+esc((res&&res.message)||'Search failed.')+'</div>'; 
+        return; 
+      }
+      if(!res.records.length){ 
+        $('lr-results').innerHTML='<div class="text-center label-bright py-4"><i class="fa-solid fa-folder-open me-2"></i>No verified lab records found for "'+esc(q)+'".</div>'; 
+        return; 
+      }
+      
+      // Master Patient Header with Abnormal Toggle
+      var head = res.patient ? 
+        '<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 p-3 rounded" style="background:linear-gradient(90deg, rgba(52,211,153,0.1) 0%, var(--bg-input) 100%); border: 1px solid rgba(52,211,153,0.3);">' +
+          '<div class="d-flex align-items-center gap-3">' +
+            '<div class="lx-avatar" style="background:#34d399; width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; color:#020617; font-weight:900; font-size:1.2rem;">' + esc((res.patient.name||'?').charAt(0).toUpperCase()) + '</div>' +
+            '<div>' +
+              '<div class="text-white-force fw-bold" style="font-size:1.15rem;">' + esc(res.patient.name) + '</div>' +
+              '<div class="label-bright small mt-1">' + 
+                '<span class="text-white">' + esc(res.patient.patientId) + '</span> &nbsp;·&nbsp; ' + 
+                esc(res.patient.gender) + (res.patient.age ? ' &nbsp;·&nbsp; ' + esc(res.patient.age) + 'y' : '') + 
+                (res.patient.mobile ? ' &nbsp;·&nbsp; 📞 ' + esc(res.patient.mobile) : '') + 
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="text-end d-flex flex-column align-items-end gap-2">' +
+            '<span class="badge" style="background:#34d399; color:#020617;">' + res.records.length + ' Verified Reports</span>' +
+            '<div class="form-check form-switch abnormal-switch m-0">' +
+              '<input class="form-check-input cursor-pointer" type="checkbox" id="abnormal-toggle" onchange="LabRecordsApp.toggleAbnormals()">' +
+              '<label class="form-check-label label-bright small fw-bold cursor-pointer" for="abnormal-toggle">Show Abnormal Only</label>' +
+            '</div>' +
+          '</div>' +
+        '</div>' : '';
+      
+      // Chronological Lab Reports List
+      $('lr-results').innerHTML = head + res.records.map(function(rec, i){
+        
+        var rows = rec.results.map(function(r){
+          var isNormal = (r.flag === 'N' || r.flag === '');
+          var rowClass = isNormal ? 'lab-row-normal' : 'lab-row-abnormal';
+          return '<tr class="'+rowClass+'"><td class="text-white-force">'+esc(r.parameterName)+'</td>'+
+            '<td class="lx-f-'+esc(r.flag||'N')+'">'+esc(r.value)+'</td>'+
+            '<td class="label-bright">'+esc(r.unit)+'</td>'+
+            '<td class="label-bright" style="font-size:.74rem;">'+esc(r.refRangeText||'—')+'</td>'+
+            '<td class="text-center lx-f-'+esc(r.flag)+'">'+esc(r.flag)+'</td></tr>';
+        }).join('');
+
+        rows += '<tr class="lab-all-normal-msg" style="display:none;"><td colspan="5" class="text-center py-4" style="background:rgba(16,185,129,.05);"><i class="fa-solid fa-check-circle fa-2x mb-2" style="color:#10b981;"></i><br><span class="text-white-force fw-semibold">Great News!</span><br><span class="label-bright small">All parameters in this report are within normal biological limits.</span></td></tr>';
+
+        // THE CORRECTLY INJECTED STEP 2 ACTION BUTTONS
+        var dispatchUI = '<div class="d-flex flex-column flex-xl-row gap-2 mt-2 pt-2" style="border-top: 1px solid var(--border-color);">' +
+          
+          // CLINICAL REPORT STRIP (Ultra-Slim Inline Layout)
+          '<div class="flex-grow-1 d-flex align-items-center justify-content-between px-3 py-2 rounded" style="background: rgba(59,130,246,0.05); border: 1px solid rgba(59,130,246,0.15);">' +
+            '<div class="small fw-semibold text-uppercase" style="color: #60a5fa; letter-spacing: 0.5px;"><i class="fa-solid fa-file-medical me-2"></i>Report</div>' +
+            '<div class="d-flex gap-2">' +
+              '<button class="btn btn-sm py-1 px-2 d-flex align-items-center gap-1" style="background:#3b82f6; color:#fff; font-size: 0.75rem;" onclick="LabRecordsApp.printReport(\''+rec.orderId+'\'); event.stopPropagation();"><i class="fa-solid fa-print"></i> Print</button>' +
+              '<button class="btn btn-sm py-1 px-2 d-flex align-items-center gap-1" style="border:1px solid #3b82f6; color:#93c5fd; background:rgba(59,130,246,0.1); font-size: 0.75rem;" onclick="LabRecordsApp.dispatchWhatsApp(\''+rec.orderId+'\', \''+esc(res.patient.name)+'\', \''+esc(res.patient.whatsapp)+'\'); event.stopPropagation();"><i class="fa-brands fa-whatsapp"></i> WA</button>' +
+              '<button class="btn btn-sm py-1 px-2 d-flex align-items-center gap-1" style="border:1px solid #3b82f6; color:#93c5fd; background:rgba(59,130,246,0.1); font-size: 0.75rem;" onclick="LabRecordsApp.dispatchEmail(\''+rec.orderId+'\', \''+esc(res.patient.email || '')+'\'); event.stopPropagation();"><i class="fa-solid fa-envelope"></i> Email</button>' +
+            '</div>' +
+          '</div>' +
+
+          // FINANCIAL INVOICE STRIP (Ultra-Slim Inline Layout)
+          '<div class="flex-grow-1 d-flex align-items-center justify-content-between px-3 py-2 rounded" style="background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.15);">' +
+            '<div class="small fw-semibold text-uppercase" style="color: #34d399; letter-spacing: 0.5px;"><i class="fa-solid fa-file-invoice-dollar me-2"></i>Invoice</div>' +
+            '<div class="d-flex gap-2">' +
+              '<button class="btn btn-sm py-1 px-2 d-flex align-items-center gap-1" style="background:#10b981; color:#fff; font-size: 0.75rem;" onclick="LabRecordsApp.printArchiveInvoice(\''+rec.orderId+'\'); event.stopPropagation();"><i class="fa-solid fa-print"></i> Print</button>' +
+              '<button class="btn btn-sm py-1 px-2 d-flex align-items-center gap-1" style="border:1px solid #10b981; color:#6ee7b7; background:rgba(16,185,129,0.1); font-size: 0.75rem;" onclick="LabRecordsApp.waArchiveInvoice(\''+rec.orderId+'\', \''+esc(res.patient.whatsapp)+'\'); event.stopPropagation();"><i class="fa-brands fa-whatsapp"></i> WA</button>' +
+              '<button class="btn btn-sm py-1 px-2 d-flex align-items-center gap-1" style="border:1px solid #10b981; color:#6ee7b7; background:rgba(16,185,129,0.1); font-size: 0.75rem;" onclick="LabRecordsApp.emailArchiveInvoiceJS(\''+rec.orderId+'\', \''+esc(res.patient.email || '')+'\'); event.stopPropagation();"><i class="fa-solid fa-envelope"></i> Email</button>' +
+            '</div>' +
+          '</div>' +
+
+        '</div>';
+
+        '</div>';
+
+        // Split Date and Time for a premium stacked look
+        var dateParts = esc(rec.date).split(' ');
+        var dateFmt = dateParts[0];
+        var timeFmt = dateParts.slice(1).join(' ');
+        var dateHtml = timeFmt ? 
+            '<div style="color:#67e8f9; font-size:0.85rem; font-weight:700;">' + dateFmt + '</div><div style="color:#94a3b8; font-size:0.7rem; font-weight:500; margin-top:2px;">' + timeFmt + '</div>' : 
+            '<div style="color:#67e8f9; font-size:0.85rem; font-weight:700;">' + dateFmt + '</div>';
+
+        return '<div class="lx-rec-card">'+
+          '<div class="lx-rec-head gap-3" onclick="var b=document.getElementById(\'lr-body-'+i+'\'); if(b) b.classList.toggle(\'d-none\');">'+
+            
+            // COLUMN 1: The Date Block (Fixed Width, Subtle Divider)
+            '<div class="flex-shrink-0" style="width: 95px; border-right: 1px solid rgba(255,255,255,0.08); padding-right: 12px;">' +
+              dateHtml +
+            '</div>'+
+            
+            // COLUMN 2: The Main Info (Fluid Width, Truncated to prevent bloat)
+            '<div class="flex-grow-1" style="min-width: 0;">' +
+              '<div class="text-white-force fw-bold text-truncate" style="font-size: 1rem;"><i class="fa-solid fa-flask me-2" style="opacity: 0.5;"></i>'+esc(rec.testNames)+'</div>'+
+              '<div class="label-bright text-truncate mt-1" style="font-size:.72rem;">' +
+                'Via ' + esc(rec.source) + (rec.doctor ? ' · Dr. ' + esc(rec.doctor) : '') + (rec.verifiedBy ? ' · By ' + esc(rec.verifiedBy) : '') + 
+              '</div>' +
+            '</div>'+
+            
+            // COLUMN 3: Status & Chevron (Fixed Right)
+            '<div class="d-flex align-items-center gap-3 flex-shrink-0 text-end">'+
+              '<span class="badge" style="background:rgba(52,211,153,.1); color:#34d399; font-size:0.65rem; padding: 5px 8px; border:1px solid rgba(52,211,153,.3); letter-spacing:0.5px;">'+esc(rec.status.replace(/_/g,' '))+'</span>'+
+              '<i class="fa-solid fa-chevron-down label-bright"></i>'+
+            '</div>'+
+            
+          '</div>'+
+          
+          '<div id="lr-body-'+i+'" class="d-none px-3 pb-3 pt-2" style="border-top:1px solid var(--border-color);">'+
+            (rec.results.length ? '<table class="lx-rtable w-100" id="table-'+i+'"><thead><tr><th>Parameter</th><th>Result</th><th>Unit</th><th>Reference</th><th>Flag</th></tr></thead><tbody>'+rows+'</tbody></table>' : '<div class="label-bright small py-2">No parameter rows stored for this order.</div>')+
+            dispatchUI + 
+          '</div>'+
+        '</div>';
+      }).join('');
+
+    }).withFailureHandler(function(e){ 
+      $('lr-results').innerHTML='<div class="text-danger small py-3 text-center"><i class="fa-solid fa-triangle-exclamation me-1"></i> Server Error: '+esc(e.message)+'</div>'; 
+    }).searchLabRecords(q);
+  }
+
+  // --- FRONTEND LOGIC ---
+  function toggleAbnormals() {
+    var isChecked = $('abnormal-toggle').checked;
+    var tables = document.querySelectorAll('.lx-rtable');
+    
+    tables.forEach(table => {
+      var normals = table.querySelectorAll('.lab-row-normal');
+      var abnormals = table.querySelectorAll('.lab-row-abnormal');
+      var msgRow = table.querySelector('.lab-all-normal-msg');
+
+      if (isChecked) {
+        normals.forEach(r => r.style.display = 'none');
+        if (abnormals.length === 0 && msgRow) msgRow.style.display = '';
+      } else {
+        normals.forEach(r => r.style.display = '');
+        if (msgRow) msgRow.style.display = 'none';
+      }
+    });
+  }
+
+  function printReport(orderId) {
+    var btn = event.currentTarget;
+    var originalHtml = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+    
+    google.script.run.withSuccessHandler(function(res){
+      btn.innerHTML = originalHtml;
+      if(!res || !res.success){ alert((res&&res.message)||'Report not ready.'); return; }
+      
+      var w = window.open('','_blank','width=900,height=1100');
+      if(!w){ alert('Pop-up blocked. Allow pop-ups for this site, then retry.'); return; }
+      w.document.open();
+      w.document.write(res.html);
+      w.document.close();
+      w.focus();
+      setTimeout(function(){ try{ w.print(); }catch(e){} }, 800); 
+    }).withFailureHandler(function(e){
+      btn.innerHTML = originalHtml;
+      alert("Failed to load report: " + e.message);
+    }).getLabReportHtml(orderId);
+  }
+
+  function dispatchEmail(orderId, patientEmail) {
+    if (!patientEmail || patientEmail === "undefined") {
+      patientEmail = prompt("No email on file. Please enter the patient's email address:");
+      if (!patientEmail) return;
+    } else {
+      if (!confirm("Send Lab Report to " + patientEmail + "?")) return;
+    }
+
+    var btn = event.currentTarget;
+    var originalHtml = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+    
+    google.script.run.withSuccessHandler(function(res){
+      btn.innerHTML = originalHtml;
+      if(res.success) { alert("✅ Report emailed successfully to " + patientEmail); } 
+      else { alert("❌ Failed to send email: " + res.message); }
+    }).withFailureHandler(function(e){
+      btn.innerHTML = originalHtml;
+      alert("❌ Server Error: " + e.message);
+    }).emailLabReportPDF(orderId, patientEmail);
+  }
+
+  function dispatchWhatsApp(orderId, patientName, mobileNumber) {
+    if (!mobileNumber || mobileNumber === "undefined" || mobileNumber.trim() === "") {
+      mobileNumber = prompt("No mobile number on file. Enter number (with country code):");
+      if (!mobileNumber) return; 
+    }
+    
+    var cleanNum = mobileNumber.replace(/\D/g,'');
+    if (cleanNum.length === 10) cleanNum = "91" + cleanNum;
+
+    var btn = event.currentTarget || document.activeElement;
+    var originalHtml = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+    btn.disabled = true; 
+    
+    var timeoutId = setTimeout(function() {
+      if (btn.disabled) {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        alert("⏳ Server is taking too long. Please try again.");
+      }
+    }, 25000);
+
+    google.script.run.withSuccessHandler(function(res){
+      clearTimeout(timeoutId);
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+
+      if(!res.success) {
+        alert("❌ Failed to generate secure link: " + res.message);
+        return;
+      }
+
+      var rawMessage = 
+        "Hello " + patientName + ",\n\n" +
+        "Here is your verified Lab Report from *Crescentia HealthTech*.\n\n" +
+        "📄 *View & Download your secure PDF report here:*\n" + 
+        res.link + "\n\n" +
+        "_Please do not reply to this automated message._";
+
+      var waUrl = "https://wa.me/" + cleanNum + "?text=" + encodeURIComponent(rawMessage);
+      window.open(waUrl, '_blank');
+
+    }).withFailureHandler(function(e){
+      clearTimeout(timeoutId); 
+      btn.innerHTML = originalHtml;
+      btn.disabled = false;
+      alert("❌ Server Error: " + e.message);
+    }).generateAndStoreLabReportPDF(orderId);
+  }
+
+  // --- ARCHIVE INVOICE DISPATCHERS (Hardened) ---
+
+  function printArchiveInvoice(orderId) {
+    google.script.run.withSuccessHandler(function(res) {
+      if(!res || !res.success) { alert((res && res.message) || 'Invoice not found.'); return; }
+      var w = window.open('', '_blank', 'width=820,height=900');
+      if(!w) { alert("Pop-up blocked. Please allow popups."); return; }
+      w.document.open();
+      w.document.write(res.html); 
+      w.document.close();
+      setTimeout(function() { w.print(); }, 500);
+    }).withFailureHandler(function(err){
+      alert("Failed to load invoice: " + err.message);
+    }).getLabBillHtml(orderId);
+  }
+
+  function waArchiveInvoice(orderId, mobileNumber) {
+    if (!mobileNumber || mobileNumber === "undefined" || mobileNumber.trim() === "") {
+      mobileNumber = prompt("No WhatsApp number on file. Enter WhatsApp number (no country code):", "");
+      if (!mobileNumber || mobileNumber.trim().length < 10) return;
+    }
+    
+    var cleanNum = mobileNumber.replace(/\D/g,'');
+    if (cleanNum.length === 10) cleanNum = "91" + cleanNum;
+    
+    var btn = event.currentTarget || document.activeElement;
+    var ogHtml = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+    
+    google.script.run.withSuccessHandler(function(res) {
+      btn.innerHTML = ogHtml;
+      if (!res || !res.success) { alert(res.message); return; }
+      var text = "Hello,%0A%0APlease find your laboratory tax invoice attached below:%0A" + encodeURIComponent(res.link) + "%0A%0A- Crescentia Clinic";
+      window.open("https://wa.me/" + cleanNum + "?text=" + text, '_blank');
+    }).withFailureHandler(function(err){
+      btn.innerHTML = ogHtml;
+      alert("Network Error: " + err.message);
+    }).getArchiveInvoiceLink(orderId);
+  }
+
+  function emailArchiveInvoiceJS(orderId, patientEmail) {
+    if (!patientEmail || patientEmail === "undefined" || patientEmail.trim() === "") {
+      patientEmail = prompt("No email on file. Please enter patient email address:", "");
+      if (!patientEmail || patientEmail.trim() === "") return;
+    } else {
+      if (!confirm("Send Invoice to " + patientEmail + "?")) return;
+    }
+    
+    var btn = event.currentTarget || document.activeElement;
+    var ogHtml = btn.innerHTML;
+    btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
+
+    google.script.run.withSuccessHandler(function(res) {
+      btn.innerHTML = ogHtml;
+      if (res && res.success) alert(res.message); 
+      else alert('Failed: ' + (res && res.message));
+    }).withFailureHandler(function(err){
+      btn.innerHTML = ogHtml;
+      alert("Network Error: " + err.message);
+    }).emailArchiveInvoice(orderId, patientEmail.trim());
+  }
+
+  // Ensure ALL functions are fully mapped out for UI accessibility
+  return {
+    init: function() { 
+      $('lr-query').value = '';
+      $('lr-results').innerHTML = '<div class="text-center label-bright py-5"><i class="fa-solid fa-magnifying-glass-chart fa-2x mb-3 d-block"></i>Search a patient by ID, Name, or Mobile to view their complete lab history.</div>';
+    },
+    searchRecords: searchRecords,
+    toggleAbnormals: toggleAbnormals,
+    printReport: printReport,
+    dispatchEmail: dispatchEmail,
+    dispatchWhatsApp: dispatchWhatsApp,
+    printArchiveInvoice: printArchiveInvoice,
+    waArchiveInvoice: waArchiveInvoice,
+    emailArchiveInvoiceJS: emailArchiveInvoiceJS
+  };
+})();
+</script>

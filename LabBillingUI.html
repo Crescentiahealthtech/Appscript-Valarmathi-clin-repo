@@ -1,0 +1,343 @@
+<div id="lab-billing-workspace" class="page-section d-none">
+
+  <div id="lbOv" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center flex-column" style="background:rgba(2,6,23,.88);z-index:2000;">
+    <div class="spinner-border mb-3" style="color:#34d399;width:3rem;height:3rem;"></div>
+    <div class="fw-semibold" id="lbOvMsg" style="color:#6ee7b7;">Loading…</div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('lab-workspace-view');"><i class="fa-solid fa-arrow-left me-1"></i>Back to Lab</button>
+      <div>
+        <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-receipt me-2" style="color:#34d399;"></i>Lab Billing Desk</h3>
+        <div class="label-bright small" id="lbSub">Loading today's collections…</div>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-secondary" onclick="LabBill.load();" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+      <button class="btn btn-sm" style="background:rgba(52,211,153,.12);border:1px solid #34d399;color:#6ee7b7;" onclick="LabBill.generateAndPrintDayReport();"><i class="fa-solid fa-print me-1"></i>Print Day Report</button>
+    </div>
+  </div>
+
+  <div id="lbFlash"></div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3 col-6">
+      <div class="lbKpi">
+        <div class="lbKn" id="lbKpending">–</div>
+        <div class="lbKl"><i class="fa-solid fa-hourglass-half me-1" style="color:#f59e0b;"></i>Pending Bills</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="lbKpi">
+        <div class="lbKn" id="lbKtoday" style="color:#34d399;">₹0</div>
+        <div class="lbKl"><i class="fa-solid fa-coins me-1" style="color:#34d399;"></i>Today Collection</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="lbKpi">
+        <div class="lbKn" id="lbKcount">0</div>
+        <div class="lbKl"><i class="fa-solid fa-receipt me-1" style="color:#22d3ee;"></i>Bills Raised Today</div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="lbKpi">
+        <div class="lbKn" id="lbKip" style="color:#a5b4fc;">–</div>
+        <div class="lbKl"><i class="fa-solid fa-bed me-1" style="color:#a5b4fc;"></i>IP On-Account</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 flex-wrap mb-3">
+    <span class="lbTab on" id="lbTabPend" onclick="LabBill.setTab('PENDING')">⏳ Pending <span id="lbNpend" class="lbTN">0</span></span>
+    <span class="lbTab" id="lbTabPaid" onclick="LabBill.setTab('PAID')">✅ Paid Today <span id="lbNpaid" class="lbTN">0</span></span>
+    <span class="lbTab" id="lbTabIP" onclick="LabBill.setTab('IP')">🏥 IP Account <span id="lbNip" class="lbTN">0</span></span>
+  </div>
+
+  <div class="input-group mb-3" style="max-width:360px;">
+    <span class="input-group-text" style="background:var(--bg-input);border-color:var(--border-color);color:var(--text-muted);"><i class="fa-solid fa-search"></i></span>
+    <input type="text" id="lbSearch" class="form-control form-control-sm" placeholder="Search patient, receipt, order…" oninput="LabBill.render();">
+  </div>
+
+  <div id="lbList"></div>
+
+</div>
+
+<style>
+.lbKpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:14px 16px;text-align:center;}
+.lbKn{font-size:1.6rem;font-weight:800;color:var(--text-main);line-height:1;}
+.lbKl{font-size:.67rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
+.lbTab{background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:.78rem;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.lbTab:hover{border-color:var(--border-hover);color:var(--text-main);}
+.lbTab.on{background:rgba(52,211,153,.2);border-color:#34d399;color:#6ee7b7;}
+.lbTN{background:rgba(255,255,255,.12);border-radius:10px;padding:0 7px;font-size:.67rem;font-weight:700;}
+.lbCard{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:.18s;}
+.lbCard:hover{border-color:var(--border-hover);}
+.lbCard.PAID{border-left:3px solid #10b981;}
+.lbCard.PENDING{border-left:3px solid #f59e0b;}
+.lbCard.IP{border-left:3px solid #6366f1;}
+</style>
+
+<script>
+var LabBill=(function(){
+  'use strict';
+
+  var _bills=[], _stats={}, _tab='PENDING';
+
+  /* ─── UTILS ─── */
+  function g(id){return document.getElementById(id);}
+  function e(s){if(s==null)return '';return String(s).replace(/[&<>"'`=\/]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[c];});}
+  function spin(m){var el=g('lbOv');if(el){el.classList.remove('d-none');el.classList.add('d-flex');}if(g('lbOvMsg'))g('lbOvMsg').textContent=m||'Loading…';}
+  function stop(){var el=g('lbOv');if(el){el.classList.add('d-none');el.classList.remove('d-flex');}}
+  function flash(msg,ok){
+    var b=g('lbFlash');if(!b)return;
+    b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'rgba(52,211,153,.4)':'rgba(248,113,113,.5)')+'"><i class="fa-solid '+(ok?'fa-circle-check text-success':'fa-circle-exclamation text-danger')+'"></i><span class="text-white-force flex-grow-1">'+e(msg)+'</span><span style="cursor:pointer;color:var(--text-muted);" onclick="this.parentNode.remove()">×</span></div>';
+    if(ok)setTimeout(function(){if(g('lbFlash'))g('lbFlash').innerHTML='';},4000);
+  }
+  
+  function run(fn, args, onOk, msg) {
+    if (msg) spin(msg);
+    var to = setTimeout(function() { stop(); flash('Server Timeout. Please retry.', false); }, 45000);
+    
+    var server = google.script.run
+      .withSuccessHandler(function(res) { clearTimeout(to); stop(); onOk(res); })
+      .withFailureHandler(function(err) { clearTimeout(to); stop(); flash('Error: ' + (err.message || err), false); });
+    
+    if (!args || args.length === 0) server[fn]();
+    else if (args.length === 1) server[fn](args[0]);
+    else server[fn].apply(server, args);
+  }
+
+  /* ─── LOAD ─── */
+  function load(){
+    run('getLabBillingWorkspace',[],function(res){
+      if(!res||!res.success){flash((res&&res.message)||'Load failed.',false);return;}
+      _bills=res.bills||[];
+      _stats=res.stats||{};
+      _kpis();
+      _tabCounts();
+      render();
+      if(g('lbSub'))g('lbSub').innerHTML='Recent Activity · '+new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
+    },'Loading billing desk…');
+  }
+
+  function _kpis(){
+    if(g('lbKpending'))g('lbKpending').textContent=_stats.pendingCount||0;
+    if(g('lbKtoday'))g('lbKtoday').textContent='₹'+(Number(_stats.todayOP)||0).toFixed(0);
+    if(g('lbKcount'))g('lbKcount').textContent=_stats.todayCount||0;
+    if(g('lbKip'))g('lbKip').textContent='₹'+(Number(_stats.todayIP)||0).toFixed(0);
+  }
+
+  function _tabCounts(){
+    var pend=_bills.filter(function(b){return b.tabType==='PENDING';}).length;
+    var paid=_bills.filter(function(b){return b.tabType==='PAID';}).length;
+    var ip=_bills.filter(function(b){return b.tabType==='IP';}).length;
+    if(g('lbNpend'))g('lbNpend').textContent=pend;
+    if(g('lbNpaid'))g('lbNpaid').textContent=paid;
+    if(g('lbNip'))g('lbNip').textContent=ip;
+  }
+
+  function setTab(t){
+    _tab=t;
+    ['lbTabPend','lbTabPaid','lbTabIP'].forEach(function(id,i){
+      var el=g(id);if(el)el.classList.toggle('on',['PENDING','PAID','IP'][i]===t);
+    });
+    render();
+  }
+
+  function render(){
+    var h=g('lbList');if(!h)return;
+    var q=((g('lbSearch')&&g('lbSearch').value)||'').toLowerCase().trim();
+    var list=_bills.filter(function(b){
+      if(b.tabType!==_tab)return false;
+      if(!q)return true;
+      return(b.patientName+' '+b.orderId+' '+b.receiptNumber+' '+b.patientId).toLowerCase().indexOf(q)!==-1;
+    });
+    if(!list.length){
+      h.innerHTML='<div class="text-center label-bright py-5"><i class="fa-solid fa-receipt fa-2x mb-3 d-block"></i>'
+        +(_tab==='PENDING'?'No pending bills right now.'
+          :_tab==='PAID'?'No recent payments collected.'
+          :'No recent IP account postings.')
+        +'</div>';
+      return;
+    }
+    h.innerHTML=list.map(_card).join('');
+  }
+
+  function _card(b){
+    var payIcon=b.paymentMode==='CASH'?'💵':b.paymentMode==='UPI'?'📱':b.paymentMode==='CARD'?'💳':b.paymentMode==='IP_ACCOUNT'?'🏥':'💰';
+    var statusBadge=b.tabType==='PENDING'
+      ?'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid #f59e0b;">PENDING</span>'
+      :b.tabType==='IP'
+      ?'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid #6366f1;">IP ACCOUNT</span>'
+      :'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid #10b981;">PAID</span>';
+
+    var actions='';
+    if(b.tabType==='PENDING'){
+      actions='<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:rgba(52,211,153,.15);border:1px solid #34d399;color:#6ee7b7;" onclick="LabBill.openOrder(\''+e(b.orderId)+'\')"><i class="fa-solid fa-arrow-right me-1"></i>Process</button>';
+    } else {
+      actions=
+        '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid #10b981;color:#6ee7b7;background:rgba(16,185,129,.1);" onclick="event.stopPropagation(); LabBill.waInvoice(\''+e(b.billId)+'\', \''+e(b.patientName).replace(/'/g,"\\'")+'\')" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>' +
+        '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid #3b82f6;color:#93c5fd;background:rgba(59,130,246,.1);" onclick="event.stopPropagation(); LabBill.emailInvoice(\''+e(b.billId)+'\')" title="Email Invoice"><i class="fa-solid fa-envelope"></i></button>' +
+        '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" onclick="event.stopPropagation(); LabBill.printReceiptDirectly(\''+e(b.billId)+'\')"><i class="fa-solid fa-print me-1"></i>Receipt</button>';
+    }
+
+    return '<div class="lbCard '+(b.tabType||'')+'">'
+      +'<div style="width:38px;height:38px;border-radius:10px;background:var(--bg-input);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;">'+payIcon+'</div>'
+      +'<div class="flex-grow-1" style="min-width:0;">'
+        +'<div class="d-flex align-items-center gap-2 flex-wrap">'
+          +'<span class="text-white-force fw-bold">'+e(b.patientName)+'</span>'
+          +'<span class="label-bright" style="font-size:.72rem;">'+e(b.patientId)+'</span>'
+          +statusBadge
+        +'</div>'
+        +'<div class="label-bright mt-1" style="font-size:.76rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:480px;"><i class="fa-solid fa-flask me-1" style="font-size:.63rem;"></i>'+e(b.testNames)+'</div>'
+        +'<div class="d-flex gap-3 mt-1 flex-wrap">'
+          +(b.receiptNumber?'<span class="label-bright" style="font-size:.67rem;font-family:monospace;">'+e(b.receiptNumber)+'</span>':'')
+          +'<span class="label-bright" style="font-size:.67rem;">'+e(b.billedAt?b.billedAt.substring(0,16):'')+'</span>'
+          +(b.paymentMode&&b.tabType!=='PENDING'?'<span class="label-bright" style="font-size:.67rem;">'+payIcon+' '+e(b.paymentMode)+'</span>':'')
+        +'</div>'
+      +'</div>'
+      +'<div class="text-end flex-shrink-0">'
+        +'<div style="font-size:1.1rem;font-weight:800;color:'+(b.tabType==='IP'?'#a5b4fc':b.tabType==='PAID'?'#34d399':'#fcd34d')+';">₹'+Number(b.net).toFixed(2)+'</div>'
+        +(b.discount>0?'<div class="label-bright" style="font-size:.67rem;">Disc: ₹'+Number(b.discount).toFixed(0)+'</div>':'')
+        +actions
+      +'</div>'
+      +'</div>';
+  }
+
+  function openOrder(orderId){
+    if(typeof switchTab !== 'undefined') switchTab('lab-workspace-view');
+    if(typeof LabX!=='undefined')setTimeout(function(){LabX.openPanel(orderId);},300);
+  }
+
+  /* 🚀 THE NATIVE POP-UP PRINT ENGINE 🚀 */
+  
+  function printReceiptDirectly(billId){
+    run('getLabReceiptHtml',[billId],function(res){
+      if(!res||!res.success){flash((res&&res.message)||'Receipt not found.',false);return;}
+      _triggerNativePrint(res.html);
+    },'Preparing receipt for printing…');
+  }
+
+  /* 🚀 WHATSAPP & EMAIL INVOICE DISPATCH 🚀 */
+  function waInvoice(billId, patientName) {
+    var mobile = prompt("Enter 10-digit WhatsApp number for " + patientName + "\n(Do not add country code):", "");
+    if (!mobile || mobile.trim().length < 10) return;
+    
+    run('generateAndStoreLabInvoicePDF', [billId], function(res) {
+      if (!res || !res.success) { flash((res && res.message) || 'Failed to generate PDF.', false); return; }
+      
+      var text = "Hello " + patientName + ",%0A%0AThank you for visiting Crescentia Clinic. Your laboratory payment receipt is ready.%0A%0AYou can securely view and download your invoice here:%0A" + encodeURIComponent(res.link) + "%0A%0AWe wish you the best of health!%0A- Crescentia Billing Desk";
+      
+      var waUrl = "https://wa.me/91" + mobile.trim().replace(/\D/g,'') + "?text=" + text;
+      var w = window.open(waUrl, '_blank');
+      if(w) flash('Opening WhatsApp Web...', true);
+      else flash('Pop-up blocked. Allow pop-ups to open WhatsApp.', false);
+    }, 'Generating Secure PDF for WhatsApp...');
+  }
+
+  function emailInvoice(billId) {
+    var email = prompt("Enter patient's email address:", "");
+    if (!email || email.trim() === "") return;
+    
+    run('emailLabInvoicePDF', [billId, email.trim()], function(res) {
+      if (res && res.success) { flash(res.message, true); } 
+      else { flash((res && res.message) || 'Failed to send email.', false); }
+    }, 'Dispatching Premium HTML Email...');
+  }
+
+  function generateAndPrintDayReport(){
+    run('getLabDailyCollection',[],function(res){
+      if(!res||!res.success){flash((res&&res.message)||'Failed.',false);return;}
+      var html = _buildPremiumDayHtml(res);
+      _triggerNativePrint(html);
+    },'Compiling Daily Report…');
+  }
+
+  function _triggerNativePrint(htmlString) {
+    var printWindow = window.open('', '_blank', 'width=900,height=800,top=50,left=50');
+    if (!printWindow) { alert("Pop-up blocker is preventing printing. Please click 'Allow Pop-ups' in your URL bar."); return; }
+    printWindow.document.open(); printWindow.document.write(htmlString); printWindow.document.close();
+    printWindow.focus();
+    setTimeout(function() { printWindow.print(); }, 500);
+  }
+
+  function _buildPremiumDayHtml(res){
+    var bills = res.bills || [];
+    var todayStr = new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    var cashTotal=0, upiTotal=0, cardTotal=0, ipTotal=0;
+    
+    bills.forEach(function(b){
+      var n = Number(b.net) || 0;
+      if(b.paymentMode === 'CASH') cashTotal += n;
+      else if(b.paymentMode === 'UPI') upiTotal += n;
+      else if(b.paymentMode === 'CARD') cardTotal += n;
+      else if(b.paymentMode === 'IP_ACCOUNT' || b.paymentMode === 'ON_ACCOUNT') ipTotal += n;
+    });
+
+    var rows = bills.map(function(b, index){
+      return `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">${index + 1}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-family: monospace;">${b.receiptNumber || b.billId}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 600;">${b.patientName}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #475569;">${b.testNames}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; text-align: center;">${b.paymentMode}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; text-align: right;">${b.billedAt ? new Date(b.billedAt).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'}) : ''}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 14px; font-weight: bold; text-align: right;">₹${Number(b.net).toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Daily Collection Report</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; padding: 30px; margin: 0; background: #fff; }
+          .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 30px; }
+          .title { font-size: 24px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+          .subtitle { font-size: 14px; color: #64748b; margin-top: 5px; }
+          .kpi-grid { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 30px; }
+          .kpi-box { flex: 1; padding: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; }
+          .kpi-box .val { font-size: 20px; font-weight: bold; color: #0f172a; }
+          .kpi-box .lbl { font-size: 11px; color: #64748b; text-transform: uppercase; margin-top: 5px; font-weight: 600; }
+          table { width: 100%; border-collapse: collapse; }
+          th { background: #f1f5f9; padding: 10px 8px; text-align: left; font-size: 12px; text-transform: uppercase; color: #475569; border-bottom: 2px solid #cbd5e1; }
+          .footer { margin-top: 50px; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+          @media print { body { padding: 0; margin: 0; } @page { size: A4 portrait; margin: 1cm; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">Crescentia HealthTech</div>
+          <div class="subtitle">Laboratory Daily Collection Report &bull; ${todayStr}</div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-box"><div class="val">₹${cashTotal.toFixed(2)}</div><div class="lbl">CASH IN DRAWER</div></div>
+          <div class="kpi-box"><div class="val">₹${upiTotal.toFixed(2)}</div><div class="lbl">UPI PAYMENTS</div></div>
+          <div class="kpi-box"><div class="val">₹${cardTotal.toFixed(2)}</div><div class="lbl">CARD PAYMENTS</div></div>
+          <div class="kpi-box"><div class="val" style="color:#6366f1;">₹${ipTotal.toFixed(2)}</div><div class="lbl">IP ON-ACCOUNT</div></div>
+          <div class="kpi-box" style="background:#f0fdf4; border-color:#bbf7d0;"><div class="val" style="color:#16a34a;">₹${Number(res.totalNet).toFixed(2)}</div><div class="lbl">TOTAL OP REVENUE</div></div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Receipt No.</th><th>Patient Name</th><th>Investigations</th><th style="text-align:center;">Mode</th><th style="text-align:right;">Time</th><th style="text-align:right;">Amount</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="footer"><div>Generated by: Crescentia EMR System</div><div>Page 1 of 1</div></div>
+      </body>
+      </html>
+    `;
+  }
+
+  return{
+    load:load, render:render, setTab:setTab, openOrder:openOrder, 
+    printReceiptDirectly:printReceiptDirectly, generateAndPrintDayReport:generateAndPrintDayReport,
+    waInvoice:waInvoice, emailInvoice:emailInvoice // <-- Added these two
+  };
+})();
+</script>

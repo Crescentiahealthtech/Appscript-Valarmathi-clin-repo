@@ -1,0 +1,138 @@
+<!-- ===================================================================== -->
+<!-- 🏥 CRESCENTIA — IP RUNNING TAB (charge entry + advances).              -->
+<!-- Feeds the tab that Discharge later settles. Mount container:           -->
+<!--   <div id="workspace-accounts-iptab" class="page-section d-none">      -->
+<!--     <div id="acc-iptab-root"></div></div>                              -->
+<!-- Register 'workspace-accounts-iptab' in AccX.PAGES; tile -> openIpTab(). -->
+<!-- ===================================================================== -->
+<script>
+const IPTab = (function () {
+  const $ = (id) => document.getElementById(id);
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
+  const CATS = ['ROOM', 'NURSING', 'RMO', 'SURGEON', 'OT', 'CONSUMABLE', 'OTHER'];
+  let IP = null, TAB = null;
+
+  function toast(msg, ok) {
+    const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white';
+    t.style.zIndex = 3000; t.style.background = ok ? '#198754' : '#dc3545'; t.textContent = msg;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+  }
+  const num = (id) => { const e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; };
+  const val = (id) => { const e = $(id); return e ? e.value : ''; };
+
+  function load() {
+    const root = $('acc-iptab-root'); if (!root) return;
+    root.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading admitted patients…</div>';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc((res && res.message) || 'Failed.') + '</div>'; return; }
+        renderPicker(res.admissions || []);
+      })
+      .withFailureHandler(function (e) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc(e.message || 'Server error — IP_Charges_Logic.js deployed?') + '</div>'; })
+      .getOpenAdmissions();
+  }
+
+  function renderPicker(adms) {
+    const root = $('acc-iptab-root');
+    const opts = adms.length ? adms.map(a => '<option value="' + esc(a.ipNumber) + '">' + esc(a.ipNumber) + ' — ' + esc(a.patientName) + ' (' + esc(a.bed || '—') + ')</option>').join('') : '';
+    root.innerHTML =
+      '<div class="d-flex gap-2 align-items-end flex-wrap mb-4" style="max-width:680px;">' +
+        '<div class="flex-grow-1"><label class="form-label small text-muted">Admitted Patient</label>' +
+        (adms.length ? '<select id="acc-iptab-ip" class="form-select">' + opts + '</select>' : '<input id="acc-iptab-ip" class="form-control" placeholder="No active admissions — type IP number">') +
+        '</div><button class="btn btn-primary fw-semibold" onclick="IPTab.open()"><i class="fas fa-folder-open me-1"></i>Open Tab</button></div>' +
+      '<div id="acc-iptab-body"></div>';
+  }
+
+  function open() {
+    IP = val('acc-iptab-ip'); if (!IP) { toast('Select or enter an IP number.', false); return; }
+    refresh();
+  }
+
+  function refresh() {
+    const body = $('acc-iptab-body'); if (body) body.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading tab…</div>';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { if (body) body.innerHTML = '<div class="text-danger py-3">' + esc((res && res.message) || 'Failed.') + '</div>'; return; }
+        TAB = res; renderTab();
+      })
+      .withFailureHandler(function (e) { if (body) body.innerHTML = '<div class="text-danger py-3">' + esc(e.message || 'Server error.') + '</div>'; })
+      .getRunningTab(IP);
+  }
+
+  function lineRows() {
+    const lines = (TAB.lines || []).filter(l => l.status !== 'VOID');
+    if (!lines.length) return '<tr><td colspan="5" class="text-center text-muted py-4">No charges yet.</td></tr>';
+    return lines.map(function (l) {
+      const badge = l.status === 'ON_TAB' ? '<span class="badge bg-warning bg-opacity-25 text-warning">ON TAB</span>'
+        : l.status === 'PAID_COUNTER' ? '<span class="badge bg-success bg-opacity-25 text-success">PAID COUNTER</span>'
+        : l.status === 'SETTLED' ? '<span class="badge bg-info bg-opacity-25 text-info">SETTLED</span>'
+        : '<span class="badge bg-secondary bg-opacity-25 text-secondary">' + esc(l.status) + '</span>';
+      return '<tr><td class="small">' + esc(l.category) + (l.nonPayable ? ' <span class="text-warning" title="Non-payable">•</span>' : '') +
+        '</td><td class="small">' + esc(l.description) + '</td><td class="small text-muted">' + esc(l.source) +
+        '</td><td class="text-end small">' + inr(l.amount) + '</td><td>' + badge + '</td></tr>';
+    }).join('');
+  }
+
+  function renderTab() {
+    const a = TAB.admission;
+    $('acc-iptab-body').innerHTML =
+      '<div class="d-flex justify-content-between flex-wrap mb-3"><div><h5 class="fw-bold mb-0">' + esc(a.patientName) + '</h5>' +
+      '<span class="small text-muted">' + esc(a.ipNumber) + ' · ' + esc(a.bed || '') + ' · Dr ' + esc(a.consultant || '') + '</span></div>' +
+      '<div class="text-end"><div class="small text-muted">Outstanding (gross − advances)</div><h4 class="fw-bold mb-0 text-warning">' + inr(TAB.outstanding) + '</h4></div></div>' +
+      '<div class="row g-4">' +
+        '<div class="col-lg-7"><div class="premium-card p-3">' +
+          '<table class="table table-sm align-middle mb-0"><thead><tr>' +
+          '<th class="small text-uppercase text-muted">Cat</th><th class="small text-uppercase text-muted">Description</th><th class="small text-uppercase text-muted">Src</th><th class="text-end small text-uppercase text-muted">Amount</th><th class="small text-uppercase text-muted">Status</th></tr></thead>' +
+          '<tbody>' + lineRows() + '</tbody>' +
+          '<tfoot><tr class="fw-bold border-top"><td colspan="3" class="ps-1">Gross Tab</td><td class="text-end">' + inr(TAB.grossTab) + '</td><td></td></tr>' +
+          '<tr><td colspan="3" class="ps-1 small text-info">Advances Held</td><td class="text-end small text-info">' + inr(TAB.advancesHeld) + '</td><td></td></tr>' +
+          (TAB.paidAtCounter > 0 ? '<tr><td colspan="3" class="ps-1 small text-success">Paid at Counter (memo)</td><td class="text-end small text-success">' + inr(TAB.paidAtCounter) + '</td><td></td></tr>' : '') +
+          '</tfoot></table></div></div>' +
+        '<div class="col-lg-5">' +
+          // Add charge
+          '<div class="premium-card p-3 mb-3"><h6 class="fw-bold mb-2"><i class="fas fa-plus me-1 text-primary"></i>Add Charge</h6>' +
+          '<div class="row g-2"><div class="col-6"><select id="acc-ipc-cat" class="form-select form-select-sm">' + CATS.map(c => '<option>' + c + '</option>').join('') + '</select></div>' +
+          '<div class="col-6"><input id="acc-ipc-amt" type="number" min="0" step="0.01" class="form-control form-control-sm" placeholder="Amount ₹"></div>' +
+          '<div class="col-12"><input id="acc-ipc-desc" class="form-control form-control-sm" placeholder="Description (e.g. Room rent 16 Jun)"></div>' +
+          '<div class="col-6"><input id="acc-ipc-gst" type="number" min="0" step="0.01" class="form-control form-control-sm" placeholder="GST ₹ (opt)"></div>' +
+          '<div class="col-6 d-flex align-items-center"><div class="form-check"><input class="form-check-input" type="checkbox" id="acc-ipc-np"><label class="form-check-label small" for="acc-ipc-np">Non-payable</label></div></div>' +
+          '<div class="col-12"><button class="btn btn-primary btn-sm w-100 fw-semibold" onclick="IPTab.addCharge()">Add to Tab</button></div></div></div>' +
+          // Collect advance
+          '<div class="premium-card p-3"><h6 class="fw-bold mb-2"><i class="fas fa-wallet me-1 text-info"></i>Collect Advance</h6>' +
+          '<div class="row g-2"><div class="col-6"><input id="acc-adv-amt" type="number" min="0" step="0.01" class="form-control form-control-sm" placeholder="Amount ₹"></div>' +
+          '<div class="col-6"><select id="acc-adv-mode" class="form-select form-select-sm"><option>Cash</option><option>UPI</option><option>Card</option></select></div>' +
+          '<div class="col-12"><input id="acc-adv-txn" class="form-control form-control-sm" placeholder="Txn / Ref ID (opt)"></div>' +
+          '<div class="col-12"><button class="btn btn-info btn-sm w-100 fw-semibold text-white" onclick="IPTab.addAdvance()">Hold Advance</button></div></div></div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function addCharge() {
+    if (num('acc-ipc-amt') <= 0) { toast('Enter a charge amount.', false); return; }
+    google.script.run
+      .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) refresh(); })
+      .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
+      .addIpCharge({ ipNumber: IP, category: val('acc-ipc-cat'), description: val('acc-ipc-desc'), amount: num('acc-ipc-amt'), gst: num('acc-ipc-gst'), isNonPayable: ($('acc-ipc-np') || {}).checked === true, user: who() });
+  }
+
+  function addAdvance() {
+    if (num('acc-adv-amt') <= 0) { toast('Enter an advance amount.', false); return; }
+    google.script.run
+      .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) refresh(); })
+      .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
+      .collectIpAdvance({ ipNumber: IP, amount: num('acc-adv-amt'), payMode: val('acc-adv-mode'), txnId: val('acc-adv-txn'), user: who() });
+  }
+
+  return { load, open, refresh, addCharge, addAdvance };
+})();
+
+function openIpTab() { if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-iptab'); IPTab.load(); }
+(function () {
+  if (window.__accIpTabWired) return;
+  var orig = window.switchAccountsPage;
+  window.switchAccountsPage = function (pageId) { if (typeof orig === 'function') orig(pageId); if (pageId === 'workspace-accounts-iptab') { try { IPTab.load(); } catch (e) {} } };
+  window.__accIpTabWired = true;
+})();
+</script>

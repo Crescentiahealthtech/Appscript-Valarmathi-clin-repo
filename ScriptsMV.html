@@ -1,0 +1,186 @@
+<script>
+  const appLogo = "https://lh3.googleusercontent.com/d/1tANMw3wEVcQa6hMxmTDMiKAKhj93Zi_j";
+ 
+ window.onload = function() {
+   const loginLogo = document.getElementById('login-logo');
+   const navLogo = document.getElementById('nav-logo');
+   
+   if(loginLogo) loginLogo.src = appLogo;
+   if(navLogo) navLogo.src = appLogo;
+ };
+
+  function updateClock() {
+    const now = new Date();
+    if(document.getElementById('live-time')) document.getElementById('live-time').innerText = now.toLocaleTimeString('en-US', { hour12: false });
+    if(document.getElementById('live-date')) document.getElementById('live-date').innerText = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+  }
+  setInterval(updateClock, 1000); updateClock();
+
+  function applyRBAC(role) {
+  // 1. Define all restricted UI elements (Sidebar Links & Inner Cards)
+  const restrictedElements = [
+   'nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
+    'nav-tab-pharmacy', 'nav-tab-lab', 'nav-tab-accounts', 'card-hosp-billing',
+    'dash-card-revenue', 'dash-card-credit', 'dash-gateway-accounts'   // NEW
+  ];
+
+  // 2. Hide everything by default for security
+  restrictedElements.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('d-none');
+  });
+
+  // 3. Selectively reveal based on the security matrix
+  const userRole = (role || "").toLowerCase();
+
+  let allowedElements = [];
+
+  switch (userRole) {
+    case 'admin':
+      allowedElements = restrictedElements;
+      break;
+    case 'doctor':
+      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr', 'nav-tab-pharmacy', 'nav-tab-lab'];
+      break;
+    case 'receptionist':
+    case 'reception':
+      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'card-hosp-billing'];
+      break;
+    case 'nurse':
+      allowedElements = ['nav-tab-dash', 'nav-tab-emr'];
+      break;
+    case 'pharmacy':
+      allowedElements = ['nav-tab-dash', 'nav-tab-pharmacy'];
+      break;
+    case 'lab':
+      allowedElements = ['nav-tab-dash', 'nav-tab-lab'];
+      break;
+    case 'accounts':
+      allowedElements = ['nav-tab-dash', 'nav-tab-accounts'];
+      break;
+    default:
+      allowedElements = ['nav-tab-dash'];
+      break;
+  }
+
+  // 4. Apply the reveals
+  allowedElements.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('d-none');
+  });
+}
+ 
+function switchTab(tabId, clickedElement) {
+    document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active-section'));
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    
+    const targetEl = document.getElementById(tabId);
+    if(targetEl) targetEl.classList.add('active-section');
+    
+    if(clickedElement) clickedElement.classList.add('active');
+    
+    if(tabId === 'tab-pat-home') { setTimeout(renderCharts, 100); }
+
+    if (tabId === 'tab-admin-dash') {
+    if (typeof loadDashboardMetrics === 'function') {
+        loadDashboardMetrics();
+    }
+
+    // 📊 DASHBOARD ROUTER HOOK — refresh live metrics on entry (cached, cheap)
+    if (tabId === 'tab-admin-dash') {
+    if (typeof renderAdminDashboard === 'function') renderAdminDashboard();
+      }
+    }
+    
+    // 🛡️ THE SAFETY CATCH (Restored original)
+    if (tabId !== 'tab-admin-emr') {
+        
+        // 👇 ADDED FIX: Manually hide the detached modules when leaving the EMR tab
+        ['emr-workspace-records', 'emr-workspace-op-consult'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('d-none');
+        });
+        
+        // If leaving the EMR tab entirely, force the OP workspace to close & clear memory
+        if (typeof closeOPConsultationWorkspace === 'function') closeOPConsultationWorkspace();
+        
+    } else if (tabId === 'tab-admin-emr' && !window.isLedgerHandoff) {
+        // If clicking the EMR tab directly, show the landing menu
+        if (typeof returnToEMRMenu === 'function') returnToEMRMenu();
+    }
+    
+    // 👇 ADD THIS NEW ROUTER HOOK 👇
+    if (tabId === 'tab-admin-pharmacy') {
+        if (typeof loadPharmacyInventory === 'function') {
+            loadPharmacyInventory();
+        }
+    }
+
+    // 👇 ADD THIS NEW PHARMACY DESK HOOK 👇
+    if (tabId === 'pharmacy-desk-workspace') {
+        if (typeof openPharmacyDesk === 'function') {
+            openPharmacyDesk();
+        }
+    }
+
+    // 👇 ADD THIS NEW DASHBOARD HOOK 👇
+    if (tabId === 'pharmacy-dashboard-workspace') {
+        if (typeof openPharmacyDashboard === 'function') {
+            openPharmacyDashboard();
+        }
+    }
+    
+    // 🔬 LAB ROUTER HOOK — auto-load workspace when navigating to lab sections
+    if (tabId === 'lab-workspace-view') {
+        if (typeof LabX !== 'undefined' && typeof LabX.load === 'function') {
+            setTimeout(function() { LabX.load(); }, 100);
+        }
+    }
+    if (tabId === 'lab-records-view') {
+        // Lab records section — no auto-load needed, user will search
+    }
+
+    // 💰 LAB BILLING ROUTER HOOK — auto-load when Cashier opens the desk
+    if (tabId === 'lab-billing-workspace') {
+        if (typeof LabBill !== 'undefined' && typeof LabBill.load === 'function') {
+            setTimeout(function() { LabBill.load(); }, 100);
+        }
+    }
+    
+    // 🏦 ACCOUNTS ROUTER HOOK (FIXED)
+    if (tabId === 'workspace-accounts') { // Changed workspaceId to tabId
+        if (typeof showAccounts === 'function') {
+            showAccounts(); 
+        }
+    }
+    
+    window.isLedgerHandoff = false;
+}
+
+function routeToEMRTimeline(patientId) {
+    // 1. Tell switchTab we are entering EMR via a handoff (skips the landing menu)
+    window.isLedgerHandoff = true; 
+    
+    // 2. Activate the main EMR tab natively so the sidebar highlights
+    switchTab('tab-admin-emr'); 
+    
+    // 3. Hide the landing menu and OP consult
+    const landingMenu = document.getElementById('emr-landing-menu');
+    if (landingMenu) landingMenu.classList.add('d-none');
+    
+    const opWorkspace = document.getElementById('emr-workspace-op-consult');
+    if (opWorkspace) opWorkspace.classList.add('d-none');
+    
+    // 4. Show the Timeline module specifically
+    const recordsEl = document.getElementById('emr-workspace-records');
+    if (recordsEl) recordsEl.classList.remove('d-none');
+    
+    // 5. Fire the fetch
+    if (typeof openPatientTimeline === 'function') {
+        openPatientTimeline(patientId);
+    }
+}
+
+function signOut() { location.reload(); }
+
+</script>

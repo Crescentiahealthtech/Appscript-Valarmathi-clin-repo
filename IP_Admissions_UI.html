@@ -1,0 +1,524 @@
+<style>
+  .ledger-table-container {
+    background-color: #212529;
+    border: 1px solid #495057;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  <style>
+  /* Fix for Dropdown Option Visibility in Dark Mode */
+  select.form-select, select.bed-status-select {
+    color: #ffffff !important;
+  }
+  select option {
+    background-color: #212529 !important;
+    color: #ffffff !important;
+  }
+  
+  /* Fix for readonly inputs sometimes graying out text */
+  input[readonly] {
+    background-color: #2b3035 !important;
+    color: #ffffff !important;
+  }
+</style>
+
+<style>
+  /* 1. Fix Label Visibility in Dark Mode */
+  .modal-body label, 
+  .modal-body .form-label, 
+  .modal-body .text-muted {
+    color: #e9ecef !important; /* Bright White/Grey */
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+  
+  .modal-body .form-control, 
+  .modal-body .form-select {
+    background-color: #2b3035 !important;
+    border: 1px solid #6c757d !important;
+    color: #ffffff !important;
+  }
+
+  /* 2. Bed Management Box Grid Structure */
+  .bed-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+  }
+  
+  .bed-card {
+    background-color: #1a1d20;
+    border: 2px solid #495057;
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  
+  .bed-card .bed-id {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: #ffffff;
+    border-bottom: 1px solid #343a40;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+
+  .bed-status-available { border-top: 4px solid #198754; }
+  .bed-status-occupied { border-top: 4px solid #dc3545; }
+  .bed-status-cleaning { border-top: 4px solid #0dcaf0; }
+</style>
+
+<style>
+  /* 1. Modal Theme Corrections for Text Visibility */
+  .modal-content, #form-admission {
+    background-color: #1a1d20 !important;
+    color: #ffffff !important;
+  }
+  
+  .modal-body label,
+  .modal-body .form-label,
+  .modal-body h6,
+  .modal-body .text-muted {
+    color: #f8f9fa !important; /* Forces Labels to Bright High-Clear White */
+    font-weight: 600 !important;
+  }
+
+  .modal-body .form-control,
+  .modal-body .form-select {
+    background-color: #2b3035 !important;
+    border: 1px solid #495057 !important;
+    color: #ffffff !important;
+  }
+
+  .modal-body .form-control[readonly] {
+    background-color: #343a40 !important;
+    color: #e9ecef !important;
+  }
+
+  /* 2. Structured Box Grid Layout for Bed Maps */
+  .bed-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    gap: 1.25rem !important;
+    margin-top: 1rem;
+    margin-bottom: 2rem;
+  }
+  
+  .bed-card {
+    background-color: #212529 !important;
+    border: 2px solid #495057 !important;
+    border-radius: 0.5rem !important;
+    padding: 1.25rem !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4) !important;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .bed-card:hover {
+    transform: translateY(-3px) !important;
+  }
+
+  /* Distinct Top Borders Representing Realtime Statuses */
+  .bed-status-available { border-top: 5px solid #198754 !important; }
+  .bed-status-occupied { border-top: 5px solid #dc3545 !important; }
+  .bed-status-reserved { border-top: 5px solid #ffc107 !important; }
+  .bed-status-cleaning { border-top: 5px solid #0dcaf0 !important; }
+  .bed-status-maintenance { border-top: 5px solid #6c757d !important; }
+  .bed-status-isolation { border-top: 5px solid #fd7e14 !important; }
+
+  .bed-id {
+    font-size: 1.35rem !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    margin-bottom: 0.5rem;
+  }
+
+  .bed-patient-info {
+    font-size: 0.85rem !important;
+    color: #cfd4da !important;
+    min-height: 45px;
+    line-height: 1.4;
+  }
+</style>
+
+<div id="ip-ledger-view" class="app-view d-none h-100 flex-column px-2 page-section">
+  
+  <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
+    <div>
+      <h4 class="m-0 text-white fw-bold"><i class="fa-solid fa-folder-open me-2 text-primary"></i> IP Admissions Ledger</h4>
+      <small class="text-muted">Master log of all active and historical hospital admissions</small>
+    </div>
+    <button class="btn btn-primary fw-bold shadow px-4" style="background-color: var(--accent-purple); border:none;" data-bs-toggle="modal" data-bs-target="#modalAdmitPatient" onclick="prepAdmitModal()">
+      <i class="fa-solid fa-plus me-2"></i> New Admission
+    </button>
+    <button class="btn btn-outline-light fw-bold shadow px-4" onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
+    <i class="fa-solid fa-arrow-left me-2"></i> Go Back
+    </button>
+  </div>
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-4">
+      <input type="text" id="ledger-search" class="form-control bg-dark text-white border-secondary" placeholder="Search IP No, Patient ID, or Name..." onkeyup="filterLedger()">
+    </div>
+    <div class="col-md-2">
+      <select id="ledger-filter-status" class="form-select bg-dark text-white border-secondary" onchange="filterLedger()">
+        <option value="ALL">All Statuses</option>
+        <option value="ACTIVE" selected>Active Admissions</option>
+        <option value="DISCHARGED">Discharged</option>
+      </select>
+    </div>
+    <div class="col-md-6 text-end">
+      <button class="btn btn-outline-light"><i class="fa-solid fa-file-export me-1"></i> Export CSV</button>
+    </div>
+  </div>
+
+  <div class="ledger-table-container flex-grow-1 overflow-auto">
+    <table class="table table-dark table-hover align-middle m-0" id="ip-ledger-table">
+      <thead style="position: sticky; top: 0; z-index: 1; background-color: #1a1d20;">
+        <tr class="text-muted small">
+          <th>IP Number</th>
+          <th>Patient Details</th>
+          <th>Admitted On</th>
+          <th>Ward / Bed</th>
+          <th>Consultant</th>
+          <th>Diagnosis</th>
+          <th>Status</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="ip-ledger-tbody">
+        <tr><td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border text-primary"></div><br>Loading Ledger...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal fade" id="modalAdmitPatient" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary bg-black">
+        <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-bed-pulse me-2"></i> New Patient Admission</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-admission">
+          <h6 class="text-muted small fw-bold mb-3 border-bottom border-secondary pb-1">1. PATIENT IDENTITY</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <label class="form-label small text-muted">Patient ID</label>
+              <div class="input-group">
+                <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-id" placeholder="LMTVS0001">
+                <button class="btn btn-outline-info" type="button" onclick="fetchAdmitPatientDetails()"><i class="fa-solid fa-magnifying-glass"></i></button>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small text-muted">Patient Name</label>
+              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-name" readonly>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small text-muted">Age</label>
+              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-age" readonly>
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small text-muted">Sex</label>
+              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-sex" readonly>
+            </div>
+          </div>
+
+          <h6 class="text-muted small fw-bold mb-3 border-bottom border-secondary pb-1">2. ADMISSION LOGISTICS</h6>
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <label class="form-label small text-muted">Date of Admission</label>
+              <input type="date" class="form-control bg-dark text-white border-secondary" id="adm-doa" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small text-muted">Time</label>
+              <input type="time" class="form-control bg-dark text-white border-secondary" id="adm-toa" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small text-muted">Admission Type</label>
+              <select class="form-select bg-dark text-white border-secondary" id="adm-type">
+                <option value="Elective" selected>Elective</option>
+                <option value="Emergency">Emergency</option>
+                <option value="Observation">Observation</option>
+                <option value="Daycare">Daycare</option>
+              </select>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Ward</label>
+              <select class="form-select bg-dark text-white border-secondary" id="adm-ward" onchange="loadAvailableBeds('adm-ward', 'adm-bed')">
+                <option value="">Select Ward...</option>
+                <option value="A">Ward A (General)</option>
+                <option value="B">Ward B (Private)</option>
+                <option value="ICU">ICU</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted text-success fw-bold">Available Bed No.</label>
+              <select class="form-select bg-dark text-white border-success" id="adm-bed" required>
+                <option value="">Select Ward First...</option>
+              </select>
+            </div>
+          </div>
+
+          <h6 class="text-muted small fw-bold mb-3 border-bottom border-secondary pb-1">3. CLINICAL INFO</h6>
+          <div class="row g-3">
+             <div class="col-md-6">
+              <label class="form-label small text-muted">Consulting Doctor</label>
+              <select class="form-select bg-dark text-white border-secondary" id="adm-doctor">
+                <option value="Dr. Meivasagam">Dr. Meivasagam</option>
+                <option value="Dr. Thiyagarajan">Dr. Thiyagarajan</option>
+                <option value="Dr. Valarmathi">Dr. Valarmathi</option>
+                <option value="Dr. Logavignesh">Dr. Logavignesh</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Provisional Diagnosis</label>
+              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-diagnosis" required>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer border-secondary bg-black">
+        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary px-4 fw-bold" id="btn-submit-admit" onclick="submitAdmissionForm()">Admit & Generate IP</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalChangeBed" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-white border-secondary">
+      <div class="modal-header border-secondary bg-black">
+        <h5 class="modal-title fw-bold text-warning"><i class="fa-solid fa-right-left me-2"></i> Change Bed</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="transfer-ip-no">
+        <input type="hidden" id="transfer-old-bed">
+        <div class="mb-3">
+          <label class="form-label small text-muted">Current Bed</label>
+          <input type="text" class="form-control bg-dark text-white border-secondary" id="transfer-current" readonly>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted">New Ward</label>
+          <select class="form-select bg-dark text-white border-secondary" id="transfer-ward" onchange="loadAvailableBeds('transfer-ward', 'transfer-bed')">
+            <option value="">Select Ward...</option>
+            <option value="A">Ward A</option>
+            <option value="B">Ward B</option>
+            <option value="ICU">ICU</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted text-success fw-bold">New Available Bed</label>
+          <select class="form-select bg-dark text-white border-success" id="transfer-bed">
+            <option value="">Select Ward First...</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary bg-black">
+        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning px-4 fw-bold" id="btn-submit-transfer" onclick="submitBedTransfer()">Confirm Transfer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let ledgerDataMaster = [];
+
+  function loadIPLedger() {
+    google.script.run.withSuccessHandler(renderLedgerTable).getIPLedgerData();
+  }
+
+  function renderLedgerTable(dataStr) {
+    const tbody = document.getElementById('ip-ledger-tbody');
+    try {
+      ledgerDataMaster = JSON.parse(dataStr);
+      filterLedger(); 
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error loading ledger.</td></tr>`;
+    }
+  }
+
+  function filterLedger() {
+    const query = document.getElementById('ledger-search').value.toLowerCase();
+    const statusFilter = document.getElementById('ledger-filter-status').value;
+    const tbody = document.getElementById('ip-ledger-tbody');
+    
+    let html = '';
+    let count = 0;
+
+    ledgerDataMaster.forEach(row => {
+      const matchSearch = row.ipNumber.toLowerCase().includes(query) || row.patientId.toLowerCase().includes(query) || row.patientName.toLowerCase().includes(query);
+      const matchStatus = statusFilter === 'ALL' || row.status.toUpperCase() === statusFilter;
+
+      if(matchSearch && matchStatus) {
+        count++;
+        let statusBadge = row.status === 'ACTIVE' ? `<span class="badge bg-success">Active</span>` : `<span class="badge bg-secondary">Discharged<br><small>${row.dod}</small></span>`;
+        
+        let actionBtn = row.status === 'ACTIVE' ? 
+          `<button class="btn btn-sm btn-outline-warning rounded-pill px-3 me-1" onclick="openChangeBedModal('${row.ipNumber}', '${row.bed}', '${row.ward}')"><i class="fa-solid fa-right-left"></i> Change Bed</button>
+           <button class="btn btn-sm btn-outline-danger rounded-pill px-3" onclick="triggerDischarge('${row.ipNumber}', '${row.bed}')"><i class="fa-solid fa-arrow-right-from-bracket"></i> Discharge</button>` : 
+          `<button class="btn btn-sm btn-outline-light rounded-pill px-3" disabled>Closed</button>`;
+
+        html += `
+          <tr>
+            <td class="fw-bold text-info">${row.ipNumber}</td>
+            <td><strong class="text-white">${row.patientName}</strong><br><small class="text-muted">${row.patientId} | ${row.ageSex}</small></td>
+            <td>${row.doa}<br><small class="text-muted">${row.toa}</small></td>
+            <td><span class="badge bg-dark border border-secondary">${row.ward} - ${row.bed}</span></td>
+            <td>${row.consultant}</td>
+            <td class="small">${row.diagnosis}</td>
+            <td>${statusBadge}</td>
+            <td class="text-end">${actionBtn}</td>
+          </tr>
+        `;
+      }
+    });
+
+    if(count === 0) html = `<tr><td colspan="8" class="text-center py-4 text-muted">No records found.</td></tr>`;
+    tbody.innerHTML = html;
+  }
+
+  // UPDATED: Prepares Modal Data silently in the background
+  function prepAdmitModal() {
+    try {
+      document.getElementById('form-admission').reset();
+      document.getElementById('adm-pat-name').value = '';
+      document.getElementById('adm-pat-age').value = '';
+      document.getElementById('adm-pat-sex').value = '';
+      document.getElementById('adm-doa').valueAsDate = new Date();
+      document.getElementById('adm-toa').value = new Date().toTimeString().substring(0,5);
+      document.getElementById('adm-bed').innerHTML = '<option value="">Select Ward First...</option>';
+    } catch (error) {
+      console.error("Data prep error: ", error);
+    }
+  }
+
+  function fetchAdmitPatientDetails() {
+    const pid = document.getElementById('adm-pat-id').value.trim();
+    if(!pid) return;
+    document.getElementById('adm-pat-name').value = "Fetching...";
+    
+    // Assumes fetchPatientForAdmit exists in your .gs file
+    google.script.run.withSuccessHandler(res => {
+      if(res) {
+        document.getElementById('adm-pat-name').value = res.name;
+        document.getElementById('adm-pat-age').value = res.age;
+        document.getElementById('adm-pat-sex').value = res.sex;
+      } else {
+        document.getElementById('adm-pat-name').value = "Not Found!";
+        document.getElementById('adm-pat-age').value = "";
+        document.getElementById('adm-pat-sex').value = "";
+      }
+    }).fetchPatientForAdmit(pid);
+  }
+
+  function loadAvailableBeds(wardElementId, targetElementId) {
+    const ward = document.getElementById(wardElementId).value;
+    const bedSelect = document.getElementById(targetElementId);
+    if(!ward) { bedSelect.innerHTML = '<option value="">Select Ward First...</option>'; return; }
+    
+    bedSelect.innerHTML = '<option value="">Loading...</option>';
+    google.script.run.withSuccessHandler(beds => {
+      if(beds.length === 0) bedSelect.innerHTML = '<option value="" disabled>No beds available</option>';
+      else {
+        bedSelect.innerHTML = '<option value="">Select Bed...</option>';
+        beds.forEach(b => bedSelect.innerHTML += `<option value="${b}">${b}</option>`);
+      }
+    }).getAvailableBedsByWard(ward);
+  }
+
+  function submitAdmissionForm() {
+    const pid = document.getElementById('adm-pat-id').value;
+    const bed = document.getElementById('adm-bed').value;
+    const name = document.getElementById('adm-pat-name').value;
+    const age = document.getElementById('adm-pat-age').value;
+    const sex = document.getElementById('adm-pat-sex').value;
+    
+    if(!pid || !bed || name === "Not Found!") {
+      alert("Valid Patient ID and Available Bed are required."); return;
+    }
+
+    const payload = {
+      patientId: pid,
+      patientName: name,
+      ageSex: age + " / " + sex,
+      doa: document.getElementById('adm-doa').value,
+      toa: document.getElementById('adm-toa').value,
+      type: document.getElementById('adm-type').value,
+      ward: document.getElementById('adm-ward').value,
+      bed: bed,
+      consultant: document.getElementById('adm-doctor').value,
+      diagnosis: document.getElementById('adm-diagnosis').value,
+      insurance: "Not Specified" // Keeping payload structure intact for DB
+    };
+
+    const btn = document.getElementById('btn-submit-admit');
+    btn.innerText = "Processing...";
+    btn.disabled = true;
+    
+    google.script.run.withSuccessHandler(newIpNum => {
+      alert(`Admission Successful!\nGenerated IP Number: ${newIpNum}`);
+      // Hide modal programmatically after success
+      bootstrap.Modal.getInstance(document.getElementById('modalAdmitPatient')).hide();
+      btn.innerText = "Admit & Generate IP";
+      btn.disabled = false;
+      loadIPLedger(); 
+    }).saveNewAdmissionLedger(payload);
+  }
+
+  // Bed Transfer Handlers
+  function openChangeBedModal(ipNumber, currentBed, currentWard) {
+    document.getElementById('transfer-ip-no').value = ipNumber;
+    document.getElementById('transfer-old-bed').value = currentBed;
+    document.getElementById('transfer-current').value = `${currentWard} - ${currentBed}`;
+    
+    document.getElementById('transfer-ward').value = '';
+    document.getElementById('transfer-bed').innerHTML = '<option value="">Select Ward First...</option>';
+    
+    new bootstrap.Modal(document.getElementById('modalChangeBed')).show();
+  }
+
+  function submitBedTransfer() {
+    const ipNumber = document.getElementById('transfer-ip-no').value;
+    const oldBed = document.getElementById('transfer-old-bed').value;
+    const newWard = document.getElementById('transfer-ward').value;
+    const newBed = document.getElementById('transfer-bed').value;
+
+    if(!newBed) { alert("Please select a new bed."); return; }
+
+    const btn = document.getElementById('btn-submit-transfer');
+    btn.innerText = "Transferring...";
+    btn.disabled = true;
+
+    google.script.run.withSuccessHandler(() => {
+      bootstrap.Modal.getInstance(document.getElementById('modalChangeBed')).hide();
+      btn.innerText = "Confirm Transfer";
+      btn.disabled = false;
+      alert(`Bed successfully changed from ${oldBed} to ${newBed}.`);
+      loadIPLedger();
+    }).processBedTransfer(ipNumber, oldBed, newWard, newBed);
+  }
+
+  // Discharge Handler
+  function triggerDischarge(ipNumber, bedId) {
+    if(confirm(`WARNING: You are about to discharge IP No: ${ipNumber}.\nThis will release Bed ${bedId} for cleaning.\n\nProceed?`)) {
+      google.script.run.withSuccessHandler(() => {
+        alert("Patient Discharged. Bed sent to cleaning.");
+        loadIPLedger(); 
+      }).processPatientDischarge(ipNumber, bedId);
+    }
+  }
+</script>

@@ -1,0 +1,304 @@
+<style>
+  /* Subtle styling for our new features */
+  .indicator-dot { width: 10px; height: 10px; transition: all 0.2s ease; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
+  .hover-bg-dark:hover { background-color: rgba(255, 255, 255, 0.05); }
+</style>
+
+<div id="tab-admin-avail" class="page-section d-none">
+  <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-outline-secondary label-bright" onclick="switchTab('workspace-appointments')"><i class="fa-solid fa-arrow-left"></i></button>
+      <h3 class="fw-bold m-0 text-white">Doctor Availability</h3>
+    </div>
+    <div class="text-muted small" id="last-audit-log"></div>
+  </div>
+
+  <div class="card p-4 shadow-lg" style="max-width: 1200px;">
+    <div class="d-flex flex-wrap align-items-end gap-3 mb-4 p-3 rounded" style="background: var(--bg-main, #0f172a);">
+      <div>
+        <label class="label-bright mb-1 fw-bold small">Start Date</label>
+        <input type="date" id="avail-start-date" class="form-control form-control-sm text-white-force border-secondary" style="width: 150px;" onchange="loadAvailabilityCache()">
+      </div>
+      
+      <div class="form-check form-switch ms-2 pb-1">
+        <input class="form-check-input cursor-pointer" type="checkbox" id="toggle-bulk-date" onchange="toggleEndDate(this)">
+        <label class="form-check-label text-warning small fw-bold mt-1">Bulk Date Range</label>
+      </div>
+
+      <div id="end-date-container" class="d-none">
+        <label class="label-bright mb-1 fw-bold small">End Date</label>
+        <input type="date" id="avail-end-date" class="form-control form-control-sm text-white-force border-secondary" style="width: 150px;">
+      </div>
+    </div>
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h6 class="label-bright m-0">Availability Slots (Green = Available, Red = Blocked)</h6>
+      <button id="btn-expand-toggle" class="btn btn-sm btn-outline-info fw-bold" onclick="toggleExpandCollapse()">
+        <i class="fa-solid fa-layer-group"></i> Expand All
+      </button>
+    </div>
+
+    <div id="avail-container" class="row g-3 pb-4">
+      </div>
+    
+    <div class="text-center mt-2 pt-4 border-top border-secondary">
+      <button id="btn-save-avail" class="btn btn-success fw-bold px-5 py-3 shadow-lg" style="border-radius: 12px; font-size: 1.1rem; width: 100%; max-width: 400px;" onclick="saveAvailabilitySettings(false)">
+        <i class="fa-solid fa-floppy-disk me-2"></i> Update Availability
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="conflictModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark border-danger" style="border-width: 2px;">
+      <div class="modal-header border-bottom-0">
+        <h5 class="modal-title text-danger fw-bold"><i class="fa-solid fa-triangle-exclamation me-2"></i> Booking Conflict Detected</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-white">
+        <p>You are trying to block time slots where patients are already scheduled:</p>
+        <ul id="conflict-list" class="text-warning small mb-3"></ul>
+        <p class="mb-0 text-muted small">Do you want to force this block anyway? (Reception must manually reschedule these patients later).</p>
+      </div>
+      <div class="modal-footer border-top-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger fw-bold" onclick="saveAvailabilitySettings(true)">Force Block Override</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  // 🚀 UPGRADE: Segregated Period Data Structure
+  const SCHEDULE_PERIODS = {
+    "☀️ Morning": [
+      { id: "hr1", label: "10:00 AM to 11:00 AM", slots: ["10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM"] },
+      { id: "hr2", label: "11:00 AM to 12:00 PM", slots: ["11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM"] }
+    ],
+    "🌤️ Afternoon": [
+      { id: "hr3", label: "12:00 PM to 01:00 PM", slots: ["12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM"] },
+      { id: "hr4", label: "05:00 PM to 06:00 PM", slots: ["05:00 PM", "05:15 PM", "05:30 PM", "05:45 PM"] }
+    ],
+    "🌙 Evening": [
+      { id: "hr5", label: "06:00 PM to 07:00 PM", slots: ["06:00 PM", "06:15 PM", "06:30 PM", "06:45 PM"] },
+      { id: "hr6", label: "07:00 PM to 08:00 PM", slots: ["07:00 PM", "07:15 PM", "07:30 PM", "07:45 PM"] },
+      { id: "hr7", label: "08:00 PM to 09:00 PM", slots: ["08:00 PM", "08:15 PM", "08:30 PM", "08:45 PM"] }
+    ]
+  };
+
+  let conflictModalInstance;
+  let isGridExpanded = false;
+
+  function initAvailability() {
+    document.getElementById('avail-start-date').value = new Date().toISOString().split('T')[0];
+    conflictModalInstance = new bootstrap.Modal(document.getElementById('conflictModal'));
+    loadAvailabilityCache();
+  }
+
+  function toggleEndDate(checkbox) {
+    const container = document.getElementById('end-date-container');
+    if(checkbox.checked) {
+      container.classList.remove('d-none');
+      document.getElementById('avail-end-date').value = document.getElementById('avail-start-date').value;
+    } else {
+      container.classList.add('d-none');
+      document.getElementById('avail-end-date').value = "";
+    }
+  }
+
+  function loadAvailabilityCache() {
+    const dateVal = document.getElementById('avail-start-date').value;
+    if(!dateVal) return;
+    const cacheKey = `clinic_avail_${dateVal}`;
+    const cachedData = sessionStorage.getItem(cacheKey);
+
+    if (cachedData) {
+      renderMicroSlotGrid(JSON.parse(cachedData));
+    } else {
+      fetchAvailabilityFromDB(dateVal, cacheKey);
+    }
+  }
+
+  function fetchAvailabilityFromDB(dateVal, cacheKey) {
+    const container = document.getElementById('avail-container');
+    container.innerHTML = '<div class="col-12 text-center text-info py-4"><i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i><br>Fetching Schedule...</div>';
+
+    google.script.run.withSuccessHandler(appts => {
+      const blockedTimes = appts.filter(a => a.status === 'Blocked').map(a => a.time);
+      sessionStorage.setItem(cacheKey, JSON.stringify(blockedTimes)); 
+      renderMicroSlotGrid(blockedTimes);
+    }).getAppointmentsByDate(dateVal);
+  }
+
+  // 🚀 UPGRADED: Renders Segregated Periods with Dividers
+  function renderMicroSlotGrid(blockedTimes) {
+    const container = document.getElementById('avail-container');
+    let html = '';
+    isGridExpanded = false; 
+    document.getElementById('btn-expand-toggle').innerHTML = '<i class="fa-solid fa-layer-group"></i> Expand All';
+
+    for (const [periodTitle, blocks] of Object.entries(SCHEDULE_PERIODS)) {
+      // Add the Period Header & Divider
+      html += `
+        <div class="col-12 mt-4 mb-1 d-flex align-items-center gap-3">
+          <h5 class="fw-bold m-0 text-white opacity-75" style="letter-spacing: 1px;">${periodTitle}</h5>
+          <div class="flex-grow-1 border-bottom border-secondary opacity-50"></div>
+        </div>
+      `;
+
+      // Loop through the hour blocks for this specific period
+      blocks.forEach(block => {
+        let childHtml = '';
+        let miniHeatmapHtml = '';
+        let activeChildrenCount = 0;
+
+        block.slots.forEach((slot, index) => {
+          const isBlocked = blockedTimes.includes(slot);
+          const isChecked = !isBlocked ? 'checked' : '';
+          if(!isBlocked) activeChildrenCount++;
+          
+          const dotColor = isBlocked ? 'bg-danger' : 'bg-success';
+          miniHeatmapHtml += `<div id="dot-${block.id}-${index}" class="${dotColor} rounded-circle indicator-dot" title="${slot}"></div>`;
+          
+          childHtml += `
+            <div class="d-flex justify-content-between align-items-center py-2 px-3 border-top border-secondary hover-bg-dark">
+              <span class="text-white fw-medium small opacity-75">${slot}</span>
+              <div class="form-check form-switch m-0">
+                <input class="form-check-input micro-checkbox cursor-pointer" type="checkbox" data-time="${slot}" data-parent="${block.id}" ${isChecked} onchange="updateParentVisual('${block.id}')">
+              </div>
+            </div>
+          `;
+        });
+
+        const masterChecked = (activeChildrenCount === 4) ? 'checked' : '';
+        const cardBorder = (activeChildrenCount === 0) ? 'border-color: #ef4444; opacity: 0.7;' : (activeChildrenCount < 4 ? 'border-color: #f59e0b;' : 'border-color: #22c55e;');
+
+        html += `
+          <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm p-0 overflow-hidden parent-card" id="card-${block.id}" style="background: var(--bg-base, #121418); ${cardBorder} border-width: 2px; transition: all 0.3s ease;">
+              <div class="p-3 d-flex flex-column gap-2">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-dark border border-secondary text-white p-1" data-bs-toggle="collapse" data-bs-target="#collapse-${block.id}" style="line-height: 1;">
+                      <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                    <span class="text-white fw-bold small m-0">${block.label}</span>
+                  </div>
+                  <div class="form-check form-switch m-0" style="transform: scale(1.2);">
+                    <input class="form-check-input master-checkbox cursor-pointer" type="checkbox" id="master-${block.id}" ${masterChecked} onchange="toggleMaster(this, '${block.id}')">
+                  </div>
+                </div>
+                <div class="d-flex gap-2 ms-5 ps-1">
+                  ${miniHeatmapHtml}
+                </div>
+              </div>
+              <div class="collapse bg-dark" id="collapse-${block.id}">
+                ${childHtml}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+    container.innerHTML = html;
+  }
+
+  function toggleExpandCollapse() {
+    const btn = document.getElementById('btn-expand-toggle');
+    const elements = document.querySelectorAll('.collapse');
+    
+    if (!isGridExpanded) {
+      elements.forEach(el => new bootstrap.Collapse(el, {toggle: false}).show());
+      btn.innerHTML = '<i class="fa-solid fa-compress"></i> Collapse All';
+      btn.classList.replace('btn-outline-info', 'btn-outline-warning');
+      isGridExpanded = true;
+    } else {
+      elements.forEach(el => new bootstrap.Collapse(el, {toggle: false}).hide());
+      btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Expand All';
+      btn.classList.replace('btn-outline-warning', 'btn-outline-info');
+      isGridExpanded = false;
+    }
+  }
+
+  function toggleMaster(masterCheckbox, blockId) {
+    const children = document.querySelectorAll(`.micro-checkbox[data-parent="${blockId}"]`);
+    children.forEach(child => {
+      child.checked = masterCheckbox.checked;
+    });
+    updateParentVisual(blockId);
+  }
+
+  function updateParentVisual(blockId) {
+    const card = document.getElementById(`card-${blockId}`);
+    const master = document.getElementById(`master-${blockId}`);
+    const children = document.querySelectorAll(`.micro-checkbox[data-parent="${blockId}"]`);
+    
+    let checkedCount = 0;
+    
+    children.forEach((c, index) => {
+      const dot = document.getElementById(`dot-${blockId}-${index}`);
+      if(c.checked) {
+        checkedCount++;
+        dot.className = 'bg-success rounded-circle indicator-dot';
+      } else {
+        dot.className = 'bg-danger rounded-circle indicator-dot';
+      }
+    });
+
+    if(checkedCount === 4) {
+      master.checked = true;
+      card.style.borderColor = '#22c55e'; card.style.opacity = '1';
+    } else if (checkedCount === 0) {
+      master.checked = false;
+      card.style.borderColor = '#ef4444'; card.style.opacity = '0.7';
+    } else {
+      master.checked = false; 
+      card.style.borderColor = '#f59e0b'; card.style.opacity = '1';
+    }
+  }
+
+  function saveAvailabilitySettings(overrideConflicts) {
+    const startDate = document.getElementById('avail-start-date').value;
+    const isBulk = document.getElementById('toggle-bulk-date').checked;
+    let endDate = isBulk ? document.getElementById('avail-end-date').value : startDate;
+
+    if(!startDate) return alert("Please select a date.");
+    if(isBulk && startDate > endDate) return alert("End date cannot be before start date.");
+
+    let blockedSlots = [];
+    document.querySelectorAll('.micro-checkbox:not(:checked)').forEach(chk => {
+      blockedSlots.push(chk.getAttribute('data-time'));
+    });
+
+    const payload = { startDate: startDate, endDate: endDate, blockedSlots: blockedSlots, overrideConflicts: overrideConflicts };
+
+    const btn = document.getElementById('btn-save-avail');
+    const ogHtml = btn.innerHTML;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-2"></i> Processing...`;
+    btn.disabled = true;
+
+    google.script.run.withSuccessHandler(res => {
+      btn.innerHTML = ogHtml; btn.disabled = false;
+      
+      // 🚀 UPGRADED: Strict error checking prevents infinite hanging
+      if (res.isConflict) {
+        document.getElementById('conflict-list').innerHTML = res.conflicts.map(c => `<li>${c.date} @ ${c.time} - ${c.patient}</li>`).join('');
+        conflictModalInstance.show();
+      } else if (res.success) {
+        if(overrideConflicts) conflictModalInstance.hide();
+        sessionStorage.removeItem(`clinic_avail_${startDate}`);
+        const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        document.getElementById('last-audit-log').innerText = `Last updated today at ${timeStr}`;
+        alert("Availability saved successfully!");
+        loadAvailabilityCache();
+      } else {
+        // Backend caught an error, returned it safely
+        alert("Action Failed: " + res.message);
+      }
+    }).withFailureHandler(err => {
+      // Network/Google timeout error
+      btn.innerHTML = ogHtml; btn.disabled = false; 
+      alert("Network Error: " + err.message);
+    }).saveEnterpriseAvailability(payload);
+  }
+</script>

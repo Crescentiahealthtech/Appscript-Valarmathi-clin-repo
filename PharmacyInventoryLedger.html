@@ -1,0 +1,279 @@
+<div id="tab-admin-pharmacy" class="page-section d-none">
+  <div class="container-fluid py-3 animate-fade-in">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h3 class="fw-bold m-0 text-white"><i class="fa-solid fa-boxes-stacked text-success me-2"></i>Live Inventory</h3>
+      <button class="btn btn-outline-light btn-sm" onclick="loadPharmacyInventory()">
+        <i class="fa-solid fa-rotate-right"></i> Refresh
+      </button>
+      <button class="btn btn-info rounded-circle shadow-lg position-fixed bottom-0 end-0 m-4 d-flex align-items-center justify-content-center transition-all" 
+            style="width: 65px; height: 65px; z-index: 1040; border: 3px solid #1a1d20;"
+            onclick="switchTab('pharmacy-inventory-view');">
+      <i class="fa-solid fa-plus fs-3 text-dark"></i>
+    </button>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-4 col-12">
+        <div class="card bg-dark border-secondary h-100">
+          <div class="card-body d-flex align-items-center">
+            <i class="fa-solid fa-magnifying-glass text-secondary me-3 fs-4"></i>
+            <input type="text" id="inventorySearch" class="form-control custom-input-dark border-0 shadow-none w-100" placeholder="Search Inventory (Brand, Batch, Generic)..." onkeyup="filterInventoryTable()">
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 col-6">
+        <div class="card border-0 h-100" style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444 !important;">
+          <div class="card-body py-2">
+            <h6 class="text-danger fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Low Stock Alerts</h6>
+            <h3 class="text-white m-0 fw-bold" id="kpi-low-stock">0</h3>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4 col-6">
+        <div class="card border-0 h-100" style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b !important;">
+          <div class="card-body py-2">
+            <h6 class="text-warning fw-bold mb-1"><i class="fa-regular fa-clock me-1"></i>Expiring Soon</h6>
+            <h3 class="text-white m-0 fw-bold" id="kpi-expiring">0</h3>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bg-dark border-secondary shadow-lg">
+      <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 65vh;">
+          <table class="table table-dark table-hover align-middle mb-0" id="pharmacyInventoryTable">
+            <thead class="table-active text-secondary" style="position: sticky; top: 0; z-index: 10;">
+              <tr style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                <th class="ps-3 py-3">S.No</th>
+                <th class="py-3">Drug Name (Generic)</th>
+                <th class="py-3 text-info">Brand Name</th>
+                <th class="py-3">Batch</th>
+                <th class="py-3 text-warning">Stock</th>
+                <th class="py-3">Expiry</th>
+                <th class="py-3">MRP (₹)</th>
+                <th class="py-3">GST (%)</th>
+                <th class="py-3">Rack</th>
+                <th class="py-3">Supplier</th>
+                <th class="py-3">Manufacturer</th>
+                <th class="py-3 pe-3 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTbody" style="font-size: 0.85rem;">
+              </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="inventoryEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark border-secondary">
+      <div class="modal-header border-bottom border-secondary">
+        <h5 class="modal-title text-light"><i class="fa-solid fa-pen-to-square text-info me-2"></i>Adjust Stock Entry</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="editInventoryForm">
+          <input type="hidden" id="editRowId">
+          <input type="hidden" id="editBrandName">
+          <input type="hidden" id="editGenericName">
+          <input type="hidden" id="editSupplier">
+          <input type="hidden" id="editManufacturer">
+          
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="p-3 rounded" style="background: #1a1d20;">
+                <h6 class="text-info fw-bold mb-1" id="displayEditBrand">Brand Name</h6>
+                <small class="text-secondary" id="displayEditBatch">Batch: XXXX</small>
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <label class="custom-label-dark">Live Stock Count</label>
+              <input type="number" class="form-control custom-input-dark text-warning fw-bold" id="editStockCount" required>
+            </div>
+            <div class="col-md-6">
+              <label class="custom-label-dark">Expiry Date</label>
+              <input type="month" class="form-control custom-input-dark" id="editExpiry" required>
+            </div>
+            <div class="col-md-4">
+              <label class="custom-label-dark">MRP (₹)</label>
+              <input type="number" step="0.01" class="form-control custom-input-dark" id="editMrp" required>
+            </div>
+            <div class="col-md-4">
+              <label class="custom-label-dark">GST (%)</label>
+              <input type="number" step="0.1" class="form-control custom-input-dark" id="editGst" required>
+            </div>
+            <div class="col-md-4">
+              <label class="custom-label-dark">Rack Location</label>
+              <input type="text" class="form-control custom-input-dark text-uppercase" id="editRack">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer border-top border-secondary">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-info" id="btnSaveInventoryEdit" onclick="submitInventoryEdit()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentInventoryData = [];
+
+  function loadPharmacyInventory() {
+    const tbody = document.getElementById('inventoryTbody');
+    tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-secondary"><div class="spinner-border spinner-border-sm me-2"></div>Loading Database...</td></tr>`;
+    
+    google.script.run
+      .withSuccessHandler((response) => {
+        if(!response.success) {
+          tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-4">${response.message}</td></tr>`;
+          return;
+        }
+        
+        currentInventoryData = response.data;
+        renderInventoryTable(currentInventoryData);
+        calculateInventoryKPIs(currentInventoryData);
+      })
+      .withFailureHandler((err) => {
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-4">Connection Failed.</td></tr>`;
+      })
+      .fetchPharmacyInventory();
+  }
+
+  function renderInventoryTable(data) {
+    const tbody = document.getElementById('inventoryTbody');
+    tbody.innerHTML = '';
+    
+    if(data.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-secondary">No inventory found.</td></tr>`;
+      return;
+    }
+
+    data.forEach((item, index) => {
+      const safeItem = JSON.stringify(item).replace(/"/g, '&quot;');
+      const stockColor = item.stock < 50 ? 'text-danger fw-bold' : 'text-light';
+      
+      const row = `
+        <tr>
+          <td class="ps-3 text-secondary">${index + 1}</td>
+          <td><span class="badge bg-secondary bg-opacity-25 text-light fw-normal">${item.genericName}</span></td>
+          <td class="text-info fw-semibold">${item.brandName}</td>
+          <td class="text-secondary">${item.batch}</td>
+          <td class="${stockColor}">${item.stock}</td>
+          <td>${item.expiry}</td>
+          <td>${item.mrp.toFixed(2)}</td>
+          <td class="text-secondary">${item.gst}%</td>
+          <td>${item.rack || '-'}</td>
+          <td class="text-secondary truncate-text" style="max-width: 100px;">${item.supplier}</td>
+          <td class="text-secondary truncate-text" style="max-width: 100px;">${item.manufacturer}</td>
+          <td class="pe-3 text-center">
+            <button class="btn btn-sm btn-primary py-1 px-2" onclick="openInventoryEditModal(${safeItem})">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+      tbody.insertAdjacentHTML('beforeend', row);
+    });
+  }
+
+  function calculateInventoryKPIs(data) {
+    let lowStock = 0;
+    let expiring = 0;
+    
+    const today = new Date();
+    const ninetyDaysFromNow = new Date();
+    ninetyDaysFromNow.setDate(today.getDate() + 90);
+
+    data.forEach(item => {
+      if (item.stock < 50) lowStock++;
+      
+      if (item.expiry) {
+        const parts = item.expiry.split('-');
+        if(parts.length === 2) {
+           const expDate = new Date(parts[0], parts[1], 0); 
+           if (expDate <= ninetyDaysFromNow) expiring++;
+        }
+      }
+    });
+
+    document.getElementById('kpi-low-stock').innerText = lowStock;
+    document.getElementById('kpi-expiring').innerText = expiring;
+  }
+
+  function filterInventoryTable() {
+    const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
+    const filteredData = currentInventoryData.filter(item => 
+      item.brandName.toLowerCase().includes(searchTerm) || 
+      item.genericName.toLowerCase().includes(searchTerm) ||
+      item.batch.toLowerCase().includes(searchTerm)
+    );
+    renderInventoryTable(filteredData);
+  }
+
+  function openInventoryEditModal(item) {
+    document.getElementById('editRowId').value = item.rowId;
+    document.getElementById('editBrandName').value = item.brandName;
+    document.getElementById('editGenericName').value = item.genericName;
+    document.getElementById('editSupplier').value = item.supplier;
+    document.getElementById('editManufacturer').value = item.manufacturer;
+    
+    document.getElementById('displayEditBrand').innerText = item.brandName;
+    document.getElementById('displayEditBatch').innerText = `Batch: ${item.batch}`;
+    
+    document.getElementById('editStockCount').value = item.stock;
+    document.getElementById('editExpiry').value = item.expiry;
+    document.getElementById('editMrp').value = item.mrp;
+    document.getElementById('editGst').value = item.gst;
+    document.getElementById('editRack').value = item.rack;
+
+    const modal = new bootstrap.Modal(document.getElementById('inventoryEditModal'));
+    modal.show();
+  }
+
+  function submitInventoryEdit() {
+    const btn = document.getElementById('btnSaveInventoryEdit');
+    const originalText = btn.innerText;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Saving...`;
+    btn.disabled = true;
+
+    const payload = {
+      rowId: document.getElementById('editRowId').value,
+      brandName: document.getElementById('editBrandName').value,
+      genericName: document.getElementById('editGenericName').value,
+      batch: document.getElementById('displayEditBatch').innerText.replace('Batch: ', ''),
+      stock: document.getElementById('editStockCount').value,
+      expiry: document.getElementById('editExpiry').value,
+      mrp: document.getElementById('editMrp').value,
+      gst: document.getElementById('editGst').value,
+      rack: document.getElementById('editRack').value.trim().toUpperCase(),
+      supplier: document.getElementById('editSupplier').value,
+      manufacturer: document.getElementById('editManufacturer').value
+    };
+
+    google.script.run
+      .withSuccessHandler((response) => {
+        if(response.success) {
+          bootstrap.Modal.getInstance(document.getElementById('inventoryEditModal')).hide();
+          loadPharmacyInventory(); 
+          if(typeof showToast === 'function') showToast('Updated', response.message, 'success');
+        } else {
+          alert(response.message);
+        }
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      })
+      .withFailureHandler((err) => {
+        alert("Error saving: " + err.message);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      })
+      .updatePharmacyStock(payload);
+  }
+</script>

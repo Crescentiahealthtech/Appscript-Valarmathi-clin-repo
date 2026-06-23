@@ -1,0 +1,177 @@
+<!-- ===================================================================== -->
+<!-- 💰 CRESCENTIA — FINANCE DASHBOARD (scoped + period picker).            -->
+<!-- Include AFTER Accounts_Scripts.html. Self-wiring navigation.          -->
+<!-- Spoke must contain: #accdash-tabs #accdash-picker #accdash-kpis        -->
+<!-- #accdash-shifts. Remember to add 'workspace-accounts-dashboard' to     -->
+<!-- AccX.PAGES.                                                            -->
+<!-- ===================================================================== -->
+<script>
+const AccDash = (function () {
+  const $ = (id) => document.getElementById(id);
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
+
+  const SCOPES = [['OVERALL', 'Overall'], ['MONTH', 'Monthly'], ['DAY', 'Day / Shift']];
+  const COLOR = {
+    green: ['#198754', 'text-success'], red: ['#dc3545', 'text-danger'],
+    blue: ['#0d6efd', 'text-primary'], teal: ['#0dcaf0', 'text-info'], amber: ['#ffc107', 'text-warning']
+  };
+  let SCOPE = 'OVERALL', PERIOD = '', modalInjected = false;
+
+  function busy(on) {
+    let o = $('acc-overlay');
+    if (on) {
+      if (!o) { o = document.createElement('div'); o.id = 'acc-overlay'; o.className = 'modal-overlay';
+        o.innerHTML = '<div class="text-center text-light"><i class="fas fa-circle-notch fa-spin fa-2x mb-2"></i></div>';
+        document.body.appendChild(o); }
+      o.style.display = 'flex';
+    } else if (o) o.style.display = 'none';
+  }
+  function toast(msg, ok) {
+    const t = document.createElement('div');
+    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white';
+    t.style.zIndex = 3000; t.style.background = ok ? '#198754' : '#dc3545';
+    t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+  }
+  const num = (id) => parseFloat(($(id) || {}).value) || 0;
+
+  function renderTabs() {
+    const bar = $('accdash-tabs'); if (!bar) return;
+    bar.innerHTML = SCOPES.map(function (s) {
+      const active = s[0] === SCOPE;
+      return '<button class="btn btn-sm rounded-pill px-3 fw-semibold ' +
+        (active ? 'btn-primary shadow-sm' : 'btn-outline-secondary text-white border-secondary bg-dark') +
+        '" onclick="AccDash.setScope(\'' + s[0] + '\')">' + s[1] + '</button>';
+    }).join('');
+  }
+
+  function renderPicker() {
+    const box = $('accdash-picker'); if (!box) return;
+    if (SCOPE === 'MONTH') {
+      box.innerHTML = '<input type="month" class="form-control form-control-sm" id="accdash-period" value="' + esc(PERIOD) + '" onchange="AccDash.setPeriod(this.value)" style="max-width:170px;">';
+    } else if (SCOPE === 'DAY') {
+      box.innerHTML = '<input type="date" class="form-control form-control-sm" id="accdash-period" value="' + esc(PERIOD) + '" onchange="AccDash.setPeriod(this.value)" style="max-width:170px;">';
+    } else { box.innerHTML = ''; }
+  }
+
+  function setScope(s) { SCOPE = s; PERIOD = ''; renderTabs(); renderPicker(); load(); }
+  function setPeriod(p) { PERIOD = p; load(); }
+
+  function load() {
+    const grid = $('accdash-kpis'), shifts = $('accdash-shifts');
+    if (grid) grid.innerHTML = '<div class="col-12 text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading…</div>';
+    if (shifts) shifts.innerHTML = '';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { if (grid) grid.innerHTML = '<div class="col-12 text-danger text-center py-5">' + esc((res && res.message) || 'Load failed.') + '</div>'; return; }
+        if (SCOPE !== 'OVERALL' && !PERIOD && res.periodKey) { PERIOD = res.periodKey; const p = $('accdash-period'); if (p) p.value = PERIOD; }
+        renderKPIs(res.kpis || []);
+        renderShifts(res.openShifts || []);
+      })
+      .withFailureHandler(function (err) { if (grid) grid.innerHTML = '<div class="col-12 text-danger text-center py-5">' + esc(err.message || 'Server error.') + '</div>'; })
+      .getFinanceDashboard(SCOPE, PERIOD || null);
+  }
+
+  function renderKPIs(kpis) {
+    const grid = $('accdash-kpis'); 
+    if (!grid) return;
+    
+    if (!kpis || !kpis.length) { 
+      grid.innerHTML = '<div class="col-12 text-center text-muted py-5">No data.</div>'; 
+      return; 
+    }
+    
+    grid.innerHTML = kpis.map(function (k) {
+      const c = COLOR[k.color] || COLOR.blue;
+      return '<div class="col-md-6 col-lg-3">' + 
+               '<div class="p-3 rounded-3 h-100" style="border-left:3px solid ' + c[0] + ';background:rgba(255,255,255,0.03);">' +
+                 '<div class="small fw-bold text-uppercase mb-1 ' + c[1] + '">' + esc(k.label) + '</div>' +
+                 '<h5 class="mb-0 fw-bold text-main">' + inr(k.value) + '</h5>' + 
+               '</div>' + 
+             '</div>';
+    }).join('');
+  }
+
+  function renderShifts(open) {
+    const box = $('accdash-shifts'); if (!box) return;
+    if (!open.length) {
+      box.innerHTML = '<h6 class="fw-bold text-main mt-4 mb-2">Active Shift Drawers</h6><div class="text-muted small">No open shifts right now.</div>';
+      return;
+    }
+    const cards = open.map(function (s) {
+      return '<div class="col-md-4"><div class="card premium-card border-0 rounded-3 h-100"><div class="card-body p-3">' +
+        '<div class="d-flex justify-content-between"><div><div class="fw-bold text-white">' + esc(s.counter) + '</div>' +
+        '<div class="small text-muted">' + esc(s.user) + '</div></div>' +
+        '<span class="badge bg-success bg-opacity-25 text-success" style="height:fit-content;">OPEN</span></div>' +
+        '<div class="d-flex justify-content-between mt-2 small"><span class="text-muted">Opening Float</span><span class="fw-semibold text-white">' + inr(s.opening) + '</span></div>' +
+        '<div class="d-flex justify-content-between small"><span class="text-muted">Current Expected</span><span class="fw-semibold text-info">' + inr(s.currentExpected) + '</span></div>' +
+        '</div></div></div>';
+    }).join('');
+    box.innerHTML = '<h6 class="fw-bold text-main mt-4 mb-2">Active Shift Drawers</h6><div class="row g-3">' + cards + '</div>';
+  }
+
+  // ---- transfer modal ----
+  function injectModal() {
+    if (modalInjected) return; modalInjected = true;
+    document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal fade" id="acc-transfer-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content premium-card border-0 rounded-4">
+        <div class="modal-header border-bottom border-secondary border-opacity-25">
+          <h6 class="modal-title fw-bold text-main">Cash ↔ Bank Transfer</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="btn-group w-100 mb-3">
+            <input type="radio" class="btn-check" name="acc-trf-dir" id="acc-trf-dep" value="DEPOSIT" checked>
+            <label class="btn btn-outline-info" for="acc-trf-dep">Cash → Bank</label>
+            <input type="radio" class="btn-check" name="acc-trf-dir" id="acc-trf-wd" value="WITHDRAW">
+            <label class="btn btn-outline-info" for="acc-trf-wd">Bank → Cash</label>
+          </div>
+          <div class="row g-3">
+            <div class="col-12"><label class="form-label small text-muted">Amount (₹)</label>
+              <input type="number" min="0" step="0.01" class="form-control" id="acc-trf-amount" placeholder="0.00"></div>
+            <div class="col-12"><label class="form-label small text-muted">Reference / Txn ID</label>
+              <input class="form-control" id="acc-trf-ref" placeholder="slip / UTR"></div>
+            <div class="col-12"><label class="form-label small text-muted">Notes</label>
+              <input class="form-control" id="acc-trf-notes" placeholder="Optional"></div>
+          </div>
+        </div>
+        <div class="modal-footer border-top border-secondary border-opacity-25">
+          <button class="btn btn-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-info btn-sm rounded-pill px-4" id="acc-trf-save">Record Transfer</button></div>
+      </div></div></div>`);
+    $('acc-trf-save').addEventListener('click', saveTransfer);
+  }
+  function openTransfer() {
+    injectModal();
+    ['acc-trf-amount', 'acc-trf-ref', 'acc-trf-notes'].forEach(id => { const e = $(id); if (e) e.value = ''; });
+    const d = $('acc-trf-dep'); if (d) d.checked = true;
+    new bootstrap.Modal($('acc-transfer-modal')).show();
+  }
+  function saveTransfer() {
+    const dir = (document.querySelector('input[name="acc-trf-dir"]:checked') || {}).value || 'DEPOSIT';
+    const payload = { direction: dir, amount: num('acc-trf-amount'), refId: ($('acc-trf-ref') || {}).value, notes: ($('acc-trf-notes') || {}).value, loggedBy: who() };
+    if (!(payload.amount > 0)) { toast('Enter a valid amount.', false); return; }
+    busy(true);
+    google.script.run
+      .withSuccessHandler(function (res) { busy(false); toast(res.message, !!res.success); if (res.success) { bootstrap.Modal.getInstance($('acc-transfer-modal')).hide(); load(); } })
+      .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
+      .recordBankTransfer(payload);
+  }
+
+  function init() { SCOPE = 'OVERALL'; PERIOD = ''; renderTabs(); renderPicker(); load(); }
+  return { init, load, setScope, setPeriod, openTransfer };
+})();
+
+function openAccountsDashboard() { switchAccountsPage('workspace-accounts-dashboard'); AccDash.init(); }
+
+(function () {
+  if (window.__accDashWired) return;
+  var orig = window.switchAccountsPage;
+  window.switchAccountsPage = function (pageId) {
+    if (typeof orig === 'function') orig(pageId);
+    if (pageId === 'workspace-accounts-dashboard') { try { AccDash.init(); } catch (e) {} }
+  };
+  window.__accDashWired = true;
+})();
+</script>

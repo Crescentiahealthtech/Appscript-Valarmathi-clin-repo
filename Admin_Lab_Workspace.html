@@ -1,0 +1,1221 @@
+<!-- ==========================================================================
+     CRESCENTIA HEALTHTECH — ADMIN LAB WORKSPACE  (v2 — redesigned)
+     Sections:
+       workspace-lab            Landing tiles
+       workspace-lab-catalog    Test Catalog manager (redesigned)
+     No "Setup DB" button in UI — auto-bootstraps silently on first load.
+     "Parameter" concept hidden from user — params only added inside a Panel.
+     Three clear creation paths: Panel · Individual Test · Package
+     ========================================================================== -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION A — LANDING
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div id="workspace-lab" class="page-section d-none">
+  <div class="d-flex justify-content-between align-items-center mb-3 mt-4 me-md-5">
+    <h3 class="fw-bold m-0 text-white-force">Laboratory Workspace</h3>
+  </div>
+  <div class="row g-4">
+    <div class="col-md-3 col-6">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('workspace-lab-catalog'); LabCatalog.init();">
+        <i class="fa-solid fa-list-check fa-2x mb-3" style="color:#22d3ee;"></i>
+        <h6 class="text-white-force fw-bold m-0">Test Catalog</h6>
+        <small class="label-bright mt-1 d-block">Panels · Tests · Packages</small>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('lab-workspace-view'); LabX.load();">
+        <i class="fa-solid fa-microscope fa-2x mb-3 text-warning"></i>
+        <h6 class="text-white-force fw-bold m-0">Lab Queue & Results</h6>
+        <small class="label-bright mt-1 d-block">Pipeline · Entry · Verify</small>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('workspace-lab-records'); LabRecordsApp.init();">
+        <i class="fa-solid fa-folder-open fa-2x mb-3" style="color:#34d399;"></i>
+        <h6 class="text-white-force fw-bold m-0">Lab Records</h6>
+        <small class="label-bright mt-1 d-block">Patient Results History</small>
+      </div>
+    </div>
+    <div class="col-md-3 col-6">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('lab-billing-workspace');">
+        <i class="fa-solid fa-file-invoice fa-2x mb-3 text-info"></i>
+        <h6 class="text-white-force fw-bold m-0">Lab Billing</h6>
+        <small class="label-bright mt-1 d-block">OP Spot · IP Account</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION B — TEST CATALOG MANAGER
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div id="workspace-lab-catalog" class="page-section d-none position-relative">
+
+  <!-- scoped loading overlay -->
+  <div id="lc-loader" class="position-absolute top-0 start-0 w-100 h-100 align-items-center justify-content-center flex-column d-none"
+       style="background:rgba(2,6,23,.75);z-index:1050;border-radius:.5rem;">
+    <div class="spinner-border mb-2" style="color:#22d3ee;" role="status"></div>
+    <span class="label-bright small" id="lc-loader-txt">Loading…</span>
+  </div>
+
+  <!-- header bar -->
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-3 pb-2"
+       style="border-bottom:1px solid var(--border-color);">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('workspace-lab');">
+        <i class="fa-solid fa-arrow-left me-1"></i>Back
+      </button>
+      <div>
+        <h3 class="fw-bold m-0 text-white-force">
+          <i class="fa-solid fa-list-check me-2" style="color:#22d3ee;"></i>Test Catalog
+        </h3>
+        <div id="lc-stat-bar" class="small label-bright mt-1">Loading catalog…</div>
+      </div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <button class="btn btn-sm btn-outline-secondary" onclick="LabCatalog.load();" title="Refresh">
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
+      <!-- Three distinct creation paths — no "Entry Type" dropdown needed -->
+      <div class="btn-group">
+        <button class="btn btn-sm fw-semibold"
+                style="background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;"
+                onclick="LabCatalog.openCreate('PANEL');"
+                title="A named group of parameters (e.g. CBC, LFT)">
+          <i class="fa-solid fa-layer-group me-1"></i>New Panel
+        </button>
+        <button class="btn btn-sm fw-semibold"
+                style="background:rgba(14,165,233,.12);border:1px solid #0ea5e9;color:#7dd3fc;"
+                onclick="LabCatalog.openCreate('INDIVIDUAL');"
+                title="A single reportable test (e.g. HbA1c, TSH)">
+          <i class="fa-solid fa-flask me-1"></i>New Test
+        </button>
+        <button class="btn btn-sm fw-semibold"
+                style="background:rgba(16,185,129,.12);border:1px solid #10b981;color:#6ee7b7;"
+                onclick="LabCatalog.openCreate('PACKAGE');"
+                title="A bundled health-check package (e.g. Master Health Checkup)">
+          <i class="fa-solid fa-box-open me-1"></i>New Package
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- flash message -->
+  <div id="lc-msg" class="mb-3"></div>
+
+  <!-- search + dept filter -->
+  <div class="d-flex gap-2 mb-4 flex-wrap">
+    <div class="input-group flex-grow-1" style="max-width:380px;">
+      <span class="input-group-text" style="background:var(--bg-input);border-color:var(--border-color);color:var(--text-muted);">
+        <i class="fa-solid fa-search"></i>
+      </span>
+      <input type="text" id="lc-search"
+             class="form-control form-control-sm"
+             placeholder="Search tests, codes, departments…"
+             oninput="LabCatalog.render();">
+    </div>
+    <select id="lc-dept-filter" class="form-select form-select-sm" style="max-width:200px;" onchange="LabCatalog.render();">
+      <option value="">All Departments</option>
+      <option value="HAEMATOLOGY">Haematology</option>
+      <option value="BIOCHEMISTRY">Biochemistry</option>
+      <option value="MICROBIOLOGY">Microbiology</option>
+      <option value="SEROLOGY">Serology</option>
+      <option value="URINE_ANALYSIS">Urine Analysis</option>
+      <option value="HISTOPATHOLOGY">Histopathology</option>
+      <option value="CYTOLOGY">Cytology</option>
+      <option value="ENDOCRINOLOGY">Endocrinology</option>
+      <option value="CLINICAL_PATH">Clinical Pathology</option>
+    </select>
+    <div class="d-flex gap-1 align-items-center">
+      <button class="btn btn-sm" id="lc-filter-all"
+              style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);"
+              onclick="LabCatalog.setView('all');">All</button>
+      <button class="btn btn-sm" id="lc-filter-active"
+              style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);"
+              onclick="LabCatalog.setView('active');">Active</button>
+      <button class="btn btn-sm" id="lc-filter-inactive"
+              style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);"
+              onclick="LabCatalog.setView('inactive');">Inactive</button>
+    </div>
+  </div>
+
+  <!-- catalog body — rendered by JS -->
+  <div id="lc-body"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PANEL EDITOR MODAL
+     Used for: New Panel · Edit Panel (no "entry type" concept exposed)
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="lc-panel-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <div>
+          <h5 class="modal-title text-white-force mb-0" id="lc-pm-title">New Panel</h5>
+          <small class="label-bright">A panel groups multiple parameters into one reportable test (e.g. CBC = 14 parameters)</small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="lcp-id">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label small label-bright">Panel Code *</label>
+            <input type="text" id="lcp-code" class="form-control form-control-sm"
+                   placeholder="e.g. CBC" style="text-transform:uppercase;"
+                   oninput="this.value=this.value.toUpperCase();">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small label-bright">Panel Name *</label>
+            <input type="text" id="lcp-name" class="form-control form-control-sm"
+                   placeholder="e.g. Complete Blood Count">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small label-bright">Display Order</label>
+            <input type="number" id="lcp-sort" class="form-control form-control-sm" value="0">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small label-bright">Department</label>
+            <select id="lcp-dept" class="form-select form-select-sm">
+              <option value="HAEMATOLOGY">Haematology</option>
+              <option value="BIOCHEMISTRY">Biochemistry</option>
+              <option value="MICROBIOLOGY">Microbiology</option>
+              <option value="SEROLOGY">Serology</option>
+              <option value="URINE_ANALYSIS">Urine Analysis</option>
+              <option value="HISTOPATHOLOGY">Histopathology</option>
+              <option value="CYTOLOGY">Cytology</option>
+              <option value="ENDOCRINOLOGY">Endocrinology</option>
+              <option value="CLINICAL_PATH">Clinical Pathology</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small label-bright">Sample Type</label>
+            <select id="lcp-sample" class="form-select form-select-sm">
+              <option value="BLOOD_EDTA">Blood — EDTA (Purple cap)</option>
+              <option value="BLOOD_PLAIN">Blood — Plain (Red cap)</option>
+              <option value="BLOOD_FLUORIDE">Blood — Fluoride (Grey cap)</option>
+              <option value="URINE_RANDOM">Urine — Random</option>
+              <option value="URINE_24HR">Urine — 24hr</option>
+              <option value="STOOL">Stool</option>
+              <option value="SWAB">Swab</option>
+              <option value="CSF">CSF</option>
+              <option value="TISSUE">Tissue / Biopsy</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small label-bright">Price (₹) *</label>
+            <input type="number" step="0.01" id="lcp-price" class="form-control form-control-sm" value="0">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small label-bright">TAT (min)</label>
+            <input type="number" id="lcp-tat" class="form-control form-control-sm" value="120">
+          </div>
+        </div>
+
+        <!-- Parameters inline table -->
+        <div class="mt-4">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+              <span class="text-white-force fw-semibold small">Parameters</span>
+              <small class="label-bright ms-2">Each row = one reportable value in this panel</small>
+            </div>
+            <button class="btn btn-sm"
+                    style="background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;font-size:.75rem;"
+                    onclick="LabCatalog.pmAddParamRow();">
+              <i class="fa-solid fa-plus me-1"></i>Add Parameter
+            </button>
+          </div>
+          <div style="background:var(--bg-input);border-radius:10px;border:1px solid var(--border-color);overflow:hidden;">
+            <table class="table table-sm mb-0" style="font-size:.8rem;">
+              <thead>
+                <tr style="border-color:var(--border-color);">
+                  <th class="label-bright fw-normal ps-3" style="width:80px;">Code</th>
+                  <th class="label-bright fw-normal" style="min-width:150px;">Parameter Name</th>
+                  <th class="label-bright fw-normal" style="width:80px;">Unit</th>
+                  <th class="label-bright fw-normal" style="width:90px;">M Range</th>
+                  <th class="label-bright fw-normal" style="width:90px;">F Range</th>
+                  <th class="label-bright fw-normal" style="width:80px;">Crit Low</th>
+                  <th class="label-bright fw-normal" style="width:80px;">Crit High</th>
+                  <th class="label-bright fw-normal" style="width:90px;">Result Type</th>
+                  <th style="width:40px;"></th>
+                </tr>
+              </thead>
+              <tbody id="lcp-param-rows">
+                <tr id="lcp-no-params">
+                  <td colspan="9" class="text-center label-bright py-3">
+                    No parameters yet. Click <strong>Add Parameter</strong> above.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-1"><small class="label-bright">💡 Tip: Leave ranges blank for qualitative/descriptive parameters.</small></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-success fw-semibold" onclick="LabCatalog.savePanel();">
+          <i class="fa-solid fa-floppy-disk me-1"></i>Save Panel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     INDIVIDUAL TEST EDITOR MODAL
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="lc-test-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-md modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <div>
+          <h5 class="modal-title text-white-force mb-0" id="lc-tm-title">New Individual Test</h5>
+          <small class="label-bright">A single reportable investigation (e.g. HbA1c, TSH, Urine Routine)</small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="lct-id">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label small label-bright">Test Code *</label>
+            <input type="text" id="lct-code" class="form-control form-control-sm" placeholder="HBA1C"
+                   oninput="this.value=this.value.toUpperCase();">
+          </div>
+          <div class="col-md-7">
+            <label class="form-label small label-bright">Test Name *</label>
+            <input type="text" id="lct-name" class="form-control form-control-sm"
+                   placeholder="e.g. Glycated Haemoglobin (HbA1c)">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small label-bright">Sort Order</label>
+            <input type="number" id="lct-sort" class="form-control form-control-sm" value="0">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small label-bright">Department</label>
+            <select id="lct-dept" class="form-select form-select-sm">
+              <option value="HAEMATOLOGY">Haematology</option>
+              <option value="BIOCHEMISTRY">Biochemistry</option>
+              <option value="MICROBIOLOGY">Microbiology</option>
+              <option value="SEROLOGY">Serology</option>
+              <option value="URINE_ANALYSIS">Urine Analysis</option>
+              <option value="HISTOPATHOLOGY">Histopathology</option>
+              <option value="CYTOLOGY">Cytology</option>
+              <option value="ENDOCRINOLOGY">Endocrinology</option>
+              <option value="CLINICAL_PATH">Clinical Pathology</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small label-bright">Sample Type</label>
+            <select id="lct-sample" class="form-select form-select-sm">
+              <option value="BLOOD_EDTA">Blood — EDTA</option>
+              <option value="BLOOD_PLAIN">Blood — Plain</option>
+              <option value="BLOOD_FLUORIDE">Blood — Fluoride</option>
+              <option value="URINE_RANDOM">Urine — Random</option>
+              <option value="URINE_24HR">Urine — 24hr</option>
+              <option value="STOOL">Stool</option>
+              <option value="SWAB">Swab</option>
+              <option value="CSF">CSF</option>
+              <option value="TISSUE">Tissue / Biopsy</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small label-bright">Price (₹) *</label>
+            <input type="number" step="0.01" id="lct-price" class="form-control form-control-sm" value="0">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small label-bright">TAT (min)</label>
+            <input type="number" id="lct-tat" class="form-control form-control-sm" value="120">
+          </div>
+
+          <!-- result section -->
+          <div class="col-12"><hr style="border-color:var(--border-color);margin:4px 0;"></div>
+          <div class="col-md-4">
+            <label class="form-label small label-bright">Result Type</label>
+            <select id="lct-rtype" class="form-select form-select-sm" onchange="LabCatalog.onTestResultTypeChange();">
+              <option value="NUMERIC">Numeric (e.g. 5.2 %)</option>
+              <option value="QUALITATIVE">Qualitative (Pos / Neg)</option>
+              <option value="DESCRIPTIVE">Descriptive (free text)</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small label-bright">Unit</label>
+            <input type="text" id="lct-unit" class="form-control form-control-sm" placeholder="%, mg/dL">
+          </div>
+          <div class="col-md-5 d-flex align-items-end pb-1">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="lct-consent">
+              <label class="form-check-label small label-bright" for="lct-consent">
+                Requires patient consent
+              </label>
+            </div>
+          </div>
+
+          <div id="lct-ranges-wrap" class="col-12">
+            <div class="p-3 rounded" style="background:var(--bg-input);border:1px solid var(--border-color);">
+              <div class="small label-bright mb-2 fw-semibold">Reference Ranges <span class="fw-normal">(numeric)</span></div>
+              <div class="row g-2">
+                <div class="col-6 col-md-3">
+                  <label class="form-label" style="font-size:.7rem;color:var(--text-muted);">Male Low</label>
+                  <input type="number" step="0.01" id="lct-mlo" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label" style="font-size:.7rem;color:var(--text-muted);">Male High</label>
+                  <input type="number" step="0.01" id="lct-mhi" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label" style="font-size:.7rem;color:var(--text-muted);">Female Low</label>
+                  <input type="number" step="0.01" id="lct-flo" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label" style="font-size:.7rem;color:var(--text-muted);">Female High</label>
+                  <input type="number" step="0.01" id="lct-fhi" class="form-control form-control-sm">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label" style="font-size:.7rem;color:#f87171;">Critical Low</label>
+                  <input type="number" step="0.01" id="lct-clo" class="form-control form-control-sm"
+                         style="border-color:rgba(248,113,113,.4)!important;">
+                </div>
+                <div class="col-6 col-md-3">
+                  <label class="form-label" style="font-size:.7rem;color:#f87171;">Critical High</label>
+                  <input type="number" step="0.01" id="lct-chi" class="form-control form-control-sm"
+                         style="border-color:rgba(248,113,113,.4)!important;">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label" style="font-size:.7rem;color:var(--text-muted);">Paediatric Ref (text)</label>
+                  <input type="text" id="lct-paed" class="form-control form-control-sm"
+                         placeholder="e.g. 6m-6yr: 10-14 | 6-12yr: 11-15">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm fw-semibold"
+                style="background:rgba(14,165,233,.15);border:1px solid #0ea5e9;color:#7dd3fc;"
+                onclick="LabCatalog.saveTest();">
+          <i class="fa-solid fa-floppy-disk me-1"></i>Save Test
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     PACKAGE EDITOR MODAL
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="lc-pkg-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <div>
+          <h5 class="modal-title text-white-force mb-0" id="lc-pkm-title">New Package</h5>
+          <small class="label-bright">Bundle panels and tests into a named health checkup package</small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="lcpk-id">
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label small label-bright">Package Code *</label>
+            <input type="text" id="lcpk-code" class="form-control form-control-sm" placeholder="MASTER"
+                   oninput="this.value=this.value.toUpperCase();">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small label-bright">Package Name *</label>
+            <input type="text" id="lcpk-name" class="form-control form-control-sm"
+                   placeholder="e.g. Master Health Checkup">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small label-bright">Package Price (₹) *</label>
+            <input type="number" step="0.01" id="lcpk-price" class="form-control form-control-sm" value="0"
+                   oninput="LabCatalog.pkgCalcSaving();">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small label-bright">Department</label>
+            <select id="lcpk-dept" class="form-select form-select-sm">
+              <option value="GENERAL">General</option>
+              <option value="HAEMATOLOGY">Haematology</option>
+              <option value="BIOCHEMISTRY">Biochemistry</option>
+              <option value="SEROLOGY">Serology</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small label-bright">TAT (min)</label>
+            <input type="number" id="lcpk-tat" class="form-control form-control-sm" value="240">
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <div id="lcpk-saving-badge" class="w-100 text-center rounded py-2"
+                 style="background:rgba(16,185,129,.12);border:1px solid var(--success);font-size:.78rem;color:var(--success);">
+              Set price &amp; select items to see savings
+            </div>
+          </div>
+
+          <!-- component picker -->
+          <div class="col-12">
+            <label class="form-label small label-bright">Select Components</label>
+            <small class="label-bright d-block mb-2">Click to add/remove. Shows individual price. Calculates savings automatically.</small>
+            <div id="lcpk-picker"
+                 style="background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:12px;max-height:260px;overflow-y:auto;">
+              <div class="text-center label-bright small py-3">Loading available tests…</div>
+            </div>
+          </div>
+          <!-- selected chips -->
+          <div class="col-12">
+            <div class="d-flex flex-wrap gap-1 min-height-30" id="lcpk-chips"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm fw-semibold"
+                style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;"
+                onclick="LabCatalog.savePackage();">
+          <i class="fa-solid fa-floppy-disk me-1"></i>Save Package
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ── catalog scoped styles ── */
+.lc-dept-pill {
+  display:inline-block;font-size:.65rem;font-weight:600;letter-spacing:.4px;
+  padding:2px 7px;border-radius:20px;text-transform:uppercase;
+}
+.lc-panel-card {
+  background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:14px;margin-bottom:10px;overflow:hidden;transition:.2s;
+}
+.lc-panel-card:hover { border-color:var(--border-hover); }
+.lc-panel-head {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;cursor:pointer;gap:12px;
+}
+.lc-panel-body { padding:0 12px 12px; }
+.lc-param-table { width:100%;font-size:.78rem;border-collapse:separate;border-spacing:0; }
+.lc-param-table th {
+  color:var(--text-muted);font-weight:500;padding:6px 8px;
+  background:var(--bg-input);font-size:.7rem;letter-spacing:.3px;text-transform:uppercase;
+}
+.lc-param-table th:first-child { border-radius:8px 0 0 8px; }
+.lc-param-table th:last-child  { border-radius:0 8px 8px 0; }
+.lc-param-table td { padding:6px 8px;color:var(--text-label);border-bottom:1px solid var(--border-color); }
+.lc-param-table tr:last-child td { border-bottom:none; }
+.lc-flag-c { color:#f87171;font-weight:700; }
+.lc-flag-h { color:#fb923c; }
+.lc-flag-l { color:#60a5fa; }
+.lc-flag-n { color:var(--success); }
+.lc-add-param-row td { background:rgba(99,102,241,.05); }
+.lc-chip-sel {
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:.75rem;padding:4px 10px;border-radius:20px;
+  background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;cursor:pointer;
+}
+.lc-chip-sel:hover { background:rgba(99,102,241,.3); }
+.lc-chip-unsel {
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:.75rem;padding:4px 10px;border-radius:20px;
+  background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);cursor:pointer;
+}
+.lc-chip-unsel:hover { border-color:var(--border-hover);color:var(--text-main); }
+.lc-row-test {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:9px 12px;border-radius:10px;margin-bottom:5px;
+  background:var(--bg-card);border:1px solid var(--border-color);transition:.15s;
+}
+.lc-row-test:hover { border-color:var(--border-hover); }
+.lc-pkg-card {
+  background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:14px;margin-bottom:10px;padding:14px 16px;transition:.2s;
+}
+.lc-pkg-card:hover { border-color:var(--border-hover); }
+.lc-section-title {
+  display:flex;align-items:center;gap:8px;
+  font-size:.8rem;font-weight:600;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--text-muted);margin:20px 0 10px;
+}
+.lc-section-title hr { flex:1;border-color:var(--border-color);margin:0; }
+.lc-action-btn {
+  background:transparent;border:1px solid var(--border-color);
+  color:var(--text-muted);border-radius:7px;padding:3px 9px;font-size:.78rem;cursor:pointer;transition:.15s;
+}
+.lc-action-btn:hover { border-color:var(--border-hover);color:var(--text-main); }
+.pm-input {
+  background:var(--bg-input)!important;border:1px solid var(--border-color)!important;
+  color:var(--text-main)!important;border-radius:6px;padding:3px 6px;font-size:.78rem;width:100%;
+}
+.pm-input:focus { outline:none;border-color:var(--accent-purple)!important; }
+</style>
+
+<script>
+/* ==========================================================================
+   LabCatalog — v2  (redesigned, parameter concept hidden from user)
+   Three separate modals: Panel · Individual Test · Package
+   Auto-bootstraps DB silently on first load.
+   ========================================================================== */
+var LabCatalog = (function () {
+
+  /* ── state ── */
+  var _data = { panels: [], individuals: [], packages: [] };
+  var _viewMode = 'all'; // 'all' | 'active' | 'inactive'
+  var _pmRows = [];       // live parameter rows in Panel modal
+  var _pkgSelected = {};  // testId → item for Package modal
+
+  /* ── modal singletons (lazy) ── */
+  var _mPanel, _mTest, _mPkg;
+  function _panelModal() { return _mPanel || (_mPanel = new bootstrap.Modal(document.getElementById('lc-panel-modal'))); }
+  function _testModal()  { return _mTest  || (_mTest  = new bootstrap.Modal(document.getElementById('lc-test-modal'))); }
+  function _pkgModal()   { return _mPkg   || (_mPkg   = new bootstrap.Modal(document.getElementById('lc-pkg-modal'))); }
+
+  /* ── loader ── */
+  function _spin(msg) {
+    var el = document.getElementById('lc-loader');
+    if (el) { el.classList.remove('d-none'); el.classList.add('d-flex'); }
+    var t = document.getElementById('lc-loader-txt');
+    if (t) t.textContent = msg || 'Loading…';
+  }
+  function _stop() {
+    var el = document.getElementById('lc-loader');
+    if (el) { el.classList.add('d-none'); el.classList.remove('d-flex'); }
+  }
+
+  /* ── flash ── */
+  function _flash(msg, ok) {
+    var b = document.getElementById('lc-msg');
+    if (!b) return;
+    var cls = ok ? 'border-success' : 'border-danger';
+    var ic  = ok ? 'fa-circle-check text-success' : 'fa-circle-exclamation text-danger';
+    b.innerHTML = '<div class="d-flex align-items-center gap-2 px-3 py-2 rounded mb-2 small" style="background:var(--bg-input);border:1px solid var(--border-color);" class="'+cls+'">' +
+      '<i class="fa-solid '+ic+'"></i><span class="text-white-force flex-grow-1">'+_esc(msg)+'</span>' +
+      '<button class="lc-action-btn" style="border:none;font-size:1rem;" onclick="this.parentNode.remove();">×</button></div>';
+    if (ok) setTimeout(function () { var x = document.getElementById('lc-msg'); if (x) x.innerHTML = ''; }, 4000);
+  }
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  /* ── public: init (first load + auto-bootstrap) ── */
+  function init() {
+    // Silently ensure DB sheets exist, then load catalog
+    _spin('Initialising…');
+    google.script.run
+      .withSuccessHandler(function () { load(); })
+      .withFailureHandler(function ()  { load(); }) // If already exists, still load
+      .setupLabDatabase();
+  }
+
+  /* ── public: load ── */
+  function load() {
+    _spin('Loading catalog…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        _stop();
+        if (!res || !res.success) { _flash((res && res.message) || 'Failed to load catalog.', false); return; }
+        _data = { panels: res.panels || [], individuals: res.individuals || [], packages: res.packages || [] };
+        render();
+      })
+      .withFailureHandler(function (err) {
+        _stop();
+        _flash('Load error: ' + err.message, false);
+      })
+      .getLabCatalog();
+  }
+
+  /* ── public: setView ── */
+  function setView(v) {
+    _viewMode = v;
+    ['all','active','inactive'].forEach(function (id) {
+      var b = document.getElementById('lc-filter-'+id);
+      if (!b) return;
+      b.style.background = (id === v) ? 'var(--accent-purple)' : 'var(--bg-input)';
+      b.style.borderColor = (id === v) ? 'var(--accent-purple)' : 'var(--border-color)';
+      b.style.color = (id === v) ? '#fff' : 'var(--text-muted)';
+    });
+    render();
+  }
+
+  /* ── public: render ── */
+  function render() {
+    var host = document.getElementById('lc-body');
+    if (!host) return;
+    var q    = (document.getElementById('lc-search').value || '').toLowerCase().trim();
+    var dept = (document.getElementById('lc-dept-filter').value || '').toUpperCase();
+
+    var _ok = function (t) {
+      if (_viewMode === 'active'   && !t.isActive) return false;
+      if (_viewMode === 'inactive' && t.isActive)  return false;
+      if (dept && t.department !== dept) return false;
+      if (!q) return true;
+      return (t.testName+' '+t.testCode+' '+t.department).toLowerCase().indexOf(q) !== -1;
+    };
+
+    var panels  = _data.panels.filter(_ok);
+    var indivs  = _data.individuals.filter(_ok);
+    var pkgs    = _data.packages.filter(_ok);
+
+    // stat bar
+    var sb = document.getElementById('lc-stat-bar');
+    if (sb) {
+      var tot = _data.panels.length + _data.individuals.length + _data.packages.length;
+      var act = _data.panels.filter(function(t){return t.isActive;}).length +
+                _data.individuals.filter(function(t){return t.isActive;}).length +
+                _data.packages.filter(function(t){return t.isActive;}).length;
+      sb.textContent = tot + ' entries  ·  ' + act + ' active  ·  ' +
+        _data.panels.length + ' panels  ·  ' +
+        _data.individuals.length + ' tests  ·  ' +
+        _data.packages.length + ' packages';
+    }
+
+    if (!panels.length && !indivs.length && !pkgs.length) {
+      host.innerHTML = '<div class="text-center py-5"><i class="fa-solid fa-folder-open fa-2x label-bright mb-3 d-block"></i>' +
+        '<p class="label-bright">' + (q || dept ? 'No entries match your filter.' : 'Catalog is empty. Use <strong>New Panel</strong>, <strong>New Test</strong> or <strong>New Package</strong> to begin.') + '</p></div>';
+      return;
+    }
+
+    var html = '';
+    if (panels.length)  html += _renderPanels(panels);
+    if (indivs.length)  html += _renderTests(indivs);
+    if (pkgs.length)    html += _renderPackages(pkgs);
+    host.innerHTML = html;
+  }
+
+  /* ─── PANELS ─── */
+  var _DEPT_COLORS = {
+    HAEMATOLOGY:'#f472b6', BIOCHEMISTRY:'#60a5fa', MICROBIOLOGY:'#34d399',
+    SEROLOGY:'#a78bfa', URINE_ANALYSIS:'#fbbf24', HISTOPATHOLOGY:'#f87171',
+    CYTOLOGY:'#fb923c', ENDOCRINOLOGY:'#22d3ee', CLINICAL_PATH:'#a3e635',
+    GENERAL:'#94a3b8'
+  };
+  function _deptColor(d) { return _DEPT_COLORS[d] || '#94a3b8'; }
+
+  function _renderPanels(panels) {
+    var rows = panels.map(function (p) {
+      var paramCount = (p.parameters || []).length;
+      var clr = _deptColor(p.department);
+      var params = paramCount
+        ? '<div class="lc-panel-body"><table class="lc-param-table"><thead><tr>' +
+            '<th>Code</th><th>Parameter</th><th>Unit</th><th>Male Range</th><th>Female Range</th>' +
+            '<th class="lc-flag-c">Crit Low</th><th class="lc-flag-c">Crit High</th><th>Type</th><th></th>' +
+          '</tr></thead><tbody>' +
+          (p.parameters || []).map(function (pm) {
+            return '<tr>' +
+              '<td><code style="font-size:.7rem;color:var(--text-muted);">'+_esc(pm.testCode)+'</code></td>' +
+              '<td class="fw-semibold text-white-force">'+_esc(pm.testName)+'</td>' +
+              '<td>'+_esc(pm.unit||'—')+'</td>' +
+              '<td>'+_rng(pm.maleRefLow,pm.maleRefHigh)+'</td>' +
+              '<td>'+_rng(pm.femaleRefLow,pm.femaleRefHigh)+'</td>' +
+              '<td class="lc-flag-c">'+_v(pm.criticalLow)+'</td>' +
+              '<td class="lc-flag-c">'+_v(pm.criticalHigh)+'</td>' +
+              '<td><span class="lc-dept-pill" style="background:var(--bg-input);color:var(--text-muted);">'+pm.resultType+'</span></td>' +
+              '<td><button class="lc-action-btn" onclick=\'LabCatalog.openEditParam("'+pm.testId+'","'+p.testId+'");\' title="Edit parameter"><i class="fa-solid fa-pen" style="font-size:.7rem;"></i></button></td>' +
+              '</tr>';
+          }).join('') +
+          '</tbody></table></div>'
+        : '<div class="lc-panel-body"><div class="label-bright small py-2 ps-1"><i class="fa-solid fa-circle-info me-1"></i>No parameters yet. <button class="lc-action-btn ms-1" onclick=\'LabCatalog.openAddParam("'+p.testId+'","'+_esc(p.testName)+'");\'>+ Add first parameter</button></div></div>';
+
+      return '<div class="lc-panel-card" id="lc-pan-'+p.testId+'">' +
+        '<div class="lc-panel-head" onclick="document.getElementById(\'lcp-body-'+p.testId+'\').classList.toggle(\'d-none\');">' +
+          '<div class="d-flex align-items-center gap-3 flex-grow-1 min-width-0">' +
+            '<div style="width:4px;height:40px;border-radius:3px;flex-shrink:0;background:'+clr+';"></div>' +
+            '<div class="min-width-0">' +
+              '<div class="d-flex align-items-center gap-2">' +
+                '<span class="text-white-force fw-bold" style="font-size:.93rem;">'+_esc(p.testName)+'</span>' +
+                '<code class="label-bright" style="font-size:.7rem;">'+_esc(p.testCode)+'</code>' +
+                '<span class="lc-dept-pill" style="background:'+clr+'22;color:'+clr+';border:1px solid '+clr+'44;">'+_fmt(p.department)+'</span>' +
+                (!p.isActive ? '<span class="lc-dept-pill" style="background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color);">Inactive</span>' : '') +
+              '</div>' +
+              '<div class="label-bright" style="font-size:.72rem;">'+paramCount+' parameter'+(paramCount!==1?'s':'')+
+                ' · ₹'+Number(p.price).toFixed(2)+' · TAT '+p.tatMinutes+' min · '+_fmt(p.sampleType||'')+'</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="d-flex align-items-center gap-1 flex-shrink-0">' +
+            '<button class="lc-action-btn" onclick=\'event.stopPropagation();LabCatalog.openAddParam("'+p.testId+'","'+_esc(p.testName)+'");\' title="Add parameter"><i class="fa-solid fa-plus"></i></button>' +
+            '<button class="lc-action-btn" onclick=\'event.stopPropagation();LabCatalog.openCreate("PANEL","'+p.testId+'");\' title="Edit panel"><i class="fa-solid fa-pen"></i></button>' +
+            (p.isActive
+              ? '<button class="lc-action-btn" style="color:#f87171;border-color:rgba(248,113,113,.3);" onclick=\'event.stopPropagation();LabCatalog.toggle("'+p.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban"></i></button>'
+              : '<button class="lc-action-btn" style="color:var(--success);border-color:rgba(16,185,129,.3);" onclick=\'event.stopPropagation();LabCatalog.toggle("'+p.testId+'",true);\' title="Activate"><i class="fa-solid fa-check"></i></button>') +
+            '<i class="fa-solid fa-chevron-down label-bright ms-1" style="font-size:.7rem;"></i>' +
+          '</div>' +
+        '</div>' +
+        '<div id="lcp-body-'+p.testId+'" class="d-none">' + params + '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="lc-section-title"><i class="fa-solid fa-layer-group" style="color:#a5b4fc;"></i>Panels<hr></div>' + rows;
+  }
+
+  /* ─── INDIVIDUAL TESTS (compact table) ─── */
+  function _renderTests(tests) {
+    var rows = tests.map(function (t) {
+      var clr = _deptColor(t.department);
+      return '<div class="lc-row-test">' +
+        '<div class="d-flex align-items-center gap-3 flex-grow-1 min-width-0">' +
+          '<div style="width:3px;height:32px;border-radius:3px;flex-shrink:0;background:'+clr+';"></div>' +
+          '<div class="min-width-0">' +
+            '<span class="text-white-force fw-semibold" style="font-size:.88rem;">'+_esc(t.testName)+'</span>' +
+            ' <code class="label-bright" style="font-size:.7rem;">'+_esc(t.testCode)+'</code>' +
+          '</div>' +
+          '<span class="lc-dept-pill d-none d-md-inline" style="background:'+clr+'22;color:'+clr+';border:1px solid '+clr+'44;">'+_fmt(t.department)+'</span>' +
+          (t.requiresConsent ? '<span class="lc-dept-pill" style="background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3);">Consent</span>' : '') +
+        '</div>' +
+        '<div class="d-flex align-items-center gap-2 flex-shrink-0">' +
+          '<span class="label-bright" style="font-size:.72rem;">'+_esc(t.resultType)+(t.unit?' · '+_esc(t.unit):'')+'</span>' +
+          '<span class="fw-semibold" style="color:#22d3ee;font-size:.82rem;">₹'+Number(t.price).toFixed(2)+'</span>' +
+          (!t.isActive ? '<span class="lc-dept-pill" style="background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color);">Inactive</span>' : '') +
+          '<button class="lc-action-btn" onclick=\'LabCatalog.openCreate("INDIVIDUAL","'+t.testId+'");\' title="Edit"><i class="fa-solid fa-pen" style="font-size:.72rem;"></i></button>' +
+          (t.isActive
+            ? '<button class="lc-action-btn" style="color:#f87171;" onclick=\'LabCatalog.toggle("'+t.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban" style="font-size:.72rem;"></i></button>'
+            : '<button class="lc-action-btn" style="color:var(--success);" onclick=\'LabCatalog.toggle("'+t.testId+'",true);\' title="Activate"><i class="fa-solid fa-check" style="font-size:.72rem;"></i></button>') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="lc-section-title"><i class="fa-solid fa-flask" style="color:#7dd3fc;"></i>Individual Tests<hr></div>' + rows;
+  }
+
+  /* ─── PACKAGES ─── */
+  function _renderPackages(pkgs) {
+    var rows = pkgs.map(function (pk) {
+      var compIds = (pk.componentTestIds || '').split(',').filter(Boolean);
+      // build component chip display
+      var allItems = _getAllOrderable();
+      var chips = compIds.map(function (cid) {
+        var item = allItems[cid];
+        return item
+          ? '<span class="lc-dept-pill" style="background:var(--bg-input);color:var(--text-label);border:1px solid var(--border-color);">'+_esc(item.testName)+'</span>'
+          : '';
+      }).filter(Boolean).join(' ');
+      // compute individual sum
+      var sum = compIds.reduce(function (acc, cid) {
+        var item = allItems[cid];
+        return acc + (item ? Number(item.price) : 0);
+      }, 0);
+      var saving = sum - Number(pk.price);
+
+      return '<div class="lc-pkg-card">' +
+        '<div class="d-flex justify-content-between align-items-start gap-3">' +
+          '<div class="flex-grow-1">' +
+            '<div class="d-flex align-items-center gap-2 mb-1">' +
+              '<i class="fa-solid fa-box-open" style="color:#6ee7b7;"></i>' +
+              '<span class="text-white-force fw-bold" style="font-size:.93rem;">'+_esc(pk.testName)+'</span>' +
+              '<code class="label-bright" style="font-size:.7rem;">'+_esc(pk.testCode)+'</code>' +
+              (!pk.isActive ? '<span class="lc-dept-pill" style="background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color);">Inactive</span>' : '') +
+            '</div>' +
+            '<div class="d-flex flex-wrap gap-1 mb-2">' + (chips || '<span class="label-bright small">No components defined</span>') + '</div>' +
+            '<div class="label-bright" style="font-size:.72rem;">' + compIds.length + ' items · TAT '+pk.tatMinutes+' min' +
+              (saving > 0 ? ' · <span style="color:var(--success);">Patient saves ₹'+saving.toFixed(2)+'</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">' +
+            '<span class="fw-bold" style="color:#6ee7b7;font-size:1rem;">₹'+Number(pk.price).toFixed(2)+'</span>' +
+            (sum > 0 ? '<span class="label-bright" style="font-size:.7rem;text-decoration:line-through;">₹'+sum.toFixed(2)+'</span>' : '') +
+            '<div class="d-flex gap-1 mt-1">' +
+              '<button class="lc-action-btn" onclick=\'LabCatalog.openCreate("PACKAGE","'+pk.testId+'");\' title="Edit"><i class="fa-solid fa-pen" style="font-size:.72rem;"></i></button>' +
+              (pk.isActive
+                ? '<button class="lc-action-btn" style="color:#f87171;" onclick=\'LabCatalog.toggle("'+pk.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban" style="font-size:.72rem;"></i></button>'
+                : '<button class="lc-action-btn" style="color:var(--success);" onclick=\'LabCatalog.toggle("'+pk.testId+'",true);\' title="Activate"><i class="fa-solid fa-check" style="font-size:.72rem;"></i></button>') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="lc-section-title"><i class="fa-solid fa-box-open" style="color:#6ee7b7;"></i>Packages<hr></div>' + rows;
+  }
+
+  /* ─── helper: flat map of all orderable items by id ─── */
+  function _getAllOrderable() {
+    var m = {};
+    _data.panels.forEach(function (p) { m[p.testId] = p; });
+    _data.individuals.forEach(function (t) { m[t.testId] = t; });
+    return m;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     CREATION / EDITING
+     openCreate(type, existingId?) dispatches to the right modal.
+     ═══════════════════════════════════════════════════════════════ */
+  function openCreate(type, existingId) {
+    var existing = existingId ? _findById(existingId) : null;
+    if (type === 'PANEL')      _openPanelModal(existing);
+    else if (type === 'INDIVIDUAL') _openTestModal(existing);
+    else if (type === 'PACKAGE')    _openPkgModal(existing);
+  }
+
+  /* ─── Panel modal ─── */
+  function _openPanelModal(p) {
+    _pmRows = [];
+    document.getElementById('lcp-id').value   = p ? p.testId : '';
+    document.getElementById('lcp-code').value  = p ? p.testCode : '';
+    document.getElementById('lcp-name').value  = p ? p.testName : '';
+    document.getElementById('lcp-sort').value  = p ? (p.sortOrder || 0) : 0;
+    document.getElementById('lcp-dept').value  = p ? (p.department || 'HAEMATOLOGY') : 'HAEMATOLOGY';
+    document.getElementById('lcp-sample').value= p ? (p.sampleType || 'BLOOD_EDTA') : 'BLOOD_EDTA';
+    document.getElementById('lcp-price').value = p ? p.price : 0;
+    document.getElementById('lcp-tat').value   = p ? p.tatMinutes : 120;
+    document.getElementById('lc-pm-title').textContent = p ? ('Edit Panel: ' + p.testName) : 'New Panel';
+
+    // load existing parameters as editable rows
+    var tbody = document.getElementById('lcp-param-rows');
+    tbody.innerHTML = '';
+    if (p && p.parameters && p.parameters.length) {
+      p.parameters.forEach(function (pm) {
+        _pmRows.push({ testId: pm.testId });
+        _appendParamRow(pm);
+      });
+    } else {
+      tbody.innerHTML = '<tr id="lcp-no-params"><td colspan="9" class="text-center label-bright py-3">No parameters yet. Click <strong>Add Parameter</strong> above.</td></tr>';
+    }
+    _panelModal().show();
+  }
+
+  function pmAddParamRow() {
+    var noRow = document.getElementById('lcp-no-params');
+    if (noRow) noRow.remove();
+    _pmRows.push({ testId: '' });
+    _appendParamRow(null);
+  }
+
+  function _appendParamRow(pm) {
+    var idx = _pmRows.length - 1;
+    var existingId = pm ? pm.testId : '';
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-pm-idx', idx);
+    tr.innerHTML =
+      '<td><input class="pm-input" type="text" id="pm-code-'+idx+'" value="'+_esc(pm?pm.testCode:'')+'" placeholder="HB" oninput="this.value=this.value.toUpperCase();" style="width:70px;"></td>' +
+      '<td><input class="pm-input" type="text" id="pm-name-'+idx+'" value="'+_esc(pm?pm.testName:'')+'" placeholder="Haemoglobin" style="min-width:140px;"></td>' +
+      '<td><input class="pm-input" type="text" id="pm-unit-'+idx+'" value="'+_esc(pm?pm.unit||'':'')+'" placeholder="g/dL" style="width:70px;"></td>' +
+      '<td><input class="pm-input" type="text" id="pm-mlo-'+idx+'" value="'+_v(pm?pm.maleRefLow:'')+'" placeholder="13" style="width:80px;"></td>' +
+      '<td><input class="pm-input" type="text" id="pm-mhi-'+idx+'" value="'+_v(pm?pm.maleRefHigh:'')+'" placeholder="17" style="width:80px;"></td>' +
+      '<td><input class="pm-input" type="text" id="pm-clo-'+idx+'" value="'+_v(pm?pm.criticalLow:'')+'" placeholder="" style="width:72px;"></td>' +
+      '<td><input class="pm-input" type="text" id="pm-chi-'+idx+'" value="'+_v(pm?pm.criticalHigh:'')+'" placeholder="" style="width:72px;"></td>' +
+      '<td><select class="pm-input" id="pm-rtype-'+idx+'" style="width:100px;">' +
+        '<option value="NUMERIC"'+(pm&&pm.resultType==='NUMERIC'?' selected':'')+'>Numeric</option>' +
+        '<option value="QUALITATIVE"'+(pm&&pm.resultType==='QUALITATIVE'?' selected':'')+'>Qualitative</option>' +
+        '<option value="DESCRIPTIVE"'+(pm&&pm.resultType==='DESCRIPTIVE'?' selected':'')+'>Descriptive</option>' +
+      '</select></td>' +
+      '<td><button class="lc-action-btn" style="color:#f87171;" onclick="LabCatalog.pmRemoveRow(this,' + idx + ');" title="Remove"><i class="fa-solid fa-trash" style="font-size:.68rem;"></i></button></td>';
+    if (existingId) tr.setAttribute('data-pm-existing-id', existingId);
+    document.getElementById('lcp-param-rows').appendChild(tr);
+  }
+
+  function pmRemoveRow(btn, idx) {
+    btn.closest('tr').remove();
+    _pmRows[idx] = null; // mark as removed
+    if (document.getElementById('lcp-param-rows').querySelectorAll('tr').length === 0) {
+      document.getElementById('lcp-param-rows').innerHTML =
+        '<tr id="lcp-no-params"><td colspan="9" class="text-center label-bright py-3">No parameters. Click <strong>Add Parameter</strong> above.</td></tr>';
+    }
+  }
+
+  function savePanel() {
+    var panelId = document.getElementById('lcp-id').value;
+    var code = document.getElementById('lcp-code').value.trim();
+    var name = document.getElementById('lcp-name').value.trim();
+    if (!code || !name) { _flash('Panel code and name are required.', false); return; }
+
+    // Collect parameter rows from DOM
+    var params = [];
+    var tbody = document.getElementById('lcp-param-rows');
+    var rows = tbody.querySelectorAll('tr[data-pm-idx]');
+    var hasError = false;
+    rows.forEach(function (tr) {
+      var idx = tr.getAttribute('data-pm-idx');
+      var pm = _pmRows[parseInt(idx)];
+      if (pm === null) return; // removed
+      var pname = document.getElementById('pm-name-'+idx) ? document.getElementById('pm-name-'+idx).value.trim() : '';
+      var pcode = document.getElementById('pm-code-'+idx) ? document.getElementById('pm-code-'+idx).value.trim() : '';
+      if (!pname || !pcode) { hasError = true; return; }
+      params.push({
+        testId: tr.getAttribute('data-pm-existing-id') || '',
+        testCode: pcode,
+        testName: pname,
+        unit: document.getElementById('pm-unit-'+idx).value,
+        maleRefLow: document.getElementById('pm-mlo-'+idx).value,
+        maleRefHigh: document.getElementById('pm-mhi-'+idx).value,
+        criticalLow: document.getElementById('pm-clo-'+idx).value,
+        criticalHigh: document.getElementById('pm-chi-'+idx).value,
+        resultType: document.getElementById('pm-rtype-'+idx).value
+      });
+    });
+    if (hasError) { _flash('Each parameter needs a code and name.', false); return; }
+
+    var payload = {
+      testId: panelId,
+      testType: 'PANEL',
+      testCode: code,
+      testName: name,
+      department: document.getElementById('lcp-dept').value,
+      sampleType: document.getElementById('lcp-sample').value,
+      price: document.getElementById('lcp-price').value,
+      tatMinutes: document.getElementById('lcp-tat').value,
+      sortOrder: document.getElementById('lcp-sort').value,
+      parameters: params,
+      isActive: true
+    };
+
+    _spin('Saving panel…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        _stop();
+        if (res && res.success) { _panelModal().hide(); _flash(res.message, true); load(); }
+        else _flash((res && res.message) || 'Save failed.', false);
+      })
+      .withFailureHandler(function (err) { _stop(); _flash('Error: ' + err.message, false); })
+      .savePanelWithParameters(payload);
+  }
+
+  /* ─── Individual test modal ─── */
+  function _openTestModal(t) {
+    var _f = function (id, v) { var e = document.getElementById(id); if (e) e.value = (v == null ? '' : v); };
+    _f('lct-id',    t ? t.testId : '');
+    _f('lct-code',  t ? t.testCode : '');
+    _f('lct-name',  t ? t.testName : '');
+    _f('lct-sort',  t ? (t.sortOrder||0) : 0);
+    _f('lct-dept',  t ? (t.department||'BIOCHEMISTRY') : 'BIOCHEMISTRY');
+    _f('lct-sample',t ? (t.sampleType||'BLOOD_EDTA') : 'BLOOD_EDTA');
+    _f('lct-price', t ? t.price : 0);
+    _f('lct-tat',   t ? t.tatMinutes : 120);
+    _f('lct-rtype', t ? (t.resultType||'NUMERIC') : 'NUMERIC');
+    _f('lct-unit',  t ? (t.unit||'') : '');
+    _f('lct-mlo',   t ? _v(t.maleRefLow) : '');
+    _f('lct-mhi',   t ? _v(t.maleRefHigh) : '');
+    _f('lct-flo',   t ? _v(t.femaleRefLow) : '');
+    _f('lct-fhi',   t ? _v(t.femaleRefHigh) : '');
+    _f('lct-clo',   t ? _v(t.criticalLow) : '');
+    _f('lct-chi',   t ? _v(t.criticalHigh) : '');
+    _f('lct-paed',  t ? (t.paediatricRefText||'') : '');
+    document.getElementById('lct-consent').checked = !!(t && t.requiresConsent);
+    document.getElementById('lc-tm-title').textContent = t ? ('Edit: ' + t.testName) : 'New Individual Test';
+    onTestResultTypeChange();
+    _testModal().show();
+  }
+
+  function onTestResultTypeChange() {
+    var rt = document.getElementById('lct-rtype').value;
+    var w = document.getElementById('lct-ranges-wrap');
+    if (w) w.classList.toggle('d-none', rt !== 'NUMERIC');
+  }
+
+  function saveTest() {
+    var code = document.getElementById('lct-code').value.trim();
+    var name = document.getElementById('lct-name').value.trim();
+    if (!code || !name) { _flash('Test code and name are required.', false); return; }
+    var payload = {
+      testId: document.getElementById('lct-id').value,
+      testType: 'INDIVIDUAL',
+      testCode: code, testName: name,
+      department: document.getElementById('lct-dept').value,
+      sampleType: document.getElementById('lct-sample').value,
+      price: document.getElementById('lct-price').value,
+      tatMinutes: document.getElementById('lct-tat').value,
+      sortOrder: document.getElementById('lct-sort').value,
+      requiresConsent: document.getElementById('lct-consent').checked,
+      resultType: document.getElementById('lct-rtype').value,
+      unit: document.getElementById('lct-unit').value,
+      maleRefLow: document.getElementById('lct-mlo').value,
+      maleRefHigh: document.getElementById('lct-mhi').value,
+      femaleRefLow: document.getElementById('lct-flo').value,
+      femaleRefHigh: document.getElementById('lct-fhi').value,
+      criticalLow: document.getElementById('lct-clo').value,
+      criticalHigh: document.getElementById('lct-chi').value,
+      paediatricRefText: document.getElementById('lct-paed').value,
+      isActive: true
+    };
+    _spin('Saving test…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        _stop();
+        if (res && res.success) { _testModal().hide(); _flash(res.message, true); load(); }
+        else _flash((res && res.message) || 'Save failed.', false);
+      })
+      .withFailureHandler(function (err) { _stop(); _flash('Error: ' + err.message, false); })
+      .saveCatalogEntry(payload);
+  }
+
+  /* ─── Package modal ─── */
+  function _openPkgModal(pk) {
+    _pkgSelected = {};
+    document.getElementById('lcpk-id').value    = pk ? pk.testId : '';
+    document.getElementById('lcpk-code').value   = pk ? pk.testCode : '';
+    document.getElementById('lcpk-name').value   = pk ? pk.testName : '';
+    document.getElementById('lcpk-price').value  = pk ? pk.price : 0;
+    document.getElementById('lcpk-dept').value   = pk ? (pk.department||'GENERAL') : 'GENERAL';
+    document.getElementById('lcpk-tat').value    = pk ? pk.tatMinutes : 240;
+    document.getElementById('lc-pkm-title').textContent = pk ? ('Edit Package: '+pk.testName) : 'New Package';
+
+    var selIds = pk ? (pk.componentTestIds||'').split(',').filter(Boolean) : [];
+    selIds.forEach(function (id) { _pkgSelected[id] = true; });
+
+    _renderPkgPicker();
+    pkgCalcSaving();
+    _pkgModal().show();
+  }
+
+  function _renderPkgPicker() {
+    var host = document.getElementById('lcpk-picker');
+    var all = [].concat(_data.panels).concat(_data.individuals);
+    if (!all.length) {
+      host.innerHTML = '<div class="text-center label-bright small py-3">No tests or panels available. Add them first.</div>';
+      _renderPkgChips();
+      return;
+    }
+    // Group by department
+    var groups = {};
+    all.forEach(function (t) {
+      if (!t.isActive) return;
+      var d = t.department || 'OTHER';
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(t);
+    });
+    var html = '';
+    Object.keys(groups).sort().forEach(function (dept) {
+      html += '<div class="label-bright" style="font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin:8px 0 4px;">'+_fmt(dept)+'</div>';
+      html += '<div class="d-flex flex-wrap gap-1 mb-2">';
+      groups[dept].forEach(function (t) {
+        var sel = !!_pkgSelected[t.testId];
+        html += '<span class="'+(sel?'lc-chip-sel':'lc-chip-unsel')+'" id="pkpick-'+t.testId+'" onclick=\'LabCatalog.pkgToggle("'+t.testId+'");\'>' +
+          (sel ? '<i class="fa-solid fa-check" style="font-size:.65rem;"></i> ' : '') +
+          _esc(t.testName) + ' <span style="opacity:.6;">₹'+Number(t.price).toFixed(0)+'</span>' +
+          '</span>';
+      });
+      html += '</div>';
+    });
+    host.innerHTML = html;
+    _renderPkgChips();
+  }
+
+  function pkgToggle(testId) {
+    if (_pkgSelected[testId]) delete _pkgSelected[testId];
+    else _pkgSelected[testId] = true;
+    _renderPkgPicker();
+    pkgCalcSaving();
+  }
+
+  function _renderPkgChips() {
+    var host = document.getElementById('lcpk-chips');
+    if (!host) return;
+    var all = _getAllOrderable();
+    var chips = Object.keys(_pkgSelected).map(function (id) {
+      var t = all[id];
+      return t ? '<span class="lc-chip-sel">'+_esc(t.testName)+
+        ' <span onclick=\'LabCatalog.pkgToggle("'+id+'");\' style="opacity:.7;cursor:pointer;">×</span></span>' : '';
+    }).filter(Boolean);
+    host.innerHTML = chips.length ? chips.join('') : '<span class="label-bright small">No components selected yet</span>';
+  }
+
+  function pkgCalcSaving() {
+    var price = parseFloat(document.getElementById('lcpk-price').value) || 0;
+    var all = _getAllOrderable();
+    var sum = Object.keys(_pkgSelected).reduce(function (acc, id) {
+      return acc + (all[id] ? Number(all[id].price) : 0);
+    }, 0);
+    var badge = document.getElementById('lcpk-saving-badge');
+    if (!badge) return;
+    var saving = sum - price;
+    if (sum === 0) {
+      badge.textContent = 'Set price & select items to see savings';
+    } else if (saving > 0) {
+      badge.innerHTML = '<i class="fa-solid fa-tag me-1"></i>Patient saves <strong>₹'+saving.toFixed(2)+'</strong> vs buying separately';
+      badge.style.color = 'var(--success)';
+    } else if (saving === 0) {
+      badge.textContent = 'No discount vs. individual prices';
+      badge.style.color = 'var(--text-muted)';
+    } else {
+      badge.innerHTML = '<i class="fa-solid fa-exclamation-triangle me-1"></i>Package price higher than sum by ₹'+Math.abs(saving).toFixed(2);
+      badge.style.color = '#fbbf24';
+    }
+  }
+
+  function savePackage() {
+    var code = document.getElementById('lcpk-code').value.trim();
+    var name = document.getElementById('lcpk-name').value.trim();
+    if (!code || !name) { _flash('Package code and name are required.', false); return; }
+    var components = Object.keys(_pkgSelected);
+    if (!components.length) { _flash('Select at least one component for this package.', false); return; }
+    var payload = {
+      testId: document.getElementById('lcpk-id').value,
+      testType: 'PACKAGE',
+      testCode: code, testName: name,
+      department: document.getElementById('lcpk-dept').value,
+      sampleType: '',
+      price: document.getElementById('lcpk-price').value,
+      tatMinutes: document.getElementById('lcpk-tat').value,
+      componentTestIds: components,
+      isActive: true
+    };
+    _spin('Saving package…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        _stop();
+        if (res && res.success) { _pkgModal().hide(); _flash(res.message, true); load(); }
+        else _flash((res && res.message) || 'Save failed.', false);
+      })
+      .withFailureHandler(function (err) { _stop(); _flash('Error: ' + err.message, false); })
+      .saveCatalogEntry(payload);
+  }
+
+  /* ─── Add / edit param directly from catalog view (outside modal) ─── */
+  function openAddParam(panelId, panelName) {
+    // Find the panel and re-open its modal
+    var panel = _findById(panelId);
+    if (panel) { _openPanelModal(panel); pmAddParamRow(); }
+  }
+  function openEditParam(paramId, panelId) {
+    var panel = _findById(panelId);
+    if (panel) _openPanelModal(panel);
+  }
+
+  /* ─── toggle active ─── */
+  function toggle(testId, makeActive) {
+    _spin(makeActive ? 'Activating…' : 'Deactivating…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        _stop();
+        _flash((res&&res.message)||'Done.', !!(res&&res.success));
+        if (res&&res.success) load();
+      })
+      .withFailureHandler(function (err) { _stop(); _flash('Error: '+err.message, false); })
+      .setCatalogActive(testId, makeActive);
+  }
+
+  /* ─── helpers ─── */
+  function _findById(id) {
+    var all = [].concat(_data.panels).concat(_data.individuals).concat(_data.packages);
+    _data.panels.forEach(function (p) { (p.parameters||[]).forEach(function(pm){all.push(pm);}); });
+    for (var i = 0; i < all.length; i++) if (all[i] && all[i].testId === id) return all[i];
+    return null;
+  }
+  function _rng(lo, hi) {
+    var l = (lo===''||lo==null)?null:lo;
+    var h = (hi===''||hi==null)?null:hi;
+    if (l===null&&h===null) return '<span class="label-bright">—</span>';
+    return (l===null?'?':l)+' – '+(h===null?'?':h);
+  }
+  function _v(n)  { return (n===''||n==null)?'':n; }
+  function _fmt(s){ return (s||'').replace(/_/g,' ').toLowerCase().replace(/\b\w/g,function(c){return c.toUpperCase();}); }
+
+  /* ─── public API ─── */
+  return {
+    init: init, load: load, render: render, setView: setView,
+    openCreate: openCreate,
+    pmAddParamRow: pmAddParamRow, pmRemoveRow: pmRemoveRow,
+    savePanel: savePanel,
+    onTestResultTypeChange: onTestResultTypeChange, saveTest: saveTest,
+    pkgToggle: pkgToggle, pkgCalcSaving: pkgCalcSaving, savePackage: savePackage,
+    openAddParam: openAddParam, openEditParam: openEditParam,
+    toggle: toggle
+  };
+})();
+</script>

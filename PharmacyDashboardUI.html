@@ -1,0 +1,345 @@
+<!-- ===================================================================
+  CRESCENTIA — PHARMACY DASHBOARD + BILL SEARCH  (operational)
+  Add alongside the other workspace sections. Reach it from the Pharmacy
+  Workspace with:  <button onclick="openPharmacyDashboard()">Pharmacy Dashboard</button>
+  Depends on the global buildPrintInvoiceRaw() from the billing partial
+  (used to reprint past invoices). Both live on the same single page.
+==================================================================== -->
+<div id="pharmacy-dashboard-workspace" class="page-section">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <button class="btn btn-outline-secondary btn-sm" onclick="closePharmacyDashboard()">
+      <i class="fa-solid fa-arrow-left"></i> Back to Workspace
+    </button>
+    <div class="btn-group btn-group-sm" role="group">
+      <button class="btn btn-outline-primary active" id="pdash-tab-dash" onclick="pdashShowTab('dash')">
+        <i class="fa-solid fa-chart-line"></i> Dashboard
+      </button>
+      <button class="btn btn-outline-primary" id="pdash-tab-search" onclick="pdashShowTab('search')">
+        <i class="fa-solid fa-magnifying-glass"></i> Bill Search
+      </button>
+    </div>
+  </div>
+
+  <style>
+    #pharmacy-dashboard-workspace input,
+    #pharmacy-dashboard-workspace select {
+      background-color: var(--bg-input) !important; color: var(--text-main) !important;
+      border: 1px solid var(--border-color) !important; border-radius: 6px; box-shadow: none !important;
+    }
+    #pharmacy-dashboard-workspace .pdash-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; display: block; }
+    .pdash-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 18px; }
+    .pdash-kpi { font-size: 1.5rem; font-weight: 800; color: var(--text-main); }
+    .pdash-kpi-lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    .pdash-table { width: 100%; border-collapse: collapse; }
+    .pdash-table th { color: var(--text-label); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left; }
+    .pdash-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.85rem; }
+    .pdash-pill { font-size: 0.62rem; font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; }
+    .pdash-pill.active { background: rgba(16,185,129,0.15); color: var(--success); }
+    .pdash-pill.partial { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .pdash-pill.returned { background: rgba(220,38,38,0.15); color: #dc2626; }
+
+    #phs-print { display: none; }
+    
+    /* 1. Hides the browser's default URL, Page Numbers, and Date */
+    @page {
+      size: auto;
+      margin: 0mm; 
+    }
+
+    /* 2. Your updated print media query */
+    @media print {
+      body.phs-printing * { visibility: hidden !important; }
+      body.phs-printing #phs-print, body.phs-printing #phs-print * { visibility: visible !important; }
+      body.phs-printing #phs-print { 
+        display: block !important; 
+        position: absolute; 
+        left: 0; 
+        top: 0; 
+        width: 100%; 
+        background: #fff !important; 
+        color: #000 !important; 
+        /* Increased padding to compensate for the 0mm page margin */
+        padding: 15mm 10px; 
+        font-family: 'Segoe UI', Arial, sans-serif; 
+      }
+    }
+  </style>
+
+  <!-- ===================== DASHBOARD TAB ===================== -->
+  <div id="pdash-pane-dash">
+    <div class="hd-panel mb-3">
+      <div class="hd-panel-title">Pharmacy Dashboard</div>
+      <div class="d-flex align-items-end gap-2 flex-wrap">
+        <div><label class="pdash-label">From</label><input type="date" id="pdashFrom" class="hd-input p-2"></div>
+        <div><label class="pdash-label">To</label><input type="date" id="pdashTo" class="hd-input p-2"></div>
+        <button class="btn btn-sm btn-primary" onclick="pdashRun()"><i class="fa-solid fa-rotate"></i> Load</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="pdashToday()">Today</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="pdashThisMonth()">This Month</button>
+        <button class="btn btn-sm btn-outline-dark ms-auto" onclick="pdashPrintList()"><i class="fa-solid fa-print"></i> Print List</button>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Bills</div><div class="pdash-kpi" id="kBills">0</div></div></div>
+      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Refunds</div><div class="pdash-kpi" style="color:#dc2626;" id="kRefunds">0</div></div></div>
+      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Cash</div><div class="pdash-kpi" id="kCash">₹0</div></div></div>
+      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">UPI</div><div class="pdash-kpi" id="kUpi">₹0</div></div></div>
+      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Card</div><div class="pdash-kpi" id="kCard">₹0</div></div></div>
+      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Credit</div><div class="pdash-kpi" id="kCredit">₹0</div></div></div>
+    </div>
+
+    <div class="hd-panel">
+      <div class="hd-panel-title">Bills <span id="pdashListLabel" class="text-muted" style="font-size:0.72rem;font-weight:400;"></span></div>
+      <div class="table-responsive">
+        <table class="pdash-table">
+          <thead><tr><th>Invoice</th><th>Time</th><th>Patient</th><th>Mode</th><th>Status</th><th style="text-align:right;">Net (₹)</th><th style="text-align:right;">Refund (₹)</th><th></th></tr></thead>
+          <tbody id="pdashBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SEARCH TAB ===================== -->
+  <div id="pdash-pane-search" class="d-none">
+    <div class="hd-panel mb-3">
+      <div class="hd-panel-title">Bill Search</div>
+      <div class="d-flex" style="max-width: 460px;">
+        <input type="text" id="phsQuery" class="hd-input w-100 p-2" placeholder="Patient ID / Name / Mobile / Invoice No"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();phsRun();}">
+        <button class="btn btn-sm btn-primary ms-1" onclick="phsRun()"><i class="fa-solid fa-magnifying-glass"></i> Search</button>
+      </div>
+    </div>
+    <div class="hd-panel">
+      <div class="hd-panel-title">Results <span id="phsCount" class="text-muted" style="font-size:0.72rem;font-weight:400;"></span></div>
+      <div class="table-responsive">
+        <table class="pdash-table">
+          <thead><tr><th>Invoice</th><th>Date</th><th>Patient</th><th>Mobile</th><th>Mode</th><th>Status</th><th style="text-align:right;">Net (₹)</th><th style="text-align:right;">Refund (₹)</th><th></th></tr></thead>
+          <tbody id="phsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="pdash-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:20000;display:none;align-items:center;justify-content:center;">
+    <div style="background:var(--bg-card);color:var(--text-main);padding:22px 30px;border-radius:12px;border:1px solid var(--border-color);font-weight:600;">
+      <span class="spinner-border spinner-border-sm me-2"></span><span id="pdash-overlay-text">Working…</span>
+    </div>
+  </div>
+
+  <div id="phs-print"></div>
+</div>
+
+<script>
+  let pdashBills = [], pdashTotals = null, pdashRange = null;
+
+  // ===================================================================
+// PHARMACY DASHBOARD — state + navigation
+// ===================================================================
+
+  function openPharmacyDashboard() {
+    // 1. Always default to the 'Dash' tab when opening
+   pdashShowTab('dash');
+
+    // 2. Set default date filters to TODAY if they are currently empty
+    const f = document.getElementById('pdashFrom');
+    const t = document.getElementById('pdashTo');
+    if (f && !f.value && t && !t.value) {
+     const now = new Date();
+      const today = now.getFullYear() + '-' + 
+                  String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                  String(now.getDate()).padStart(2, '0');
+     f.value = today;
+     t.value = today;
+    }
+  
+    // 3. Auto-fetch the dashboard data so the user isn't staring at a blank screen
+    pdashFetchDash();
+  }
+
+  function closePharmacyDashboard() {
+   // Let the global router handle the return trip
+   if (typeof switchTab === 'function') {
+     switchTab('workspace-pharmacy');
+   }
+  }
+  function pdashShowTab(name) {
+    document.getElementById('pdash-pane-dash').classList.toggle('d-none', name !== 'dash');
+    document.getElementById('pdash-pane-search').classList.toggle('d-none', name !== 'search');
+    document.getElementById('pdash-tab-dash').classList.toggle('active', name === 'dash');
+    document.getElementById('pdash-tab-search').classList.toggle('active', name === 'search');
+  }
+  function pdashOverlay(show, text) {
+    const o = document.getElementById('pdash-overlay'); if (!o) return;
+    if (text) document.getElementById('pdash-overlay-text').innerText = text;
+    o.style.display = show ? 'flex' : 'none';
+  }
+  const pdashR2 = n => '₹' + (Math.round((n || 0) * 100) / 100).toFixed(2);
+
+  function pdashToday() {
+    const t = new Date().toISOString().slice(0, 10);
+    document.getElementById('pdashFrom').value = t;
+    document.getElementById('pdashTo').value = t;
+    pdashRun();
+  }
+  function pdashThisMonth() {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    document.getElementById('pdashFrom').value = first;
+    document.getElementById('pdashTo').value = now.toISOString().slice(0, 10);
+    pdashRun();
+  }
+
+  function pdashRun() {
+    const from = document.getElementById('pdashFrom').value || '0000-01-01';
+    const to = document.getElementById('pdashTo').value || '9999-12-31';
+    pdashOverlay(true, "Loading…");
+    google.script.run
+      .withSuccessHandler(res => {
+        pdashOverlay(false);
+        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Failed.")); return; }
+        pdashBills = res.bills || []; pdashTotals = res.totals; pdashRange = res.range;
+        const t = res.totals;
+        document.getElementById('kBills').innerText = t.bills;
+        document.getElementById('kRefunds').innerText = t.refunds;
+        document.getElementById('kCash').innerText = pdashR2(t.cash);
+        document.getElementById('kUpi').innerText = pdashR2(t.upi);
+        document.getElementById('kCard').innerText = pdashR2(t.card);
+        document.getElementById('kCredit').innerText = pdashR2(t.credit);
+        document.getElementById('pdashListLabel').innerText =
+          `(${from} to ${to} · ${t.bills} bills · ${pdashR2(t.net)}` +
+          (t.refundAmt > 0 ? ` · refunds ${pdashR2(t.refundAmt)} · net realised ${pdashR2(t.netRealised)}` : '') + ')';
+        document.getElementById('pdashBody').innerHTML = pdashBills.map(b => pdashRowHtml(b, true)).join('') ||
+          `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:18px;">No bills in this range.</td></tr>`;
+      })
+      .withFailureHandler(() => { pdashOverlay(false); alert("❌ Network error."); })
+      .getPharmacyDashboard(from, to);
+  }
+
+  function pdashRefundCell(b) {
+    return (b.refunded && b.refunded > 0)
+      ? `<span style="color:#dc2626;">- ₹${b.refunded.toFixed(2)}</span><br><span style="font-size:0.68rem;color:var(--text-muted);">${b.returnCount} return(s)</span>`
+      : '<span style="color:var(--text-muted);">—</span>';
+  }
+
+  function pdashRowHtml(b, withTime) {
+    let pill = 'active', st = b.status || 'ACTIVE';
+    if (st === 'PARTIAL-RETURN') pill = 'partial';
+    else if (st === 'RETURNED' || st === 'CANCELLED') pill = 'returned';
+    return `<tr>
+      <td><strong>${b.invoiceNo}</strong></td>
+      <td>${withTime ? (b.time || '') : (b.date || '')}</td>
+      <td>${b.patientName || 'Walk-in'}<br><span style="font-size:0.72rem;color:var(--text-muted);">${b.patientId || ''}</span></td>
+      <td>${b.payMode || ''}</td>
+      <td><span class="pdash-pill ${pill}">${st}</span></td>
+      <td style="text-align:right;">${(b.net || 0).toFixed(2)}</td>
+      <td style="text-align:right;">${pdashRefundCell(b)}</td>
+      <td style="text-align:right;"><button class="btn btn-sm btn-outline-secondary border-0 p-1" title="Print invoice" onclick="phReprintInvoice('${b.invoiceNo}')"><i class="fa-solid fa-print"></i></button></td>
+    </tr>`;
+  }
+
+  // ---------- Search ----------
+  function phsRun() {
+    const q = document.getElementById('phsQuery').value.trim();
+    if (!q) return alert("Enter a Patient ID, name, mobile, or invoice number.");
+    pdashOverlay(true, "Searching…");
+    google.script.run
+      .withSuccessHandler(res => {
+        pdashOverlay(false);
+        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Failed.")); return; }
+        const rows = res.data || [];
+        document.getElementById('phsCount').innerText = `(${rows.length}${rows.length === 200 ? '+' : ''})`;
+        document.getElementById('phsBody').innerHTML = rows.map(b => {
+          let pill = 'active', st = b.status || 'ACTIVE';
+          if (st === 'PARTIAL-RETURN') pill = 'partial';
+          else if (st === 'RETURNED' || st === 'CANCELLED') pill = 'returned';
+          return `<tr>
+            <td><strong>${b.invoiceNo}</strong></td>
+            <td>${b.date || ''} ${b.time || ''}</td>
+            <td>${b.patientName || 'Walk-in'}<br><span style="font-size:0.72rem;color:var(--text-muted);">${b.patientId || ''}</span></td>
+            <td>${b.mobile || ''}</td>
+            <td>${b.payMode || ''}</td>
+            <td><span class="pdash-pill ${pill}">${st}</span></td>
+            <td style="text-align:right;">${(b.net || 0).toFixed(2)}</td>
+            <td style="text-align:right;">${pdashRefundCell(b)}</td>
+            <td style="text-align:right;"><button class="btn btn-sm btn-outline-secondary border-0 p-1" title="Print invoice" onclick="phReprintInvoice('${b.invoiceNo}')"><i class="fa-solid fa-print"></i></button></td>
+          </tr>`;
+        }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px;">No matching bills.</td></tr>`;
+      })
+      .withFailureHandler(() => { pdashOverlay(false); alert("❌ Network error."); })
+      .searchPharmacyInvoices(q);
+  }
+
+  // ---------- Reprint any past invoice ----------
+  function phReprintInvoice(invoiceNo) {
+    if (typeof buildPrintInvoiceRaw !== 'function') { alert("Invoice print template not loaded on this page."); return; }
+    pdashOverlay(true, "Preparing invoice…");
+    google.script.run
+      .withSuccessHandler(res => {
+        pdashOverlay(false);
+        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Could not load invoice.")); return; }
+        document.getElementById('phs-print').innerHTML = buildPrintInvoiceRaw(res.print);
+        phsDoPrint();
+      })
+      .withFailureHandler(() => { pdashOverlay(false); alert("❌ Network error."); })
+      .getInvoiceForPrint(invoiceNo);
+  }
+
+  // ---------- Print the day/range bill list (with summary) ----------
+  function pdashPrintList() {
+    if (!pdashBills.length) return alert("Nothing to print — load a range with bills first.");
+    document.getElementById('phs-print').innerHTML = pdashBuildListPrint(pdashBills, pdashTotals, pdashRange);
+    phsDoPrint();
+  }
+
+  function pdashBuildListPrint(bills, totals, range) {
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    const t = totals || {};
+    const sCell = (lbl, val) => `<td style="padding:8px 10px;border:1px solid #e5e7eb;text-align:center;"><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px;">${lbl}</div><div style="font-size:15px;font-weight:800;color:#111827;">${val}</div></td>`;
+    const summary = `
+      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+        <tr>
+          ${sCell('Bills', t.bills || 0)}
+          ${sCell('Refunds', t.refunds || 0)}
+          ${sCell('Cash', '₹' + (t.cash || 0).toFixed(2))}
+          ${sCell('UPI', '₹' + (t.upi || 0).toFixed(2))}
+          ${sCell('Card', '₹' + (t.card || 0).toFixed(2))}
+          ${sCell('Credit', '₹' + (t.credit || 0).toFixed(2))}
+        </tr>
+      </table>`;
+    const rows = bills.map((b, i) => `
+      <tr>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.invoiceNo)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.date)} ${esc(b.time)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.patientName || 'Walk-in')}${b.patientId ? ' (' + esc(b.patientId) + ')' : ''}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.payMode)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.status)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">₹${(b.net || 0).toFixed(2)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;text-align:right;color:#dc2626;">${(b.refunded && b.refunded > 0) ? ('- ₹' + b.refunded.toFixed(2)) : '—'}</td>
+      </tr>`).join('');
+    return `
+      <div style="max-width:840px;margin:14px auto;font-family:'Helvetica Neue',Arial,sans-serif;color:#111827;">
+        <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0369a1;padding-bottom:10px;margin-bottom:12px;">
+          <div><div style="font-size:18px;font-weight:800;color:#0369a1;">CRESCENTIA HEALTHTECH</div><div style="font-size:12px;color:#6b7280;">Pharmacy — Bills Report</div></div>
+          <div style="text-align:right;font-size:12px;color:#4b5563;">${esc(range ? range.from : '')} to ${esc(range ? range.to : '')}<br>Net ₹${(t.net || 0).toFixed(2)} · Refunds ₹${(t.refundAmt || 0).toFixed(2)} · Realised ₹${(t.netRealised || 0).toFixed(2)}</div>
+        </div>
+        ${summary}
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#f3f4f6;">
+            <th style="padding:6px 8px;text-align:left;">#</th><th style="padding:6px 8px;text-align:left;">Invoice</th>
+            <th style="padding:6px 8px;text-align:left;">Date/Time</th><th style="padding:6px 8px;text-align:left;">Patient</th>
+            <th style="padding:6px 8px;text-align:left;">Mode</th><th style="padding:6px 8px;text-align:left;">Status</th>
+            <th style="padding:6px 8px;text-align:right;">Net</th><th style="padding:6px 8px;text-align:right;">Refund</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function phsDoPrint() {
+    document.body.classList.add('phs-printing');
+    window.print();
+    setTimeout(() => document.body.classList.remove('phs-printing'), 800);
+  }
+</script>

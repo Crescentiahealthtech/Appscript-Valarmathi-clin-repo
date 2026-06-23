@@ -1,0 +1,467 @@
+<!-- ===================================================================
+  CRESCENTIA — PHARMACY DESK  (Returns / Refund / GST + Finance)
+  Add this whole block into your single-page app alongside the other
+  workspace sections (e.g. right after #pharmacy-billing-workspace).
+  Reach it from the Pharmacy Workspace with a button:
+     <button onclick="openPharmacyDesk()">Pharmacy Desk</button>
+==================================================================== -->
+<div id="pharmacy-desk-workspace" class="page-section">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <button class="btn btn-outline-secondary btn-sm" onclick="closePharmacyDesk()">
+      <i class="fa-solid fa-arrow-left"></i> Back to Workspace
+    </button>
+    <div class="btn-group btn-group-sm" role="group">
+      <button class="btn btn-outline-primary active" id="phd-tab-returns" onclick="phdShowTab('returns')">
+        <i class="fa-solid fa-rotate-left"></i> Returns &amp; Refunds
+      </button>
+      <button class="btn btn-outline-primary" id="phd-tab-finance" onclick="phdShowTab('finance')">
+        <i class="fa-solid fa-indian-rupee-sign"></i> Finance &amp; GST
+      </button>
+    </div>
+  </div>
+
+  <style>
+    #pharmacy-desk-workspace input,
+    #pharmacy-desk-workspace select {
+      background-color: var(--bg-input) !important; color: var(--text-main) !important;
+      border: 1px solid var(--border-color) !important; border-radius: 6px;
+      outline: none; box-shadow: none !important;
+    }
+    #pharmacy-desk-workspace input:focus,
+    #pharmacy-desk-workspace select:focus { border-color: var(--accent-purple) !important; }
+    #pharmacy-desk-workspace .phd-label {
+      font-size: 0.7rem; color: var(--text-muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; display: block;
+    }
+    .phd-table { width: 100%; border-collapse: collapse; }
+    .phd-table th {
+      color: var(--text-label); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px;
+      padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left;
+    }
+    .phd-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.85rem; vertical-align: middle; }
+    .phd-table input { width: 100%; font-size: 0.85rem; padding: 0.3rem 0.4rem; text-align: center; }
+    .phd-pill { font-size: 0.62rem; font-weight: 700; padding: 2px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .phd-pill.active   { background: rgba(16,185,129,0.15); color: var(--success); }
+    .phd-pill.partial  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .phd-pill.returned { background: rgba(220,38,38,0.15); color: #dc2626; }
+    .phd-pill.pending  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .phd-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 18px; }
+    .phd-kpi-val { font-size: 1.5rem; font-weight: 800; color: var(--text-main); }
+    .phd-kpi-lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    .phd-refund-total { font-size: 1.6rem; font-weight: 800; color: #dc2626; }
+
+    #phd-print { display: none; }
+    @media print {
+      body.phd-printing * { visibility: hidden !important; }
+      body.phd-printing #phd-print, body.phd-printing #phd-print * { visibility: visible !important; }
+      body.phd-printing #phd-print { display: block !important; position: absolute; left: 0; top: 0; width: 100%;
+        background: #fff !important; color: #000 !important; padding: 10px 4px; font-family: 'Segoe UI', Arial, sans-serif; }
+    }
+  </style>
+
+  <!-- ===================== RETURNS TAB ===================== -->
+  <div id="phd-pane-returns">
+    <div class="hd-panel mb-3">
+      <div class="hd-panel-title">1. Find the Invoice to Return</div>
+      <div class="d-flex" style="max-width: 420px;">
+        <input type="text" id="phrInvoiceQuery" class="hd-input w-100 p-2" placeholder="Invoice No (e.g. PH2606-1001)"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();phrLoadInvoice();}">
+        <button class="btn btn-sm btn-primary ms-1" onclick="phrLoadInvoice()"><i class="fa-solid fa-magnifying-glass"></i> Load</button>
+      </div>
+    </div>
+
+    <div id="phrResult" class="d-none">
+      <div class="hd-panel mb-3">
+        <div class="hd-panel-title d-flex justify-content-between align-items-center">
+          <span>2. Choose Quantities to Return</span>
+          <button class="btn btn-sm btn-outline-danger" onclick="phrCancelAll()"><i class="fa-solid fa-ban"></i> Cancel Entire Bill</button>
+        </div>
+        <div id="phrHeaderInfo" class="mb-2" style="font-size: 0.85rem; color: var(--text-muted);"></div>
+        <div class="table-responsive">
+          <table class="phd-table" id="phrTable">
+            <thead>
+              <tr>
+                <th>Medicine</th><th>Batch / Exp</th>
+                <th style="text-align:center;">Billed</th>
+                <th style="text-align:center;">Returned</th>
+                <th style="text-align:center;">Returnable</th>
+                <th style="width:90px; text-align:center;">Return Qty</th>
+                <th style="text-align:right;">Refund (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="phrBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-8">
+          <div class="hd-panel h-100">
+            <div class="hd-panel-title">3. Refund &amp; Reason</div>
+            <div class="row g-3">
+              <div class="col-md-5">
+                <label class="phd-label">Refund Mode</label>
+                <select id="phrRefundMode" class="hd-input w-100 p-2" onchange="phrToggleRefundRef()">
+                  <option value="CASH">CASH</option>
+                  <option value="UPI">UPI / GPay</option>
+                  <option value="CARD">CARD</option>
+                </select>
+                <input type="text" id="phrRefundRef" class="hd-input w-100 p-2 mt-2 d-none" placeholder="UPI / Card refund reference">
+                <div id="phrCreditNote" class="mt-2 d-none" style="font-size:0.75rem;color:#f59e0b;">
+                  Unsettled credit bill — this return reduces the outstanding amount (no cash refund).
+                </div>
+              </div>
+              <div class="col-md-7">
+                <label class="phd-label">Reason (optional)</label>
+                <input type="text" id="phrReason" class="hd-input w-100 p-2" placeholder="e.g. wrong item, damaged strip, patient discharged early">
+                <button id="phrProcessBtn" class="btn btn-danger w-100 mt-3 py-2" style="font-weight:bold;" onclick="phrProcess(event)">
+                  <i class="fa-solid fa-rotate-left me-1"></i> Process Return &amp; Refund
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="hd-panel h-100">
+            <div class="d-flex justify-content-between mb-1"><span style="color:var(--text-muted);">Returned Gross</span><span id="phrSumGross">₹ 0.00</span></div>
+            <div class="d-flex justify-content-between mb-2"><span style="color:var(--text-muted);font-size:0.8rem;">Incl. GST reversed</span><span id="phrSumGst" class="text-warning" style="font-size:0.8rem;">₹ 0.00</span></div>
+            <hr style="border-color: var(--border-color);">
+            <div class="d-flex justify-content-between align-items-center"><span style="font-weight:bold;color:var(--text-muted);">TOTAL REFUND</span><span id="phrSumRefund" class="phd-refund-total">₹ 0.00</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== FINANCE TAB ===================== -->
+  <div id="phd-pane-finance" class="d-none">
+    <div class="hd-panel mb-3">
+      <div class="hd-panel-title">Finance &amp; GST Recalculation</div>
+      <div class="d-flex align-items-end gap-2 flex-wrap">
+        <div><label class="phd-label">From</label><input type="date" id="phdFrom" class="hd-input p-2"></div>
+        <div><label class="phd-label">To</label><input type="date" id="phdTo" class="hd-input p-2"></div>
+        <button class="btn btn-sm btn-primary" onclick="phdRunFinance()"><i class="fa-solid fa-calculator"></i> Recalculate</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="phdFinanceToday()">Today</button>
+      </div>
+    </div>
+    <div id="phdFinanceOut" class="d-none">
+      <div class="row g-3 mb-3">
+        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net Sales</div><div class="phd-kpi-val" id="fNetSales">₹0</div></div></div>
+        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Refunds</div><div class="phd-kpi-val" style="color:#dc2626;" id="fRefunds">₹0</div></div></div>
+        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net Realised</div><div class="phd-kpi-val" style="color:var(--success);" id="fNetReal">₹0</div></div></div>
+        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net GST Payable</div><div class="phd-kpi-val" style="color:#f59e0b;" id="fNetGst">₹0</div></div></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6"><div class="phd-card"><div class="hd-panel-title">Sales</div><div id="fSales" style="font-size:0.88rem;"></div></div></div>
+        <div class="col-md-6"><div class="phd-card"><div class="hd-panel-title">Returns &amp; Credit</div><div id="fReturns" style="font-size:0.88rem;"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="phd-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:20000;display:none;align-items:center;justify-content:center;">
+    <div style="background:var(--bg-card);color:var(--text-main);padding:22px 30px;border-radius:12px;border:1px solid var(--border-color);font-weight:600;">
+      <span class="spinner-border spinner-border-sm me-2"></span><span id="phd-overlay-text">Working…</span>
+    </div>
+  </div>
+
+  <div id="phd-print"></div>
+</div>
+
+<script>
+  // ===================================================================
+  // PHARMACY DESK — state + navigation
+  // ===================================================================
+  let phrInvoice = null;            // { header, items }
+  let phrReturnUuid = null;
+
+  function newReturnUuid() { return 'RET-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); }
+
+  function openPharmacyDesk() {
+  // 1. Always default to the Returns tab when opening
+  phdShowTab('returns');
+  
+  // 2. Clear out any old search data so the desk is fresh
+  const searchInput = document.getElementById('phrInvoiceQuery');
+  if (searchInput) searchInput.value = '';
+  
+  const resultDiv = document.getElementById('phrResult');
+  if (resultDiv) resultDiv.classList.add('d-none');
+}
+
+function closePharmacyDesk() {
+  // Simply route back to the Pharmacy Command Center
+  if (typeof switchTab === 'function') {
+    switchTab('workspace-pharmacy');
+  }
+}
+
+function phdShowTab(name) {
+  document.getElementById('phd-pane-returns').classList.toggle('d-none', name !== 'returns');
+  document.getElementById('phd-pane-finance').classList.toggle('d-none', name !== 'finance');
+  document.getElementById('phd-tab-returns').classList.toggle('active', name === 'returns');
+  document.getElementById('phd-tab-finance').classList.toggle('active', name === 'finance');
+}
+
+  function phdOverlay(show, text) {
+    const o = document.getElementById('phd-overlay');
+    if (!o) return;
+    if (text) document.getElementById('phd-overlay-text').innerText = text;
+    o.style.display = show ? 'flex' : 'none';
+  }
+
+  // ===================================================================
+  // RETURNS — load invoice
+  // ===================================================================
+  function phrLoadInvoice() {
+    const q = document.getElementById('phrInvoiceQuery').value.trim();
+    if (!q) return alert("Enter an invoice number.");
+    phdOverlay(true, "Loading invoice…");
+    google.script.run
+      .withSuccessHandler(res => {
+        phdOverlay(false);
+        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Not found.")); return; }
+        phrInvoice = res;
+        phrReturnUuid = newReturnUuid();
+        phrRender();
+      })
+      .withFailureHandler(() => { phdOverlay(false); alert("❌ Network error."); })
+      .getInvoiceForReturn(q);
+  }
+
+  function phrRender() {
+    const h = phrInvoice.header, items = phrInvoice.items || [];
+    document.getElementById('phrResult').classList.remove('d-none');
+
+    let statusPill = 'active', statusTxt = h.status || 'ACTIVE';
+    if (statusTxt === 'PARTIAL-RETURN') statusPill = 'partial';
+    else if (statusTxt === 'RETURNED' || statusTxt === 'CANCELLED') statusPill = 'returned';
+
+    document.getElementById('phrHeaderInfo').innerHTML =
+      `<strong style="color:var(--text-main);">${h.invoiceNo}</strong> · ${h.patientName || 'Walk-in'} (${h.patientId || '—'}) · ${h.date}` +
+      ` · <span class="phd-pill ${statusPill}">${statusTxt}</span>` +
+      ` · <span class="phd-pill pending">${h.payMode}/${h.payStatus}</span>` +
+      ` · Net ₹${(h.net || 0).toFixed(2)}` + (h.discount > 0 ? ` (after ₹${h.discount.toFixed(2)} discount)` : '');
+
+    // Show credit-adjust note + lock the refund mode for unsettled credit
+    const isCredit = (h.payStatus || '').toUpperCase() === 'PENDING';
+    document.getElementById('phrCreditNote').classList.toggle('d-none', !isCredit);
+    document.getElementById('phrRefundMode').disabled = isCredit;
+
+    const body = document.getElementById('phrBody');
+    body.innerHTML = items.map((it, i) => {
+      const disabled = it.returnableQty <= 0 ? 'disabled' : '';
+      return `
+        <tr data-idx="${i}">
+          <td><strong>${it.brand}</strong>${it.generic ? `<br><span style="font-size:0.72rem;color:var(--text-muted);">${it.generic}</span>` : ''}</td>
+          <td style="font-size:0.78rem;color:var(--text-muted);">${it.batch}<br>Exp: ${it.expiry}</td>
+          <td style="text-align:center;">${it.billedQty}</td>
+          <td style="text-align:center;">${it.returnedQty}</td>
+          <td style="text-align:center;font-weight:600;">${it.returnableQty}</td>
+          <td><input type="number" class="phr-qty" value="0" min="0" max="${it.returnableQty}" ${disabled} oninput="phrRecalc()"></td>
+          <td style="text-align:right;" class="phr-line">₹0.00</td>
+        </tr>`;
+    }).join('');
+    phrRecalc();
+  }
+
+  function phrRecalc() {
+    if (!phrInvoice) return;
+    const factor = phrInvoice.header.discountFactor || 1;
+    let gross = 0, gst = 0, refund = 0;
+    document.querySelectorAll('#phrBody tr').forEach(tr => {
+      const it = phrInvoice.items[parseInt(tr.dataset.idx, 10)];
+      const input = tr.querySelector('.phr-qty');
+      let q = parseFloat(input.value) || 0;
+      if (q < 0) q = 0;
+      if (q > it.returnableQty) { q = it.returnableQty; input.value = q; }
+      const lineTotal = q * it.mrp;
+      const lineGst = it.gst > 0 ? lineTotal - (lineTotal / (1 + it.gst / 100)) : 0;
+      const lineRefund = lineTotal * factor;
+      tr.querySelector('.phr-line').innerText = `₹${lineRefund.toFixed(2)}`;
+      gross += lineTotal; gst += lineGst; refund += lineRefund;
+    });
+    document.getElementById('phrSumGross').innerText = `₹ ${gross.toFixed(2)}`;
+    document.getElementById('phrSumGst').innerText = `₹ ${gst.toFixed(2)}`;
+    document.getElementById('phrSumRefund').innerText = `₹ ${refund.toFixed(2)}`;
+  }
+
+  function phrCancelAll() {
+    document.querySelectorAll('#phrBody tr').forEach(tr => {
+      const it = phrInvoice.items[parseInt(tr.dataset.idx, 10)];
+      tr.querySelector('.phr-qty').value = it.returnableQty;
+    });
+    phrRecalc();
+  }
+
+  function phrToggleRefundRef() {
+    const m = document.getElementById('phrRefundMode').value;
+    const ref = document.getElementById('phrRefundRef');
+    if (m === 'UPI' || m === 'CARD') ref.classList.remove('d-none');
+    else { ref.classList.add('d-none'); ref.value = ''; }
+  }
+
+  // ===================================================================
+  // RETURNS — process
+  // ===================================================================
+  function phrProcess(event) {
+    if (!phrInvoice) return;
+    const lines = [];
+    let anyReturnable = false;
+    document.querySelectorAll('#phrBody tr').forEach(tr => {
+      const it = phrInvoice.items[parseInt(tr.dataset.idx, 10)];
+      if (it.returnableQty > 0) anyReturnable = true;
+      const q = parseFloat(tr.querySelector('.phr-qty').value) || 0;
+      if (q > 0) lines.push({ brand: it.brand, batch: it.batch, generic: it.generic, expiry: it.expiry, unit: it.unit, qty: q });
+    });
+    if (!anyReturnable) return alert("Nothing left to return on this invoice.");
+    if (lines.length === 0) return alert("Enter at least one return quantity.");
+
+    const totalQty = lines.reduce((s, l) => s + l.qty, 0);
+    const allMax = phrInvoice.items.every(it => {
+      const tr = document.querySelector(`#phrBody tr[data-idx="${phrInvoice.items.indexOf(it)}"]`);
+      const q = tr ? (parseFloat(tr.querySelector('.phr-qty').value) || 0) : 0;
+      return q >= it.returnableQty;
+    });
+
+    if (!confirm(`Return ${totalQty} unit(s) across ${lines.length} line(s) and refund ${document.getElementById('phrSumRefund').innerText}?\n\nStock will be added back and this cannot be undone.`)) return;
+
+    const btn = event.target.closest('button');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Processing…`;
+
+    const payload = {
+      invoiceNo: phrInvoice.header.invoiceNo,
+      returnUuid: phrReturnUuid,
+      returnType: allMax ? 'CANCEL' : 'PARTIAL',
+      refundMode: document.getElementById('phrRefundMode').value,
+      refundRef: document.getElementById('phrRefundRef').value.trim(),
+      reason: document.getElementById('phrReason').value.trim(),
+      lines: lines
+    };
+
+    google.script.run
+      .withSuccessHandler(res => {
+        btn.innerHTML = original; btn.disabled = false;
+        if (res && res.success) {
+          if (res.duplicate) { alert("ℹ️ " + res.message); return; }
+          document.getElementById('phd-print').innerHTML = phrBuildCreditNote(res.print);
+          if (confirm(`✅ Return ${res.returnNo} done. Refund ₹${res.refund.toFixed(2)} (${res.refundMode}).\n\nPrint the credit note now?`)) {
+            phrPrintCreditNote();
+          }
+          phrLoadInvoice(); // reload to reflect new returnable quantities
+        } else alert("❌ " + ((res && res.message) || "Return failed."));
+      })
+      .withFailureHandler(() => { btn.innerHTML = original; btn.disabled = false; alert("❌ Network error: please retry."); })
+      .processPharmacyReturn(payload);
+  }
+
+  function phrPrintCreditNote() {
+    document.body.classList.add('phd-printing');
+    window.print();
+    setTimeout(() => document.body.classList.remove('phd-printing'), 800);
+  }
+
+  function phrBuildCreditNote(d) {
+    if (!d) return "";
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    const rows = d.items.map((it, i) => `
+      <tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;"><strong>${esc(it.drug)}</strong>${it.generic ? `<br><span style="font-size:10px;color:#6b7280;">${esc(it.generic)}</span>` : ''}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;">${esc(it.batch)}<br><span style="font-size:10px;color:#6b7280;">Exp: ${esc(it.expiry)}</span></td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">${it.qty}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">₹${it.mrp.toFixed(2)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#4b5563;">${it.gst}%</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">₹${it.refundLine.toFixed(2)}</td>
+      </tr>`).join('');
+    return `
+      <div style="max-width:760px;margin:18px auto;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-family:'Helvetica Neue',Arial,sans-serif;color:#111827;background:#fff;">
+        <div style="padding:18px 24px;border-bottom:2px solid #dc2626;display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:20px;font-weight:800;color:#dc2626;text-transform:uppercase;">Crescentia HealthTech</div>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px;">Medical District, City</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:16px;font-weight:800;letter-spacing:1px;">CREDIT NOTE / REFUND</div>
+            <div style="font-size:12px;color:#4b5563;margin-top:4px;">Return: <strong>${esc(d.returnNo)}</strong></div>
+            <div style="font-size:11px;color:#6b7280;">Against Invoice: ${esc(d.invoiceNo)}</div>
+            <div style="font-size:11px;color:#6b7280;">Date: ${esc(d.date)}</div>
+          </div>
+        </div>
+        <div style="padding:12px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:13px;">
+          <span style="color:#6b7280;">Patient:</span> <strong>${esc(d.patientName)}</strong>${d.patientId && d.patientId !== 'WALK-IN' ? ` &bull; ${esc(d.patientId)}` : ''}
+          ${d.reason ? `<br><span style="color:#6b7280;">Reason:</span> ${esc(d.reason)}` : ''}
+        </div>
+        <div style="padding:16px 24px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:#f3f4f6;">
+              <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;">#</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;">Medicine</th>
+              <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;">Batch / Exp</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;text-transform:uppercase;">Qty</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;text-transform:uppercase;">MRP</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;text-transform:uppercase;">GST</th>
+              <th style="padding:8px 10px;text-align:right;font-size:11px;text-transform:uppercase;">Refund</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div style="padding:8px 24px 18px;display:flex;justify-content:flex-end;">
+          <table style="width:46%;font-size:13px;border-collapse:collapse;">
+            <tr><td style="padding:4px 10px;color:#6b7280;">Returned Gross</td><td style="padding:4px 10px;text-align:right;">₹${d.returnedGross.toFixed(2)}</td></tr>
+            <tr><td style="padding:0 10px 4px;color:#9ca3af;font-size:10px;">(GST reversed: ₹${d.returnedGst.toFixed(2)})</td><td></td></tr>
+            <tr style="border-top:2px solid #111827;"><td style="padding:8px 10px;font-weight:800;font-size:15px;">Total Refund</td><td style="padding:8px 10px;text-align:right;font-weight:800;font-size:16px;color:#dc2626;">₹${d.refund.toFixed(2)}</td></tr>
+          </table>
+        </div>
+        <div style="padding:12px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#374151;display:flex;justify-content:space-between;">
+          <div>Refund: <strong>${esc(d.refundMode)}</strong>${d.refundRef ? ` &bull; Ref: ${esc(d.refundRef)}` : ''} &bull; Invoice now: <strong>${esc(d.newStatus)}</strong></div>
+          <div style="color:#9ca3af;font-size:11px;">Computer-generated credit note.</div>
+        </div>
+      </div>`;
+  }
+
+  // ===================================================================
+  // FINANCE
+  // ===================================================================
+  function phdFinanceToday() {
+    const t = new Date().toISOString().slice(0, 10);
+    document.getElementById('phdFrom').value = t;
+    document.getElementById('phdTo').value = t;
+    phdRunFinance();
+  }
+
+  function phdRunFinance() {
+    const from = document.getElementById('phdFrom').value || '0000-01-01';
+    const to = document.getElementById('phdTo').value || '9999-12-31';
+    phdOverlay(true, "Recalculating…");
+    google.script.run
+      .withSuccessHandler(res => {
+        phdOverlay(false);
+        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Failed.")); return; }
+        document.getElementById('phdFinanceOut').classList.remove('d-none');
+        const r2 = n => '₹' + (Math.round((n || 0) * 100) / 100).toFixed(2);
+        document.getElementById('fNetSales').innerText = r2(res.sales.net);
+        document.getElementById('fRefunds').innerText = r2(res.returns.refund);
+        document.getElementById('fNetReal').innerText = r2(res.netRealised);
+        document.getElementById('fNetGst').innerText = r2(res.netGst);
+        const modes = Object.keys(res.sales.byMode || {}).map(m => `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">${m}</span><span>${r2(res.sales.byMode[m])}</span></div>`).join('');
+        document.getElementById('fSales').innerHTML =
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Bills</span><span>${res.sales.count}</span></div>` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Gross</span><span>${r2(res.sales.gross)}</span></div>` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Discount</span><span>${r2(res.sales.discount)}</span></div>` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">GST collected</span><span>${r2(res.sales.gst)}</span></div>` +
+          `<hr style="border-color:var(--border-color);margin:6px 0;">${modes}`;
+        document.getElementById('fReturns').innerHTML =
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Returns</span><span>${res.returns.count}</span></div>` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Returned gross</span><span>${r2(res.returns.gross)}</span></div>` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">GST reversed</span><span>${r2(res.returns.gst)}</span></div>` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Refunds paid</span><span style="color:#dc2626;">${r2(res.returns.refund)}</span></div>` +
+          `<hr style="border-color:var(--border-color);margin:6px 0;">` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Credit outstanding</span><span style="color:#f59e0b;">${r2(res.creditOutstanding)} (${res.creditCount})</span></div>`;
+      })
+      .withFailureHandler(() => { phdOverlay(false); alert("❌ Network error."); })
+      .getPharmacyFinanceSummary(from, to);
+  }
+</script>

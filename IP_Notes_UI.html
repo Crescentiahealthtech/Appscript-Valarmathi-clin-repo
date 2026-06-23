@@ -1,0 +1,2404 @@
+<div id="emr-workspace-ip-notes" class="d-none hd-workspace app-view mt-3">
+
+  <!-- ═══════════════════════════════════════════════════════
+       LEDGER VIEW — Active Ward Roster
+  ═══════════════════════════════════════════════════════ -->
+  <div id="ip-notes-ledger-view" class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
+      <div class="d-flex align-items-center gap-3">
+        <button class="btn btn-outline-secondary btn-sm" onclick="returnToEMRMenu()">
+          <i class="fa-solid fa-arrow-left"></i> EMR Menu
+        </button>
+        <h4 class="m-0 text-white fw-bold">
+          <i class="fa-solid fa-hospital-user me-2 text-success"></i> Active Ward Roster
+        </h4>
+      </div>
+      <button class="btn btn-outline-info btn-sm" onclick="fetchIPNotesLedger()">
+        <i class="fa-solid fa-arrows-rotate me-1"></i> Refresh Roster
+      </button>
+    </div>
+    <div class="card bg-dark border-secondary shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-dark table-hover mb-0 align-middle">
+          <thead style="background-color: #1a1d20;">
+            <tr class="text-muted small text-uppercase">
+              <th>IP Number</th>
+              <th>Patient ID</th>
+              <th>Patient Name</th>
+              <th>Ward &amp; Bed</th>
+              <th>Admitted On</th>
+              <th>Consultant</th>
+              <th>Diagnosis</th>
+              <th class="text-end">Action</th>
+            </tr>
+          </thead>
+          <tbody id="ip-notes-ledger-tbody">
+            <tr>
+              <td colspan="8" class="text-center text-muted py-4">
+                <i class="fas fa-circle-notch fa-spin me-2"></i> Loading ward data...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DETAIL VIEW — Clinical Notes Workspace
+  ═══════════════════════════════════════════════════════ -->
+  <div id="ip-notes-detail-view" class="d-none">
+
+    <style>
+      /* ─── LAYOUT & SURFACE ─────────────────────── */
+      :root {
+        --ip-surface:      #111418;
+        --ip-surface-2:    #181c22;
+        --ip-border-soft:  rgba(255,255,255,0.05);
+        --ip-border-mid:   rgba(255,255,255,0.09);
+        --ip-purple:       #635bff;
+        --ip-blue:         #3b82f6;
+        --ip-green:        #10b981;
+        --ip-amber:        #f59e0b;
+        --ip-red:          #ef4444;
+        --ip-teal:         #06b6d4;
+        --btn-cont:        rgba(16,185,129,0.15);  --txt-cont: #34d399;
+        --btn-stop:        rgba(239,68,68,0.15);   --txt-stop: #f87171;
+        --btn-hold:        rgba(245,158,11,0.15);  --txt-hold: #fbbf24;
+        --btn-mod:         rgba(59,130,246,0.15);  --txt-mod:  #60a5fa;
+      }
+
+      .ip-notes-wrapper {
+        background: var(--ip-surface);
+        color: #e2e8f0;
+        height: calc(100vh - 70px);
+        margin: -1rem;
+        width: calc(100% + 2rem);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        font-family: 'Inter', sans-serif;
+      }
+      .ip-global-header {
+        background: var(--ip-surface-2);
+        padding: 12px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--ip-border-soft);
+        flex-shrink: 0;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        gap: 12px;
+      }
+      .ip-pat-name  { font-size: 1.3rem; font-weight: 800; color: white; margin: 0; letter-spacing: -0.3px; }
+      .ip-pat-meta  { font-size: 0.8rem; color: #94a3b8; }
+
+      /* ─── FILTER BAR ─────────────────────────────── */
+      .ip-filter-bar {
+        background: var(--ip-surface-2);
+        border-bottom: 1px solid var(--ip-border-soft);
+        padding: 8px 24px;
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .ip-filter-btn {
+        background: transparent;
+        border: 1px solid var(--ip-border-mid);
+        color: #94a3b8;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+        letter-spacing: 0.3px;
+      }
+      .ip-filter-btn:hover  { background: rgba(255,255,255,0.04); color: #e2e8f0; }
+      .ip-filter-btn.active { background: var(--ip-purple); border-color: var(--ip-purple); color: white; }
+
+      /* ─── THREE-PANEL GRID ──────────────────────── */
+      .ip-grid {
+        display: grid;
+        grid-template-columns: 22% 54% 24%;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+      .ip-panel {
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 20px;
+        min-height: 0;
+      }
+      .ip-panel::-webkit-scrollbar { width: 3px; }
+      .ip-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+      .ip-center-panel {
+        background: rgba(10,13,18,0.5);
+        position: relative;
+        padding: 0;
+        border-left: 1px solid var(--ip-border-soft);
+        border-right: 1px solid var(--ip-border-soft);
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      /* ─── LEFT PANEL ELEMENTS ──────────────────── */
+      .ip-section-title {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 1.8px;
+        color: #475569;
+        font-weight: 700;
+        margin-bottom: 10px;
+        margin-top: 20px;
+      }
+      .ip-section-title:first-child { margin-top: 0; }
+
+      .diag-chip {
+        display: inline-block;
+        background: rgba(99,91,255,0.12);
+        color: #a5b4fc;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        margin: 0 4px 6px 0;
+        border: 1px solid rgba(99,91,255,0.2);
+        font-weight: 500;
+      }
+      .allergy-chip {
+        display: inline-block;
+        background: rgba(239,68,68,0.12);
+        color: #fca5a5;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        margin: 0 4px 5px 0;
+        border: 1px solid rgba(239,68,68,0.2);
+        font-weight: 600;
+      }
+
+      .vital-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--ip-border-soft);
+      }
+      .vital-card:last-child { border-bottom: none; }
+      .vc-label { color: #64748b; font-size: 0.8rem; line-height: 1; }
+      .vc-time  { color: #475569; font-size: 0.65rem; margin-top: 3px; }
+      .vc-val   { font-size: 1.1rem; font-weight: 700; color: white; }
+      .vc-val.warn  { color: #fbbf24; }
+      .vc-val.alert { color: #f87171; }
+
+      .handover-alert-box {
+        background: rgba(239,68,68,0.08);
+        border: 1px solid rgba(239,68,68,0.25);
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        color: #fca5a5;
+        margin-bottom: 4px;
+      }
+
+      /* ─── CENTER PANEL — TIMELINE ──────────────── */
+      .ip-timeline-scroller {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 20px 24px 90px 24px;
+        position: relative;
+        scroll-behavior: smooth;
+        min-height: 0;
+      }
+      .ip-timeline-scroller::-webkit-scrollbar { width: 3px; }
+      .ip-timeline-scroller::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+
+      .shift-group { margin-bottom: 24px; }
+      .shift-label {
+        font-size: 0.7rem;
+        color: #a855f7;
+        font-weight: 800;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        padding: 8px 0;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(168,85,247,0.15);
+        position: sticky;
+        top: 0;
+        background: rgba(10,13,18,0.9);
+        backdrop-filter: blur(8px);
+        z-index: 10;
+      }
+
+      .feed-item {
+        display: flex;
+        gap: 14px;
+        margin-bottom: 16px;
+        padding: 14px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.015);
+        border: 1px solid var(--ip-border-soft);
+        animation: ipFadeIn 0.3s ease-out;
+        position: relative;
+      }
+      .feed-item.d-filter-hidden { display: none !important; }
+
+      .feed-item.role-DOCTOR     { border-left: 3px solid #60a5fa; }
+      .feed-item.role-NURSE      { border-left: 3px solid #34d399; }
+      .feed-item.role-CONSULTANT { border-left: 3px solid #f59e0b; }
+      .feed-item.role-PROCEDURE  { border-left: 3px solid #c084fc; }
+      .feed-item.role-HANDOVER   { border-left: 3px solid #94a3b8; background: rgba(148,163,184,0.04); }
+      .feed-item.role-QUICK      { border-left: 3px solid #475569; }
+      .feed-item.role-INVESTIGATION { border-left: 3px solid #06b6d4; }
+
+      .feed-icon {
+        width: 40px; height: 40px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem; flex-shrink: 0;
+        border: 1px solid rgba(255,255,255,0.06);
+      }
+      .feed-icon.role-DOCTOR      { background: rgba(59,130,246,0.12); color: #60a5fa; }
+      .feed-icon.role-NURSE       { background: rgba(16,185,129,0.12); color: #34d399; }
+      .feed-icon.role-CONSULTANT  { background: rgba(245,158,11,0.12); color: #fbbf24; }
+      .feed-icon.role-PROCEDURE   { background: rgba(192,132,252,0.12); color: #c084fc; }
+      .feed-icon.role-HANDOVER    { background: rgba(148,163,184,0.08); color: #94a3b8; }
+      .feed-icon.role-QUICK       { background: rgba(71,85,105,0.12); color: #94a3b8; }
+      .feed-icon.role-INVESTIGATION { background: rgba(6,182,212,0.12); color: #22d3ee; }
+      .feed-icon.role-SYSTEM      { background: rgba(239,68,68,0.12); color: #f87171; }
+
+      .feed-body   { flex: 1; min-width: 0; }
+      .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 8px; flex-wrap: wrap; }
+      .feed-author { font-weight: 700; color: #f1f5f9; font-size: 0.9rem; }
+      .feed-role   { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+      .feed-role.role-DOCTOR      { background: rgba(59,130,246,0.15); color: #93c5fd; }
+      .feed-role.role-NURSE       { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+      .feed-role.role-CONSULTANT  { background: rgba(245,158,11,0.15); color: #fcd34d; }
+      .feed-role.role-PROCEDURE   { background: rgba(192,132,252,0.15); color: #d8b4fe; }
+      .feed-role.role-HANDOVER    { background: rgba(148,163,184,0.1); color: #cbd5e1; }
+      .feed-role.role-INVESTIGATION { background: rgba(6,182,212,0.15); color: #67e8f9; }
+      .feed-time   { color: #475569; font-size: 0.72rem; white-space: nowrap; }
+      .feed-text   { color: #cbd5e1; font-size: 0.88rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+
+      .med-action-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+      .mac { font-size: 0.72rem; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
+      .mac-cont { background: var(--btn-cont); color: var(--txt-cont); }
+      .mac-stop { background: var(--btn-stop); color: var(--txt-stop); }
+      .mac-hold { background: var(--btn-hold); color: var(--txt-hold); }
+      .mac-mod  { background: var(--btn-mod);  color: var(--txt-mod);  }
+
+      .vitals-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+      .vr-chip { background: rgba(255,255,255,0.04); border: 1px solid var(--ip-border-soft); border-radius: 8px; padding: 5px 10px; font-size: 0.78rem; color: #94a3b8; }
+      .vr-chip span { color: white; font-weight: 600; margin-left: 4px; }
+
+      .empty-timeline {
+        text-align: center;
+        padding: 48px 20px;
+        color: #475569;
+        font-size: 0.9rem;
+      }
+
+      /* ─── QUICK COMPOSE BAR ─────────────────────── */
+      .ip-compose-bar {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        background: var(--ip-surface-2);
+        padding: 12px 20px;
+        border-top: 1px solid var(--ip-border-soft);
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        z-index: 20;
+      }
+      .compose-input {
+        flex: 1;
+        background: #0d1117;
+        border: 1px solid var(--ip-border-mid);
+        color: white;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        outline: none;
+      }
+      .compose-input:focus { border-color: var(--ip-purple); box-shadow: 0 0 0 2px rgba(99,91,255,0.15); }
+      .compose-btn {
+        background: #1e293b;
+        border: 1px solid var(--ip-border-mid);
+        color: #94a3b8;
+        width: 40px; height: 40px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: 0.15s;
+        flex-shrink: 0;
+      }
+      .compose-btn:hover { background: #273444; color: white; }
+      .compose-btn.primary { background: var(--ip-purple); border-color: var(--ip-purple); color: white; }
+
+      /* ─── RIGHT PANEL ─────────────────────────────── */
+      .action-fab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+      .action-fab {
+        background: #1a1e27;
+        border: 1px solid var(--ip-border-mid);
+        color: #cbd5e1;
+        padding: 14px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-align: center;
+        cursor: pointer;
+        transition: 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+      .action-fab:hover { background: #232837; border-color: rgba(255,255,255,0.15); }
+      .action-fab .fab-icon { font-size: 1.1rem; }
+      .action-fab.fab-dr     { border-color: rgba(59,130,246,0.3); }
+      .action-fab.fab-nr     { border-color: rgba(16,185,129,0.3); }
+      .action-fab.fab-cons   { border-color: rgba(245,158,11,0.3); }
+      .action-fab.fab-proc   { border-color: rgba(192,132,252,0.3); }
+
+      .med-queue-item {
+        background: #1a1e27;
+        border: 1px solid var(--ip-border-soft);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+      }
+      .mqi-name { font-weight: 700; color: #e2e8f0; font-size: 0.85rem; margin-bottom: 2px; }
+      .mqi-freq { color: #64748b; font-size: 0.75rem; }
+      .mqi-status { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
+      .mqi-status.active    { background: var(--btn-cont); color: var(--txt-cont); }
+      .mqi-status.hold      { background: var(--btn-hold); color: var(--txt-hold); }
+      .mqi-status.iv        { background: rgba(6,182,212,0.15); color: #67e8f9; }
+
+      .lab-result-item {
+        background: #1a1e27;
+        border: 1px solid var(--ip-border-soft);
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+      }
+      .lri-test   { font-weight: 600; color: #e2e8f0; font-size: 0.82rem; }
+      .lri-status { font-size: 0.7rem; }
+      .lri-status.pending   { color: #94a3b8; }
+      .lri-status.available { color: #34d399; }
+
+      @keyframes ipFadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      /* ─── MODAL OVERRIDES ─────────────────────────── */
+      .ip-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--ip-border-soft);
+      }
+      .ip-modal-title { font-size: 1rem; font-weight: 700; margin: 0; }
+      .ip-modal-body  { padding: 20px; overflow-y: auto; max-height: 70vh; }
+      .ip-modal-footer { padding: 14px 20px; border-top: 1px solid var(--ip-border-soft); display: flex; justify-content: flex-end; gap: 10px; }
+
+      .ip-form-label { font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; display: block; }
+      .ip-form-input {
+        width: 100%;
+        background: #0d1117 !important;
+        border: 1px solid #2d3748 !important;
+        color: white !important;
+        padding: 9px 12px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        outline: none;
+        transition: 0.15s;
+      }
+      .ip-form-input:focus { border-color: var(--ip-purple) !important; box-shadow: 0 0 0 2px rgba(99,91,255,0.15); }
+      .ip-form-select {
+        width: 100%;
+        background: #0d1117 !important;
+        border: 1px solid #2d3748 !important;
+        color: white !important;
+        padding: 9px 12px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        outline: none;
+        cursor: pointer;
+        -webkit-appearance: none;
+      }
+
+      .sysex-row { display: grid; grid-template-columns: 50px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
+      .sysex-label { font-size: 0.78rem; color: #94a3b8; font-weight: 700; text-align: right; }
+
+      .med-order-row {
+        background: #131720;
+        border: 1px solid var(--ip-border-soft);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+      }
+      .med-order-row .drug-label { font-weight: 700; font-size: 0.9rem; color: #e2e8f0; }
+      .med-order-row .drug-freq  { font-size: 0.78rem; color: #64748b; margin-top: 2px; }
+
+      .med-action-row {
+        display: flex;
+        gap: 6px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      .med-action-btn {
+        border: none;
+        padding: 5px 14px;
+        border-radius: 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.15s;
+        opacity: 0.55;
+      }
+      .med-action-btn.selected { opacity: 1; transform: scale(1.05); }
+      .med-action-btn.btn-cont { background: var(--btn-cont); color: var(--txt-cont); }
+      .med-action-btn.btn-stop { background: var(--btn-stop); color: var(--txt-stop); }
+      .med-action-btn.btn-hold { background: var(--btn-hold); color: var(--txt-hold); }
+      .med-action-btn.btn-mod  { background: var(--btn-mod);  color: var(--txt-mod);  }
+
+      .add-drug-row {
+        border: 1px dashed #334155;
+        border-radius: 10px;
+        padding: 10px 14px;
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+        margin-top: 4px;
+        position: relative;
+      }
+      .drug-autocomplete-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        max-height: 160px;
+        overflow-y: auto;
+        z-index: 9999;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      }
+      .drug-autocomplete-list div {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+        color: #e2e8f0;
+        cursor: pointer;
+        border-bottom: 1px solid #2d3748;
+      }
+      .drug-autocomplete-list div:hover { background: var(--ip-purple); color: white; }
+      .drug-autocomplete-list div:last-child { border-bottom: none; }
+
+      .sign-btn {
+        background: var(--ip-purple);
+        color: white;
+        border: none;
+        width: 100%;
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: 0.2s;
+        letter-spacing: 0.3px;
+      }
+      .sign-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+      .sign-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+      .sign-btn.nurse-sign { background: linear-gradient(135deg, #059669, #10b981); }
+
+      .inv-order-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+      .inv-order-row input { flex: 1; }
+
+      /* ─── WNL BUTTON ─────────────────────────────── */
+      .wnl-btn {
+        background: rgba(16,185,129,0.12);
+        border: 1px solid rgba(16,185,129,0.25);
+        color: #34d399;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.15s;
+        white-space: nowrap;
+      }
+      .wnl-btn:hover { background: rgba(16,185,129,0.2); }
+
+      /* ─── HANDOVER MODAL ─────────────────────────── */
+      .handover-output-box {
+        background: #0d1117;
+        border: 1px solid var(--ip-border-mid);
+        border-radius: 10px;
+        padding: 16px;
+        font-size: 0.82rem;
+        color: #94a3b8;
+        white-space: pre-wrap;
+        min-height: 300px;
+        font-family: 'Courier New', monospace;
+        line-height: 1.7;
+      }
+
+      /* ─── SPINNER OVERLAY ────────────────────────── */
+      .ip-loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(10,13,18,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 50;
+        backdrop-filter: blur(2px);
+        border-radius: 0;
+      }
+
+      /* ─── MARK-GIVEN BUTTON ──────────────────────── */
+      .mark-given-btn {
+        font-size: 0.7rem;
+        padding: 3px 10px;
+        border-radius: 8px;
+        background: rgba(16,185,129,0.1);
+        border: 1px solid rgba(16,185,129,0.3);
+        color: #34d399;
+        cursor: pointer;
+        transition: 0.15s;
+        font-weight: 600;
+      }
+      .mark-given-btn.given { background: rgba(16,185,129,0.25); }
+    </style>
+
+    <!-- ─── MAIN WRAPPER ────────────────────────────── -->
+    <div class="ip-notes-wrapper" id="ip-notes-main-wrapper">
+
+      <!-- Global Header -->
+      <div class="ip-global-header">
+        <div class="d-flex align-items-center gap-3">
+          <button class="compose-btn" onclick="returnToIPLedger()" title="Back to Ward Roster">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <div>
+            <div class="ip-pat-name" id="dyn-ip-name">--</div>
+            <div class="ip-pat-meta" id="dyn-ip-meta">--</div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
+            onclick="openBaselineCasesheet()">
+            <i class="fa-solid fa-file-medical" style="color:#38bdf8;"></i>
+            <span style="font-size:0.8rem;">Baseline</span>
+          </button>
+          <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
+            onclick="openHandoverModal()">
+            <i class="fa-solid fa-right-from-bracket" style="color:#94a3b8;"></i>
+            <span style="font-size:0.8rem;">Handover</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter Bar -->
+      <div class="ip-filter-bar">
+        <span style="font-size:0.72rem; color:#475569; font-weight:700; margin-right:4px;">FILTER:</span>
+        <button class="ip-filter-btn active" data-filter="ALL"     onclick="applyTimelineFilter(this, 'ALL')">All Feed</button>
+        <button class="ip-filter-btn"        data-filter="DOCTOR"  onclick="applyTimelineFilter(this, 'DOCTOR')">Doctor</button>
+        <button class="ip-filter-btn"        data-filter="NURSE"   onclick="applyTimelineFilter(this, 'NURSE')">Nursing</button>
+        <button class="ip-filter-btn"        data-filter="CONSULTANT" onclick="applyTimelineFilter(this, 'CONSULTANT')">Consultant</button>
+        <button class="ip-filter-btn"        data-filter="PROCEDURE"  onclick="applyTimelineFilter(this, 'PROCEDURE')">Procedure</button>
+        <button class="ip-filter-btn"        data-filter="INVESTIGATION" onclick="applyTimelineFilter(this, 'INVESTIGATION')">Labs</button>
+      </div>
+
+      <!-- Three-Panel Grid -->
+      <div class="ip-grid">
+
+        <!-- ═══ LEFT PANEL ══════════════════════════ -->
+        <div class="ip-panel" id="ip-left-panel">
+
+          <div id="ip-handover-alert-box" class="d-none handover-alert-box">
+            <i class="fas fa-bell me-2"></i>
+            <span id="ip-handover-alert-text"></span>
+          </div>
+
+          <div class="ip-section-title" style="margin-top:0;">Active Diagnosis</div>
+          <div id="ip-diag-container">
+            <span class="diag-chip">Loading...</span>
+          </div>
+
+          <div class="ip-section-title">Allergies</div>
+          <div id="ip-allergy-container">
+            <span style="color:#475569; font-size:0.8rem;">None on record</span>
+          </div>
+
+          <div class="ip-section-title">Latest Vitals</div>
+          <div id="ip-vitals-container">
+            <div class="vital-card">
+              <div><div class="vc-label">BP</div><div class="vc-time" id="vc-bp-time">--</div></div>
+              <div class="vc-val" id="vc-bp">--/--</div>
+            </div>
+            <div class="vital-card">
+              <div><div class="vc-label">Pulse</div><div class="vc-time" id="vc-pulse-time">--</div></div>
+              <div class="vc-val" id="vc-pulse">--</div>
+            </div>
+            <div class="vital-card">
+              <div><div class="vc-label">SpO₂</div><div class="vc-time" id="vc-spo2-time">--</div></div>
+              <div class="vc-val" id="vc-spo2">--%</div>
+            </div>
+            <div class="vital-card">
+              <div><div class="vc-label">Temp</div><div class="vc-time" id="vc-temp-time">--</div></div>
+              <div class="vc-val" id="vc-temp">--</div>
+            </div>
+          </div>
+
+          <div class="ip-section-title">Consultant</div>
+          <div id="ip-consultant-display" style="color:#94a3b8; font-size:0.82rem;">--</div>
+        </div>
+
+        <!-- ═══ CENTER PANEL — TIMELINE ════════════ -->
+        <div class="ip-center-panel">
+          <div class="ip-timeline-scroller" id="ip-timeline-scroller">
+            <div id="ip-timeline-container">
+              <div class="empty-timeline" id="ip-timeline-empty">
+                <i class="fas fa-clipboard-list fa-2x mb-3 d-block" style="color:#2d3748;"></i>
+                No notes logged yet for this admission.
+              </div>
+            </div>
+          </div>
+          <!-- Quick Compose -->
+          <div class="ip-compose-bar">
+            <button class="compose-btn" title="Voice input (browser only)" onclick="startVoiceInput()">
+              <i class="fas fa-microphone"></i>
+            </button>
+            <input type="text" class="compose-input" id="quick-note-input"
+              placeholder="Type quick observation... (Press Enter)"
+              onkeypress="if(event.key==='Enter') postQuickNote()">
+            <button class="compose-btn primary" onclick="postQuickNote()">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- ═══ RIGHT PANEL ════════════════════════ -->
+        <div class="ip-panel" id="ip-right-panel">
+
+          <!-- Action FABs -->
+          <div class="action-fab-grid">
+            <button class="action-fab fab-dr" onclick="openDoctorNoteModal()">
+              <span class="fab-icon"><i class="fas fa-user-md" style="color:#60a5fa;"></i></span>
+              Dr Note
+            </button>
+            <button class="action-fab fab-nr" onclick="openNurseNoteModal()">
+              <span class="fab-icon"><i class="fas fa-syringe" style="color:#34d399;"></i></span>
+              Nursing
+            </button>
+            <button class="action-fab fab-cons" onclick="openConsultantNoteModal()">
+              <span class="fab-icon"><i class="fas fa-stethoscope" style="color:#fbbf24;"></i></span>
+              Consult
+            </button>
+            <button class="action-fab fab-proc" onclick="openProcedureNoteModal()">
+              <span class="fab-icon"><i class="fas fa-scalpel" style="color:#c084fc;"></i></span>
+              Procedure
+            </button>
+          </div>
+
+          <!-- Active Medications -->
+          <div class="ip-section-title" style="margin-top:0;">Active Medications</div>
+          <div id="ip-active-meds-list">
+            <div style="color:#475569; font-size:0.8rem;">No active medications.</div>
+          </div>
+
+          <!-- Running IV -->
+          <div class="ip-section-title">Running IV / Infusions</div>
+          <div id="ip-running-iv-list">
+            <div style="color:#475569; font-size:0.8rem;">No running infusions.</div>
+          </div>
+
+          <!-- Lab Results -->
+          <div class="ip-section-title">Investigations</div>
+          <div id="ip-lab-results-list">
+            <div style="color:#475569; font-size:0.8rem;">No orders found.</div>
+          </div>
+
+        </div><!-- /right panel -->
+      </div><!-- /grid -->
+    </div><!-- /wrapper -->
+  </div><!-- /detail view -->
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       MODALS
+  ═══════════════════════════════════════════════════════ -->
+
+  <!-- ── DOCTOR NOTE MODAL ─────────────────────────────── -->
+  <div class="modal fade" id="modalIPDoctorNote" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+        <div class="ip-modal-header">
+          <div class="ip-modal-title" style="color:#60a5fa;">
+            <i class="fas fa-user-md me-2"></i> Clinical Progress Note
+          </div>
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <select class="ip-form-select" id="dr-author-select" style="max-width:220px; font-size:0.78rem;">
+              <option value="">-- Select Doctor --</option>
+            </select>
+            <button class="wnl-btn" onclick="setAllWNL()">⚡ All WNL</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="copyPreviousNote()">
+              <i class="fas fa-copy me-1"></i> Copy Prev
+            </button>
+            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+        </div>
+        <div class="ip-modal-body">
+          <!-- SOAP -->
+          <div class="mb-4">
+            <label class="ip-form-label">Subjective / Objective</label>
+            <textarea class="ip-form-input" id="dr-soap-text" rows="4"
+              placeholder="Enter clinical findings, patient complaints, examination findings..."></textarea>
+          </div>
+
+          <!-- System Examination -->
+          <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="ip-form-label mb-0">System Examination</label>
+            </div>
+            <div style="background:#131720; border:1px solid var(--ip-border-soft); border-radius:10px; padding:14px;">
+              <div class="sysex-row">
+                <div class="sysex-label">CVS</div>
+                <select class="ip-form-select" id="dr-se-cvs">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="S1S2 heard, no murmurs">S1S2 heard, no murmurs</option>
+                  <option value="Murmur present">Murmur present</option>
+                  <option value="Irregular rhythm">Irregular rhythm</option>
+                  <option value="Reduced heart sounds">Reduced heart sounds</option>
+                </select>
+                <input type="text" class="ip-form-input" id="dr-se-cvs-detail" placeholder="Additional details">
+              </div>
+              <div class="sysex-row">
+                <div class="sysex-label">RS</div>
+                <select class="ip-form-select" id="dr-se-rs">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="NVBS bilateral">NVBS bilateral</option>
+                  <option value="Crepitations present">Crepitations present</option>
+                  <option value="Wheeze present">Wheeze present</option>
+                  <option value="Reduced air entry">Reduced air entry</option>
+                  <option value="Pleural rub">Pleural rub</option>
+                </select>
+                <input type="text" class="ip-form-input" id="dr-se-rs-detail" placeholder="Additional details">
+              </div>
+              <div class="sysex-row">
+                <div class="sysex-label">PA</div>
+                <select class="ip-form-select" id="dr-se-pa">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="Soft, non-tender">Soft, non-tender</option>
+                  <option value="Tenderness present">Tenderness present</option>
+                  <option value="Distended">Distended</option>
+                  <option value="Organomegaly present">Organomegaly present</option>
+                  <option value="Guarding/rigidity">Guarding / Rigidity</option>
+                </select>
+                <input type="text" class="ip-form-input" id="dr-se-pa-detail" placeholder="Additional details">
+              </div>
+              <div class="sysex-row" style="margin-bottom:0;">
+                <div class="sysex-label">CNS</div>
+                <select class="ip-form-select" id="dr-se-cns">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="Conscious, oriented">Conscious, oriented</option>
+                  <option value="Altered sensorium">Altered sensorium</option>
+                  <option value="GCS documented separately">GCS documented separately</option>
+                  <option value="Focal deficit present">Focal deficit present</option>
+                </select>
+                <input type="text" class="ip-form-input" id="dr-se-cns-detail" placeholder="Additional details">
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Orders Management -->
+          <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="ip-form-label mb-0">Active Orders Management</label>
+              <small class="text-muted" style="font-size:0.7rem;">Mark each drug with an action</small>
+            </div>
+            <div id="dr-active-orders-container">
+              <!-- Populated dynamically from IP_Pharmacy_Queue -->
+              <div style="color:#475569; font-size:0.8rem; padding:8px 0;">Loading active medications...</div>
+            </div>
+
+            <!-- Add New Drug -->
+            <div class="add-drug-row mt-3" id="ip-add-drug-section">
+              <div class="position-relative" style="flex:2; min-width:160px;">
+                <input type="text" class="ip-form-input" id="ip-new-drug-name"
+                  placeholder="Search drug name..."
+                  oninput="handleIPDrugSearch(this)"
+                  autocomplete="off">
+                <div class="drug-autocomplete-list d-none" id="ip-drug-autocomplete"></div>
+              </div>
+              <input type="text" class="ip-form-input" id="ip-new-drug-dose" placeholder="Dose" style="flex:1; min-width:70px;">
+              <select class="ip-form-select" id="ip-new-drug-freq" style="flex:1; min-width:80px;">
+                <option value="1-0-0">1-0-0</option>
+                <option value="0-1-0">0-1-0</option>
+                <option value="0-0-1">0-0-1</option>
+                <option value="1-0-1">1-0-1</option>
+                <option value="1-1-1">1-1-1</option>
+                <option value="SOS">SOS</option>
+                <option value="STAT">STAT</option>
+                <option value="OD">OD</option>
+                <option value="BD">BD</option>
+                <option value="TDS">TDS</option>
+                <option value="QID">QID</option>
+              </select>
+              <select class="ip-form-select" id="ip-new-drug-route" style="flex:1; min-width:90px;" onchange="toggleIVFluidFields(this)">
+                <option value="Oral">Oral</option>
+                <option value="IV">IV</option>
+                <option value="IM">IM</option>
+                <option value="SC">SC</option>
+                <option value="IV Fluid">IV Fluid</option>
+                <option value="Nebulisation">Nebulisation</option>
+                <option value="Topical">Topical</option>
+                <option value="Per Rectal">Per Rectal</option>
+              </select>
+              <input type="text" class="ip-form-input" id="ip-new-drug-instructions" placeholder="Instructions" style="flex:2; min-width:100px;">
+              <button class="action-fab" style="padding:8px 14px; flex-shrink:0; flex-direction:row; gap:4px;" onclick="addNewDrugOrder()">
+                + Add
+              </button>
+              <!-- IV Fluid extra fields — hidden by default -->
+              <div id="ip-iv-extra-fields" class="d-none" style="width:100%; display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                <select class="ip-form-select" id="ip-iv-fluid-type" style="flex:2; min-width:160px;">
+                  <option value="">-- Select IV Fluid --</option>
+                  <option value="Normal Saline (NS)">Normal Saline (NS)</option>
+                  <option value="DNS (Dextrose NS)">DNS (Dextrose NS)</option>
+                  <option value="RL (Ringer's Lactate)">RL (Ringer's Lactate)</option>
+                  <option value="D5W (5% Dextrose)">D5W (5% Dextrose)</option>
+                  <option value="D10W (10% Dextrose)">D10W (10% Dextrose)</option>
+                  <option value="Isolyte P">Isolyte P</option>
+                  <option value="Isolyte S">Isolyte S</option>
+                  <option value="Mannitol 20%">Mannitol 20%</option>
+                  <option value="Albumin 25%">Albumin 25%</option>
+                </select>
+                <select class="ip-form-select" id="ip-iv-pints" style="flex:1; min-width:100px;">
+                  <option value="1 Pint (500ml)">1 Pint (500ml)</option>
+                  <option value="2 Pints (1000ml)">2 Pints (1000ml)</option>
+                  <option value="Half Pint (250ml)">Half Pint (250ml)</option>
+                  <option value="100ml">100ml</option>
+                  <option value="150ml">150ml</option>
+                </select>
+                <input type="text" class="ip-form-input" id="ip-iv-rate" placeholder="Rate (e.g. 75 ml/hr)" style="flex:1; min-width:140px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Investigation Orders -->
+          <div class="mb-4">
+            <label class="ip-form-label">Order Investigations</label>
+            <div id="dr-inv-orders-container">
+              <!-- One row by default -->
+            </div>
+            <button class="action-fab mt-2 py-2 px-3" style="flex-direction:row; gap:6px; font-size:0.78rem;"
+              onclick="addInvOrderRow()">
+              <i class="fas fa-plus me-1"></i> Add Test
+            </button>
+          </div>
+
+          <!-- Notes / Advice -->
+          <div>
+            <label class="ip-form-label">Additional Notes / Advice</label>
+            <textarea class="ip-form-input" id="dr-advice-text" rows="2"
+              placeholder="Diet orders, nursing instructions, follow-up plans..."></textarea>
+          </div>
+        </div>
+        <div class="ip-modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="sign-btn" style="width:auto; padding:10px 28px;" onclick="saveDoctorNote()" id="btn-save-dr-note">
+            <i class="fas fa-signature me-2"></i> Sign &amp; Push to Timeline
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── NURSING NOTE MODAL ──────────────────────────── -->
+  <div class="modal fade" id="modalIPNurseNote" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+        <div class="ip-modal-header">
+          <div class="ip-modal-title" style="color:#34d399;">
+            <i class="fas fa-syringe me-2"></i> Nursing Execution Note
+          </div>
+          <div class="d-flex gap-2 align-items-center">
+            <select class="ip-form-select" id="nr-author-select" style="max-width:200px; font-size:0.78rem;">
+              <option value="">-- Select Nurse --</option>
+            </select>
+            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+        </div>
+        <div class="ip-modal-body">
+
+          <!-- Active Doctor Order Alert -->
+          <div id="nurse-active-order-alert" class="d-none" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:0.82rem; color:#fcd34d;">
+            <i class="fas fa-bell me-2"></i>
+            <strong>Active Doctor Order:</strong> <span id="nurse-alert-text"></span>
+          </div>
+
+          <!-- Record Vitals -->
+          <div class="mb-4">
+            <label class="ip-form-label">Record Vitals</label>
+            <div class="row g-2">
+              <div class="col-6">
+                <input type="text" class="ip-form-input" id="nr-bp" placeholder="BP (e.g. 120/80)">
+              </div>
+              <div class="col-6">
+                <input type="text" class="ip-form-input" id="nr-temp" placeholder="Temp (°F)">
+              </div>
+              <div class="col-6">
+                <input type="text" class="ip-form-input" id="nr-pulse" placeholder="Pulse (bpm)">
+              </div>
+              <div class="col-6">
+                <input type="text" class="ip-form-input" id="nr-spo2" placeholder="SpO2 (%)">
+              </div>
+            </div>
+          </div>
+
+          <!-- Medication Administration Log -->
+          <div class="mb-4">
+            <label class="ip-form-label">Medication Administration Log</label>
+            <div id="nr-med-log-container">
+              <div style="color:#475569; font-size:0.8rem;">Loading due medications...</div>
+            </div>
+          </div>
+
+          <!-- Interventions -->
+          <div class="mb-4">
+            <label class="ip-form-label">Intervention Type</label>
+            <select class="ip-form-select" id="nr-intervention">
+              <option value="Routine Meds Administered">Routine Meds Administered</option>
+              <option value="IV Cannula Inserted">IV Cannula Inserted</option>
+              <option value="IV Fluid Started">IV Fluid Started</option>
+              <option value="IV Fluid Completed">IV Fluid Completed</option>
+              <option value="Wound Dressing">Wound Dressing</option>
+              <option value="Catheter Care">Catheter Care</option>
+              <option value="NG Tube Feeding">NG Tube Feeding</option>
+              <option value="Position Change">Position Change</option>
+              <option value="Patient Education">Patient Education</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <!-- Observations -->
+          <div>
+            <label class="ip-form-label">Nursing Observations / Notes</label>
+            <textarea class="ip-form-input" id="nr-observations" rows="3"
+              placeholder="Additional nursing observations, patient response, concerns..."></textarea>
+          </div>
+        </div>
+        <div class="ip-modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="sign-btn nurse-sign" style="width:auto; padding:10px 28px;" onclick="saveNursingNote()">
+            <i class="fas fa-check me-2"></i> Save Nursing Note
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONSULTANT NOTE MODAL ───────────────────────── -->
+  <div class="modal fade" id="modalIPConsultantNote" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+        <div class="ip-modal-header">
+          <div class="ip-modal-title" style="color:#fbbf24;">
+            <i class="fas fa-stethoscope me-2"></i> Consultant / Visiting Doctor Note
+          </div>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="ip-modal-body">
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="ip-form-label">Consultant Name</label>
+              <input type="text" class="ip-form-input" id="cons-name" placeholder="Dr. Name">
+            </div>
+            <div class="col-6">
+              <label class="ip-form-label">Specialty</label>
+              <select class="ip-form-select" id="cons-specialty">
+                <option value="">-- Select Specialty --</option>
+                <option>Cardiology</option>
+                <option>Pulmonology</option>
+                <option>Nephrology</option>
+                <option>Neurology</option>
+                <option>Gastroenterology</option>
+                <option>Endocrinology</option>
+                <option>Infectious Disease</option>
+                <option>Orthopaedics</option>
+                <option>Urology</option>
+                <option>ENT</option>
+                <option>Ophthalmology</option>
+                <option>Dermatology</option>
+                <option>Psychiatry</option>
+                <option>Anaesthesia</option>
+                <option>General Surgery</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="ip-form-label">Clinical Findings</label>
+            <textarea class="ip-form-input" id="cons-findings" rows="4"
+              placeholder="Consultant's clinical findings and assessment..."></textarea>
+          </div>
+          <div>
+            <label class="ip-form-label">Recommendations</label>
+            <textarea class="ip-form-input" id="cons-recommendations" rows="3"
+              placeholder="Further investigations, medication changes, follow-up..."></textarea>
+          </div>
+        </div>
+        <div class="ip-modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,#92400e,#f59e0b);" onclick="saveConsultantNote()">
+            <i class="fas fa-signature me-2"></i> Save Consultant Note
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PROCEDURE NOTE MODAL ───────────────────────── -->
+  <div class="modal fade" id="modalIPProcedureNote" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+        <div class="ip-modal-header">
+          <div class="ip-modal-title" style="color:#c084fc;">
+            <i class="fas fa-scalpel me-2"></i> Procedure Note
+          </div>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="ip-modal-body">
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="ip-form-label">Procedure Name</label>
+              <input type="text" class="ip-form-input" id="proc-name" placeholder="e.g. Lumbar Puncture, Pleural Tap">
+            </div>
+            <div class="col-6">
+              <label class="ip-form-label">Operator</label>
+              <input type="text" class="ip-form-input" id="proc-operator" placeholder="Dr. Name">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="ip-form-label">Procedure Findings</label>
+            <textarea class="ip-form-input" id="proc-findings" rows="4"
+              placeholder="Indication, technique, findings, specimen sent..."></textarea>
+          </div>
+          <div>
+            <label class="ip-form-label">Complications</label>
+            <textarea class="ip-form-input" id="proc-complications" rows="2"
+              placeholder="None / describe complications..."></textarea>
+          </div>
+        </div>
+        <div class="ip-modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,#4c1d95,#7c3aed);" onclick="saveProcedureNote()">
+            <i class="fas fa-signature me-2"></i> Save Procedure Note
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── HANDOVER MODAL ─────────────────────────────── -->
+  <div class="modal fade" id="modalIPHandover" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+        <div class="ip-modal-header">
+          <div class="ip-modal-title" style="color:#94a3b8;">
+            <i class="fas fa-right-from-bracket me-2"></i> Shift Handover Summary
+          </div>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="ip-modal-body">
+          <div class="d-flex gap-2 mb-3 align-items-center">
+            <select class="ip-form-select" id="handover-shift-select" style="max-width:200px;">
+              <option value="MORNING">Morning Shift</option>
+              <option value="EVENING">Evening Shift</option>
+              <option value="NIGHT">Night Shift</option>
+            </select>
+            <button class="sign-btn" style="width:auto; padding:9px 20px; font-size:0.82rem;"
+              onclick="generateHandoverSummary()" id="btn-gen-handover">
+              <i class="fas fa-wand-magic-sparkles me-1"></i> Generate Summary
+            </button>
+          </div>
+          <div class="handover-output-box" id="handover-output-box">
+            Click "Generate Summary" to create the handover note for this patient.
+          </div>
+        </div>
+        <div class="ip-modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+          <button class="sign-btn" style="width:auto; padding:10px 22px;" onclick="copyHandoverToClipboard()">
+            <i class="fas fa-copy me-2"></i> Copy to Clipboard
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       JAVASCRIPT — ALL LOGIC
+  ═══════════════════════════════════════════════════════ -->
+  <script>
+  // ── MODULE STATE ─────────────────────────────────────────
+  const IPNotesModule = {
+    context: {},          // { ipNumber, patientId, name, ageSex, wardBed, doa }
+    activeMeds: [],       // IP_Pharmacy_Queue data
+    drugMaster: [],       // Pharmacy inventory for autocomplete
+    newDrugOrders: [],    // New drugs to add in current Doctor note session
+    activeFilter: 'ALL',
+    modals: {}
+  };
+
+  // ── MODAL INSTANCES ──────────────────────────────────────
+  function _getModal_(id) {
+    if (!IPNotesModule.modals[id]) {
+      IPNotesModule.modals[id] = new bootstrap.Modal(document.getElementById(id));
+    }
+    return IPNotesModule.modals[id];
+  }
+
+  // ── 1. LEDGER LOAD ──────────────────────────────────────
+  function fetchIPNotesLedger() {
+    const tbody = document.getElementById('ip-notes-ledger-tbody');
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4"><i class="fas fa-circle-notch fa-spin me-2"></i> Loading ward data...</td></tr>';
+    google.script.run
+      .withSuccessHandler(renderIPNotesLedger)
+      .withFailureHandler(function(e) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4"><i class="fas fa-exclamation-triangle me-2"></i> ' + e.message + '</td></tr>';
+      })
+      .getActiveIPAdmissionsForNotes();
+  }
+
+  function renderIPNotesLedger(resp) {
+    const tbody = document.getElementById('ip-notes-ledger-tbody');
+    if (!resp.success || !resp.data || resp.data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-warning py-4"><i class="fas fa-bed me-2"></i>No active patients currently admitted.</td></tr>';
+      return;
+    }
+    let html = '';
+    resp.data.forEach(function(p) {
+      const ipSafe   = _esc(p.ipNumber);
+      const pidSafe  = _esc(p.patientId);
+      const nameSafe = _esc(p.name);
+      const asSafe   = _esc(p.ageSex);
+      const wbSafe   = _esc(p.wardBed);
+      const doaSafe  = _esc(p.doa);
+      html += `<tr style="cursor:pointer;" onclick="openPatientIPNotes('${ipSafe}','${pidSafe}','${nameSafe}','${asSafe}','${wbSafe}','${doaSafe}')">
+        <td class="text-info fw-bold">${p.ipNumber}</td>
+        <td class="text-secondary">${p.patientId}</td>
+        <td class="text-white fw-bold">${p.name}</td>
+        <td><span class="badge bg-secondary">${p.wardBed}</span></td>
+        <td class="text-secondary">${p.doa}</td>
+        <td class="text-secondary small">${p.consultant}</td>
+        <td><span class="badge" style="background:rgba(99,91,255,0.15);color:#a5b4fc;">${p.diagnosis || 'Pending'}</span></td>
+        <td class="text-end">
+          <button class="btn btn-sm text-white py-1 px-3 rounded-pill" style="background:#635bff; font-size:0.75rem;">
+            Open Notes <i class="fas fa-chevron-right ms-1" style="font-size:0.65rem;"></i>
+          </button>
+        </td>
+      </tr>`;
+    });
+    tbody.innerHTML = html;
+  }
+
+  // ── 2. OPEN PATIENT DETAIL VIEW ─────────────────────────
+  function openPatientIPNotes(ipNumber, patientId, name, ageSex, wardBed, doa) {
+    IPNotesModule.context = { ipNumber, patientId, name, ageSex, wardBed, doa };
+    IPNotesModule.newDrugOrders = [];
+
+    document.getElementById('dyn-ip-name').innerText = name;
+    document.getElementById('dyn-ip-meta').innerText =
+      ipNumber + ' • ' + patientId + ' • ' + ageSex + ' • ' + wardBed + ' • Admitted: ' + doa;
+
+    // Reset filter
+    applyTimelineFilter(document.querySelector('.ip-filter-btn[data-filter="ALL"]'), 'ALL');
+
+    // Switch views
+    document.getElementById('ip-notes-ledger-view').classList.add('d-none');
+    document.getElementById('ip-notes-detail-view').classList.remove('d-none');
+
+    // Clear and load
+    document.getElementById('ip-timeline-container').innerHTML =
+      '<div class="empty-timeline"><i class="fas fa-circle-notch fa-spin fa-2x mb-3 d-block" style="color:#2d3748;"></i>Loading timeline...</div>';
+    resetLeftPanel();
+    resetRightPanel();
+
+    // Load clinical context (left + right panel)
+    loadClinicalContext(ipNumber);
+
+    // Load timeline (center panel)
+    loadIPTimeline(ipNumber);
+
+    // Preload drug master for autocomplete
+    if (IPNotesModule.drugMaster.length === 0) {
+      google.script.run
+        .withSuccessHandler(function(drugs) { IPNotesModule.drugMaster = drugs || []; })
+        .fetchPharmacyMasterForIP();
+    }
+
+    // Load staff roster for author dropdowns
+    if (!IPNotesModule.staffRoster) {
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          if (resp && resp.success) {
+            IPNotesModule.staffRoster = resp.data || [];
+            _populateAuthorDropdowns_();
+          }
+        })
+        .getStaffRoster();
+    } else {
+      _populateAuthorDropdowns_();
+    }
+  }
+
+  function _populateAuthorDropdowns_() {
+    const roster = IPNotesModule.staffRoster || [];
+    const doctors = roster.filter(function(s) { return s.role === 'doctor' || s.role === 'admin'; });
+    const nurses  = roster.filter(function(s) { return s.role === 'nurse'  || s.role === 'staff'; });
+
+    // Build fallback options if sheet has no extended columns
+    const drSel = document.getElementById('dr-author-select');
+    const nrSel = document.getElementById('nr-author-select');
+
+    if (drSel) {
+      drSel.innerHTML = '<option value="">-- Select Doctor --</option>';
+      if (doctors.length === 0) {
+        // Fallback: use current user
+        const u = _getCurrentUser();
+        drSel.innerHTML += `<option value="${_esc(u)}" selected>${_esc(u)}</option>`;
+      } else {
+        doctors.forEach(function(d) {
+          const sel = d.label === _getCurrentUser() ? ' selected' : '';
+          drSel.innerHTML += `<option value="${_esc(d.label)}"${sel}>${_esc(d.label)}</option>`;
+        });
+      }
+    }
+    if (nrSel) {
+      nrSel.innerHTML = '<option value="">-- Select Nurse --</option>';
+      if (nurses.length === 0) {
+        const u = _getCurrentUser();
+        nrSel.innerHTML += `<option value="${_esc(u)}" selected>${_esc(u)}</option>`;
+      } else {
+        nurses.forEach(function(n) {
+          const sel = n.label === _getCurrentUser() ? ' selected' : '';
+          nrSel.innerHTML += `<option value="${_esc(n.label)}"${sel}>${_esc(n.label)}</option>`;
+        });
+      }
+    }
+  }
+
+  function returnToIPLedger() {
+    IPNotesModule.context = {};
+    document.getElementById('ip-notes-detail-view').classList.add('d-none');
+    document.getElementById('ip-notes-ledger-view').classList.remove('d-none');
+    fetchIPNotesLedger();
+  }
+
+  // ── 3. LOAD CLINICAL CONTEXT ─────────────────────────────
+  function loadClinicalContext(ipNumber) {
+    google.script.run
+      .withSuccessHandler(renderClinicalContext)
+      .withFailureHandler(function(e) { console.error('Clinical context error:', e.message); })
+      .getClinicalContext(ipNumber);
+  }
+
+  function renderClinicalContext(ctx) {
+    if (!ctx.success) return;
+
+    // Diagnosis
+    const diagCont = document.getElementById('ip-diag-container');
+    if (ctx.diagnosis && ctx.diagnosis.length > 0) {
+      diagCont.innerHTML = ctx.diagnosis.map(function(d) {
+        return '<span class="diag-chip">' + _esc(d) + '</span>';
+      }).join('');
+    } else {
+      diagCont.innerHTML = '<span class="diag-chip">Diagnosis Pending</span>';
+    }
+
+    // Allergies
+    const allergyCont = document.getElementById('ip-allergy-container');
+    if (ctx.allergies && ctx.allergies.length > 0) {
+      allergyCont.innerHTML = ctx.allergies.map(function(a) {
+        return '<span class="allergy-chip"><i class="fas fa-exclamation-triangle me-1"></i>' + _esc(a) + '</span>';
+      }).join('');
+    } else {
+      allergyCont.innerHTML = '<span style="color:#475569; font-size:0.8rem;">None on record</span>';
+    }
+
+    // Vitals
+    const v = ctx.latestVitals;
+    const bpVal = v.bp || '--/--';
+    const bpParts = bpVal.split('/');
+    const systolic = parseInt(bpParts[0]);
+    const bpClass = systolic && (systolic < 90 || systolic > 160) ? 'alert' : (systolic && (systolic < 100 || systolic > 140) ? 'warn' : '');
+
+    document.getElementById('vc-bp').innerHTML      = '<span class="' + bpClass + '">' + bpVal + '</span>';
+    document.getElementById('vc-pulse').innerText   = v.pulse || '--';
+    document.getElementById('vc-spo2').innerText    = (v.spo2 || '--') + '%';
+    document.getElementById('vc-temp').innerText    = v.temp || '--';
+    const timeStr = v.recorded || '--';
+    ['vc-bp-time','vc-pulse-time','vc-spo2-time','vc-temp-time'].forEach(function(id) {
+      document.getElementById(id).innerText = timeStr;
+    });
+
+    // Consultant
+    document.getElementById('ip-consultant-display').innerText =
+      (ctx.demographics && ctx.demographics.consultant) || '--';
+
+    // Handover alert
+    if (ctx.handoverAlert) {
+      const alertBox = document.getElementById('ip-handover-alert-box');
+      alertBox.classList.remove('d-none');
+      document.getElementById('ip-handover-alert-text').innerText = ctx.handoverAlert;
+    }
+
+    // Store active meds for Doctor note modal
+    IPNotesModule.activeMeds = (ctx.activeMeds || []).concat(ctx.runningIV || []);
+
+    // Active Meds list (right panel)
+    renderActiveMedsList(ctx.activeMeds || [], ctx.runningIV || []);
+
+    // Lab results (right panel)
+    loadLabResults();
+  }
+
+  function renderActiveMedsList(meds, ivs) {
+    const medList = document.getElementById('ip-active-meds-list');
+    const ivList  = document.getElementById('ip-running-iv-list');
+
+    if (meds.length === 0) {
+      medList.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No active medications.</div>';
+    } else {
+      medList.innerHTML = meds.map(function(m) {
+        return `<div class="med-queue-item">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="mqi-name">${_esc(m.drugName)}</div>
+              <div class="mqi-freq">${_esc(m.dose || '')} &bull; ${_esc(m.freq || '')} &bull; ${_esc(m.route || '')}</div>
+            </div>
+            <span class="mqi-status active">Active</span>
+          </div>
+          <div style="font-size:0.7rem; color:#475569; margin-top:4px;">By: ${_esc(m.orderedBy)}</div>
+        </div>`;
+      }).join('');
+    }
+
+    if (ivs.length === 0) {
+      ivList.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No running infusions.</div>';
+    } else {
+      ivList.innerHTML = ivs.map(function(m) {
+        return `<div class="med-queue-item">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="mqi-name">${_esc(m.drugName)}</div>
+              <div class="mqi-freq">${_esc(m.dose || '')} — ${_esc(m.instructions || '')}</div>
+            </div>
+            <span class="mqi-status iv">IV Running</span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  function loadLabResults() {
+    const ctx = IPNotesModule.context;
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        const cont = document.getElementById('ip-lab-results-list');
+        if (!resp.success || !resp.data || resp.data.length === 0) {
+          cont.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No orders found.</div>';
+          return;
+        }
+        cont.innerHTML = resp.data.map(function(l) {
+          const isPending = l.status.toLowerCase().includes('pending');
+          const hasResult = !isPending && l.result && Object.keys(l.result).length > 0;
+          return `<div class="lab-result-item">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="lri-test">${_esc(l.testName)}</div>
+              <span class="lri-status ${isPending ? 'pending' : 'available'}">${isPending ? '⏳ Pending' : '✓ Available'}</span>
+            </div>
+            <div style="font-size:0.7rem; color:#475569;">${l.orderedAt}</div>
+            ${hasResult ? '<div class="mt-1" style="font-size:0.78rem; color:#67e8f9;">' + JSON.stringify(l.result) + '</div>' : ''}
+          </div>`;
+        }).join('');
+      })
+      .withFailureHandler(function() {})
+      .getIPLabResults(ctx.ipNumber, ctx.patientId);
+  }
+
+  // ── 4. TIMELINE LOAD & RENDER ────────────────────────────
+  function loadIPTimeline(ipNumber) {
+    google.script.run
+      .withSuccessHandler(renderIPTimeline)
+      .withFailureHandler(function(e) {
+        document.getElementById('ip-timeline-container').innerHTML =
+          '<div class="empty-timeline"><i class="fas fa-exclamation-triangle me-2 text-danger"></i>' + e.message + '</div>';
+      })
+      .getIPTimeline(ipNumber);
+  }
+
+  function renderIPTimeline(resp) {
+    const cont = document.getElementById('ip-timeline-container');
+    if (!resp.success || !resp.data || resp.data.length === 0) {
+      cont.innerHTML = '<div class="empty-timeline"><i class="fas fa-clipboard-list fa-2x mb-3 d-block" style="color:#2d3748;"></i>No notes logged yet for this admission.</div>';
+      return;
+    }
+
+    // Group by shift
+    const groups = { MORNING: [], EVENING: [], NIGHT: [] };
+    resp.data.forEach(function(note) {
+      const s = note.shift || 'MORNING';
+      if (!groups[s]) groups[s] = [];
+      groups[s].push(note);
+    });
+
+    const shiftOrder = ['MORNING', 'EVENING', 'NIGHT'];
+    let html = '';
+
+    shiftOrder.forEach(function(shift) {
+      if (!groups[shift] || groups[shift].length === 0) return;
+      html += `<div class="shift-group" data-shift="${shift}">
+        <div class="shift-label">
+          <i class="fas ${shift==='MORNING'?'fa-sun':shift==='EVENING'?'fa-cloud-sun':'fa-moon'} me-2"></i>
+          ${shift} SHIFT
+        </div>`;
+      groups[shift].forEach(function(note) {
+        html += buildTimelineItemHTML(note);
+      });
+      html += '</div>';
+    });
+
+    cont.innerHTML = html;
+    applyTimelineFilter(document.querySelector('.ip-filter-btn.active'), IPNotesModule.activeFilter);
+
+    // Scroll to bottom (newest)
+    const scroller = document.getElementById('ip-timeline-scroller');
+    setTimeout(function() { scroller.scrollTop = scroller.scrollHeight; }, 100);
+  }
+
+  function buildTimelineItemHTML(note) {
+    const roleType = (note.roleType || 'QUICK').toUpperCase();
+    const nd = note.noteData || {};
+
+    const iconMap = {
+      DOCTOR:        'fa-user-md',
+      NURSE:         'fa-syringe',
+      CONSULTANT:    'fa-stethoscope',
+      PROCEDURE:     'fa-scalpel',
+      HANDOVER:      'fa-right-from-bracket',
+      QUICK:         'fa-comment-medical',
+      INVESTIGATION: 'fa-flask'
+    };
+    const icon = iconMap[roleType] || 'fa-notes-medical';
+
+    let bodyHTML = '';
+
+    if (roleType === 'DOCTOR') {
+      if (nd.subjectiveObjective) {
+        bodyHTML += `<div class="feed-text mb-2">${_esc(nd.subjectiveObjective)}</div>`;
+      }
+      // System exam summary
+      const seItems = [
+        nd.systemExam && nd.systemExam.cvs  ? 'CVS: ' + nd.systemExam.cvs  : null,
+        nd.systemExam && nd.systemExam.rs   ? 'RS: '  + nd.systemExam.rs   : null,
+        nd.systemExam && nd.systemExam.pa   ? 'PA: '  + nd.systemExam.pa   : null,
+        nd.systemExam && nd.systemExam.cns  ? 'CNS: ' + nd.systemExam.cns  : null
+      ].filter(Boolean);
+      if (seItems.length > 0) {
+        bodyHTML += `<div style="font-size:0.78rem; color:#64748b; margin-bottom:8px;">${seItems.map(_esc).join(' &nbsp;|&nbsp; ')}</div>`;
+      }
+      // Med orders
+      if (nd.medOrders && nd.medOrders.length > 0) {
+        bodyHTML += '<div class="med-action-chips">';
+        nd.medOrders.forEach(function(m) {
+          const aClass = { CONT:'mac-cont', STOP:'mac-stop', HOLD:'mac-hold', MODIFY:'mac-mod', NEW:'mac-cont' }[m.action] || 'mac-cont';
+          const aLabel = { CONT:'Cont', STOP:'Stop', HOLD:'Hold', MODIFY:'Modified', NEW:'New' }[m.action] || m.action;
+          bodyHTML += `<span class="mac ${aClass}">${_esc(aLabel)}: ${_esc(m.drugName)} ${_esc(m.dose||'')} ${_esc(m.freq||'')}</span>`;
+        });
+        bodyHTML += '</div>';
+      }
+      if (nd.adviceText) {
+        bodyHTML += `<div style="font-size:0.8rem; color:#64748b; margin-top:8px; font-style:italic;">${_esc(nd.adviceText)}</div>`;
+      }
+    }
+
+    if (roleType === 'NURSE') {
+      if (nd.vitals) {
+        bodyHTML += `<div class="vitals-row">
+          ${nd.vitals.bp    ? `<span class="vr-chip">BP<span>${_esc(nd.vitals.bp)}</span></span>` : ''}
+          ${nd.vitals.pulse ? `<span class="vr-chip">Pulse<span>${_esc(nd.vitals.pulse)}</span></span>` : ''}
+          ${nd.vitals.spo2  ? `<span class="vr-chip">SpO₂<span>${_esc(nd.vitals.spo2)}%</span></span>` : ''}
+          ${nd.vitals.temp  ? `<span class="vr-chip">Temp<span>${_esc(nd.vitals.temp)}</span></span>` : ''}
+        </div>`;
+      }
+      if (nd.intervention) {
+        bodyHTML += `<div style="font-size:0.78rem; color:#34d399; margin-top:6px;">${_esc(nd.intervention)}</div>`;
+      }
+      if (nd.observations) {
+        bodyHTML += `<div class="feed-text mt-2">${_esc(nd.observations)}</div>`;
+      }
+    }
+
+    if (roleType === 'CONSULTANT') {
+      const specialty = nd.specialty ? ` <span style="color:#fbbf24;font-size:0.75rem;">[${_esc(nd.specialty)}]</span>` : '';
+      bodyHTML += `<div style="font-size:0.82rem; color:#fbbf24; font-weight:600; margin-bottom:4px;">${_esc(nd.consultantName||'')}${specialty}</div>`;
+      if (nd.findings) bodyHTML += `<div class="feed-text mb-1">${_esc(nd.findings)}</div>`;
+      if (nd.recommendations) bodyHTML += `<div style="font-size:0.8rem; color:#64748b; font-style:italic;">${_esc(nd.recommendations)}</div>`;
+    }
+
+    if (roleType === 'PROCEDURE') {
+      bodyHTML += `<div style="font-size:0.82rem; color:#c084fc; font-weight:600; margin-bottom:4px;">${_esc(nd.procedureName||'')} <span style="font-size:0.72rem; color:#64748b;">(${_esc(nd.operator||'')})</span></div>`;
+      if (nd.findings) bodyHTML += `<div class="feed-text mb-1">${_esc(nd.findings)}</div>`;
+      if (nd.complications) bodyHTML += `<div style="font-size:0.78rem; color:#f87171;">${_esc(nd.complications)}</div>`;
+    }
+
+    if (roleType === 'HANDOVER') {
+      bodyHTML += `<div class="feed-text" style="font-family:monospace; font-size:0.78rem; white-space:pre-wrap; color:#94a3b8;">${_esc(nd.handoverText||'')}</div>`;
+    }
+
+    if (roleType === 'QUICK') {
+      bodyHTML += `<div class="feed-text">${_esc(nd.text||'')}</div>`;
+    }
+
+    if (roleType === 'INVESTIGATION') {
+      bodyHTML += `<div style="font-size:0.82rem; color:#67e8f9; margin-bottom:4px;">${_esc(nd.testName||'')} <span style="color:#475569;">${_esc(nd.priority||'')}</span></div>`;
+      if (nd.result) {
+        bodyHTML += `<div style="font-size:0.8rem; color:#e2e8f0;">Result: ${_esc(nd.result)} ${_esc(nd.unit||'')}`;
+        if (nd.referenceRange) bodyHTML += ` <span style="color:#475569;">(Ref: ${_esc(nd.referenceRange)})</span>`;
+        bodyHTML += '</div>';
+      }
+    }
+
+    const roleLabelMap = {
+      DOCTOR:'Progress Note', NURSE:'Nursing Note', CONSULTANT:'Consultant Note',
+      PROCEDURE:'Procedure Note', HANDOVER:'Handover', QUICK:'Quick Note',
+      INVESTIGATION:'Lab Result'
+    };
+    const roleLabel = roleLabelMap[roleType] || roleType;
+
+    return `<div class="feed-item role-${roleType}" data-role="${roleType}">
+      <div class="feed-icon role-${roleType}"><i class="fas ${icon}"></i></div>
+      <div class="feed-body">
+        <div class="feed-header">
+          <div>
+            <span class="feed-author">${_esc(note.author)}</span>
+            <span class="feed-role role-${roleType} ms-2">${roleLabel}</span>
+          </div>
+          <span class="feed-time">${_esc(note.timestamp)}</span>
+        </div>
+        ${bodyHTML}
+      </div>
+    </div>`;
+  }
+
+  // ── 5. TIMELINE FILTER ──────────────────────────────────
+  function applyTimelineFilter(btn, filter) {
+    if (!filter) filter = 'ALL';
+    IPNotesModule.activeFilter = filter;
+
+    // Toggle button states
+    document.querySelectorAll('.ip-filter-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.filter === filter);
+    });
+
+    // Show/hide feed items
+    document.querySelectorAll('#ip-timeline-container .feed-item').forEach(function(item) {
+      const role = item.dataset.role;
+      if (filter === 'ALL' || role === filter) {
+        item.classList.remove('d-filter-hidden');
+      } else {
+        item.classList.add('d-filter-hidden');
+      }
+    });
+  }
+
+  // ── 6. QUICK NOTE ────────────────────────────────────────
+  function postQuickNote() {
+    const input = document.getElementById('quick-note-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) return;
+
+    const payload = {
+      ipNumber:  ctx.ipNumber,
+      patientId: ctx.patientId,
+      roleType:  'QUICK',
+      author:    _getCurrentUser(),
+      noteData:  { text: text }
+    };
+
+    // Optimistic UI update
+    const noteObj = {
+      author:    _getCurrentUser(),
+      timestamp: new Date().toLocaleString(),
+      roleType:  'QUICK',
+      shift:     _getShift(),
+      noteData:  { text: text }
+    };
+    injectTimelineItem(noteObj);
+    input.value = '';
+
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (!resp.success) console.error('Quick note save failed:', resp.message);
+      })
+      .withFailureHandler(function(e) { console.error('Quick note error:', e); })
+      .saveIPNote(payload);
+  }
+
+  function injectTimelineItem(note) {
+    const cont = document.getElementById('ip-timeline-container');
+    // Remove empty state
+    const empty = cont.querySelector('.empty-timeline');
+    if (empty) empty.remove();
+
+    // Find or create shift group
+    const shift = note.shift || _getShift();
+    let group = cont.querySelector(`.shift-group[data-shift="${shift}"]`);
+    if (!group) {
+      group = document.createElement('div');
+      group.className = 'shift-group';
+      group.dataset.shift = shift;
+      const iconMap = { MORNING:'fa-sun', EVENING:'fa-cloud-sun', NIGHT:'fa-moon' };
+      group.innerHTML = `<div class="shift-label"><i class="fas ${iconMap[shift]||'fa-clock'} me-2"></i>${shift} SHIFT</div>`;
+      cont.appendChild(group);
+    }
+    group.insertAdjacentHTML('beforeend', buildTimelineItemHTML(note));
+
+    // Re-apply filter
+    applyTimelineFilter(null, IPNotesModule.activeFilter);
+
+    const scroller = document.getElementById('ip-timeline-scroller');
+    scroller.scrollTop = scroller.scrollHeight;
+  }
+
+  // ── 7. DOCTOR NOTE MODAL ────────────────────────────────
+  function openDoctorNoteModal() {
+    // Populate active orders
+    const cont = document.getElementById('dr-active-orders-container');
+    if (IPNotesModule.activeMeds.length === 0) {
+      cont.innerHTML = '<div style="color:#475569; font-size:0.8rem; padding:8px 0;">No active medications on file.</div>';
+    } else {
+      cont.innerHTML = IPNotesModule.activeMeds.map(function(m, idx) {
+        return `<div class="med-order-row" id="med-order-row-${idx}" data-queue-id="${_esc(m.queueId)}" data-drug="${_esc(m.drugName)}" data-dose="${_esc(m.dose||'')}" data-freq="${_esc(m.freq||'')}" data-route="${_esc(m.route||'Oral')}">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="drug-label">${_esc(m.drugName)} <span style="font-size:0.75rem; color:#64748b;">${_esc(m.dose||'')} ${_esc(m.route||'')}</span></div>
+              <div class="drug-freq">${_esc(m.freq||'')}</div>
+            </div>
+          </div>
+          <div class="med-action-row">
+            <button class="med-action-btn btn-cont selected" data-action="CONT" onclick="selectMedAction(this,${idx})">Cont</button>
+            <button class="med-action-btn btn-stop" data-action="STOP" onclick="selectMedAction(this,${idx})">Stop</button>
+            <button class="med-action-btn btn-hold" data-action="HOLD" onclick="selectMedAction(this,${idx})">Hold</button>
+            <button class="med-action-btn btn-mod"  data-action="MODIFY" onclick="selectMedAction(this,${idx})">Mod</button>
+          </div>
+          <div class="mod-expand-fields d-none" id="mod-expand-${idx}" style="margin-top:10px; padding:10px; background:#0d1117; border-radius:8px; border:1px dashed #334155;">
+            <div class="row g-2">
+              <div class="col-4"><label class="ip-form-label">New Dose</label><input type="text" class="ip-form-input mod-new-dose" placeholder="New dose..."></div>
+              <div class="col-4"><label class="ip-form-label">New Frequency</label>
+                <select class="ip-form-select mod-new-freq">
+                  <option value="1-0-0">1-0-0</option><option value="0-1-0">0-1-0</option><option value="0-0-1">0-0-1</option>
+                  <option value="1-0-1">1-0-1</option><option value="1-1-1">1-1-1</option><option value="BD">BD</option>
+                  <option value="TDS">TDS</option><option value="OD">OD</option><option value="SOS">SOS</option>
+                </select>
+              </div>
+              <div class="col-4"><label class="ip-form-label">New Route</label>
+                <select class="ip-form-select mod-new-route">
+                  <option value="Oral">Oral</option><option value="IV">IV</option><option value="IM">IM</option>
+                  <option value="SC">SC</option><option value="IV Fluid">IV Fluid</option>
+                </select>
+              </div>
+              <div class="col-12"><label class="ip-form-label">Updated Instructions</label><input type="text" class="ip-form-input mod-new-instructions" placeholder="Updated instructions..."></div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Reset new drug section
+    IPNotesModule.newDrugOrders = [];
+    document.getElementById('ip-new-drug-name').value = '';
+    document.getElementById('ip-new-drug-dose').value = '';
+    document.getElementById('ip-new-drug-instructions').value = '';
+
+    // Reset investigation orders
+    document.getElementById('dr-inv-orders-container').innerHTML = '';
+    addInvOrderRow();
+
+    // Reset sys exam
+    ['dr-se-cvs','dr-se-rs','dr-se-pa','dr-se-cns'].forEach(function(id) {
+      document.getElementById(id).value = '';
+    });
+    ['dr-se-cvs-detail','dr-se-rs-detail','dr-se-pa-detail','dr-se-cns-detail'].forEach(function(id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('dr-soap-text').value = '';
+    document.getElementById('dr-advice-text').value = '';
+
+    // Check for latest pending doctor orders to show nurse alert context
+    _checkForPendingDoctorOrders();
+
+    _getModal_('modalIPDoctorNote').show();
+  }
+
+  function selectMedAction(btn, idx) {
+    const row = document.getElementById('med-order-row-' + idx);
+    row.querySelectorAll('.med-action-btn').forEach(function(b) {
+      b.classList.remove('selected');
+    });
+    btn.classList.add('selected');
+
+    // Show mod expand fields only when MODIFY is selected
+    const modExpand = document.getElementById('mod-expand-' + idx);
+    if (modExpand) {
+      if (btn.dataset.action === 'MODIFY') {
+        modExpand.classList.remove('d-none');
+        // Pre-fill with current values for easy editing
+        const doseInput = modExpand.querySelector('.mod-new-dose');
+        const freqSel   = modExpand.querySelector('.mod-new-freq');
+        const routeSel  = modExpand.querySelector('.mod-new-route');
+        if (doseInput && !doseInput.value) doseInput.value = row.dataset.dose || '';
+        if (freqSel   && !freqSel.value)  { /* keep default or try to match */ }
+        if (routeSel  && row.dataset.route) {
+          // Try to select matching option
+          const opts = Array.from(routeSel.options);
+          const match = opts.find(function(o) { return o.value === row.dataset.route; });
+          if (match) routeSel.value = row.dataset.route;
+        }
+      } else {
+        modExpand.classList.add('d-none');
+      }
+    }
+  }
+
+  function setAllWNL() {
+    document.getElementById('dr-se-cvs').value         = 'S1S2+, No Murmur';
+    document.getElementById('dr-se-cvs-detail').value  = '';
+    document.getElementById('dr-se-rs').value          = 'NVBS, B/L AE+';
+    document.getElementById('dr-se-rs-detail').value   = '';
+    document.getElementById('dr-se-pa').value          = 'Soft, No Organomegaly';
+    document.getElementById('dr-se-pa-detail').value   = '';
+    document.getElementById('dr-se-cns').value         = 'NFND';
+    document.getElementById('dr-se-cns-detail').value  = '';
+  }
+
+  function copyPreviousNote() {
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) return;
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (!resp.success || !resp.data || resp.data.length === 0) {
+          alert('No previous notes found for this patient.');
+          return;
+        }
+        // Find the most recent DOCTOR note (data is newest-first)
+        const prev = resp.data.find(function(n) {
+          return n.roleType === 'DOCTOR';
+        });
+        if (!prev) { alert('No previous doctor progress note found.'); return; }
+        const nd = prev.noteData || {};
+        if (nd.subjectiveObjective) {
+          document.getElementById('dr-soap-text').value = nd.subjectiveObjective;
+        }
+        if (nd.systemExam) {
+          const se = nd.systemExam;
+          // systemExam fields are stored as combined "select + detail" string; split on first space boundary
+          if (se.cvs) { document.getElementById('dr-se-cvs').value = se.cvs.split(' ')[0] || se.cvs; document.getElementById('dr-se-cvs-detail').value = se.cvs.includes(' ') ? se.cvs.substring(se.cvs.indexOf(' ')+1) : ''; }
+          if (se.rs)  { document.getElementById('dr-se-rs').value  = se.rs.split(' ')[0]  || se.rs;  document.getElementById('dr-se-rs-detail').value  = se.rs.includes(' ')  ? se.rs.substring(se.rs.indexOf(' ')+1) : ''; }
+          if (se.pa)  { document.getElementById('dr-se-pa').value  = se.pa.split(' ')[0]  || se.pa;  document.getElementById('dr-se-pa-detail').value  = se.pa.includes(' ')  ? se.pa.substring(se.pa.indexOf(' ')+1) : ''; }
+          if (se.cns) { document.getElementById('dr-se-cns').value = se.cns.split(' ')[0] || se.cns; document.getElementById('dr-se-cns-detail').value = se.cns.includes(' ') ? se.cns.substring(se.cns.indexOf(' ')+1) : ''; }
+        }
+        if (nd.adviceText) document.getElementById('dr-advice-text').value = nd.adviceText;
+        alert('Previous note copied. Review and modify before signing.');
+      })
+      .withFailureHandler(function(e) { alert('Could not fetch previous note: ' + e.message); })
+      .getIPTimeline(ctx.ipNumber);
+  }
+
+  function addInvOrderRow() {
+    const cont = document.getElementById('dr-inv-orders-container');
+    const row = document.createElement('div');
+    row.className = 'inv-order-row';
+    row.innerHTML = `
+      <input type="text" class="ip-form-input inv-test-name" placeholder="Test name (e.g. CBC, S.Creatinine)">
+      <select class="ip-form-select inv-priority" style="width:110px;">
+        <option value="ROUTINE">Routine</option>
+        <option value="STAT">STAT</option>
+        <option value="URGENT">Urgent</option>
+      </select>
+      <button class="compose-btn" style="border:1px solid #334155; flex-shrink:0;" onclick="this.closest('.inv-order-row').remove()">
+        <i class="fas fa-times"></i>
+      </button>`;
+    cont.appendChild(row);
+  }
+
+  function toggleIVFluidFields(routeSelect) {
+    const extra = document.getElementById('ip-iv-extra-fields');
+    if (routeSelect.value === 'IV Fluid') {
+      extra.classList.remove('d-none');
+      extra.style.display = 'flex';
+    } else {
+      extra.classList.add('d-none');
+      extra.style.display = '';
+    }
+  }
+
+  function addNewDrugOrder() {
+    const route = document.getElementById('ip-new-drug-route').value;
+    let drugName, dose, instructions;
+
+    if (route === 'IV Fluid') {
+      const fluidType = document.getElementById('ip-iv-fluid-type').value;
+      const pints     = document.getElementById('ip-iv-pints').value;
+      const rate      = document.getElementById('ip-iv-rate').value.trim();
+      if (!fluidType) { alert('Please select an IV Fluid type.'); return; }
+      drugName     = fluidType + ' — ' + pints;
+      dose         = pints;
+      instructions = rate ? rate : document.getElementById('ip-new-drug-instructions').value.trim();
+    } else {
+      drugName = document.getElementById('ip-new-drug-name').value.trim();
+      if (!drugName) { alert('Please enter a drug name.'); return; }
+      dose         = document.getElementById('ip-new-drug-dose').value.trim();
+      instructions = document.getElementById('ip-new-drug-instructions').value.trim();
+    }
+
+    const order = {
+      drugName:     drugName,
+      dose:         dose,
+      freq:         document.getElementById('ip-new-drug-freq').value,
+      route:        route,
+      instructions: instructions,
+      action:       'NEW'
+    };
+    IPNotesModule.newDrugOrders.push(order);
+
+    const cont = document.getElementById('dr-active-orders-container');
+    const newRow = document.createElement('div');
+    newRow.className = 'med-order-row';
+    newRow.style.borderLeft = '3px solid #34d399';
+    newRow.dataset.newIdx = IPNotesModule.newDrugOrders.length - 1;
+    const routeTag = (route === 'IV Fluid' || route === 'IV')
+      ? '<span style="font-size:0.72rem; color:#67e8f9; margin-left:6px;">IV</span>'
+      : '';
+    newRow.innerHTML = `<div class="d-flex justify-content-between align-items-center">
+      <div>
+        <div class="drug-label">${_esc(drugName)}${routeTag} <span style="font-size:0.72rem; color:#34d399; margin-left:4px;">NEW</span></div>
+        <div class="drug-freq">${_esc(dose)} &bull; ${_esc(order.freq)} &bull; ${_esc(route)}${instructions ? ' — ' + _esc(instructions) : ''}</div>
+      </div>
+      <button class="compose-btn" onclick="removeNewDrugOrder(this, ${IPNotesModule.newDrugOrders.length-1})" style="width:28px;height:28px;font-size:0.7rem;">✕</button>
+    </div>`;
+    cont.appendChild(newRow);
+
+    // Clear input fields
+    document.getElementById('ip-new-drug-name').value = '';
+    document.getElementById('ip-new-drug-dose').value = '';
+    document.getElementById('ip-new-drug-instructions').value = '';
+    document.getElementById('ip-new-drug-route').value = 'Oral';
+    const extra = document.getElementById('ip-iv-extra-fields');
+    extra.classList.add('d-none'); extra.style.display = '';
+    document.getElementById('ip-iv-fluid-type').value = '';
+    document.getElementById('ip-iv-rate').value = '';
+    document.getElementById('ip-drug-autocomplete').classList.add('d-none');
+  }
+
+  function handleIPDrugSearch(input) {
+    const list = document.getElementById('ip-drug-autocomplete');
+    const val = input.value.trim().toLowerCase();
+    list.innerHTML = '';
+    if (val.length < 2) { list.classList.add('d-none'); return; }
+
+    const matches = IPNotesModule.drugMaster.filter(function(d) {
+      return (d.brand||'').toLowerCase().includes(val) || (d.generic||'').toLowerCase().includes(val);
+    }).slice(0, 10);
+
+    if (matches.length === 0) { list.classList.add('d-none'); return; }
+
+    matches.forEach(function(drug) {
+      const div = document.createElement('div');
+      div.innerHTML = `<strong>${_esc(drug.brand)}</strong> <span style="color:#64748b;">(${_esc(drug.generic)}) — ${_esc(drug.type)}</span>`;
+      div.onclick = function() {
+        document.getElementById('ip-new-drug-name').value = drug.brand + ' ' + (drug.unit||'');
+        list.classList.add('d-none');
+      };
+      list.appendChild(div);
+    });
+    list.classList.remove('d-none');
+  }
+
+  document.addEventListener('click', function(e) {
+    const list = document.getElementById('ip-drug-autocomplete');
+    if (list && !list.contains(e.target) && e.target.id !== 'ip-new-drug-name') {
+      list.classList.add('d-none');
+    }
+  });
+
+  function removeNewDrugOrder(btn, idx) {
+    IPNotesModule.newDrugOrders.splice(idx, 1);
+    btn.closest('.med-order-row').remove();
+  }
+
+  function saveDoctorNote() {
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) return;
+
+    const authorEl   = document.getElementById('dr-author-select');
+    const noteAuthor = (authorEl && authorEl.value) ? authorEl.value : _getCurrentUser();
+    if (!noteAuthor || noteAuthor === '-- Select Doctor --') {
+      alert('Please select the doctor before signing.'); return;
+    }
+
+    const btn = document.getElementById('btn-save-dr-note');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i> Saving...';
+
+    // Collect med actions for existing active meds
+    const medOrders = [];
+    document.querySelectorAll('#dr-active-orders-container .med-order-row[id^="med-order-row"]').forEach(function(row) {
+      const selectedBtn = row.querySelector('.med-action-btn.selected');
+      if (!selectedBtn) return;
+      const action = selectedBtn.dataset.action;
+      const order = {
+        queueId:  row.dataset.queueId || '',
+        drugName: row.dataset.drug || '',
+        action:   action
+      };
+      // If MODIFY, collect the expanded field values
+      if (action === 'MODIFY') {
+        const modExpand = row.querySelector('.mod-expand-fields');
+        if (modExpand) {
+          order.newDose         = (modExpand.querySelector('.mod-new-dose')         || {}).value || '';
+          order.newFreq         = (modExpand.querySelector('.mod-new-freq')         || {}).value || '';
+          order.newRoute        = (modExpand.querySelector('.mod-new-route')        || {}).value || '';
+          order.newInstructions = (modExpand.querySelector('.mod-new-instructions') || {}).value || '';
+          // Fallback to original values if fields left blank
+          order.dose         = order.newDose  || row.dataset.dose  || '';
+          order.freq         = order.newFreq  || row.dataset.freq  || '';
+          order.route        = order.newRoute || row.dataset.route || 'Oral';
+          order.instructions = order.newInstructions || '';
+        }
+      }
+      medOrders.push(order);
+    });
+
+    // Add new drug orders
+    IPNotesModule.newDrugOrders.forEach(function(o) { medOrders.push(o); });
+
+    // Collect investigation orders
+    const investigationOrders = [];
+    document.querySelectorAll('.inv-order-row').forEach(function(row) {
+      const name = row.querySelector('.inv-test-name').value.trim();
+      const prio = row.querySelector('.inv-priority').value;
+      if (name) investigationOrders.push({ testName: name, priority: prio });
+    });
+
+    const noteData = {
+      subjectiveObjective: document.getElementById('dr-soap-text').value.trim(),
+      systemExam: {
+        cvs: (document.getElementById('dr-se-cvs').value + ' ' + document.getElementById('dr-se-cvs-detail').value).trim(),
+        rs:  (document.getElementById('dr-se-rs').value  + ' ' + document.getElementById('dr-se-rs-detail').value).trim(),
+        pa:  (document.getElementById('dr-se-pa').value  + ' ' + document.getElementById('dr-se-pa-detail').value).trim(),
+        cns: (document.getElementById('dr-se-cns').value + ' ' + document.getElementById('dr-se-cns-detail').value).trim()
+      },
+      medOrders:          medOrders,
+      investigationOrders: investigationOrders,
+      adviceText:         document.getElementById('dr-advice-text').value.trim()
+    };
+
+    const payload = {
+      ipNumber:  ctx.ipNumber,
+      patientId: ctx.patientId,
+      roleType:  'DOCTOR',
+      author:    noteAuthor,
+      noteData:  noteData
+    };
+
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-signature me-2"></i> Sign & Push to Timeline';
+        if (!resp.success) {
+          alert('Error saving note: ' + resp.message);
+          return;
+        }
+        _getModal_('modalIPDoctorNote').hide();
+
+        // Inject into timeline optimistically
+        injectTimelineItem({
+          author:    noteAuthor,
+          timestamp: new Date().toLocaleString(),
+          roleType:  'DOCTOR',
+          shift:     _getShift(),
+          noteData:  noteData
+        });
+
+        // Refresh context (active meds may have changed)
+        loadClinicalContext(ctx.ipNumber);
+        IPNotesModule.newDrugOrders = [];
+      })
+      .withFailureHandler(function(e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-signature me-2"></i> Sign & Push to Timeline';
+        alert('Failed to save note: ' + e.message);
+      })
+      .saveIPNote(payload);
+  }
+
+  // ── 8. NURSING NOTE MODAL ───────────────────────────────
+  function openNurseNoteModal() {
+    // Populate med log from active meds
+    const logCont = document.getElementById('nr-med-log-container');
+    if (IPNotesModule.activeMeds.length === 0) {
+      logCont.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No medications to log.</div>';
+    } else {
+      logCont.innerHTML = IPNotesModule.activeMeds.map(function(m) {
+        return `<div class="med-queue-item" style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div class="mqi-name">${_esc(m.drugName)}</div>
+            <div class="mqi-freq">${_esc(m.dose||'')} &bull; ${_esc(m.freq||'')} &bull; ${_esc(m.route||'')}</div>
+          </div>
+          <button class="mark-given-btn" data-queue-id="${_esc(m.queueId)}" data-given="false"
+            onclick="toggleMarkGiven(this)">
+            Mark Given
+          </button>
+        </div>`;
+      }).join('');
+    }
+
+    // Clear vitals fields
+    ['nr-bp','nr-temp','nr-pulse','nr-spo2'].forEach(function(id) {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('nr-observations').value = '';
+    document.getElementById('nr-intervention').value = 'Routine Meds Administered';
+
+    // Show pending doctor order alert (if any)
+    _checkForPendingDoctorOrders(true);
+
+    _getModal_('modalIPNurseNote').show();
+  }
+
+  function toggleMarkGiven(btn) {
+    const isGiven = btn.dataset.given === 'true';
+    btn.dataset.given = String(!isGiven);
+    btn.classList.toggle('given', !isGiven);
+    btn.innerText = !isGiven ? '✓ Given' : 'Mark Given';
+  }
+
+  function saveNursingNote() {
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) return;
+
+    const nrAuthorEl  = document.getElementById('nr-author-select');
+    const nurseAuthor = (nrAuthorEl && nrAuthorEl.value) ? nrAuthorEl.value : _getCurrentUser();
+    if (!nurseAuthor || nurseAuthor === '-- Select Nurse --') {
+      alert('Please select the nurse before saving.'); return;
+    }
+
+    // Collect marked meds
+    const markedMeds = [];
+    document.querySelectorAll('#nr-med-log-container .mark-given-btn').forEach(function(btn) {
+      markedMeds.push({
+        queueId:  btn.dataset.queueId,
+        drugName: btn.closest('.med-queue-item').querySelector('.mqi-name').innerText,
+        given:    btn.dataset.given === 'true'
+      });
+    });
+
+    const noteData = {
+      vitals: {
+        bp:    document.getElementById('nr-bp').value.trim(),
+        pulse: document.getElementById('nr-pulse').value.trim(),
+        spo2:  document.getElementById('nr-spo2').value.trim(),
+        temp:  document.getElementById('nr-temp').value.trim()
+      },
+      intervention:  document.getElementById('nr-intervention').value,
+      observations:  document.getElementById('nr-observations').value.trim(),
+      markedMeds:    markedMeds
+    };
+
+    const payload = {
+      ipNumber:  ctx.ipNumber,
+      patientId: ctx.patientId,
+      roleType:  'NURSE',
+      author:    nurseAuthor,
+      noteData:  noteData
+    };
+
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (!resp.success) { alert('Error: ' + resp.message); return; }
+        _getModal_('modalIPNurseNote').hide();
+        injectTimelineItem({
+          author:    nurseAuthor,
+          timestamp: new Date().toLocaleString(),
+          roleType:  'NURSE',
+          shift:     _getShift(),
+          noteData:  noteData
+        });
+        // Refresh vitals in left panel
+        if (noteData.vitals.bp) {
+          document.getElementById('vc-bp').innerHTML = noteData.vitals.bp;
+          document.getElementById('vc-pulse').innerText = noteData.vitals.pulse || '--';
+          document.getElementById('vc-spo2').innerText = (noteData.vitals.spo2 || '--') + '%';
+          document.getElementById('vc-temp').innerText = noteData.vitals.temp || '--';
+          ['vc-bp-time','vc-pulse-time','vc-spo2-time','vc-temp-time'].forEach(function(id) {
+            document.getElementById(id).innerText = 'Just now';
+          });
+        }
+      })
+      .withFailureHandler(function(e) { alert('Failed: ' + e.message); })
+      .saveIPNote(payload);
+  }
+
+  // ── 9. CONSULTANT NOTE MODAL ─────────────────────────────
+  function openConsultantNoteModal() { _getModal_('modalIPConsultantNote').show(); }
+
+  function saveConsultantNote() {
+    const ctx = IPNotesModule.context;
+    const noteData = {
+      consultantName:  document.getElementById('cons-name').value.trim(),
+      specialty:       document.getElementById('cons-specialty').value,
+      findings:        document.getElementById('cons-findings').value.trim(),
+      recommendations: document.getElementById('cons-recommendations').value.trim()
+    };
+    if (!noteData.consultantName) { alert('Please enter consultant name.'); return; }
+
+    const payload = { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'CONSULTANT', author: noteData.consultantName, noteData };
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (!resp.success) { alert(resp.message); return; }
+        _getModal_('modalIPConsultantNote').hide();
+        injectTimelineItem({ author: noteData.consultantName, timestamp: new Date().toLocaleString(), roleType: 'CONSULTANT', shift: _getShift(), noteData });
+      })
+      .withFailureHandler(function(e) { alert(e.message); })
+      .saveIPNote(payload);
+  }
+
+  // ── 10. PROCEDURE NOTE MODAL ─────────────────────────────
+  function openProcedureNoteModal() { _getModal_('modalIPProcedureNote').show(); }
+
+  function saveProcedureNote() {
+    const ctx = IPNotesModule.context;
+    const noteData = {
+      procedureName:  document.getElementById('proc-name').value.trim(),
+      operator:       document.getElementById('proc-operator').value.trim(),
+      findings:       document.getElementById('proc-findings').value.trim(),
+      complications:  document.getElementById('proc-complications').value.trim()
+    };
+    if (!noteData.procedureName) { alert('Please enter the procedure name.'); return; }
+
+    const payload = { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'PROCEDURE', author: _getCurrentUser(), noteData };
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (!resp.success) { alert(resp.message); return; }
+        _getModal_('modalIPProcedureNote').hide();
+        injectTimelineItem({ author: _getCurrentUser(), timestamp: new Date().toLocaleString(), roleType: 'PROCEDURE', shift: _getShift(), noteData });
+      })
+      .withFailureHandler(function(e) { alert(e.message); })
+      .saveIPNote(payload);
+  }
+
+  // ── 11. HANDOVER MODAL ───────────────────────────────────
+  function openHandoverModal() {
+    document.getElementById('handover-output-box').innerText =
+      'Click "Generate Summary" to create the handover note for this patient.';
+    _getModal_('modalIPHandover').show();
+  }
+
+  function generateHandoverSummary() {
+    const ctx = IPNotesModule.context;
+    const btn = document.getElementById('btn-gen-handover');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin me-1"></i> Generating...';
+    document.getElementById('handover-output-box').innerText = 'Generating summary from timeline data...';
+
+    const payload = {
+      ipNumber:  ctx.ipNumber,
+      patientId: ctx.patientId,
+      author:    _getCurrentUser(),
+      shift:     document.getElementById('handover-shift-select').value
+    };
+
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-wand-magic-sparkles me-1"></i> Generate Summary';
+        if (!resp.success) {
+          document.getElementById('handover-output-box').innerText = 'Error: ' + resp.message;
+          return;
+        }
+        document.getElementById('handover-output-box').innerText = resp.summary;
+        // Also inject into timeline
+        injectTimelineItem({
+          author:    _getCurrentUser(),
+          timestamp: new Date().toLocaleString(),
+          roleType:  'HANDOVER',
+          shift:     _getShift(),
+          noteData:  { handoverText: resp.summary }
+        });
+      })
+      .withFailureHandler(function(e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-wand-magic-sparkles me-1"></i> Generate Summary';
+        document.getElementById('handover-output-box').innerText = 'Error: ' + e.message;
+      })
+      .generateIPHandoverSummary(payload);
+  }
+
+  function copyHandoverToClipboard() {
+    const text = document.getElementById('handover-output-box').innerText;
+    if (!text || text.startsWith('Click')) return;
+    navigator.clipboard.writeText(text).then(function() {
+      alert('Handover summary copied to clipboard.');
+    });
+  }
+
+  // ── 12. OPEN BASELINE CASESHEET ─────────────────────────
+  function openBaselineCasesheet() {
+    const ctx = IPNotesModule.context;
+    // Navigate to IP Records workspace and open the detail view for this patient
+    if (typeof openEMRWorkspace === 'function') {
+      openEMRWorkspace('ip-records');
+      // Give the workspace a moment to render, then trigger the patient lookup
+      setTimeout(function() {
+        if (typeof fetchIPRecordsLedger === 'function') {
+          fetchIPRecordsLedger();
+        }
+        // Pre-populate the search with this patient's IP number and trigger filter
+        const searchEl = document.getElementById('ip-record-search');
+        if (searchEl) {
+          searchEl.value = ctx.ipNumber || '';
+          if (typeof filterIPRecords === 'function') filterIPRecords();
+        }
+      }, 400);
+    }
+  }
+
+  // ── 13. VOICE INPUT (BROWSER WEB SPEECH API) ────────────
+  function startVoiceInput() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Voice input is not supported in this browser.');
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SpeechRecognition();
+    rec.lang = 'en-IN';
+    rec.interimResults = false;
+    rec.onresult = function(e) {
+      const transcript = e.results[0][0].transcript;
+      document.getElementById('quick-note-input').value = transcript;
+    };
+    rec.onerror = function(e) { console.warn('Voice error:', e.error); };
+    rec.start();
+  }
+
+  // ── 14. HELPERS ─────────────────────────────────────────
+  function _esc(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  function _getCurrentUser() {
+    // Pull from whatever global auth your system sets
+    const nameEl = document.getElementById('top-bar-username') ||
+                   document.getElementById('welcome-name') ||
+                   document.getElementById('sidebar-username');
+    return nameEl ? nameEl.innerText.trim() : 'Staff';
+  }
+
+  function _getShift() {
+    const h = new Date().getHours();
+    if (h >= 6 && h < 14) return 'MORNING';
+    if (h >= 14 && h < 22) return 'EVENING';
+    return 'NIGHT';
+  }
+
+  function resetLeftPanel() {
+    document.getElementById('ip-diag-container').innerHTML    = '<span class="diag-chip">Loading...</span>';
+    document.getElementById('ip-allergy-container').innerHTML = '<span style="color:#475569; font-size:0.8rem;">Loading...</span>';
+    document.getElementById('vc-bp').innerHTML    = '--/--';
+    document.getElementById('vc-pulse').innerText = '--';
+    document.getElementById('vc-spo2').innerText  = '--%';
+    document.getElementById('vc-temp').innerText  = '--';
+    ['vc-bp-time','vc-pulse-time','vc-spo2-time','vc-temp-time'].forEach(function(id) {
+      document.getElementById(id).innerText = '--';
+    });
+    document.getElementById('ip-handover-alert-box').classList.add('d-none');
+    document.getElementById('ip-consultant-display').innerText = '--';
+  }
+
+  function resetRightPanel() {
+    document.getElementById('ip-active-meds-list').innerHTML =
+      '<div style="color:#475569; font-size:0.8rem;">Loading...</div>';
+    document.getElementById('ip-running-iv-list').innerHTML =
+      '<div style="color:#475569; font-size:0.8rem;">Loading...</div>';
+    document.getElementById('ip-lab-results-list').innerHTML =
+      '<div style="color:#475569; font-size:0.8rem;">Loading...</div>';
+  }
+
+  function _checkForPendingDoctorOrders(forNurse) {
+    // Show pending doctor instructions in nurse modal alert
+    const alertCont = document.getElementById('nurse-active-order-alert');
+    const alertText = document.getElementById('nurse-alert-text');
+    if (!alertCont) return;
+
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) return;
+
+    google.script.run
+      .withSuccessHandler(function(resp) {
+        if (!resp.success || !resp.data || resp.data.length === 0) {
+          alertCont.classList.add('d-none');
+          return;
+        }
+        // Find most recent doctor note for instructions
+        const doctorNotes = resp.data.filter(function(n) { return n.roleType === 'DOCTOR'; });
+        if (doctorNotes.length === 0) { alertCont.classList.add('d-none'); return; }
+        const latest = doctorNotes[0];
+        const nd = latest.noteData || {};
+        const advice = nd.adviceText || '';
+        const stoppedMeds = (nd.medOrders || []).filter(function(m) { return m.action === 'STOP'; });
+        const stopText = stoppedMeds.length > 0
+          ? 'Stop: ' + stoppedMeds.map(function(m) { return m.drugName; }).join(', ') + '. '
+          : '';
+        const msg = stopText + advice;
+        if (msg.trim()) {
+          alertText.innerText = msg.trim();
+          alertCont.classList.remove('d-none');
+        } else {
+          alertCont.classList.add('d-none');
+        }
+      })
+      .withFailureHandler(function() { alertCont.classList.add('d-none'); })
+      .getIPTimeline(ctx.ipNumber);
+  }
+  </script>
+
+</div>

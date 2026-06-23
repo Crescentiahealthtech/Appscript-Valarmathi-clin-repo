@@ -1,0 +1,276 @@
+<style>
+ /* ========================================= */
+ /* 1. PREMIUM THEME VARIABLES                */
+ /* ========================================= */
+
+ :root {
+   /* Premium Dark Theme (Default) */
+   --bg-sidebar: #09090b;       
+   --bg-main: #020617;          
+   --bg-card: #0f172a;          
+   --bg-input: #1e293b;         
+   
+   --text-main: #f8fafc;        
+   --text-muted: #94a3b8;       
+   --text-label: #cbd5e1;       
+   
+   --border-color: #1e293b;     
+   --border-hover: #334155;     
+   
+   --accent-purple: #6366f1;    
+   --accent-glow: rgba(99, 102, 241, 0.25);
+   
+   /* Semantic Triage Colors */
+   --success: #10b981; 
+   --success-bg: rgba(16, 185, 129, 0.15);
+   --warning: #f59e0b; 
+   --warning-bg: rgba(245, 158, 11, 0.15);
+   --danger: #ef4444;  
+   --danger-bg: rgba(239, 68, 68, 0.15);
+   --info: #0ea5e9;
+   --info-bg: rgba(14, 165, 233, 0.15);
+ }
+
+ body.light-theme {
+   /* Premium Light Theme */
+   --bg-sidebar: #ffffff;
+   --bg-main: #f8fafc;
+   --bg-card: #ffffff;
+   --bg-input: #f1f5f9;
+   
+   --text-main: #0f172a;        
+   --text-muted: #64748b;       
+   --text-label: #475569;
+   
+   --border-color: #e2e8f0;
+   --border-hover: #cbd5e1;
+   
+   --accent-purple: #4f46e5;    
+   --accent-glow: rgba(79, 70, 229, 0.15);
+ }
+
+ /* ========================================= */
+ /* 2. BASE STYLES & UTILITIES                */
+ /* ========================================= */
+
+ body { 
+    background-color: var(--bg-main) !important; 
+    color: var(--text-main) !important; 
+    font-family: 'Inter', 'Segoe UI', sans-serif; 
+    height: 100vh; margin: 0; overflow: hidden; 
+    transition: background-color 0.3s ease, color 0.3s ease;
+ }
+ 
+ .dr-badge { position: fixed; top: 20px; right: 25px; color: var(--text-muted); font-weight: 500; z-index: 1050; background: var(--bg-card); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(5px);}
+ .card { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 20px; transition: 0.3s; }
+ .soft-glow { box-shadow: 0 10px 30px -10px var(--accent-glow); border: 1px solid var(--accent-glow); }
+ .status-chip { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; background: rgba(150,150,150,0.1); backdrop-filter: blur(4px); margin-right: 8px; margin-bottom: 8px; }
+ 
+ .text-normal { color: var(--success) !important; } 
+ .text-border { color: var(--warning) !important; } 
+ .text-abnormal { color: var(--danger) !important; }
+ .label-bright { color: var(--text-label) !important; } 
+ .text-white-force { color: var(--text-main) !important; }
+ 
+ .clinic-logo { height: 90px; width: 100%; object-fit: contain; margin-bottom: 15px; }
+ .sidebar-logo { height: 35px; width: 35px; object-fit: contain; }
+
+ @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+ .animate-slide { animation: slideIn 0.5s ease forwards; }
+
+ #auth-screen { height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+ .auth-card { background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; width: 100%; max-width: 400px; }
+ #app-screen { display: flex; height: 100vh; width: 100vw; position: relative; overflow: hidden; }
+ 
+ /* ========================================= */
+ /* 3. DESKTOP SIDEBAR                        */
+ /* ========================================= */
+ .sidebar { width: 260px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: width 0.3s ease, background-color 0.3s ease; z-index: 1000; height: 100vh; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; }
+ .sidebar::-webkit-scrollbar { width: 4px; } .sidebar::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 4px; }
+ .sidebar.collapsed { width: 85px; }
+ .sidebar.collapsed .sidebar-text, .sidebar.collapsed .label-bright { display: none; }
+ .sidebar.collapsed .nav-link { justify-content: center; padding: 12px 0; margin: 4px 8px; }
+ .sidebar.collapsed .nav-link i { margin: 0; font-size: 1.2rem; }
+ .sidebar.collapsed .profile-details { display: none; }
+ .sidebar-toggle { cursor: pointer; color: var(--text-muted); font-size: 1.2rem; transition: 0.2s; } .sidebar-toggle:hover { color: var(--text-main); }
+ .nav-link { color: var(--text-muted); border-radius: 8px; padding: 12px 20px; margin: 4px 12px; font-weight: 500; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+ .nav-link.active { background-color: var(--accent-purple); color: #ffffff !important; }
+ 
+ .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; background-color: var(--bg-main); display: flex; flex-direction: column; transition: background-color 0.3s ease;}
+ .page-section { display: none; } .active-section { display: block; animation: fadeIn 0.3s; }
+ 
+ .theme-toggle-btn { padding: 12px 20px; margin: 4px 12px; cursor: pointer; background: transparent; border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-muted); display: flex; align-items: center; gap: 15px; font-weight: 500; transition: 0.2s; white-space: nowrap; }
+ .theme-toggle-btn:hover { border-color: var(--border-hover); color: var(--text-main); }
+ .sidebar.collapsed .theme-toggle-btn { justify-content: center; padding: 12px 0; margin: 4px 8px; }
+ .sidebar.collapsed .theme-toggle-btn i { margin: 0; font-size: 1.2rem; }
+
+ /* ========================================= */
+ /* 4. FORMS & INPUTS                         */
+ /* ========================================= */
+ .form-control, .form-select { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; border-radius: 8px; transition: all 0.2s ease;}
+ .form-control:focus, .form-select:focus { border-color: var(--accent-purple) !important; background-color: var(--bg-input) !important; color: var(--text-main) !important; box-shadow: 0 0 0 3px var(--accent-glow) !important; }
+ ::placeholder { color: var(--text-muted) !important; opacity: 1; }
+ input[type="date"]::-webkit-calendar-picker-indicator, input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+ body.light-theme input[type="date"]::-webkit-calendar-picker-indicator, body.light-theme input[type="time"]::-webkit-calendar-picker-indicator { filter: none; }
+
+ /* ========================================= */
+ /* 5. PATIENT BOOKING SCROLLER & PILLS       */
+ /* ========================================= */
+ .date-scroller { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; -ms-overflow-style: none; scrollbar-width: none; scroll-behavior: smooth; }
+ .date-scroller::-webkit-scrollbar { display: none; }
+ .date-card { flex: 0 0 auto; min-width: 80px; background: var(--bg-input) !important; border: 1px solid var(--border-color) !important; border-radius: 12px; padding: 12px 10px; text-align: center; cursor: pointer; transition: all 0.2s ease; }
+ .date-card:hover { border-color: var(--border-hover) !important; }
+ .date-card.active { background: var(--accent-purple) !important; border-color: var(--accent-purple) !important; box-shadow: 0 4px 12px var(--accent-glow); }
+ 
+ /* Fix Calendar Text Colors */
+ .date-card span { display: block; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; color: var(--text-muted); transition: 0.2s; }
+ .date-card strong { display: block; font-size: 1.4rem; margin-top: 4px; font-weight: 700; color: var(--text-main); transition: 0.2s; }
+ .date-card.active span, .date-card.active strong { color: #ffffff !important; }
+
+ .time-category-title { color: var(--text-label); font-size: 0.9rem; margin-top: 20px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: 0.5px; }
+ .time-slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+ .time-btn { padding: 10px; background-color: transparent !important; border: 1px solid var(--border-color) !important; color: var(--text-muted) !important; border-radius: 20px; text-align: center; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; }
+ .time-btn:hover { border-color: var(--border-hover) !important; color: var(--text-main) !important; }
+ .time-btn.selected { background-color: var(--accent-purple) !important; border-color: var(--accent-purple) !important; color: #ffffff !important; }
+ .time-btn.booked { background-color: var(--bg-card) !important; border-color: transparent !important; color: var(--text-muted) !important; cursor: not-allowed; text-decoration: line-through; opacity: 0.5; }
+
+ /* ========================================= */
+ /* 6. ADMIN LEDGER STYLES                    */
+ /* ========================================= */
+ .table-ledger th { background-color: var(--bg-card) !important; color: var(--text-label) !important; font-weight: 600; font-size: 0.85rem; letter-spacing: 0.5px; border-bottom: 2px solid var(--border-color) !important; white-space: nowrap; }
+ .table-ledger td { vertical-align: middle; border-bottom: 1px solid var(--border-color) !important; font-size: 0.95rem; color: var(--text-main) !important; white-space: nowrap; }
+ 
+ .badge-token { background-color: var(--bg-input); color: var(--text-main); font-weight: bold; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; border: 1px solid var(--border-color);}
+ .badge-booked { background-color: var(--info-bg) !important; color: var(--info) !important; }
+ .badge-arrived { background-color: var(--warning-bg) !important; color: var(--warning) !important; }
+ .badge-completed { background-color: var(--success-bg) !important; color: var(--success) !important; }
+ .badge-progress { background-color: rgba(168, 85, 247, 0.15) !important; color: #a855f7 !important; }
+
+ .select-badge { appearance: none; -webkit-appearance: none; padding: 6px 25px 6px 12px; border-radius: 12px; font-weight: 700; font-size: 0.85rem; border: 1px solid transparent; outline: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 8px center; background-size: 12px; transition: all 0.2s ease; }
+
+ /* ========================================= */
+ /* 7. HORIZONTAL FAB LAYOUT                  */
+ /* ========================================= */
+ .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: row; gap: 15px; z-index: 1050; }
+ .fab-action { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); cursor: pointer; transition: transform 0.2s ease; text-decoration: none; border: none; }
+ .fab-whatsapp { background-color: #25D366; color: white; }
+ .fab-whatsapp:hover { transform: scale(1.1); color: white; }
+ .fab-emergency { background-color: #ef4444; color: white; animation: pulse-red 2s infinite; }
+ .fab-emergency:hover { transform: scale(1.1); color: white; }
+
+ @keyframes pulse-red {
+   0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+   70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+   100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+ }
+
+ .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+ .hidden { display: none !important; }
+
+ /* ========================================= */
+ /* 8. MOBILE NAVIGATION RAIL ARCHITECTURE    */
+ /* ========================================= */
+ @media (max-width: 768px) {
+   .dr-badge { display: none; }
+  
+   .sidebar { position: fixed; top: 0; left: 0; z-index: 9999; height: 100vh; transition: width 0.3s ease; box-shadow: 5px 0 15px rgba(0,0,0,0.5); width: 65px; overflow-x: hidden; }
+   .sidebar:not(.mobile-open) .sidebar-text, .sidebar:not(.mobile-open) .label-bright, .sidebar:not(.mobile-open) .profile-details { display: none; }
+   .sidebar:not(.mobile-open) .nav-link, .sidebar:not(.mobile-open) .theme-toggle-btn { justify-content: center; padding: 12px 0; margin: 4px 8px; }
+   .sidebar:not(.mobile-open) .nav-link i, .sidebar:not(.mobile-open) .theme-toggle-btn i { margin: 0; font-size: 1.2rem; }
+   .sidebar.mobile-open { width: 260px; }
+  
+   .main-content { padding: 15px; margin-left: 65px; padding-bottom: 100px; width: calc(100vw - 65px); }
+  
+   .fab-container { bottom: 20px; right: 20px; }
+   .fab-action { width: 50px; height: 50px; font-size: 24px; }
+ }
+
+ /* ========================================= */
+ /* 9. WORKSPACE CARD HOVER EFFECTS           */
+ /* ========================================= */
+ .workspace-card {
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+ }
+ .workspace-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--accent-purple);
+    box-shadow: 0 10px 20px var(--accent-glow);
+ }
+
+ .active-section { 
+    display: block !important; 
+    animation: fadeIn 0.3s; 
+ }
+
+ /* ========================================= */
+ /* 10. EMR CONTINUOUS TIMELINE CSS           */
+ /* ========================================= */
+ .clinical-timeline {
+   position: relative;
+   padding-left: 2rem;
+   margin-top: 1rem;
+ }
+ .clinical-timeline::before {
+   content: '';
+   position: absolute;
+   left: 0.5rem;
+   top: 0;
+   bottom: 0;
+   width: 2px;
+   background-color: var(--border-hover); 
+ }
+ .timeline-node {
+   position: relative;
+   margin-bottom: 1.5rem;
+ }
+ .timeline-badge {
+   position: absolute;
+   left: -2.35rem;
+   top: 0.2rem;
+   width: 1.2rem;
+   height: 1.2rem;
+   border-radius: 50%;
+   border: 3px solid var(--bg-main);
+   z-index: 2;
+ }
+ .badge-op { background-color: var(--success); } 
+ .badge-ip { background-color: var(--accent-purple); } 
+  
+ .timeline-card {
+   background-color: var(--bg-input);
+   border: 1px solid var(--border-color);
+   color: var(--text-main);
+   border-radius: 0.5rem;
+   padding: 1rem;
+   transition: transform 0.2s ease, border-color 0.2s ease;
+ }
+ .timeline-card:hover { 
+   transform: translateX(5px); 
+   border-color: var(--border-hover); 
+ }
+ .sno-col { width: 60px; text-align: center; }
+
+ /* ========================================= */
+ /* 11. BOOTSTRAP THEME ENFORCERS (THE FIX)   */
+ /* ========================================= */
+ /* Intercept Bootstrap's utility classes and force them to respect Light Mode */
+ 
+ body.light-theme .text-white:not(.btn, .btn *, .badge, .badge *, .time-btn.selected, .nav-link.active *, .rounded-circle *) {
+    color: var(--text-main) !important;
+ }
+ body.light-theme .text-light:not(.btn, .btn *, .badge, .badge *, .time-btn.selected) {
+    color: var(--text-label) !important;
+ }
+ body.light-theme .bg-dark {
+    background-color: var(--bg-card) !important;
+ }
+ body.light-theme .bg-secondary {
+    background-color: var(--bg-input) !important;
+ }
+ body.light-theme .border-secondary, body.light-theme .border-dark {
+    border-color: var(--border-color) !important;
+ }
+</style>

@@ -1,0 +1,322 @@
+<style>
+  .table-billing th { background-color: #2c313c; color: #ffffff; border-bottom: 2px solid var(--medical-purple, #635bff); }
+  .table-billing td { border-color: #333; vertical-align: middle; }
+  .form-control-billing, .form-select-billing { background-color: #121418; color: #fff; border: 1px solid #444; }
+  .form-control-billing:focus, .form-select-billing:focus { background-color: #1a1d24; color: #fff; border-color: #635bff; box-shadow: none; }
+  
+  @media print {
+    body * { visibility: hidden; }
+    #printableInvoice, #printableInvoice * { visibility: visible; }
+    #printableInvoice { position: absolute; left: 0; top: 0; width: 100%; background-color: #ffffff !important; color: #000000 !important; }
+    .no-print { display: none !important; }
+    .form-control-billing, .form-select-billing { border: none !important; background: transparent !important; color: #000 !important; box-shadow: none !important; padding: 0 !important; -webkit-appearance: none; appearance: none; }
+    .table-billing th { background-color: #f1f1f1 !important; color: #000 !important; border-bottom: 2px solid #000 !important; }
+    .table-billing td { border-color: #ccc !important; }
+    .table-billing select::-ms-expand { display: none; }
+    .theme-text { color: #000 !important; } 
+  }
+  
+  .style-workspace-btn:hover {
+    border-color: var(--accent-purple) !important;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(99, 91, 255, 0.15) !important;
+  }
+</style>
+
+<div id="tab-admin-billing" class="page-section d-none">
+
+  <div id="billing-workspace-hospital" class="d-none mt-4">
+      <div class="d-flex align-items-center mb-4 no-print">
+          <button class="btn btn-outline-secondary btn-sm me-3" onclick="switchTab('workspace-appointments')"><i class="fa-solid fa-arrow-left"></i> Back</button>
+          <h4 class="fw-bold m-0 text-white">Hospital Master Billing</h4>
+      </div>
+
+      <div class="card p-4 border-secondary shadow-lg" id="printableInvoice" style="background-color: #181b21;">
+          <div class="row border-bottom border-secondary pb-3 mb-4">
+            <div class="col-md-8">
+              <h3 class="mb-0 fw-bold theme-text" style="color: #635bff;">CRESCENTIA HEALTHTECH</h3>
+              <p class="text-white mb-0">Master Billing Invoice</p>
+            </div>
+            <div class="col-md-4 text-end">
+              <p class="mb-0 text-white theme-text"><strong>Date:</strong> <span id="invoiceDate"></span></p>
+            </div>
+          </div>
+
+          <div class="row mb-4 no-print align-items-end">
+            <div class="col-md-4">
+              <label class="form-label text-white-force small text-uppercase">Patient ID *</label>
+              <input type="text" id="billPatientId" class="form-control form-control-billing text-white-force" placeholder="e.g. LMTVS0001">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label text-white small text-uppercase">Appointment ID</label>
+              <input type="text" id="billApptId" class="form-control form-control-billing text-white-force" placeholder="(Optional)">
+            </div>
+            <div class="col-md-4">
+              <button type="button" class="btn w-100 fw-bold text-white shadow-sm" style="background-color: #635bff;" onclick="fetchBillingPatientData()">
+               <i class="fa-solid fa-magnifying-glass me-1"></i> Fetch Patient
+             </button>
+            </div>
+          </div>
+
+          <div class="row mb-4">
+            <div class="col-md-4 mb-2">
+              <label class="form-label text-white small text-uppercase">Patient Name</label>
+              <input type="text" id="pName" class="form-control form-control-billing text-white-force" readonly>
+            </div>
+            <div class="col-md-2 mb-2">
+              <label class="form-label text-white small text-uppercase">Age / Sex</label>
+              <input type="text" id="pAgeGender" class="form-control form-control-billing text-white-force" readonly>
+            </div>
+            <div class="col-md-6 mb-2">
+              <label class="form-label text-white small text-uppercase">Address</label>
+              <input type="text" id="pAddress" class="form-control form-control-billing text-white-force" readonly>
+            </div>
+          </div>
+
+          <div class="table-responsive mb-3">
+            <table class="table table-dark table-billing table-bordered m-0" id="billingTable">
+              <thead>
+                <tr>
+                  <th width="5%" class="text-center">S.No</th>
+                  <th width="40%">Particulars</th>
+                  <th width="15%" class="text-end">Rate (₹)</th>
+                  <th width="15%" class="text-end">Discount (₹)</th>
+                  <th width="20%" class="text-end">Amount (₹)</th>
+                  <th width="5%" class="text-center no-print">Act</th>
+                </tr>
+              </thead>
+              <tbody id="billingTbody">
+                </tbody>
+            </table>
+            <button class="btn btn-outline-secondary btn-sm mt-2 no-print w-100" onclick="addBillingRow()">
+              <i class="fa-solid fa-plus"></i> Add Particular
+            </button>
+          </div>
+
+          <div class="row mt-4">
+            <div class="col-md-6 mb-3 no-print">
+              <div class="p-3 rounded" style="background-color: #121418; border: 1px solid #333;">
+                <h6 class="text-white text-uppercase mb-3 small fw-bold">Payment Details</h6>
+                <div class="row mb-2 align-items-center">
+                  <div class="col-5"><label class="form-label text-white m-0">Amount Paid</label></div>
+                  <div class="col-7">
+                    <input type="number" id="amountPaid" class="form-control form-control-billing text-end" placeholder="0.00">
+                  </div>
+                </div>
+                <div class="row align-items-center">
+                  <div class="col-5"><label class="form-label text-white m-0">Paid By</label></div>
+                  <div class="col-7">
+                    <select id="paymentMode" class="form-select form-select-billing">
+                      <option value="Cash">Cash</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Card">Credit/Debit Card</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <table class="table table-borderless text-white m-0">
+                <tr>
+                  <td class="text-end fw-bold align-middle">Gross Total :</td>
+                  <td class="text-end" width="40%"><input type="number" id="grossTotal" class="form-control form-control-billing text-end fw-bold" readonly value="0.00"></td>
+                </tr>
+                <tr>
+                  <td class="text-end fw-bold align-middle">Total Discount :</td>
+                  <td class="text-end"><input type="number" id="totalDiscount" class="form-control form-control-billing text-end fw-bold" readonly value="0.00"></td>
+                </tr>
+                <tr>
+                  <td class="text-end fw-bold align-middle id-5 theme-text" style="color: #635bff;">Nett Amount :</td>
+                  <td class="text-end"><input type="number" id="nettAmount" class="form-control form-control-billing text-end fw-bold fs-5 theme-text" style="color: #635bff;" readonly value="0.00"></td>
+                </tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="row mt-4 pt-3 border-top border-secondary no-print">
+            <div class="col-12 text-end">
+              <button class="btn btn-success me-2 fw-bold" onclick="saveInvoiceToDB()"><i class="fa-solid fa-floppy-disk"></i> Save to Ledger</button>
+              <button class="btn fw-bold text-white" style="background-color: #635bff; border: none;" onclick="window.print()">
+                <i class="fa-solid fa-print"></i> Print Invoice
+              </button>
+            </div>
+          </div>
+      </div>
+  </div>
+
+  <div id="billing-workspace-records" class="d-none mt-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+          <div class="d-flex align-items-center">
+              <button class="btn btn-outline-secondary btn-sm me-3" onclick="switchTab('workspace-accounts')"><i class="fa-solid fa-arrow-left"></i> Back to Accounts</button>
+              <h4 class="fw-bold m-0 text-white">Master Billing Ledger</h4>
+          </div>
+          <button class="btn btn-sm btn-outline-info" onclick="loadBillingRecords()"><i class="fa-solid fa-rotate-right"></i> Refresh Ledger</button>
+      </div>
+      <div class="card overflow-hidden border-secondary">
+          <table class="table table-dark table-hover mb-0">
+              <thead>
+                  <tr>
+                      <th>Invoice ID</th>
+                      <th>Date</th>
+                      <th>Patient ID</th>
+                      <th>Grand Total</th>
+                      <th>Status</th>
+                      <th class="text-center">Action</th>
+                  </tr>
+              </thead>
+              <tbody id="billing-records-tbody">
+                  <tr><td colspan="6" class="text-center text-white py-4">Click Refresh to load records...</td></tr>
+              </tbody>
+          </table>
+      </div>
+  </div>
+</div>
+
+<script>
+  // Setup logic on load
+  document.addEventListener('DOMContentLoaded', () => {
+    const dateSpan = document.getElementById('invoiceDate');
+    if(dateSpan) dateSpan.innerText = new Date().toLocaleDateString('en-IN');
+    
+    if(document.getElementById('billingTbody')) {
+      addBillingRow(); 
+    }
+  });
+
+  // UI Workspace Routing
+  function openBillingWorkspace(type) {
+    document.getElementById('billing-workspace-hospital').classList.add('d-none');
+    document.getElementById('billing-workspace-records').classList.add('d-none');
+
+    document.getElementById(`billing-workspace-${type}`).classList.remove('d-none');
+  }
+
+  // --- Dynamic Billing Logic ---
+  function fetchBillingPatientData() {
+   const pId = document.getElementById('billPatientId').value.trim();
+   if (!pId) return alert("Please enter a Patient ID");
+
+   document.getElementById('pName').value = "Fetching...";
+   document.getElementById('pAgeGender').value = "...";
+   document.getElementById('pAddress').value = "...";
+
+   google.script.run
+     .withSuccessHandler(function(data) {
+       try {
+         if (data) {
+           document.getElementById('pName').value = data.name || "-";
+           document.getElementById('pAgeGender').value = (data.age || "-") + " / " + (data.gender || "-");
+           document.getElementById('pAddress').value = data.address || "-";
+         } else {
+           document.getElementById('pName').value = "";
+           document.getElementById('pAgeGender').value = "";
+           document.getElementById('pAddress').value = "";
+           alert("Patient ID not found in database.");
+         }
+       } catch (e) {
+         alert("Error displaying patient data.");
+       }
+     })
+     .withFailureHandler(function(err) {
+       document.getElementById('pName').value = "";
+       document.getElementById('pAgeGender').value = "";
+       document.getElementById('pAddress').value = "";
+       alert("Backend Network Error: Could not connect to Google Servers. " + err.message);
+     })
+     .getUserProfile(pId);
+ }
+
+  function addBillingRow() {
+    const tbody = document.getElementById('billingTbody');
+    const rowCount = tbody.rows.length + 1;
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+      <td class="text-center align-middle row-sno fw-bold">${rowCount}</td>
+      <td>
+        <select class="form-select form-select-sm form-select-billing mb-1 particular-dropdown" onchange="handleParticularChange(this)">
+          <option value="">Select Particular...</option>
+          <option value="100">IP - Admission Charges (100)</option>
+          <option value="200">Room Charges (200)</option>
+          <option value="300">RMO Charges (300)</option>
+          <option value="400">Nursing Charges (400)</option>
+          <option value="500">Consultant Visit Charges (500)</option>
+          <option value="600">Specialist Visit Charges (600)</option>
+          <option value="700">ICU Monitoring Charges (700)</option>
+          <option value="OTHERS">OTHERS</option>
+        </select>
+        <input type="text" class="form-control form-control-sm form-control-billing other-particular-input d-none mt-1" placeholder="Specify Details...">
+      </td>
+      <td><input type="number" class="form-control form-control-sm form-control-billing text-end row-rate" value="0" oninput="calculateBillingTotals()"></td>
+      <td><input type="number" class="form-control form-control-sm form-control-billing text-end row-discount" value="0" oninput="calculateBillingTotals()"></td>
+      <td><input type="number" class="form-control form-control-sm form-control-billing text-end row-amount" value="0" readonly></td>
+      <td class="text-center align-middle no-print">
+        <button class="btn btn-sm btn-outline-danger" onclick="removeBillingRow(this)"><i class="fa-solid fa-xmark"></i></button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+    updateBillingSerialNumbers();
+  }
+
+  function handleParticularChange(selectEl) {
+    const otherInput = selectEl.nextElementSibling;
+    if (selectEl.value === "OTHERS") {
+      otherInput.classList.remove('d-none');
+    } else {
+      otherInput.classList.add('d-none');
+      otherInput.value = ""; 
+    }
+  }
+
+  function removeBillingRow(btn) {
+    const tbody = document.getElementById('billingTbody');
+    if(tbody.rows.length <= 1) {
+       alert("Cannot remove the last row.");
+       return;
+    }
+    const row = btn.closest('tr');
+    row.remove();
+    updateBillingSerialNumbers();
+    calculateBillingTotals();
+  }
+
+  function updateBillingSerialNumbers() {
+    const rows = document.querySelectorAll('#billingTbody tr');
+    rows.forEach((row, index) => {
+      row.querySelector('.row-sno').innerText = index + 1;
+    });
+  }
+
+  function calculateBillingTotals() {
+    let grossTotal = 0;
+    let totalDiscount = 0;
+    const rows = document.querySelectorAll('#billingTbody tr');
+
+    rows.forEach(row => {
+      const rate = parseFloat(row.querySelector('.row-rate').value) || 0;
+      const discount = parseFloat(row.querySelector('.row-discount').value) || 0;
+      
+      const amount = rate - discount;
+      row.querySelector('.row-amount').value = amount > 0 ? amount.toFixed(2) : "0.00";
+
+      grossTotal += rate;
+      totalDiscount += discount;
+    });
+
+    const nett = grossTotal - totalDiscount;
+
+    document.getElementById('grossTotal').value = grossTotal.toFixed(2);
+    document.getElementById('totalDiscount').value = totalDiscount.toFixed(2);
+    document.getElementById('nettAmount').value = nett > 0 ? nett.toFixed(2) : "0.00";
+    
+    const amtPaidInput = document.getElementById('amountPaid');
+    if (!amtPaidInput.value || parseFloat(amtPaidInput.value) === 0) {
+        amtPaidInput.value = nett > 0 ? nett.toFixed(2) : "0.00";
+    }
+  }
+
+  function saveInvoiceToDB() {
+    alert("Invoice validated. Ready to route to Google Sheets (Billing_Ledger) in Phase 2.");
+  }
+</script>

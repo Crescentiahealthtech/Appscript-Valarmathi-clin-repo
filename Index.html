@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CRESCENTIA HEALTHTECH</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <div class="dr-badge shadow-sm"><i class="fa-solid fa-user-doctor" style="color: var(--accent-purple);"></i> Logavignesh Meivasagam</div>
+  <?!= include('Auth'); ?>
+  
+  <div id="app-screen" class="d-none">
+    <?!= include('Sidebar'); ?>
+    <div class="main-content">
+      <?!= include('PatientApp'); ?>
+      
+      <?!= include('Admin_Dashboard'); ?>
+      <?!= include('Admin_Appointments_Workspace'); ?>
+      <?!= include('Admin_Appointments'); ?>
+      <?!= include('Admin_Availability'); ?>
+      <?!= include('Admin_Patient_Workspace'); ?>
+      <?!= include('Admin_Patient_Register'); ?>
+      <?!= include('Admin_Patient_Search'); ?>
+      <?!= include('Admin_Hospital_Billing'); ?>
+      <?!= include('Admin_Lab_Workspace'); ?>
+      <?!= include('Admin_Accounts_Workspace'); ?>
+
+      <?!= include('EMR_Cockpit'); ?> 
+
+      <?!= include('IP_Admissions_UI'); ?>
+      <?!= include('IP_BedMap_UI'); ?>
+      <?!= include('IP_Casesheet_UI'); ?>
+      <?!= include('IP_Notes_UI'); ?>
+      <?!= include('EMR_MasterTimeline_UI'); ?>
+      <?!= include('OP_Module'); ?>
+      <?!= include('IP_Records_UI'); ?>
+      <?!= include('Pharmacy_Module'); ?>
+      <?!= include('PharmacyStockAddUI'); ?>
+      <?!= include('PharmacyInventoryLedger'); ?>
+      <?!= include('Pharmacy_Billing_UI'); ?>
+      <?!= include('PharmacyDeskReturnsUI'); ?>
+      <?!= include('PharmacyDashboardUI'); ?>
+      <?!= include('LabModuleUI'); ?>
+      <?!= include('LabBillingUI'); ?>
+      <?!= include('LabRecordsUI'); ?>
+      <?!= include('AccountsIPChargesUI'); ?>
+      <?!= include('Admin_Dashboard_Analytics'); ?> 
+
+    </div>
+    <?!= include('Modals'); ?>
+  </div>
+  
+  <?!= include('ScriptsMV'); ?>
+  <?!= include('Accounts_Scripts'); ?> 
+  <?!= include('Accounts_Shifts_Scripts'); ?>
+  <?!= include('Accounts_Dashboard_Scripts'); ?>  
+  <?!= include('Accounts_Discharge_Script'); ?>  
+  <?!= include('AccountsPayablesScripts'); ?>  
+  <?!= include('AccountsTaxAuditsScripts'); ?> 
+  <?!= include('AccountsInsuranceScripts'); ?> 
+</body>
+</html>

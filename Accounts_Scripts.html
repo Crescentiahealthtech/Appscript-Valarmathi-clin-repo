@@ -1,0 +1,241 @@
+<!-- ===================================================================== -->
+<!-- 💰 CRESCENTIA ACCOUNTS — FRONTEND (Phase 1 corrected + Phase 2).       -->
+<!-- Include after Modals.html. window.AccX + Hub-and-Spoke globals.        -->
+<!-- ===================================================================== -->
+<script>
+const AccX = (function () {
+  const $ = (id) => document.getElementById(id);
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
+
+    const PAGES = [
+    'workspace-accounts', 'workspace-accounts-dashboard', 'workspace-accounts-ledger',
+    'workspace-accounts-drawer', 'workspace-accounts-payables', 'workspace-accounts-tpa',
+    'workspace-accounts-discharges', 'workspace-accounts-tax', 'workspace-accounts-iptab', 'workspace-accounts-discharge', 'workspace-accounts-tax', 'workspace-accounts-insurance'
+  ];
+
+  let CURRENT_PERIOD = '', LEDGER_CACHE = [], CURRENT_FILTER = 'ALL';
+  let modalsInjected = false;
+
+  function busy(on) {
+    let o = $('acc-overlay');
+    if (on) {
+      if (!o) {
+        o = document.createElement('div');
+        o.id = 'acc-overlay'; o.className = 'modal-overlay';
+        o.innerHTML = '<div class="text-center text-light"><i class="fas fa-circle-notch fa-spin fa-2x mb-2"></i><div class="small">Working…</div></div>';
+        document.body.appendChild(o);
+      }
+      o.style.display = 'flex';
+    } else if (o) o.style.display = 'none';
+  }
+  function toast(msg, ok) {
+    const t = document.createElement('div');
+    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white';
+    t.style.zIndex = 3000; t.style.background = ok ? '#198754' : '#dc3545';
+    t.textContent = msg; document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+
+  function switchPage(pageId) {
+    PAGES.forEach(function (id) {
+      const el = $(id); if (!el) return;
+      const show = (id === pageId);
+      el.classList.toggle('d-none', !show);
+      el.classList.toggle('active-section', show);
+    });
+    if (pageId === 'workspace-accounts-ledger') renderLedger();
+    if (pageId === 'workspace-accounts-discharges') loadReceivables();
+    window.scrollTo(0, 0);
+  }
+
+  // ---------- modals (expense + settle) ----------
+  function injectModals() {
+    if (modalsInjected) return; modalsInjected = true;
+    document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal fade" id="acc-entry-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content premium-card border-0 rounded-4">
+        <div class="modal-header border-bottom border-secondary border-opacity-25">
+          <h6 class="modal-title fw-bold text-main">Record Expense</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body"><div class="row g-3">
+          <div class="col-6"><label class="form-label small text-muted">Amount (₹)</label>
+            <input type="number" min="0" step="0.01" class="form-control" id="acc-entry-amount" placeholder="0.00"></div>
+          <div class="col-6"><label class="form-label small text-muted">Mode</label>
+            <select class="form-select" id="acc-entry-mode"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option></select></div>
+          <div class="col-6"><label class="form-label small text-muted">Category</label>
+            <input class="form-control" id="acc-entry-category" placeholder="e.g. Utilities"></div>
+          <div class="col-6"><label class="form-label small text-muted">Department</label>
+            <input class="form-control" id="acc-entry-department" placeholder="e.g. Admin"></div>
+          <div class="col-6"><label class="form-label small text-muted">Payee</label>
+            <input class="form-control" id="acc-entry-entity" placeholder="Vendor / party"></div>
+          <div class="col-6"><label class="form-label small text-muted">Reference ID</label>
+            <input class="form-control" id="acc-entry-ref" placeholder="Invoice / bill no."></div>
+          <div class="col-12"><label class="form-label small text-muted">Notes</label>
+            <input class="form-control" id="acc-entry-notes" placeholder="Optional"></div></div></div>
+        <div class="modal-footer border-top border-secondary border-opacity-25">
+          <button class="btn btn-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger btn-sm rounded-pill px-4" id="acc-entry-save">Save Expense</button></div>
+      </div></div></div>
+
+    <div class="modal fade" id="acc-settle-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered"><div class="modal-content premium-card border-0 rounded-4">
+        <div class="modal-header border-bottom border-secondary border-opacity-25">
+          <h6 class="modal-title fw-bold text-main">Settle Bill</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <input type="hidden" id="acc-settle-source"><input type="hidden" id="acc-settle-bill">
+          <p class="small text-muted mb-3" id="acc-settle-info"></p>
+          <label class="form-label small text-muted">Payment Mode (cash received)</label>
+          <select class="form-select" id="acc-settle-mode"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option></select>
+        </div>
+        <div class="modal-footer border-top border-secondary border-opacity-25">
+          <button class="btn btn-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-success btn-sm rounded-pill px-4" id="acc-settle-confirm">Mark Paid</button></div>
+      </div></div></div>`);
+    $('acc-entry-save').addEventListener('click', saveEntry);
+    $('acc-settle-confirm').addEventListener('click', confirmSettle);
+  }
+
+  function openEntry() {
+    injectModals();
+    ['acc-entry-amount','acc-entry-category','acc-entry-department','acc-entry-entity','acc-entry-ref','acc-entry-notes']
+      .forEach(id => { const e = $(id); if (e) e.value = ''; });
+    new bootstrap.Modal($('acc-entry-modal')).show();
+  }
+  function saveEntry() {
+    const payload = {
+      direction: 'OUT', amount: $('acc-entry-amount').value, mode: $('acc-entry-mode').value,
+      category: $('acc-entry-category').value, department: $('acc-entry-department').value,
+      entity: $('acc-entry-entity').value, refId: $('acc-entry-ref').value,
+      notes: $('acc-entry-notes').value, loggedBy: who()
+    };
+    if (!(Number(payload.amount) > 0)) { toast('Enter a valid amount.', false); return; }
+    busy(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        busy(false); toast(res.message, !!res.success);
+        if (res.success) { bootstrap.Modal.getInstance($('acc-entry-modal')).hide(); load(); }
+      })
+      .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
+      .recordLedgerEntry(payload);
+  }
+
+  // ---------- unified ledger ----------
+  function matchesFilter(row) {
+    if (CURRENT_FILTER === 'ALL') return true;
+    const cat = (row.category || '').toLowerCase().replace(/_/g, ' ');
+    if (CURRENT_FILTER === 'OP_Consultation') return /op|ip|consult/.test(cat);
+    return cat.indexOf(CURRENT_FILTER.toLowerCase().replace(/_/g, ' ')) !== -1;
+  }
+  function renderLedger() {
+    const tb = $('master-ledger-tbody'); if (!tb) return;
+    const rows = LEDGER_CACHE.filter(matchesFilter);
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No transactions found.</td></tr>'; return; }
+    tb.innerHTML = rows.map(function (r) {
+      const lk = r.locked ? ' <i class="fas fa-lock text-warning ms-1" title="Locked"></i>' : '';
+      const ic = r.amtIn > 0 ? '<span class="text-success fw-semibold">' + inr(r.amtIn) + '</span>' : '<span class="text-muted">—</span>';
+      const oc = r.amtOut > 0 ? '<span class="text-danger fw-semibold">' + inr(r.amtOut) + '</span>' : '<span class="text-muted">—</span>';
+      return '<tr><td class="px-4 small">' + esc(r.ts) + '</td><td class="small font-monospace">' + esc(r.txnId) + lk +
+        '</td><td class="small">' + esc(r.category) + '</td><td class="small">' + esc(r.entity) +
+        '</td><td class="small">' + esc(r.mode) + '</td><td class="text-end px-4">' + ic +
+        '</td><td class="text-end px-4">' + oc + '</td></tr>';
+    }).join('');
+  }
+  function filter(cat) { CURRENT_FILTER = cat || 'ALL'; renderLedger(); }
+
+  // ---------- receivables (running tab, in Discharges spoke) ----------
+  function loadReceivables() {
+    const box = $('acc-receivables-body');
+    if (box) box.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading running tabs…</div>';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { if (box) box.innerHTML = '<div class="text-center text-danger py-5">' + esc((res && res.message) || 'Load failed.') + '</div>'; return; }
+        const sum = $('acc-receivables-summary');
+        if (sum) sum.textContent = res.count + ' open tab' + (res.count === 1 ? '' : 's') + ' · ' + inr(res.totalOpen) + ' outstanding';
+        renderReceivables(res.groups || []);
+      })
+      .withFailureHandler(function (err) { if (box) box.innerHTML = '<div class="text-center text-danger py-5">' + esc(err.message || 'Server error.') + '</div>'; })
+      .getReceivables();
+  }
+  function renderReceivables(groups) {
+    const box = $('acc-receivables-body'); if (!box) return;
+    if (!groups.length) { box.innerHTML = '<div class="text-center text-muted py-5">No pending settlements. Everything is cleared.</div>'; return; }
+    box.innerHTML = groups.map(function (g) {
+      const aging = g.agingDays > 60 ? 'text-danger' : (g.agingDays > 30 ? 'text-warning' : 'text-muted');
+      const bills = g.bills.map(function (b) {
+        return '<tr><td class="small">' + esc(b.source) + '</td><td class="small font-monospace">' + esc(b.billId) +
+          '</td><td class="small">' + esc(b.date) + '</td><td class="text-end small">' + inr(b.amount) +
+          '</td><td class="text-end"><button class="btn btn-success btn-sm rounded-pill px-3" onclick="AccX.settle(\'' +
+          esc(b.source) + '\',\'' + esc(b.billId) + '\',' + (b.amount || 0) + ')">Settle</button></td></tr>';
+      }).join('');
+      return '<div class="card premium-card border-0 rounded-3 mb-3"><div class="card-body p-3">' +
+        '<div class="d-flex justify-content-between align-items-center mb-2">' +
+        '<div><span class="fw-bold text-white">' + esc(g.name || g.patientId || 'Unknown') + '</span>' +
+        ' <span class="badge bg-secondary bg-opacity-25 ms-1">' + esc(g.type) + '</span>' +
+        (g.admissionId ? ' <span class="small text-muted font-monospace ms-1">' + esc(g.admissionId) + '</span>' : '') +
+        '</div><div class="text-end"><div class="fw-bold text-danger">' + inr(g.totalDue) + '</div>' +
+        '<div class="small ' + aging + '">' + g.agingDays + ' days</div></div></div>' +
+        '<table class="table table-sm align-middle mb-0 custom-table"><tbody class="text-light">' + bills + '</tbody></table>' +
+        '</div></div>';
+    }).join('');
+  }
+  function settle(source, billId, amount) {
+    injectModals();
+    $('acc-settle-source').value = source;
+    $('acc-settle-bill').value = billId;
+    $('acc-settle-info').textContent = source + ' bill ' + billId + ' · collecting ' + inr(amount);
+    new bootstrap.Modal($('acc-settle-modal')).show();
+  }
+  function confirmSettle() {
+    const payload = { source: $('acc-settle-source').value, billId: $('acc-settle-bill').value, payMode: $('acc-settle-mode').value, loggedBy: who() };
+    busy(true);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        busy(false); toast(res.message, !!res.success);
+        if (res.success) { bootstrap.Modal.getInstance($('acc-settle-modal')).hide(); loadReceivables(); load(); }
+      })
+      .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
+      .settleReceivableBill(payload);
+  }
+
+  // ---------- dashboard ----------
+  function setText(id, t) { const e = $(id); if (e) e.textContent = t; }
+  function load() {
+    const tb = $('master-ledger-tbody');
+    if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading financial data…</td></tr>';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { toast((res && res.message) || 'Load failed.', false); LEDGER_CACHE = []; renderLedger(); return; }
+        CURRENT_PERIOD = res.currentPeriod; LEDGER_CACHE = res.ledger || [];
+        setText('acc-kpi-revenue', inr(res.kpis.collectedMTD));
+        setText('acc-kpi-expense', inr(res.kpis.paidMTD));
+        setText('acc-kpi-cash', inr(res.kpis.drawerCash));
+        const f = res.flags;
+        setText('acc-flag-mismatch', f.cashMismatch + ' Mismatch' + (f.cashMismatch === 1 ? '' : 'es'));
+        setText('acc-flag-claims', f.delayedClaims);
+        setText('acc-flag-discharges', f.pendingDischarges);
+        renderLedger();
+      })
+      .withFailureHandler(function (err) { LEDGER_CACHE = []; renderLedger(); toast(err.message || 'Server error.', false); })
+      .getAccountsDashboard();
+  }
+  function lockPeriod() {
+    if (!CURRENT_PERIOD) { toast('Open the hub first.', false); return; }
+    if (!confirm('Lock period ' + CURRENT_PERIOD + '? Expense edits in this period will be frozen permanently.')) return;
+    busy(true);
+    google.script.run
+      .withSuccessHandler(function (res) { busy(false); toast(res.message, !!res.success); if (res.success) load(); })
+      .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
+      .lockFinancialPeriod(CURRENT_PERIOD, who());
+  }
+
+  return { load, openEntry, lockPeriod, switchPage, filter, loadReceivables, settle };
+})();
+
+function switchAccountsPage(pageId) { AccX.switchPage(pageId); }
+function filterLedger(cat) { AccX.filter(cat); }
+function lockFinancialPeriod() { AccX.lockPeriod(); }
+function showAccounts() { AccX.switchPage('workspace-accounts'); AccX.load(); }
+</script>

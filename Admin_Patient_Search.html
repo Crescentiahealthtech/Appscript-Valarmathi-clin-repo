@@ -1,0 +1,171 @@
+<div id="tab-admin-search" class="page-section d-none">
+  
+  <div class="d-flex align-items-center gap-2 mb-3 mt-4">
+    <button class="btn btn-sm btn-outline-secondary label-bright" onclick="switchTab('workspace-patients')"><i class="fa-solid fa-arrow-left"></i></button>
+    <h3 class="fw-bold m-0 text-white">Patient Search</h3>
+  </div>
+
+  <div class="card p-3 mb-4" style="background-color: #1a1d24;">
+    <div class="input-group">
+      <span class="input-group-text bg-dark border-secondary text-secondary"><i class="fa-solid fa-search"></i></span>
+      <input type="text" id="patient-search-input" class="form-control text-white-force border-secondary" placeholder="Search by ID, Name, Mobile Number, or Address..." onkeyup="filterPatientDirectory()">
+    </div>
+  </div>
+
+  <div class="card p-4">
+    <div class="table-responsive">
+      <table class="table table-dark table-hover mb-0" style="background-color: var(--bg-card);">
+        <thead class="text-secondary" style="font-size: 0.85rem;">
+          <tr>
+            <th>PATIENT ID</th>
+            <th>NAME</th>
+            <th>GENDER / AGE</th>
+            <th>CONTACT</th>
+            <th>ACTION</th>
+          </tr>
+        </thead>
+        <tbody id="roster-table">
+          <tr><td colspan="5" class="text-center text-muted">Loading patients...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="patientProfileModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark border-secondary text-white">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title fw-bold text-info"><i class="fa-solid fa-id-card me-2"></i> Patient Profile</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="profileModalBody">
+        </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let globalPatientDirectory = []; // Stores data locally for instant search speeds
+
+  // 1. Core Load Function (Preserved Original Name: loadRoster)
+  function loadRoster() {
+    const tbody = document.getElementById('roster-table');
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i> Fetching patient database...</td></tr>';
+    
+    google.script.run.withSuccessHandler(res => {
+      globalPatientDirectory = res || []; 
+      renderPatientDirectoryTable(globalPatientDirectory);
+    }).getAllPatients();
+  }
+
+  // 2. Render Table Rows
+  function renderPatientDirectoryTable(data) {
+    const tbody = document.getElementById('roster-table');
+    tbody.innerHTML = '';
+    
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No patients found.</td></tr>';
+      return;
+    }
+    
+    data.forEach(p => {
+      tbody.innerHTML += `
+        <tr class="align-middle">
+          <td class="text-info fw-bold">${p.id}</td>
+          <td class="text-white fw-bold">${p.name}</td>
+          <td class="text-light">${p.gender || '-'} / ${p.age || '-'} Yrs</td>
+          <td class="text-light"><i class="fa-solid fa-phone fa-xs text-muted me-1"></i> ${p.mobile || '-'}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-info py-0" onclick="viewPatientProfile('${p.id}')">View</button>
+          </td>
+        </tr>
+      `;
+    });
+  }
+
+  // 3. Instant Search Engine (Runs as you type)
+  function filterPatientDirectory() {
+    const query = document.getElementById('patient-search-input').value.toLowerCase();
+    
+    const filtered = globalPatientDirectory.filter(p => {
+      // Add safe fallbacks in case a field is completely empty
+      const id = (p.id || '').toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const mobile = (p.mobile || '').toLowerCase();
+      const address = (p.address || '').toLowerCase();
+      
+      return id.includes(query) || name.includes(query) || mobile.includes(query) || address.includes(query);
+    });
+    
+    renderPatientDirectoryTable(filtered);
+  }
+
+  // 4. View Full Profile Modal
+  function viewPatientProfile(patientId) {
+    const modal = new bootstrap.Modal(document.getElementById('patientProfileModal'));
+    document.getElementById('profileModalBody').innerHTML = '<div class="text-center text-muted my-5"><i class="fa-solid fa-spinner fa-spin fa-2x mb-3"></i><br>Loading comprehensive profile...</div>';
+    modal.show();
+
+    // Fetch the 22-column profile data securely
+    google.script.run.withSuccessHandler(profile => {
+      if(!profile) {
+        document.getElementById('profileModalBody').innerHTML = '<div class="text-danger text-center my-4">Failed to locate profile records.</div>';
+        return;
+      }
+
+      const html = `
+        <div class="row g-3">
+          <div class="col-md-8">
+            <p class="text-muted mb-0 small">Patient Name</p>
+            <h4 class="fw-bold m-0 text-white">${profile.salutation || ''} ${profile.name}</h4>
+          </div>
+          <div class="col-md-4 text-md-end">
+            <p class="text-muted mb-0 small">Patient ID</p>
+            <h5 class="fw-bold m-0 text-info">${profile.id}</h5>
+          </div>
+        </div>
+        
+        <hr class="border-secondary my-3">
+        
+        <div class="row g-3 mb-3">
+          <div class="col-md-3"><span class="text-muted small d-block">Age / Gender</span><b class="text-white">${profile.age} Yrs, ${profile.gender}</b></div>
+          <div class="col-md-3"><span class="text-muted small d-block">Date of Birth</span><b class="text-white">${profile.dob || '-'}</b></div>
+          <div class="col-md-3"><span class="text-muted small d-block">Blood Group</span><b class="text-danger">${profile.bloodGroup || '-'}</b></div>
+          <div class="col-md-3"><span class="text-muted small d-block">Marital Status</span><b class="text-white">${profile.maritalStatus || '-'}</b></div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-md-3"><span class="text-muted small d-block">Primary Mobile</span><b class="text-white">${profile.mobile}</b></div>
+          <div class="col-md-3"><span class="text-muted small d-block">WhatsApp</span><b class="text-white">${profile.whatsapp || '-'}</b></div>
+          <div class="col-md-6"><span class="text-muted small d-block">Email Address</span><b class="text-white">${profile.email || '-'}</b></div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-12"><span class="text-muted small d-block">Residential Address</span><b class="text-white">${profile.address || '-'}</b></div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-6"><span class="text-muted small d-block">Occupation / Education</span><b class="text-white">${profile.occupation || '-'} / ${profile.education || '-'}</b></div>
+          <div class="col-md-6"><span class="text-muted small d-block">Co-morbidities</span><b class="text-warning">${profile.comorb || 'Nil'}</b></div>
+        </div>
+
+        <div class="bg-dark rounded p-3 border border-secondary">
+          <h6 class="fw-bold text-muted mb-3"><i class="fa-solid fa-truck-medical me-2"></i>Emergency & Guardian Details</h6>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <span class="text-muted small d-block">Relative/Guardian (${profile.relationType || '-'})</span>
+              <b class="text-white">${profile.relationName || '-'}</b>
+            </div>
+            <div class="col-md-6">
+              <span class="text-muted small d-block">Emergency Contact</span>
+              <b class="text-white">${profile.emergencyName || '-'} <br> ${profile.emergencyNumber || '-'}</b>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('profileModalBody').innerHTML = html;
+    }).getUserProfile(patientId);
+  }
+</script>

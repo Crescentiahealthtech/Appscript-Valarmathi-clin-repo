@@ -1,0 +1,278 @@
+<!-- ===================================================================== -->
+<!-- 🏥 CRESCENTIA — IP DISCHARGE BILLING (single pane, dynamic rows).      -->
+<!-- Mount: <div id="workspace-accounts-discharge" class="page-section      -->
+<!--   d-none"><div id="acc-discharge-root"></div></div>                    -->
+<!-- Theme-aware via Bootstrap 5.3 *-subtle/*-emphasis + body utilities.    -->
+<!-- Needs IP_Charges_Logic.js + IP_Packages.js. openDischargeDesk().       -->
+<!-- ===================================================================== -->
+<script>
+const AccDischarge = (function () {
+  const $ = (id) => document.getElementById(id);
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
+  const CATS = [['ROOM', 'Room Rent'], ['NURSING', 'Nursing Charges'], ['RMO', 'RMO Charges'], ['CONSULTANT', 'Consultant Charges'], ['SURGEON', 'Surgeon Charges'], ['ANESTHETIST', 'Anaesthetist Charges'], ['OT', 'OT Charges'], ['PROCEDURE', 'Procedure'], ['OTHER', 'Other / Custom']];
+  const RATE = { ROOM: 1500, NURSING: 400, RMO: 300, CONSULTANT: 500, SURGEON: 0, ANESTHETIST: 0, OT: 0, PROCEDURE: 0, OTHER: 0 };
+  let IP = null, TAB = null, ROWS = [], PKGS = [], INSURERS = [], INS = [], INS_ON = false, RID = 0;
+
+  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white'; t.style.zIndex = 4000; t.style.background = ok ? '#198754' : '#dc3545'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3800); }
+  const num = (id) => { const e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; };
+  const amt = (r) => r.kind === 'AUTO' ? r.amount : (Number(r.count) || 0) * (Number(r.rate) || 0);
+
+  function load() {
+    const root = $('acc-discharge-root'); if (!root) return;
+    root.innerHTML = '<div class="text-center text-body-secondary py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading…</div>';
+    google.script.run.withSuccessHandler(function (pk) {
+      PKGS = (pk && pk.packages) || [];
+      google.script.run.withSuccessHandler(function (ins) {
+        INSURERS = (ins && ins.insurers) || [];
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc((res && res.message) || 'Failed.') + '</div>'; return; }
+            const a = res.admissions || [];
+            root.innerHTML =
+              '<div class="d-flex gap-2 align-items-end flex-wrap mb-3" style="max-width:760px;"><div class="flex-grow-1">' +
+              '<label class="form-label small text-body-secondary">Admitted Patient</label>' +
+              (a.length ? '<select id="acc-dis-ip" class="form-select">' + a.map(x => '<option value="' + esc(x.ipNumber) + '">' + esc(x.ipNumber) + ' — ' + esc(x.patientName) + ' (' + esc(x.bed || '—') + ')</option>').join('') + '</select>' : '<input id="acc-dis-ip" class="form-control" placeholder="No active admissions">') +
+              '</div><button class="btn btn-primary fw-semibold" onclick="AccDischarge.open()"><i class="fas fa-file-invoice-dollar me-1"></i>Load Bill</button></div>' +
+              '<div id="acc-dis-body"></div><div id="acc-dis-modal"></div>';
+          })
+          .withFailureHandler(function (e) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc(e.message || 'Server error.') + '</div>'; })
+          .getOpenAdmissions();
+      }).withFailureHandler(function () { INSURERS = []; }).getInsurers();
+    }).withFailureHandler(function () { PKGS = []; }).getPackages();
+  }
+
+  function open() {
+    IP = ($('acc-dis-ip') || {}).value || ''; if (!IP) { toast('Select a patient.', false); return; }
+    const b = $('acc-dis-body'); if (b) b.innerHTML = '<div class="text-center text-body-secondary py-4"><i class="fas fa-circle-notch fa-spin me-2"></i>Building bill…</div>';
+    google.script.run
+      .withSuccessHandler(function (res) { if (!res || !res.success) { if (b) b.innerHTML = '<div class="text-danger py-3">' + esc((res && res.message) || 'Failed.') + '</div>'; return; } TAB = res; initState(); render(); })
+      .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="text-danger py-3">' + esc(e.message || 'Server error.') + '</div>'; })
+      .getRunningTab(IP);
+  }
+
+  function initState() {
+    ROWS = [];
+    (TAB.autoGroups || []).forEach(g => ROWS.push({ id: ++RID, kind: 'AUTO', category: g.dept, label: (g.dept === 'LAB' ? 'Laboratory' : 'Pharmacy') + ' (' + g.count + ' bills)', count: g.count, rate: '', amount: g.total, items: g.items || [], exclude: false, remark: '', locked: true }));
+    const dr = (TAB.draft && TAB.draft.ward) || [];
+    if (dr.length) dr.forEach(s => ROWS.push({ id: ++RID, kind: 'MANUAL', category: s.category, label: '', count: Number(s.multiplier) || 0, rate: Number(s.rate) || 0, exclude: s.exclude === true, remark: s.remark || '', locked: false }));
+    INS = (TAB.draft && TAB.draft.insurers) || []; INS_ON = INS.length > 0;
+  }
+
+  function render() {
+    const a = TAB.admission;
+    const pkgOpts = '<option value="">— No package (itemized) —</option>' + PKGS.map(p => '<option value="' + esc(p.code) + '"' + ((TAB.draft && TAB.draft.packageCode === p.code) ? ' selected' : '') + '>' + esc(p.name) + ' (' + inr(p.cap) + ')</option>').join('');
+    $('acc-dis-body').innerHTML =
+      '<div class="card border bg-body-tertiary"><div class="card-body">' +
+        // context bar
+        '<div class="row g-2 align-items-center mb-3 pb-3 border-bottom">' +
+          '<div class="col-md-4"><h5 class="fw-bold mb-0 text-body">' + esc(a.patientName) + '</h5><span class="small text-body-secondary">' + esc(a.ipNumber) + '</span></div>' +
+          '<div class="col-md-2 small text-body"><span class="text-body-secondary d-block">Ward / Bed</span>' + esc(a.bed || '—') + '</div>' +
+          '<div class="col-md-2 small text-body"><span class="text-body-secondary d-block">Admitted</span>' + esc(a.doaFmt || '') + '</div>' +
+          '<div class="col-md-2 small text-body"><span class="text-body-secondary d-block">Stay</span><span class="fw-bold">' + a.lengthOfStay + ' day(s)</span></div>' +
+          '<div class="col-md-2 text-md-end"><span class="badge text-bg-warning">READY</span></div>' +
+        '</div>' +
+        // toolbar
+        '<div class="row g-2 align-items-end mb-3">' +
+          '<div class="col-md-5"><label class="form-label small text-body-secondary mb-1">Package</label><select id="acc-dis-pkg" class="form-select form-select-sm" onchange="AccDischarge.applyPackage(this.value)">' + pkgOpts + '</select></div>' +
+          '<div class="col-md-7 text-md-end pt-3"><button class="btn btn-sm btn-outline-info me-1" onclick="AccDischarge.visits()"><i class="fas fa-user-doctor me-1"></i>View / Record Visits</button>' +
+          '<button class="btn btn-sm btn-outline-secondary" onclick="AccDischarge.print(false)"><i class="fas fa-print me-1"></i>Print Draft</button></div>' +
+        '</div>' +
+        '<div id="acc-dis-pkg-note" class="small text-body-secondary mb-2"></div>' +
+        // particulars table
+        '<div class="table-responsive"><table class="table table-sm align-middle mb-1"><thead><tr>' +
+          '<th class="small text-uppercase text-body-secondary" style="width:34px">#</th><th class="small text-uppercase text-body-secondary">Particular</th>' +
+          '<th class="text-center small text-uppercase text-body-secondary" style="width:130px">Count</th><th class="text-end small text-uppercase text-body-secondary" style="width:90px">Rate</th>' +
+          '<th class="text-end small text-uppercase text-body-secondary" style="width:110px">Amount</th><th class="text-center small text-uppercase text-body-secondary" style="width:54px" title="Outside package — billed on top">Extra</th>' +
+          '<th class="small text-uppercase text-body-secondary">Remark</th><th style="width:40px"></th></tr></thead><tbody id="acc-dis-rows"></tbody></table></div>' +
+        '<button class="btn btn-sm btn-outline-primary w-100 border-2" style="border-style:dashed" onclick="AccDischarge.addRow()"><i class="fas fa-plus me-1"></i>Add Particular</button>' +
+        '<div class="small text-body-secondary mt-1">Pharmacy / Lab rows are auto-fetched (locked). “Extra” bills outside the package cap.</div>' +
+        // insurance + settlement
+        '<div class="row g-3 mt-2">' +
+          '<div class="col-lg-6"><div class="border rounded-3 p-3 h-100">' +
+            '<div class="d-flex justify-content-between align-items-center"><span class="fw-semibold">Insurance?</span>' +
+            '<div class="btn-group btn-group-sm"><button type="button" id="acc-ins-no" class="btn ' + (INS_ON ? 'btn-outline-secondary' : 'btn-secondary') + '" onclick="AccDischarge.insToggle(false)">No</button>' +
+            '<button type="button" id="acc-ins-yes" class="btn ' + (INS_ON ? 'btn-primary' : 'btn-outline-primary') + '" onclick="AccDischarge.insToggle(true)">Yes</button></div></div>' +
+            '<div id="acc-ins-panel" class="' + (INS_ON ? '' : 'd-none') + ' mt-2"></div></div></div>' +
+          '<div class="col-lg-6"><div class="border rounded-3 p-3">' +
+            '<div class="row g-2 mb-2"><div class="col-4"><label class="form-label small text-body-secondary mb-1">Cap (₹)</label><input type="number" min="0" id="acc-dis-cap" class="form-control form-control-sm" value="' + ((TAB.draft && TAB.draft.packageCap) || 0) + '" oninput="AccDischarge.calc()"></div>' +
+            '<div class="col-4"><label class="form-label small text-body-secondary mb-1">Disc %</label><input type="number" min="0" max="100" id="acc-dis-disc" class="form-control form-control-sm" value="' + ((TAB.draft && TAB.draft.discountPercent) || 0) + '" oninput="AccDischarge.calc()"></div>' +
+            '<div class="col-4"><label class="form-label small text-body-secondary mb-1">Pays By</label><select id="acc-dis-mode" class="form-select form-select-sm"><option>Cash</option><option>UPI</option><option>Card</option></select></div></div>' +
+            '<div id="acc-dis-summary"></div></div></div>' +
+        '</div>' +
+        '<textarea id="acc-dis-remarks" class="form-control form-control-sm mt-3" rows="2" placeholder="Remarks (e.g. counts confirmed by Sr. Nurse)">' + esc((TAB.draft && TAB.draft.remarks) || '') + '</textarea>' +
+        '<div class="d-flex gap-2 mt-3 justify-content-end"><button class="btn btn-outline-secondary fw-semibold" onclick="AccDischarge.saveDraft()"><i class="fas fa-floppy-disk me-1"></i>Save Draft</button>' +
+        '<button class="btn btn-warning fw-bold px-4" onclick="AccDischarge.finalize()"><i class="fas fa-lock me-1"></i>Settle &amp; Discharge</button></div>' +
+      '</div></div>';
+    renderRows(); renderIns(); calc();
+  }
+
+  function renderRows() {
+    if (!ROWS.length) { $('acc-dis-rows').innerHTML = '<tr><td colspan="8" class="text-center text-body-secondary py-3">No charges yet — add a particular.</td></tr>'; return; }
+    $('acc-dis-rows').innerHTML = ROWS.map(function (r, i) {
+      const a = amt(r);
+      if (r.kind === 'AUTO') {
+        const items = (r.items || []).map(it => '<div class="d-flex justify-content-between small text-body-secondary px-2 py-1"><span>' + esc(it.date) + ' · ' + esc(it.ref) + '</span><span>' + inr(it.amount) + '</span></div>').join('') || '<div class="small text-body-secondary px-2 py-1">No line items.</div>';
+        return '<tr class="bg-body-secondary" role="button" onclick="AccDischarge.toggleAuto(' + r.id + ')"><td class="small text-body-secondary">' + (i + 1) + '</td>' +
+          '<td class="small fw-semibold text-body"><i class="fas fa-lock text-body-secondary me-1 small"></i>' + esc(r.label) + ' <i class="fas fa-chevron-down ms-1 small text-body-secondary"></i></td>' +
+          '<td class="text-center small text-body-secondary">' + r.count + '</td><td></td><td class="text-end small fw-semibold text-body">' + inr(a) + '</td><td></td><td></td><td></td></tr>' +
+          '<tr id="acc-auto-' + r.id + '" class="d-none"><td></td><td colspan="7" class="py-1">' + items + '</td></tr>';
+      }
+      const opts = CATS.map(c => '<option value="' + c[0] + '"' + (c[0] === r.category ? ' selected' : '') + '>' + c[1] + '</option>').join('');
+      return '<tr><td class="small text-body-secondary">' + (i + 1) + '</td>' +
+        '<td><select class="form-select form-select-sm" onchange="AccDischarge.setCat(' + r.id + ',this.value)">' + opts + '</select></td>' +
+        '<td class="text-center" style="white-space:nowrap"><button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="AccDischarge.step(' + r.id + ',-1)">−</button>' +
+        '<input type="number" min="0" value="' + r.count + '" class="form-control form-control-sm d-inline-block text-center mx-1" style="width:54px" oninput="AccDischarge.setCount(' + r.id + ',this.value)">' +
+        '<button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="AccDischarge.step(' + r.id + ',1)">+</button></td>' +
+        '<td><input type="number" min="0" class="form-control form-control-sm text-end" style="min-width:80px" value="' + r.rate + '" oninput="AccDischarge.setRate(' + r.id + ',this.value)"></td>' +
+        '<td class="text-end small fw-semibold text-body" id="acc-amt-' + r.id + '">' + inr(a) + '</td>' +
+        '<td class="text-center"><input type="checkbox" class="form-check-input" ' + (r.exclude ? 'checked' : '') + ' onchange="AccDischarge.setExcl(' + r.id + ',this.checked)"></td>' +
+        '<td><input class="form-control form-control-sm" value="' + esc(r.remark) + '" placeholder="note" oninput="AccDischarge.setRemark(' + r.id + ',this.value)"></td>' +
+        '<td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="AccDischarge.del(' + r.id + ')">×</button></td></tr>';
+    }).join('');
+  }
+
+  const find = (id) => ROWS.filter(r => r.id === id)[0];
+  function updateAmt(id) { const r = find(id), el = $('acc-amt-' + id); if (el) el.innerText = inr(amt(r)); }
+  function toggleAuto(id) { const el = $('acc-auto-' + id); if (el) el.classList.toggle('d-none'); }
+  function addRow() { ROWS.push({ id: ++RID, kind: 'MANUAL', category: 'ROOM', count: TAB.admission.lengthOfStay || 1, rate: RATE.ROOM, exclude: false, remark: '' }); renderRows(); calc(); }
+  function del(id) { ROWS = ROWS.filter(r => r.id !== id); renderRows(); calc(); }
+  function setCat(id, v) { const r = find(id); r.category = v; if (!r.rate) r.rate = RATE[v] || 0; renderRows(); calc(); }
+  function step(id, d) { const r = find(id); r.count = Math.max(0, (Number(r.count) || 0) + d); renderRows(); calc(); }
+  function setCount(id, v) { find(id).count = Number(v) || 0; updateAmt(id); calc(); }
+  function setRate(id, v) { find(id).rate = Number(v) || 0; updateAmt(id); calc(); }
+  function setExcl(id, c) { find(id).exclude = c; calc(); }
+  function setRemark(id, v) { find(id).remark = v; }
+
+  function applyPackage(code) {
+    const p = PKGS.filter(x => x.code === code)[0], note = $('acc-dis-pkg-note');
+    if (!p) { if (note) note.innerHTML = ''; calc(); return; }
+    $('acc-dis-cap').value = p.cap;
+    const days = p.stayDays || (TAB.admission.lengthOfStay || 1);
+    ROWS = ROWS.filter(r => r.kind === 'AUTO');  // keep auto, replace manual with package set
+    [['ROOM', days], ['NURSING', days], ['RMO', days], ['CONSULTANT', days], ['SURGEON', 1], ['ANESTHETIST', 1], ['OT', 1]].forEach(c =>
+      ROWS.push({ id: ++RID, kind: 'MANUAL', category: c[0], count: c[1], rate: RATE[c[0]], exclude: false, remark: 'package' }));
+    if (note) note.innerHTML = '<b>Range:</b> ' + inr(p.min) + '–' + inr(p.max) + ' · <b>Includes:</b> ' + esc(p.inclusions) + ' · <span class="text-warning-emphasis"><b>Bill extra:</b> ' + esc(p.exclusions) + '</span>';
+    renderRows(); calc();
+  }
+
+  function renderIns() {
+    const p = $('acc-ins-panel'); if (!p) return; if (!INS_ON) { p.innerHTML = ''; return; }
+    p.innerHTML = INS.map(function (x, i) {
+      const opts = INSURERS.map(n => '<option' + (n === x.name ? ' selected' : '') + '>' + esc(n) + '</option>').join('');
+      return '<div class="row g-1 mb-1"><div class="col-5"><select class="form-select form-select-sm" onchange="AccDischarge.insSet(' + i + ',\'name\',this.value)">' + opts + '</select></div>' +
+        '<div class="col-3"><select class="form-select form-select-sm" onchange="AccDischarge.insSet(' + i + ',\'network\',this.value)"><option value="1"' + (x.network ? ' selected' : '') + '>Network</option><option value="0"' + (!x.network ? ' selected' : '') + '>Other</option></select></div>' +
+        '<div class="col-3"><input type="number" min="0" class="form-control form-control-sm text-end" value="' + (x.amount || 0) + '" placeholder="₹" oninput="AccDischarge.insSet(' + i + ',\'amount\',this.value)"></div>' +
+        '<div class="col-1"><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="AccDischarge.insDel(' + i + ')">×</button></div></div>';
+    }).join('') + '<button class="btn btn-outline-primary btn-sm mt-1" onclick="AccDischarge.insAdd()"><i class="fas fa-plus me-1"></i>Add Insurer</button>';
+  }
+  function insToggle(on) { INS_ON = on; if (on && !INS.length) INS = [{ name: INSURERS[0] || 'Other', network: true, amount: 0 }]; $('acc-ins-yes').className = 'btn ' + (on ? 'btn-primary' : 'btn-outline-primary'); $('acc-ins-no').className = 'btn ' + (on ? 'btn-outline-secondary' : 'btn-secondary'); $('acc-ins-panel').classList.toggle('d-none', !on); renderIns(); calc(); }
+  function insAdd() { INS.push({ name: INSURERS[0] || 'Other', network: true, amount: 0 }); renderIns(); calc(); }
+  function insDel(i) { INS.splice(i, 1); renderIns(); calc(); }
+  function insSet(i, k, v) { if (k === 'amount') INS[i].amount = Number(v) || 0; else if (k === 'network') INS[i].network = (v === '1'); else INS[i].name = v; calc(); }
+
+  function model() {
+    let auto = 0, included = 0, exclusion = 0;
+    ROWS.forEach(r => { const a = amt(r); if (r.kind === 'AUTO') { auto += a; included += a; } else if (r.exclude) exclusion += a; else included += a; });
+    const cap = num('acc-dis-cap'), cappedIncl = cap > 0 ? Math.min(included, cap) : included;
+    const pkgAdj = included - cappedIncl, afterCap = cappedIncl + exclusion;
+    const discPct = Math.max(0, Math.min(100, num('acc-dis-disc'))), discAmt = afterCap * discPct / 100, billable = afterCap - discAmt;
+    const nonPay = Number(TAB.nonPayable) || 0, advHeld = Number(TAB.advancesHeld) || 0;
+    const insurable = Math.max(0, billable - nonPay);
+    let insTotal = INS_ON ? INS.reduce((s, x) => s + (Number(x.amount) || 0), 0) : 0; if (insTotal > insurable) insTotal = insurable;
+    const advApplied = Math.min(advHeld, billable), raw = billable - advApplied - insTotal;
+    return { auto, included, exclusion, gross: included + exclusion, pkgAdj, discPct, discAmt, billable, insTotal, advApplied, patient: Math.max(0, raw), refund: Math.max(0, -raw) };
+  }
+
+  function calc() {
+    if (!TAB) return; const m = model();
+    $('acc-dis-summary').innerHTML =
+      '<table class="table table-sm mb-2"><tbody>' +
+      '<tr><td class="text-body">Gross Total</td><td class="text-end text-body fw-semibold">' + inr(m.gross) + '</td></tr>' +
+      (m.pkgAdj > 0 ? '<tr><td class="text-body-secondary">Less: Package Cap</td><td class="text-end text-body-secondary">-' + inr(m.pkgAdj) + '</td></tr>' : '') +
+      (m.discAmt > 0 ? '<tr><td class="text-body-secondary">Less: Discount (' + m.discPct + '%)</td><td class="text-end text-body-secondary">-' + inr(m.discAmt) + '</td></tr>' : '') +
+      '<tr><td class="text-info-emphasis">Less: Advance</td><td class="text-end text-info-emphasis">-' + inr(m.advApplied) + '</td></tr>' +
+      (m.insTotal > 0 ? '<tr><td class="text-primary-emphasis">Insurance (pending)</td><td class="text-end text-primary-emphasis">' + inr(m.insTotal) + '</td></tr>' : '') +
+      '</tbody></table>' +
+      '<div class="p-3 rounded-3 d-flex justify-content-between align-items-center bg-warning-subtle border border-warning-subtle"><span class="fw-bold text-uppercase small text-warning-emphasis">Patient Pays Now</span><h4 class="fw-bold mb-0 text-warning-emphasis">' + inr(m.patient) + '</h4></div>' +
+      (m.refund > 0 ? '<div class="mt-2 small text-success-emphasis">Refund due: ' + inr(m.refund) + '</div>' : '');
+  }
+
+  // ---- visits modal ----
+  function visits() {
+    const host = $('acc-dis-modal');
+    host.innerHTML = '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,.5);z-index:3500" onclick="if(event.target===this)AccDischarge.closeVisits()">' +
+      '<div class="card bg-body border shadow" style="width:min(620px,92vw);max-height:86vh;overflow:auto"><div class="card-body">' +
+      '<div class="d-flex justify-content-between mb-2"><h5 class="fw-bold mb-0 text-body">Clinical Visits · ' + esc(IP) + '</h5><button class="btn-close" onclick="AccDischarge.closeVisits()"></button></div>' +
+      '<div id="acc-vis-list" class="mb-3"><div class="text-body-secondary small py-3 text-center"><i class="fas fa-circle-notch fa-spin me-1"></i>Loading…</div></div>' +
+      '<div class="border-top pt-2"><div class="row g-2">' +
+      '<div class="col-4"><input id="acc-vis-doc" class="form-control form-control-sm" placeholder="Doctor"></div>' +
+      '<div class="col-3"><select id="acc-vis-type" class="form-select form-select-sm"><option>Consultant</option><option>Surgeon</option><option>RMO</option><option>Specialist</option></select></div>' +
+      '<div class="col-2"><input id="acc-vis-cnt" type="number" min="1" value="1" class="form-control form-control-sm" placeholder="Qty"></div>' +
+      '<div class="col-3"><button class="btn btn-primary btn-sm w-100" onclick="AccDischarge.addVisit()">Record</button></div>' +
+      '<div class="col-12"><input id="acc-vis-note" class="form-control form-control-sm" placeholder="Remark (optional)"></div>' +
+      '</div></div></div></div></div>';
+    loadVisits();
+  }
+  function closeVisits() { $('acc-dis-modal').innerHTML = ''; }
+  function loadVisits() {
+    google.script.run.withSuccessHandler(function (res) {
+      const el = $('acc-vis-list'); if (!el) return;
+      const v = (res && res.visits) || [];
+      if (!v.length) { el.innerHTML = '<div class="text-body-secondary small py-3 text-center">No visits recorded yet.</div>'; return; }
+      el.innerHTML = '<table class="table table-sm mb-0"><thead><tr><th class="small text-body-secondary">Date</th><th class="small text-body-secondary">Doctor</th><th class="small text-body-secondary">Type</th><th class="text-center small text-body-secondary">Qty</th><th class="small text-body-secondary">Remark</th></tr></thead><tbody>' +
+        v.map(x => '<tr><td class="small">' + esc(x.date) + '</td><td class="small">' + esc(x.doctor) + '</td><td class="small">' + esc(x.type) + '</td><td class="text-center small">' + x.count + '</td><td class="small text-body-secondary">' + esc(x.remark) + '</td></tr>').join('') + '</tbody></table>';
+    }).withFailureHandler(function () { const el = $('acc-vis-list'); if (el) el.innerHTML = '<div class="text-danger small py-2">Could not load.</div>'; }).getIpVisits(IP);
+  }
+  function addVisit() {
+    const doc = ($('acc-vis-doc') || {}).value || ''; if (!doc.trim()) { toast('Enter doctor name.', false); return; }
+    google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { ($('acc-vis-doc') || {}).value = ''; ($('acc-vis-note') || {}).value = ''; loadVisits(); } })
+      .withFailureHandler(e => toast(e.message || 'Error', false))
+      .addIpVisit({ ipNumber: IP, doctor: doc, type: ($('acc-vis-type') || {}).value, count: num('acc-vis-cnt'), remark: ($('acc-vis-note') || {}).value || '', user: who() });
+  }
+
+  function wardPayload() { return ROWS.filter(r => r.kind === 'MANUAL' && amt(r) > 0).map(r => ({ category: r.category, multiplier: Number(r.count) || 0, rate: Number(r.rate) || 0, remark: r.remark, exclude: r.exclude })); }
+  function insPayload() { return INS_ON ? INS.filter(x => Number(x.amount) > 0).map(x => ({ name: x.name, network: x.network === true, amount: Number(x.amount) || 0 })) : []; }
+
+  function saveDraft() {
+    google.script.run.withSuccessHandler(r => toast(r.message, !!r.success)).withFailureHandler(e => toast(e.message || 'Error', false))
+      .saveDischargeDraft({ ipNumber: IP, packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), ward: wardPayload(), remarks: ($('acc-dis-remarks') || {}).value || '', user: who() });
+  }
+
+  function finalize() {
+    if (!TAB) return; const m = model();
+    if (!confirm('Settle & discharge ' + IP + '?\nPatient pays ' + inr(m.patient) + (m.insTotal > 0 ? ', insurance ' + inr(m.insTotal) : '') + (m.refund > 0 ? ', refund ' + inr(m.refund) : '') + '.')) return;
+    google.script.run
+      .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) { AccDischarge.print(true, res.summary); load(); } })
+      .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
+      .settleDischarge({ ipNumber: IP, wardCharges: wardPayload(), packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), patientPayMode: ($('acc-dis-mode') || {}).value || 'Cash', reason: ($('acc-dis-remarks') || {}).value || '', user: who() });
+  }
+
+  function print(isFinal, settled) {
+    const m = model(), a = TAB.admission, rows = [];
+    ROWS.forEach(r => { const v = amt(r); if (v > 0) rows.push([r.kind === 'AUTO' ? r.label : (CATS.filter(c => c[0] === r.category)[0] || ['', r.category])[1] + (r.exclude ? ' (extra)' : ''), r.kind === 'AUTO' ? '' : r.count, r.kind === 'AUTO' ? '' : r.rate, v]); });
+    const insLines = (isFinal && settled && settled.insurers ? settled.insurers : insPayload());
+    const body = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(r[0]) + '</td><td style="text-align:center">' + (r[1] || '') + '</td><td style="text-align:right">' + (r[2] ? inr(r[2]) : '') + '</td><td style="text-align:right">' + inr(r[3]) + '</td></tr>').join('');
+    const ins = insLines.map(x => '<tr><td colspan="4" style="text-align:right">Insurance · ' + esc(x.name) + (x.network ? ' (Network)' : ' (Other)') + '</td><td style="text-align:right">' + inr(x.amount) + '</td></tr>').join('');
+    const win = window.open('', '_blank', 'width=820,height=900');
+    win.document.write('<html><head><title>' + (isFinal ? 'Final Bill' : 'Provisional') + ' ' + esc(a.ipNumber) + '</title><style>body{font-family:Arial,sans-serif;color:#111;padding:28px;font-size:13px}h1{font-size:20px;margin:0}h2{font-size:14px;margin:2px 0 14px;font-weight:normal;color:#444}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border-bottom:1px solid #ddd;padding:6px 8px}th{text-align:left;background:#f4f4f4}.tot td{border:none;padding:3px 8px}.tot .g{font-weight:bold;font-size:15px}.stamp{color:#c00;border:2px solid #c00;display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;transform:rotate(-3deg);margin-top:8px}.meta{display:flex;justify-content:space-between;margin-bottom:8px}@media print{button{display:none}}</style></head><body>' +
+      '<h1>CRESCENTIA HEALTHTECH</h1><h2>' + (isFinal ? 'Final Discharge Bill' : 'Provisional Estimate') + '</h2>' +
+      '<div class="meta"><div><b>' + esc(a.patientName) + '</b><br>' + esc(a.ipNumber) + ' · ' + esc(a.bed || '') + '</div><div style="text-align:right">Admitted: ' + esc(a.doaFmt || '') + '<br>Stay: ' + a.lengthOfStay + ' day(s)<br>Date: ' + new Date().toLocaleDateString('en-IN') + '</div></div>' +
+      '<table><thead><tr><th>#</th><th>Particular</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+      '<table class="tot" style="margin-top:8px"><tbody><tr><td colspan="4" style="text-align:right">Gross Total</td><td style="text-align:right">' + inr(m.gross) + '</td></tr>' +
+      (m.pkgAdj > 0 ? '<tr><td colspan="4" style="text-align:right">Less: Package Cap</td><td style="text-align:right">-' + inr(m.pkgAdj) + '</td></tr>' : '') +
+      (m.discAmt > 0 ? '<tr><td colspan="4" style="text-align:right">Less: Discount (' + m.discPct + '%)</td><td style="text-align:right">-' + inr(m.discAmt) + '</td></tr>' : '') +
+      '<tr><td colspan="4" style="text-align:right">Less: Advance</td><td style="text-align:right">-' + inr(m.advApplied) + '</td></tr>' + ins +
+      '<tr class="g"><td colspan="4" style="text-align:right">Patient Payable</td><td style="text-align:right">' + inr(isFinal && settled ? settled.patientPaid : m.patient) + '</td></tr></tbody></table>' +
+      (isFinal ? '' : '<div class="stamp">PROVISIONAL — NOT A FINAL BILL</div>') +
+      '<p style="margin-top:30px"><button onclick="window.print()">Print</button></p></body></html>');
+    win.document.close(); win.focus();
+  }
+
+  return { load, open, calc, addRow, del, setCat, step, setCount, setRate, setExcl, setRemark, toggleAuto, applyPackage, insToggle, insAdd, insDel, insSet, visits, closeVisits, addVisit, saveDraft, finalize, print };
+})();
+
+function openDischargeDesk() { if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-discharge'); AccDischarge.load(); }
+(function () { if (window.__accDischargeWired) return; var o = window.switchAccountsPage; window.switchAccountsPage = function (p) { if (typeof o === 'function') o(p); if (p === 'workspace-accounts-discharge') { try { AccDischarge.load(); } catch (e) {} } }; window.__accDischargeWired = true; })();
+</script>

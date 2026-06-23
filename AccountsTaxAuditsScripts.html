@@ -1,0 +1,93 @@
+<!-- ===================================================================== -->
+<!-- 🏛️ CRESCENTIA — TAX & AUDIT.                                          -->
+<!-- Mount: <div id="workspace-accounts-tax" class="page-section d-none">   -->
+<!--   <div id="acc-tax-root"></div></div>                                  -->
+<!-- Register 'workspace-accounts-tax' in AccX.PAGES; openTaxAudit().       -->
+<!-- Needs TaxAudit.js. -->
+<!-- ===================================================================== -->
+<script>
+const AccTax = (function () {
+  const $ = (id) => document.getElementById(id);
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const val = (id) => { const e = $(id); return e ? e.value : ''; };
+  let TAB = 'TAX';
+
+  function load() {
+    const root = $('acc-tax-root'); if (!root) return;
+    const now = new Date(); const mk = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    root.innerHTML =
+      '<div class="d-flex gap-2 mb-3">' +
+      '<button id="acc-tax-t1" class="btn btn-sm rounded-pill ' + (TAB === 'TAX' ? 'btn-primary' : 'btn-outline-primary') + '" onclick="AccTax.tab(\'TAX\')">GST / Tax</button>' +
+      '<button id="acc-tax-t2" class="btn btn-sm rounded-pill ' + (TAB === 'AUDIT' ? 'btn-primary' : 'btn-outline-primary') + '" onclick="AccTax.tab(\'AUDIT\')">Audit Trail</button></div>' +
+      '<div id="acc-tax-body"></div>';
+    if (TAB === 'TAX') renderTaxShell(mk); else renderAuditShell();
+  }
+  function tab(t) { TAB = t; load(); }
+
+  // ---- TAX ----
+  function renderTaxShell(mk) {
+    $('acc-tax-body').innerHTML =
+      '<div class="d-flex gap-2 align-items-end mb-3" style="max-width:340px;"><div class="flex-grow-1">' +
+      '<label class="form-label small text-body-secondary mb-1">Filing Month</label><input type="month" id="acc-tax-month" class="form-control" value="' + mk + '"></div>' +
+      '<button class="btn btn-primary fw-semibold" onclick="AccTax.runTax()">Compute</button></div>' +
+      '<div id="acc-tax-out"><div class="text-body-secondary small">Pick a month and compute.</div></div>';
+    runTax();
+  }
+  function runTax() {
+    const out = $('acc-tax-out'); out.innerHTML = '<div class="text-body-secondary small py-3"><i class="fas fa-circle-notch fa-spin me-1"></i>Computing…</div>';
+    google.script.run.withSuccessHandler(function (r) {
+      if (!r || !r.success) { out.innerHTML = '<div class="text-danger small py-2">' + esc((r && r.message) || 'Failed.') + '</div>'; return; }
+      const liabCls = r.netLiability >= 0 ? 'text-danger-emphasis' : 'text-success-emphasis';
+      out.innerHTML =
+        '<div class="row g-3 mb-3">' +
+        card('Output GST (pharmacy)', inr(r.outputGST), 'text-warning-emphasis', r.salesCount + ' paid sales · base ' + inr(r.taxableSales)) +
+        card('Input GST (vendors)', inr(r.inputGST), 'text-info-emphasis', r.vendorCount + ' invoices · base ' + inr(r.inputBase)) +
+        card(r.netLiability >= 0 ? 'Net GST Payable' : 'Net GST Credit', inr(Math.abs(r.netLiability)), liabCls, r.direction === 'PAYABLE' ? 'Pay to govt' : 'Carry forward') +
+        '</div>' +
+        '<div class="card border bg-body-tertiary"><div class="card-body small">' +
+        '<div class="fw-semibold mb-1">' + esc(r.month) + ' summary</div>' +
+        'Output GST collected on pharmacy sales (medical services are exempt) minus input GST paid to vendors. ' +
+        'Net ' + (r.netLiability >= 0 ? '<b class="text-danger-emphasis">payable ' + inr(r.netLiability) + '</b>' : '<b class="text-success-emphasis">credit ' + inr(-r.netLiability) + '</b>') + '. ' +
+        'Hand this to your accountant for filing — figures derive live from PAID pharmacy invoices and vendor GST-In.' +
+        '</div></div>';
+    }).withFailureHandler(function (e) { out.innerHTML = '<div class="text-danger small py-2">' + esc(e.message || 'Server error — TaxAudit.js deployed?') + '</div>'; })
+      .getTaxSummary(val('acc-tax-month'));
+  }
+  function card(label, value, cls, sub) {
+    return '<div class="col-md-4"><div class="card border bg-body-tertiary h-100"><div class="card-body py-2"><div class="small text-uppercase text-body-secondary">' + label + '</div><h4 class="fw-bold mb-0 ' + cls + '">' + value + '</h4><div class="small text-body-secondary">' + sub + '</div></div></div></div>';
+  }
+
+  // ---- AUDIT ----
+  function renderAuditShell() {
+    $('acc-tax-body').innerHTML =
+      '<div class="d-flex gap-2 align-items-end mb-3 flex-wrap"><div><label class="form-label small text-body-secondary mb-1">Module</label><select id="acc-aud-mod" class="form-select form-select-sm" onchange="AccTax.runAudit()"><option value="ALL">All</option></select></div>' +
+      '<div class="flex-grow-1" style="max-width:280px"><label class="form-label small text-body-secondary mb-1">Search</label><input id="acc-aud-q" class="form-control form-control-sm" placeholder="user / ref / reason" oninput="AccTax.debounce()"></div></div>' +
+      '<div id="acc-aud-out"><div class="text-body-secondary small py-2"><i class="fas fa-circle-notch fa-spin me-1"></i>Loading…</div></div>';
+    google.script.run.withSuccessHandler(function (r) {
+      const sel = $('acc-aud-mod'); if (sel && r && r.modules) r.modules.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; sel.appendChild(o); });
+    }).withFailureHandler(function () {}).getAuditModules();
+    runAudit();
+  }
+  let _t = null;
+  function debounce() { clearTimeout(_t); _t = setTimeout(runAudit, 350); }
+  function runAudit() {
+    const out = $('acc-aud-out'); out.innerHTML = '<div class="text-body-secondary small py-2"><i class="fas fa-circle-notch fa-spin me-1"></i>Loading…</div>';
+    google.script.run.withSuccessHandler(function (r) {
+      if (!r || !r.success) { out.innerHTML = '<div class="text-danger small py-2">' + esc((r && r.message) || 'Failed.') + '</div>'; return; }
+      const e = r.events || [];
+      if (!e.length) { out.innerHTML = '<div class="text-body-secondary small py-3 text-center">No events.</div>'; return; }
+      out.innerHTML = '<div class="card border bg-body-tertiary"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr>' +
+        ['When', 'User', 'Action', 'Module', 'Ref', 'Detail'].map(h => '<th class="small text-uppercase text-body-secondary px-2">' + h + '</th>').join('') + '</tr></thead><tbody>' +
+        e.map(x => '<tr><td class="small px-2">' + esc(x.ts) + '</td><td class="small">' + esc(x.user) + '</td><td class="small"><span class="badge text-bg-secondary">' + esc(x.action) + '</span></td><td class="small">' + esc(x.module) + '</td><td class="small text-body-secondary">' + esc(x.ref) + '</td><td class="small text-body-secondary">' + esc([x.oldVal, x.newVal, x.reason].filter(Boolean).join(' · ')) + '</td></tr>').join('') +
+        '</tbody></table></div></div></div>';
+    }).withFailureHandler(function (e) { out.innerHTML = '<div class="text-danger small py-2">' + esc(e.message || 'Server error.') + '</div>'; })
+      .getAuditLog({ limit: 80, module: val('acc-aud-mod'), query: val('acc-aud-q') });
+  }
+
+  return { load, tab, runTax, renderTaxShell, runAudit, debounce };
+})();
+
+function openTaxAudit() { if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-tax'); AccTax.load(); }
+(function () { if (window.__accTaxWired) return; var o = window.switchAccountsPage; window.switchAccountsPage = function (p) { if (typeof o === 'function') o(p); if (p === 'workspace-accounts-tax') { try { AccTax.load(); } catch (e) {} } }; window.__accTaxWired = true; })();
+</script>

@@ -1,0 +1,202 @@
+<div id="tab-admin-reg" class="page-section d-none">
+  <div class="d-flex align-items-center gap-2 mb-3 mt-4">
+    <button class="btn btn-sm btn-outline-secondary label-bright" onclick="switchTab('workspace-patients')"><i class="fa-solid fa-arrow-left"></i></button>
+    <h3 class="fw-bold m-0 text-white">Register Patient</h3>
+  </div>
+  
+  <div class="card p-4" style="max-width: 1000px;">
+    
+    <div class="row g-2 mb-3">
+      <div class="col-md-3">
+        <select id="reg-salutation" class="form-select text-white-force">
+          <option value="" disabled selected>Salutation</option>
+          <option value="Mr.">Mr.</option>
+          <option value="Mrs.">Mrs.</option>
+          <option value="Ms.">Ms.</option>
+          <option value="Master">Master</option>
+          <option value="Baby">Baby</option>
+        </select>
+      </div>
+      <div class="col-md-9">
+        <input type="text" id="reg-name" class="form-control text-white-force" placeholder="Full Name">
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-4">
+        <label class="small mb-1 text-muted">Date of Birth</label>
+        <input type="date" id="reg-dob" class="form-control text-white-force" onchange="calculateAge()">
+      </div>
+      <div class="col-md-4 align-self-end">
+        <input type="number" id="reg-age" class="form-control text-white-force" placeholder="Age (Auto-calculated)" readonly>
+      </div>
+      <div class="col-md-4 align-self-end">
+        <select id="reg-gender" class="form-select text-white-force">
+          <option value="" disabled selected>Gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-4">
+        <select id="reg-marital" class="form-select text-white-force">
+          <option value="" disabled selected>Marital Status</option>
+          <option value="Single">Single</option>
+          <option value="Married">Married</option>
+          <option value="Divorced">Divorced</option>
+          <option value="Widowed">Widowed</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <select id="reg-blood" class="form-select text-white-force">
+          <option value="" disabled selected>Blood Group</option>
+          <option value="A+">A+</option>
+          <option value="A-">A-</option>
+          <option value="B+">B+</option>
+          <option value="B-">B-</option>
+          <option value="O+">O+</option>
+          <option value="O-">O-</option>
+          <option value="AB+">AB+</option>
+          <option value="AB-">AB-</option>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <input type="text" id="reg-occupation" class="form-control text-white-force" placeholder="Occupation">
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-6">
+        <input type="text" id="reg-education" class="form-control text-white-force" placeholder="Educational Qualification">
+      </div>
+      <div class="col-md-6">
+        <input type="email" id="reg-email" class="form-control text-white-force" placeholder="Email Address">
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-6">
+        <input type="tel" id="reg-mobile" class="form-control text-white-force" placeholder="Mobile Number (Primary)" oninput="syncWhatsApp()">
+      </div>
+      <div class="col-md-6">
+        <input type="tel" id="reg-whatsapp" class="form-control text-white-force" placeholder="WhatsApp Number">
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-4">
+        <select id="reg-relation-type" class="form-select text-white-force">
+          <option value="" disabled selected>Relation</option>
+          <option value="Father">Father Name</option>
+          <option value="Mother">Mother Name</option>
+          <option value="Spouse">Spouse Name</option>
+          <option value="Guardian">Guardian Name (For Children)</option>
+        </select>
+      </div>
+      <div class="col-md-8">
+        <input type="text" id="reg-relation-name" class="form-control text-white-force" placeholder="Name of Relative/Guardian">
+      </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+      <div class="col-md-6">
+        <input type="text" id="reg-emergency-name" class="form-control text-white-force" placeholder="Emergency Contact Person">
+      </div>
+      <div class="col-md-6">
+        <input type="tel" id="reg-emergency-number" class="form-control text-white-force" placeholder="Emergency Contact Number">
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <textarea id="reg-address" class="form-control text-white-force" placeholder="Residential Address" rows="2"></textarea>
+    </div>
+
+    <div class="row g-2 mb-4">
+      <div class="col-md-6">
+        <input type="text" id="reg-referred" class="form-control text-white-force" placeholder="Referred By (If any)">
+      </div>
+      <div class="col-md-6">
+        <input type="text" id="reg-comorb" class="form-control text-white-force" placeholder="Conditions (e.g., DM, HTN)">
+      </div>
+    </div>
+
+    <button id="btn-admin-reg" class="btn text-white w-100 fw-bold py-2" style="background-color: var(--accent-purple);" onclick="adminRegisterPatient()">Create Patient ID</button>
+  </div>
+</div>
+
+<script>
+  // Auto-calculate Age based on Date of Birth
+  function calculateAge() {
+    const dobInput = document.getElementById('reg-dob').value;
+    if (dobInput) {
+      const dob = new Date(dobInput);
+      const today = new Date();
+      let age = today.getFullYear() - dob.getFullYear();
+      const m = today.getMonth() - dob.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+        age--;
+      }
+      document.getElementById('reg-age').value = age > 0 ? age : 0;
+    }
+  }
+
+  // Optional: Copies Mobile to WhatsApp automatically to save typing time
+  function syncWhatsApp() {
+    const mob = document.getElementById('reg-mobile').value;
+    const wa = document.getElementById('reg-whatsapp');
+    if(wa.value === "" || wa.value.length < mob.length) {
+       wa.value = mob;
+    }
+  }
+
+  function adminRegisterPatient() {
+    const btn = document.getElementById('btn-admin-reg');
+    
+    // Collecting all fields into the payload
+    const data = {
+      salutation: document.getElementById('reg-salutation').value,
+      name: document.getElementById('reg-name').value,
+      dob: document.getElementById('reg-dob').value,
+      age: document.getElementById('reg-age').value,
+      gender: document.getElementById('reg-gender').value,
+      maritalStatus: document.getElementById('reg-marital').value,
+      bloodGroup: document.getElementById('reg-blood').value,
+      occupation: document.getElementById('reg-occupation').value,
+      education: document.getElementById('reg-education').value,
+      mobile: document.getElementById('reg-mobile').value,
+      whatsapp: document.getElementById('reg-whatsapp').value,
+      email: document.getElementById('reg-email').value,
+      address: document.getElementById('reg-address').value,
+      relationType: document.getElementById('reg-relation-type').value,
+      relationName: document.getElementById('reg-relation-name').value,
+      emergencyName: document.getElementById('reg-emergency-name').value,
+      emergencyNumber: document.getElementById('reg-emergency-number').value,
+      referredBy: document.getElementById('reg-referred').value,
+      comorb: document.getElementById('reg-comorb').value
+    };
+    
+    if (!data.name || !data.dob || !data.mobile) { 
+      alert("Name, Date of Birth, and Mobile Number are required."); 
+      return; 
+    }
+    
+    btn.innerText = "Generating ID...";
+    btn.disabled = true;
+
+    google.script.run.withSuccessHandler(res => {
+      btn.innerText = "Create Patient ID"; 
+      btn.disabled = false;
+      alert(res.message);
+      
+      if (res.success) { 
+        // Clears all inputs and select fields natively
+        document.querySelectorAll('#tab-admin-reg input, #tab-admin-reg textarea, #tab-admin-reg select').forEach(el => {
+          if(el.type !== 'button') el.value = '';
+        });
+      }
+    }).registerPatient(data); // Calls backend Google Apps Script function
+  }
+</script>

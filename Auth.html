@@ -1,0 +1,322 @@
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+<div id="auth-screen">
+  <div class="auth-card shadow-lg text-center mx-auto mt-5" style="max-width: 400px; padding: 40px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 16px;">
+    <img id="login-logo" src="" alt="CRESCENTIA HEALTHTECH" class="clinic-logo">
+    <h2 class="fw-bold mb-1">CresRx</h2>
+    <p class="mb-4 small label-bright" style="letter-spacing: 1px;">Care • Compassion • Cure</p>
+
+    <button id="btn-google-login" class="btn w-100 py-2 mb-3 fw-bold text-dark border shadow-sm" style="background-color: #ffffff;" onclick="handleGoogleLogin()">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" style="width: 18px; margin-right: 8px; margin-bottom: 2px;">
+      Sign in with Google
+    </button>
+
+    <div class="text-muted mb-3 small fw-bold">OR MANUAL LOGIN</div>
+
+    <input type="text" id="in-username" class="form-control mb-3 py-2 text-white-force" placeholder="Patient ID / Admin">
+    <input type="password" id="in-password" class="form-control mb-4 py-2 text-white-force" placeholder="Password">
+    
+    <button id="btn-login" class="btn w-100 py-2 mb-3 text-white fw-bold" style="background-color: var(--accent-purple);" onclick="handleLogin()">Secure Login</button> 
+  </div>
+</div>
+
+<div id="mfa-screen" class="d-none text-center mx-auto mt-5" style="max-width: 350px; padding: 40px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 16px;">
+  <i class="fa-solid fa-shield-halved text-warning mb-3" style="font-size: 2rem;"></i>
+  <h4 class="fw-bold text-white mb-2">Two-Factor Auth</h4>
+  <p class="small text-muted mb-4">Enter the 6-digit code from Google Authenticator.</p>
+  
+  <input type="text" id="in-mfa-code" class="form-control mb-3 text-center fs-4" placeholder="000000" maxlength="6" style="letter-spacing: 4px;">
+  
+  <button id="btn-verify-mfa" class="btn btn-warning w-100 fw-bold" onclick="submitMFA()">Verify & Login</button>
+  <button class="btn btn-link text-muted w-100 mt-2 small" onclick="cancelMFA()">Cancel</button>
+</div>
+
+<script>
+  // ==========================================
+  // 0. SESSION TIMEOUT CONFIGURATION (8 HOURS)
+  // ==========================================
+  const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+  let sessionInterval;
+
+  // Run immediately when the app loads/refreshes
+  window.addEventListener('DOMContentLoaded', (event) => {
+    checkSession();
+  });
+
+  function checkSession() {
+    const isLoggedIn = localStorage.getItem('isLoggedIn');
+    const loginTime = localStorage.getItem('loginTimestamp');
+    const savedUsername = localStorage.getItem('loggedInUser');
+    const savedRole = localStorage.getItem('loggedInRole');
+
+    if (isLoggedIn === 'true' && loginTime && savedUsername && savedRole) {
+      const timeElapsed = Date.now() - parseInt(loginTime, 10);
+      
+      if (timeElapsed > SESSION_TIMEOUT_MS) {
+        // Time is up! Force logout
+        logoutUser("Your session has expired after 8 hours. Please log in again.");
+      } else {
+        // Session is still valid. Re-route and bypass login screens
+        const dummyRes = { role: savedRole, success: true };
+        executeUIRouting(dummyRes, savedUsername, true); 
+      }
+    }
+  }
+
+  function startBackgroundTimer() {
+    clearInterval(sessionInterval);
+    // Check the clock every 60 seconds
+    sessionInterval = setInterval(() => {
+      const loginTime = localStorage.getItem('loginTimestamp');
+      if (loginTime) {
+        const timeElapsed = Date.now() - parseInt(loginTime, 10);
+        if (timeElapsed > SESSION_TIMEOUT_MS) {
+          logoutUser("You have been automatically logged out after 8 hours of inactivity.");
+        }
+      }
+    }, 60000); 
+  }
+
+  // Bind this function to your actual Logout button in the dashboard!
+  // Example: <button onclick="logoutUser()">Logout</button>
+  function logoutUser(message) {
+    clearInterval(sessionInterval);
+    
+    // Wipe local storage
+    localStorage.removeItem('isLoggedIn');
+    localStorage.removeItem('loggedInUser');
+    localStorage.removeItem('loggedInRole');
+    localStorage.removeItem('loginTimestamp');
+
+    // Alert user if a timeout message was passed
+    if (message) alert(message);
+
+    // Reset UI back to login screen
+    const appScreen = document.getElementById('app-screen');
+    if(appScreen) appScreen.classList.add('d-none');
+    
+    document.getElementById('mfa-screen').classList.add('d-none');
+    document.getElementById('auth-screen').classList.remove('d-none');
+
+    // Clear Firebase session
+    if (auth) auth.signOut();
+  }
+
+  // ==========================================
+  // 1. FIREBASE INITIALIZATION
+  // ==========================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyDJSMsLhlbsGwC1cMR9mNM4Vy2kQ1MmGy4",
+    authDomain: "crescentiaemrbuild.firebaseapp.com",
+    projectId: "crescentiaemrbuild",
+    storageBucket: "crescentiaemrbuild.firebasestorage.app",
+    messagingSenderId: "882250071558",
+    appId: "1:882250071558:web:e06dcf2d3880a492364d87",
+    measurementId: "G-VCFZBNT7Y6"
+  };
+  
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  const auth = firebase.auth();
+  const provider = new firebase.auth.GoogleAuthProvider();
+
+  // ==========================================
+  // 2. GLOBAL STATE FOR MFA
+  // ==========================================
+  let pendingAuthRes = null;
+  let pendingAuthName = null;
+
+  // ==========================================
+  // 3. GOOGLE SSO LOGIN DISPATCHER
+  // ==========================================
+  function handleGoogleLogin() {
+    const btn = document.getElementById('btn-google-login');
+    const originalHtml = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
+    btn.disabled = true;
+    
+    auth.signInWithPopup(provider)
+      .then((result) => {
+        const userEmail = result.user.email;
+        
+        google.script.run
+          .withSuccessHandler(res => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            
+            if (res.success) {
+              triggerMFAOrRoute(res, res.username);
+            } else { 
+              alert(res.message); 
+            }
+          })
+          .withFailureHandler(err => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+            alert("Network Verification Error: " + err.message);
+          })
+          .verifyGoogleLogin(userEmail); 
+      })
+      .catch((error) => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+      });
+  }
+
+  // ==========================================
+  // 4. MANUAL LOGIN DISPATCHER
+  // ==========================================
+  function handleLogin() {
+    const btn = document.getElementById('btn-login');
+    const usernameInput = document.getElementById('in-username').value.trim();
+    const passwordInput = document.getElementById('in-password').value.trim();
+
+    if (!usernameInput || !passwordInput) {
+      return alert("Please enter both ID and Password.");
+    }
+
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...';
+    btn.disabled = true;
+
+    const credentials = {
+      username: usernameInput,
+      password: passwordInput
+    };
+
+    google.script.run
+      .withSuccessHandler(res => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+
+        if (res.success) {
+          triggerMFAOrRoute(res, usernameInput);
+        } else {
+          alert(res.message);
+        }
+      })
+      .withFailureHandler(err => {
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        alert("Network Error: " + err.message);
+      })
+      .verifyLogin(credentials);
+  }
+
+  // ==========================================
+  // 5. THE INTERCEPTOR (MFA CHECKER)
+  // ==========================================
+  function triggerMFAOrRoute(res, username) {
+    if (res.role === 'patient') {
+      executeUIRouting(res, username);
+    } else {
+      pendingAuthRes = res;
+      pendingAuthName = username;
+      document.getElementById('auth-screen').classList.add('d-none');
+      document.getElementById('mfa-screen').classList.remove('d-none');
+    }
+  }
+
+  function submitMFA() {
+    const btn = document.getElementById('btn-verify-mfa');
+    const code = document.getElementById('in-mfa-code').value.trim();
+    
+    if(!code || code.length !== 6) return alert("Enter the 6 digit code.");
+
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...';
+    btn.disabled = true;
+    
+    google.script.run
+      .withSuccessHandler(mfaRes => {
+         btn.innerHTML = 'Verify & Login';
+         btn.disabled = false;
+         
+         if(mfaRes.success) {
+           document.getElementById('mfa-screen').classList.add('d-none');
+           executeUIRouting(pendingAuthRes, pendingAuthName);
+         } else {
+           alert("Invalid or Expired MFA Code. Try again.");
+         }
+      })
+      .withFailureHandler(err => {
+         btn.innerHTML = 'Verify & Login';
+         btn.disabled = false;
+         alert("Network error: " + err.message);
+      })
+      .verifyMFA(pendingAuthName, code);
+  }
+
+  function cancelMFA() {
+    pendingAuthRes = null;
+    pendingAuthName = null;
+    document.getElementById('in-mfa-code').value = "";
+    document.getElementById('mfa-screen').classList.add('d-none');
+    document.getElementById('auth-screen').classList.remove('d-none');
+    auth.signOut(); 
+  }
+
+  // ==========================================
+  // 6. CENTRAL UI ROUTING ENGINE
+  // ==========================================
+  function executeUIRouting(res, loggedInName, isRestore = false) {
+    window.loggedInUser = loggedInName; 
+    window.loggedInRole = res.role.toLowerCase();
+
+    // --- NEW: Save Session State & Start Timer ---
+    if (!isRestore) {
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('loggedInUser', loggedInName);
+      localStorage.setItem('loggedInRole', window.loggedInRole);
+      localStorage.setItem('loginTimestamp', Date.now().toString());
+    }
+    startBackgroundTimer();
+    // ---------------------------------------------
+    
+    // Hide Auth/MFA screens, Show Main App
+    document.getElementById('auth-screen').classList.add('d-none');
+    document.getElementById('mfa-screen').classList.add('d-none');
+    
+    const appScreen = document.getElementById('app-screen');
+    if(appScreen) appScreen.classList.remove('d-none');
+    
+    // UI Adjustments
+    const navDoc = document.getElementById('nav-doctor');
+    if (navDoc && res.role.toLowerCase() !== 'patient') navDoc.classList.remove('d-none'); 
+    if (typeof setDateRestrictions === 'function') setDateRestrictions();
+    
+    // Profile Badge Updates
+    const dispName = document.getElementById('display-user-name');
+    const profInit = document.getElementById('profile-initial');
+    if (dispName) dispName.innerText = (res.role.toLowerCase() === 'patient' ? "Patient Portal" : "Staff: " + res.role.toUpperCase());
+    if (profInit) profInit.innerText = res.role.charAt(0).toUpperCase();
+
+    // Trigger Layer 2 Security (Hides tabs based on role)
+    if (typeof applyRBAC === 'function') applyRBAC(res.role);
+
+    // Dashboard Routing Switch
+    switch(res.role.toLowerCase()) {
+      case 'admin':
+      case 'receptionist':
+      case 'reception':
+          switchTab('tab-admin-dash', document.getElementById('nav-tab-dash')); break;
+      case 'doctor':
+          switchTab('tab-admin-emr', document.getElementById('nav-tab-emr')); break;
+      case 'nurse':
+          switchTab('tab-admin-dash', document.getElementById('nav-tab-dash')); break;
+      case 'pharmacy':
+          switchTab('tab-admin-pharmacy', document.getElementById('nav-tab-pharmacy')); break;
+      case 'lab':
+          switchTab('tab-admin-lab', document.getElementById('nav-tab-lab')); break;
+      case 'accounts':
+          switchTab('tab-admin-billing', document.getElementById('nav-tab-accounts')); break;
+      case 'patient':
+          if(document.getElementById('nav-pat-home')) switchTab('tab-pat-home', document.getElementById('nav-pat-home')); 
+          break;
+      default:
+          switchTab('tab-admin-dash', document.getElementById('nav-tab-dash'));
+    }
+  }
+</script>

@@ -1,0 +1,128 @@
+<div id="tab-admin-analytics" class="page-section">
+
+  <div class="d-flex justify-content-between align-items-center mb-3 mt-4 me-md-5">
+    <div>
+      <h3 class="fw-bold m-0 text-white-force">Footfall Analytics</h3>
+      <small class="label-bright">OP &amp; IP attendance trends across years</small>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary shadow-sm" onclick="gotoNav('nav-tab-dash', event)">
+      <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+    </button>
+  </div>
+
+  <div id="an-empty" class="card p-5 text-center label-bright d-none">
+    <i class="fa-solid fa-chart-simple mb-2" style="font-size:1.8rem;"></i>
+    <div>No footfall data recorded yet.</div>
+  </div>
+
+  <div id="an-body" class="d-none">
+    <div class="card p-4 mb-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div class="btn-group btn-group-sm" role="group">
+          <button id="an-btn-op" class="btn btn-sm btn-outline-secondary active" onclick="setAnalyticsStream('op')">Outpatient</button>
+          <button id="an-btn-ip" class="btn btn-sm btn-outline-secondary" onclick="setAnalyticsStream('ip')">Inpatient</button>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="label-bright small">Highlight year</span>
+          <select id="an-year" class="form-select form-select-sm" style="width:auto; background:var(--bg-input); color:var(--text-main); border-color:var(--border-color);" onchange="renderAnalyticsPage()"></select>
+        </div>
+      </div>
+      <div style="position:relative; height:420px;">
+        <canvas id="an-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="card p-4 mb-5">
+      <h6 class="fw-bold text-white-force mb-3">Monthly Breakdown</h6>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle" style="color:var(--text-main);">
+          <thead><tr id="an-thead"></tr></thead>
+          <tbody id="an-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let __anStream = 'op';
+  let __anChart  = null;
+
+  function setAnalyticsStream(s) {
+    __anStream = s;
+    document.getElementById('an-btn-op').classList.toggle('active', s === 'op');
+    document.getElementById('an-btn-ip').classList.toggle('active', s === 'ip');
+    renderAnalyticsPage();
+  }
+
+  function renderAnalyticsPage() {
+    const f = (typeof __dashData !== 'undefined' && __dashData) ? __dashData.footfall : null;
+    const empty = document.getElementById('an-empty');
+    const body  = document.getElementById('an-body');
+
+    if (!f || !f.hasData || !f.years.length) {
+      empty.classList.remove('d-none');
+      body.classList.add('d-none');
+      return;
+    }
+    empty.classList.add('d-none');
+    body.classList.remove('d-none');
+
+    // Year selector (populate once)
+    const sel = document.getElementById('an-year');
+    if (sel.options.length !== f.years.length) {
+      sel.innerHTML = f.years.slice().reverse().map(function (y) {
+        return '<option value="' + y + '">' + y + '</option>';
+      }).join('');
+    }
+    const highlight = parseInt(sel.value || f.years[f.years.length - 1], 10);
+    const source = (__anStream === 'ip') ? f.ip : f.op;
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    const accent = getComputedStyle(document.body).getPropertyValue('--accent-purple').trim();
+    const muted  = getComputedStyle(document.body).getPropertyValue('--text-muted').trim();
+    const grid   = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
+    const palette = ['#94a3b8', '#64748b', '#475569'];
+
+    const datasets = f.years.map(function (yr, idx) {
+      const isHi = (yr === highlight);
+      return {
+        label: String(yr),
+        data: source[yr] || new Array(12).fill(0),
+        backgroundColor: isHi ? accent : palette[idx % palette.length],
+        borderRadius: 6,
+        maxBarThickness: 30,
+        order: isHi ? 0 : 1
+      };
+    });
+
+    if (__anChart) __anChart.destroy();
+    __anChart = new Chart(document.getElementById('an-chart').getContext('2d'), {
+      type: 'bar',
+      data: { labels: months, datasets: datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: muted, usePointStyle: true, boxWidth: 8 } } },
+        scales: {
+          x: { grid: { color: 'transparent' }, ticks: { color: muted } },
+          y: { beginAtZero: true, grid: { color: grid }, ticks: { color: muted, precision: 0 } }
+        }
+      }
+    });
+
+    // Breakdown table
+    document.getElementById('an-thead').innerHTML =
+      '<th class="label-bright">Year</th>' + months.map(function (m) {
+        return '<th class="label-bright text-center">' + m + '</th>';
+      }).join('') + '<th class="label-bright text-center">Total</th>';
+
+    document.getElementById('an-tbody').innerHTML = f.years.slice().reverse().map(function (yr) {
+      const row = source[yr] || new Array(12).fill(0);
+      const total = row.reduce(function (a, b) { return a + b; }, 0);
+      const hi = (yr === highlight) ? ' style="color:var(--accent-purple);font-weight:700;"' : '';
+      return '<tr' + hi + '><td class="fw-bold">' + yr + '</td>' +
+        row.map(function (v) { return '<td class="text-center">' + (v || '–') + '</td>'; }).join('') +
+        '<td class="text-center fw-bold">' + total + '</td></tr>';
+    }).join('');
+  }
+</script>

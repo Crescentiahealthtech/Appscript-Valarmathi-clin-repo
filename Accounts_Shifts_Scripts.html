@@ -1,0 +1,183 @@
+<!-- ===================================================================== -->
+<!-- 💰 CRESCENTIA — CASH DRAWER / SHIFTS (enhanced redesign).              -->
+<!-- Self-renders both the panel and the FULL history table, so it does    -->
+<!-- not depend on any static <table> markup. Counter-scoped, theme-safe.   -->
+<!--                                                                        -->
+<!-- Required static markup inside the drawer page-section:                 -->
+<!--   <div id="workspace-accounts-drawer" class="page-section d-none">     -->
+<!--     <div class="premium-card p-4 mb-4"><div id="acc-drawer-panel">     -->
+<!--       </div></div>                                                     -->
+<!--     <div class="premium-card p-4"><h5 class="fw-bold mb-3">            -->
+<!--       <i class="fas fa-clock-rotate-left me-2 text-info"></i>          -->
+<!--       Shift History</h5>                                               -->
+<!--       <div id="acc-drawer-history-wrap" class="table-responsive">      -->
+<!--       </div></div></div>                                               -->
+<!-- ===================================================================== -->
+<script>
+const AccShift = (function () {
+  const $ = (id) => document.getElementById(id);
+  const num = (id) => { const el = $(id); return Number(el && el.value !== '' ? el.value : 0) || 0; };
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
+  const COUNTERS = ['Reception', 'Pharmacy', 'Lab'];
+  let SELECTED = 'Reception', OPEN_SHIFT = null, AUTO = { collected: 0, petty: 0 };
+
+  function toast(msg, ok) {
+    const t = document.createElement('div');
+    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white';
+    t.style.zIndex = 3000; t.style.background = ok ? '#198754' : '#dc3545'; t.textContent = msg;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+  }
+  function pick(c) { SELECTED = c; load(); }
+
+  function load() {
+    const p = $('acc-drawer-panel');
+    if (p) p.innerHTML = tabs() + '<div class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading ' + esc(SELECTED) + '…</div>';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { toast((res && res.message) || 'Load failed.', false); if (p) p.innerHTML = tabs(); return; }
+        OPEN_SHIFT = res.open;
+        AUTO.collected = res.suggestion ? Number(res.suggestion.cashIn) || 0 : 0;
+        AUTO.petty = res.suggestion ? Number(res.suggestion.cashOut) || 0 : 0;
+        renderPanel(); renderHistory(res.history || []);
+      })
+      .withFailureHandler(function (err) { toast(err.message || 'Server error — is Accounts_Shifts.js deployed?', false); if (p) p.innerHTML = tabs(); })
+      .getShiftState(SELECTED);
+  }
+
+  // theme-safe counter selector
+  function tabs() {
+    return '<div class="d-flex gap-2 mb-4 flex-wrap">' + COUNTERS.map(c =>
+      '<button class="btn btn-sm rounded-pill px-3 fw-semibold ' + (c === SELECTED ? 'btn-primary' : 'btn-outline-primary') +
+      '" onclick="AccShift.pick(\'' + c + '\')">' + esc(c) + '</button>').join('') + '</div>';
+  }
+
+  function renderPanel() {
+    const p = $('acc-drawer-panel'); if (!p) return;
+    if (!OPEN_SHIFT) {
+      p.innerHTML = tabs() +
+        '<h5 class="fw-bold mb-3">Open Shift: ' + esc(SELECTED) + '</h5>' +
+        '<div class="row g-3 align-items-end" style="max-width:520px;">' +
+          '<div class="col-8"><label class="form-label text-muted small">Opening Float (₹)</label>' +
+          '<input type="number" min="0" step="0.01" id="acc-shift-open-amt" class="form-control" placeholder="Count physical cash…"></div>' +
+          '<div class="col-4"><button class="btn btn-success w-100 fw-bold" onclick="AccShift.open()"><i class="fas fa-unlock me-1"></i>Open Drawer</button></div>' +
+        '</div>' +
+        '<p class="small text-muted mt-3 mb-0">Each counter runs independently — opening ' + esc(SELECTED) + ' won\'t affect other drawers.</p>';
+      return;
+    }
+    const s = OPEN_SHIFT, openAmt = Number(s.opening) || 0;
+    const fld = (label, autoVal, id, val, showAuto) =>
+      '<div class="col-md-4"><label class="form-label text-muted small">' + label + '</label>' +
+      '<div class="input-group input-group-sm mb-1">' +
+        '<span class="input-group-text" style="' + (showAuto ? '' : 'visibility:hidden;') + '">Auto</span>' +
+        '<input type="text" class="form-control text-info fw-semibold" disabled value="' + (showAuto ? inr(autoVal) : '') + '"></div>' +
+      '<div class="input-group"><span class="input-group-text">Final</span>' +
+        '<input type="number" step="0.01" id="' + id + '" class="form-control fw-bold" value="' + val + '" oninput="AccShift.recalc()"></div></div>';
+
+    p.innerHTML = tabs() +
+      '<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">' +
+        '<div><h5 class="fw-bold mb-1">Active Shift: ' + esc(s.counter) + ' <span class="badge bg-success bg-opacity-25 text-success align-middle">OPEN</span></h5>' +
+        '<span class="text-success small fw-semibold"><i class="fas fa-circle-dot me-1"></i>Opened ' + esc(s.date) + ' ' + esc(s.openTime || '') + ' · ' + esc(s.incharge || s.user) + ' · ' + esc(s.shiftId) + '</span></div>' +
+        '<div class="text-end"><div class="text-muted small">Opening Float</div><h4 class="mb-0">' + inr(openAmt) + '</h4></div></div>' +
+      '<div class="row g-4 mb-4">' +
+        fld('Cash Collected', AUTO.collected, 'acc-shift-col', AUTO.collected, true) +
+        fld('Petty Cash Paid', AUTO.petty, 'acc-shift-pet', AUTO.petty, true) +
+        fld('Refunds Issued', 0, 'acc-shift-ref', 0, false) +
+      '</div>' +
+      '<div class="p-3 rounded-3 mb-4" style="background:rgba(13,202,240,0.10);border-left:3px solid #0dcaf0;">' +
+        '<div class="d-flex justify-content-between align-items-center">' +
+        '<span class="text-info fw-semibold text-uppercase small">Expected Physical Cash</span>' +
+        '<h3 class="text-info fw-bold mb-0" id="acc-shift-exp">' + inr(openAmt + AUTO.collected - AUTO.petty) + '</h3></div></div>' +
+      '<div class="row g-3 align-items-end mb-2">' +
+        '<div class="col-md-6"><label class="form-label text-muted small fw-bold">Actual Counted Cash (₹)</label>' +
+        '<input type="number" step="0.01" id="acc-shift-act" class="form-control form-control-lg" placeholder="Enter physical count" oninput="AccShift.recalc()"></div>' +
+        '<div class="col-md-6 text-end"><div id="acc-shift-var-box" class="d-none mb-2"><span class="small text-muted me-2">Variance:</span><span id="acc-shift-var-text" class="fw-bold"></span></div>' +
+        '<button class="btn btn-warning btn-lg fw-bold w-100" onclick="AccShift.close()"><i class="fas fa-lock me-1"></i>Reconcile &amp; Close</button></div></div>' +
+      '<div id="acc-drawer-mismatch-box" class="d-none p-3 rounded-3 mt-3 border border-danger" style="background:rgba(220,53,69,0.08);">' +
+        '<h6 class="text-danger fw-bold mb-2"><i class="fas fa-triangle-exclamation me-2"></i>Mismatch — explain to tally</h6>' +
+        '<input type="text" id="acc-shift-reason" class="form-control form-control-sm mb-2" placeholder="Required: reason (unlogged refund / miscount / drawer loss…)">' +
+        '<div class="form-check"><input class="form-check-input" type="checkbox" id="acc-shift-adj" checked>' +
+        '<label class="form-check-label small" for="acc-shift-adj">Post adjustment (Cash Short/Over) so ledger running cash matches the count</label></div></div>';
+    recalc();
+  }
+
+  function recalc() {
+    if (!OPEN_SHIFT) return;
+    const o = Number(OPEN_SHIFT.opening) || 0;
+    const exp = o + num('acc-shift-col') - num('acc-shift-pet') - num('acc-shift-ref');
+    if ($('acc-shift-exp')) $('acc-shift-exp').innerText = inr(exp);
+    const actEl = $('acc-shift-act'), vb = $('acc-shift-var-box'), vt = $('acc-shift-var-text'), mb = $('acc-drawer-mismatch-box');
+    if (!actEl || actEl.value === '') { if (vb) vb.classList.add('d-none'); if (mb) mb.classList.add('d-none'); return; }
+    const v = num('acc-shift-act') - exp;
+    if (vb) vb.classList.remove('d-none');
+    if (vt) { vt.innerText = (v > 0 ? '+' : '') + inr(v); vt.className = 'fw-bold ' + (Math.abs(v) > 500 ? 'text-danger' : (v === 0 ? 'text-success' : 'text-warning')); }
+    if (mb) mb.classList.toggle('d-none', Math.abs(v) < 0.01);
+  }
+
+  function open() {
+    const amt = num('acc-shift-open-amt'); if (amt < 0) { toast('Invalid float.', false); return; }
+    google.script.run
+      .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) load(); })
+      .withFailureHandler(function (err) { toast(err.message, false); })
+      .openShift({ counterName: SELECTED, openingCash: amt, user: who() });
+  }
+
+  function close() {
+    if (!OPEN_SHIFT) return;
+    const actEl = $('acc-shift-act'); if (!actEl || actEl.value === '') { toast('Enter actual counted cash.', false); return; }
+    const exp = (Number(OPEN_SHIFT.opening) || 0) + num('acc-shift-col') - num('acc-shift-pet') - num('acc-shift-ref');
+    const v = num('acc-shift-act') - exp;
+    const reason = $('acc-shift-reason') ? $('acc-shift-reason').value : '';
+    if (Math.abs(v) >= 0.01 && !reason.trim()) { toast('A reason is required for the variance.', false); return; }
+    if (!confirm('Close ' + SELECTED + ' shift ' + OPEN_SHIFT.shiftId + '? This finalizes the reconciliation.')) return;
+    google.script.run
+      .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) load(); })
+      .withFailureHandler(function (err) { toast(err.message, false); })
+      .closeShift({
+        shiftId: OPEN_SHIFT.shiftId, cashCollected: num('acc-shift-col'), pettyExpenses: num('acc-shift-pet'),
+        refunds: num('acc-shift-ref'), actualCash: num('acc-shift-act'),
+        postAdjustment: $('acc-shift-adj') ? $('acc-shift-adj').checked : false, reason: reason, user: who()
+      });
+  }
+
+  // builds the WHOLE table so it never depends on static <table> markup
+  function renderHistory(rows) {
+    const wrap = $('acc-drawer-history-wrap'); if (!wrap) return;
+    if (!rows.length) { wrap.innerHTML = '<p class="text-muted text-center py-4 mb-0">No shifts recorded yet.</p>'; return; }
+    const cols = ['Date', 'Open', 'Close', 'Incharge', 'Counter', 'Opening', 'Expected', 'Variance', 'Status'];
+    const head = '<thead><tr>' + cols.map((h, i) =>
+      '<th class="small text-uppercase text-muted py-2' + (i >= 5 && i <= 7 ? ' text-end' : '') + '">' + h + '</th>').join('') + '</tr></thead>';
+    const body = rows.map(function (r) {
+      const st = (r.status || '').toUpperCase();
+      const badge = st === 'OPEN' ? '<span class="badge bg-success bg-opacity-25 text-success">OPEN</span>'
+        : st === 'RECONCILED' ? '<span class="badge bg-info bg-opacity-25 text-info">RECONCILED</span>'
+        : st === 'MISMATCH' ? '<span class="badge bg-danger bg-opacity-25 text-danger">MISMATCH</span>'
+        : '<span class="badge bg-secondary bg-opacity-25 text-secondary">CLOSED</span>';
+      const vClass = Math.abs(r.variance) > 500 ? 'text-danger fw-bold' : (r.variance === 0 ? 'text-muted' : 'text-warning');
+      const vTxt = st === 'OPEN' ? '—' : ((r.variance > 0 ? '+' : '') + inr(r.variance));
+      return '<tr>' +
+        '<td class="small">' + esc(r.date) + '</td>' +
+        '<td class="small">' + esc(r.openTime || '—') + '</td>' +
+        '<td class="small">' + esc(r.closeTime || '—') + '</td>' +
+        '<td class="small">' + esc(r.incharge || r.user) + '</td>' +
+        '<td class="small">' + esc(r.counter) + '</td>' +
+        '<td class="text-end small">' + inr(r.opening) + '</td>' +
+        '<td class="text-end small">' + (st === 'OPEN' ? '—' : inr(r.expected)) + '</td>' +
+        '<td class="text-end small ' + vClass + '">' + vTxt + '</td>' +
+        '<td>' + badge + '</td></tr>';
+    }).join('');
+    wrap.innerHTML = '<table class="table table-sm align-middle mb-0">' + head + '<tbody>' + body + '</tbody></table>';
+  }
+
+  return { load, open, close, recalc, pick };
+})();
+
+function openCashDrawer() { if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-drawer'); AccShift.load(); }
+(function () {
+  if (window.__accDrawerWired) return;
+  var orig = window.switchAccountsPage;
+  window.switchAccountsPage = function (pageId) { if (typeof orig === 'function') orig(pageId); if (pageId === 'workspace-accounts-drawer') { try { AccShift.load(); } catch (e) {} } };
+  window.__accDrawerWired = true;
+})();
+</script>

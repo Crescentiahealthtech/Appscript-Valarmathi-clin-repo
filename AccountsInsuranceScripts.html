@@ -1,0 +1,148 @@
+<!-- ===================================================================== -->
+<!-- 🛡️ CRESCENTIA — INSURANCE / TPA DESK.                                 -->
+<!-- Mount: <div id="workspace-accounts-insurance" class="page-section      -->
+<!--   d-none"><div id="acc-ins-root"></div></div>                         -->
+<!-- Register 'workspace-accounts-insurance' in AccX.PAGES; openInsurance().-->
+<!-- Needs Insurance.js. -->
+<!-- ===================================================================== -->
+<script>
+const AccIns = (function () {
+  const $ = (id) => document.getElementById(id);
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const val = (id) => { const e = $(id); return e ? e.value : ''; };
+  const num = (id) => { const e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; };
+  const chk = (id) => { const e = $(id); return !!(e && e.checked); };
+  const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
+  let FS = 'ALL', FN = 'ALL', CACHE = [];
+  const STATUSES = ['PENDING', 'SUBMITTED', 'QUERIED', 'APPROVED', 'SETTLED', 'SHORT_SETTLED', 'REJECTED'];
+  const SCLR = { PENDING: 'warning', SUBMITTED: 'info', QUERIED: 'secondary', APPROVED: 'primary', SETTLED: 'success', SHORT_SETTLED: 'success', REJECTED: 'danger' };
+
+  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white'; t.style.zIndex = 4000; t.style.background = ok ? '#198754' : '#dc3545'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
+
+  function load() {
+    const root = $('acc-ins-root'); if (!root) return;
+    root.innerHTML = '<div class="text-center text-body-secondary py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading claims…</div>';
+    google.script.run
+      .withSuccessHandler(function (res) { if (!res || !res.success) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc((res && res.message) || 'Failed.') + '</div>'; return; } CACHE = res.claims; render(res); })
+      .withFailureHandler(function (e) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc(e.message || 'Server error — Insurance.js deployed?') + '</div>'; })
+      .getInsuranceClaims({ status: FS, network: FN });
+  }
+
+  function render(res) {
+    const s = res.summary, root = $('acc-ins-root');
+    root.innerHTML =
+      '<div class="d-flex justify-content-between align-items-center mb-3"><h5 class="fw-bold mb-0 text-body">Insurance / TPA Desk</h5>' +
+      '<button class="btn btn-primary btn-sm fw-semibold" onclick="AccIns.newModal()"><i class="fas fa-plus me-1"></i>Raise New Claim</button></div>' +
+      '<div class="row g-3 mb-3">' +
+        kpi('Total Outstanding', s.totalPending, 'text-warning-emphasis') +
+        kpi('Network Pending', s.netPending, 'text-info-emphasis') +
+        kpi('Non-Network Pending', s.nonNetPending, 'text-primary-emphasis') +
+      '</div>' +
+      '<div class="d-flex gap-2 mb-2 flex-wrap align-items-center">' +
+        '<span class="small text-body-secondary me-1">Status</span>' +
+        pill('ALL', FS === 'ALL', 'fs') + STATUSES.map(t => pill(t, FS === t, 'fs')).join('') +
+        '<span class="vr mx-1"></span><span class="small text-body-secondary me-1">Network</span>' +
+        pill('ALL', FN === 'ALL', 'fn', 'All') + pill('NETWORK', FN === 'NETWORK', 'fn', 'Network') + pill('NON', FN === 'NON', 'fn', 'Non-Network') +
+      '</div>' +
+      '<div class="card border bg-body-tertiary"><div class="card-body p-0"><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr>' +
+        ['Date', 'Patient / IP', 'Insurer', 'Claimed', 'Approved', 'Settled', 'Outstanding', 'Status', 'Age', ''].map((h, i) => '<th class="small text-uppercase text-body-secondary px-2' + (i >= 3 && i <= 6 ? ' text-end' : '') + '">' + h + '</th>').join('') +
+        '</tr></thead><tbody>' + rows(res.claims) + '</tbody></table></div></div></div>' +
+      '<div id="acc-ins-modal"></div>';
+  }
+  function kpi(label, value, cls) { return '<div class="col-md-4"><div class="card border bg-body-tertiary h-100"><div class="card-body py-2"><div class="small text-uppercase text-body-secondary">' + label + '</div><h4 class="fw-bold mb-0 ' + cls + '">' + inr(value) + '</h4></div></div></div>'; }
+  function pill(v, active, grp, label) { return '<button class="btn btn-sm rounded-pill ' + (active ? 'btn-primary' : 'btn-outline-primary') + '" onclick="AccIns.setFilter(\'' + grp + '\',\'' + v + '\')">' + (label || (v.charAt(0) + v.slice(1).toLowerCase().replace('_', '-'))) + '</button>'; }
+
+  function rows(cl) {
+    if (!cl.length) return '<tr><td colspan="10" class="text-center text-body-secondary py-4">No claims match.</td></tr>';
+    return cl.map(function (c) {
+      const net = c.network ? '<span class="badge text-bg-info ms-1">NET</span>' : '<span class="badge text-bg-secondary ms-1">NON</span>';
+      const age = c.ageDays > 0 ? '<span class="' + (c.ageDays > 30 ? 'text-danger-emphasis fw-semibold' : 'text-body-secondary') + '">' + c.ageDays + 'd</span>' : '—';
+      const terminal = ['SETTLED', 'SHORT_SETTLED', 'REJECTED'].indexOf(c.status) !== -1;
+      const act = terminal ? '<span class="small text-body-secondary">closed</span>' :
+        '<button class="btn btn-sm btn-outline-secondary py-0 me-1" onclick="AccIns.updateModal(\'' + c.id + '\')">Update</button><button class="btn btn-sm btn-success py-0" onclick="AccIns.settleModal(\'' + c.id + '\')">Settle</button>';
+      return '<tr><td class="small px-2">' + esc(c.date) + '</td><td class="small px-2"><div class="fw-semibold">' + esc(c.patient) + '</div><div class="text-body-secondary">' + esc(c.ip) + '</div></td>' +
+        '<td class="small px-2">' + esc(c.insurer) + net + (c.tpaRef ? '<div class="text-body-secondary">Ref ' + esc(c.tpaRef) + '</div>' : '') + '</td>' +
+        '<td class="small text-end px-2">' + inr(c.claimed) + '</td><td class="small text-end px-2">' + inr(c.approved) + '</td><td class="small text-end px-2">' + inr(c.settled) + '</td>' +
+        '<td class="small text-end px-2 fw-semibold">' + inr(c.outstanding) + '</td>' +
+        '<td class="px-2"><span class="badge text-bg-' + (SCLR[c.status] || 'secondary') + '">' + esc(c.status.replace('_', '-')) + '</span></td>' +
+        '<td class="small px-2">' + age + '</td><td class="px-2 text-nowrap">' + act + '</td></tr>';
+    }).join('');
+  }
+
+  function setFilter(grp, v) { if (grp === 'fs') FS = v; else FN = v; load(); }
+  const find = (id) => CACHE.filter(c => c.id === id)[0] || {};
+
+  function newModal() {
+    $('acc-ins-modal').innerHTML = shell('Raise New Claim (OP / Standalone)',
+      '<div class="row g-2 mb-2"><div class="col-5"><label class="form-label small text-body-secondary mb-1">Source</label><select id="ins-n-source" class="form-select"><option value="OP">OP / Cashless</option><option value="OTHER">Other</option></select></div>' +
+      '<div class="col-7"><label class="form-label small text-body-secondary mb-1">Case / OP Bill Ref</label><input id="ins-n-ref" class="form-control" placeholder="optional"></div></div>' +
+      '<div class="row g-2 mb-2"><div class="col-7"><label class="form-label small text-body-secondary mb-1">Patient Name</label><input id="ins-n-name" class="form-control"></div>' +
+      '<div class="col-5"><label class="form-label small text-body-secondary mb-1">Patient ID</label><input id="ins-n-pid" class="form-control" placeholder="optional"></div></div>' +
+      '<label class="form-label small text-body-secondary mb-1">Insurer / TPA</label><input id="ins-n-insurer" class="form-control mb-2" list="ins-n-list"><datalist id="ins-n-list"></datalist>' +
+      '<div class="row g-2 mb-2"><div class="col-6"><label class="form-label small text-body-secondary mb-1">Billed (₹)</label><input id="ins-n-billed" type="number" class="form-control"></div>' +
+      '<div class="col-6"><label class="form-label small text-body-secondary mb-1">Claimed (₹)</label><input id="ins-n-claimed" type="number" class="form-control"></div></div>' +
+      '<div class="row g-2 mb-2"><div class="col-6"><label class="form-label small text-body-secondary mb-1">Policy No</label><input id="ins-n-policy" class="form-control"></div>' +
+      '<div class="col-6"><label class="form-label small text-body-secondary mb-1">Pre-Auth</label><select id="ins-n-preauth" class="form-select"><option>REQUESTED</option><option>APPROVED</option><option>NOT_STARTED</option></select></div></div>' +
+      '<div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="ins-n-net"><label class="form-check-label small" for="ins-n-net">Network / empanelled hospital</label></div>' +
+      '<input id="ins-n-notes" class="form-control mb-3" placeholder="Notes (optional)">' +
+      '<button class="btn btn-primary w-100 fw-bold" onclick="AccIns.create()">Raise Claim</button>');
+    try { google.script.run.withSuccessHandler(function (r) { if (r && r.insurers) { const dl = $('ins-n-list'); r.insurers.forEach(function (n) { const o = document.createElement('option'); o.value = (typeof n === 'string' ? n : n.name); dl.appendChild(o); }); } }).withFailureHandler(function () {}).getInsurers(); } catch (e) {}
+  }
+  function create() {
+    if (!val('ins-n-name').trim()) { toast('Enter patient name.', false); return; }
+    if (!val('ins-n-insurer').trim()) { toast('Enter insurer.', false); return; }
+    if (num('ins-n-claimed') <= 0) { toast('Enter claimed amount.', false); return; }
+    google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { closeModal(); load(); } })
+      .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
+      .createManualClaim({ source: val('ins-n-source'), caseRef: val('ins-n-ref'), patientName: val('ins-n-name'), patientId: val('ins-n-pid'), insurer: val('ins-n-insurer'), billedAmount: num('ins-n-billed'), claimedAmount: num('ins-n-claimed'), policyNo: val('ins-n-policy'), preAuth: val('ins-n-preauth'), network: chk('ins-n-net'), notes: val('ins-n-notes'), user: who() });
+  }
+
+  function updateModal(id) {
+    const c = find(id);
+    $('acc-ins-modal').innerHTML = shell('Update Claim · ' + esc(c.insurer),
+      '<label class="form-label small text-body-secondary mb-1">Status</label><select id="ins-u-status" class="form-select mb-2">' + STATUSES.filter(s => ['SETTLED', 'SHORT_SETTLED'].indexOf(s) === -1).map(s => '<option' + (s === c.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>' +
+      '<div class="row g-2 mb-2"><div class="col-6"><label class="form-label small text-body-secondary mb-1">Pre-Auth</label><select id="ins-u-preauth" class="form-select"><option' + (c.preAuth === 'APPROVED' ? ' selected' : '') + '>APPROVED</option><option' + (c.preAuth === 'REQUESTED' ? ' selected' : '') + '>REQUESTED</option><option' + (c.preAuth === 'DENIED' ? ' selected' : '') + '>DENIED</option></select></div>' +
+      '<div class="col-6"><label class="form-label small text-body-secondary mb-1">Approved (₹)</label><input id="ins-u-approved" type="number" class="form-control" value="' + c.approved + '"></div></div>' +
+      '<div class="row g-2 mb-2"><div class="col-6"><label class="form-label small text-body-secondary mb-1">Policy No</label><input id="ins-u-policy" class="form-control" value="' + esc(c.policy || '') + '"></div>' +
+      '<div class="col-6"><label class="form-label small text-body-secondary mb-1">TPA Ref</label><input id="ins-u-tpa" class="form-control" value="' + esc(c.tpaRef || '') + '"></div></div>' +
+      '<input id="ins-u-notes" class="form-control mb-3" placeholder="Notes (query reason, etc.)" value="' + esc(c.notes || '') + '">' +
+      '<button class="btn btn-primary w-100 fw-bold" onclick="AccIns.update(\'' + id + '\')">Save</button>');
+  }
+  function update(id) {
+    google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { closeModal(); load(); } })
+      .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
+      .updateClaim({ claimId: id, status: val('ins-u-status'), preAuthStatus: val('ins-u-preauth'), approvedAmount: num('ins-u-approved'), policyNo: val('ins-u-policy'), tpaRef: val('ins-u-tpa'), notes: val('ins-u-notes'), user: who() });
+  }
+
+  function settleModal(id) {
+    const c = find(id);
+    $('acc-ins-modal').innerHTML = shell('Settle Claim · ' + esc(c.insurer),
+      '<div class="small text-body-secondary mb-2">Claimed <b>' + inr(c.claimed) + '</b> · Approved <b>' + inr(c.approved) + '</b></div>' +
+      '<label class="form-label small text-body-secondary mb-1">Amount Received (₹)</label><input id="ins-s-amt" type="number" class="form-control mb-2" value="' + (c.approved || c.claimed) + '">' +
+      '<label class="form-label small text-body-secondary mb-1">Received In</label><select id="ins-s-mode" class="form-select mb-2"><option>Bank</option><option>UPI</option><option>Cash</option><option>Card</option></select>' +
+      '<label class="form-label small text-body-secondary mb-1">TPA Ref / UTR</label><input id="ins-s-tpa" class="form-control mb-2" value="' + esc(c.tpaRef || '') + '">' +
+      '<div class="form-check mb-1"><input class="form-check-input" type="checkbox" id="ins-s-short"><label class="form-check-label small" for="ins-s-short">Bill shortfall to patient</label></div>' +
+      '<div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="ins-s-reject"><label class="form-check-label small text-danger-emphasis" for="ins-s-reject">Mark as fully rejected</label></div>' +
+      '<input id="ins-s-notes" class="form-control mb-3" placeholder="Notes (optional)">' +
+      '<button class="btn btn-success w-100 fw-bold" onclick="AccIns.settle(\'' + id + '\')">Confirm Settlement</button>');
+  }
+  function settle(id) {
+    google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { closeModal(); load(); } })
+      .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
+      .settleClaim({ claimId: id, settledAmount: chk('ins-s-reject') ? 0 : num('ins-s-amt'), payMode: val('ins-s-mode'), tpaRef: val('ins-s-tpa'), shortfallToPatient: chk('ins-s-short'), reject: chk('ins-s-reject'), notes: val('ins-s-notes'), user: who() });
+  }
+
+  function shell(title, body) {
+    return '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,.5);z-index:3500" onclick="if(event.target===this)AccIns.closeModal()">' +
+      '<div class="card bg-body border shadow" style="width:min(460px,94vw)"><div class="card-body">' +
+      '<div class="d-flex justify-content-between mb-2"><h5 class="fw-bold mb-0 text-body">' + title + '</h5><button class="btn-close" onclick="AccIns.closeModal()"></button></div>' + body + '</div></div></div>';
+  }
+  function closeModal() { $('acc-ins-modal').innerHTML = ''; }
+
+  return { load, setFilter, newModal, create, updateModal, update, settleModal, settle, closeModal };
+})();
+
+function openInsurance() { if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-insurance'); AccIns.load(); }
+(function () { if (window.__accInsWired) return; var o = window.switchAccountsPage; window.switchAccountsPage = function (p) { if (typeof o === 'function') o(p); if (p === 'workspace-accounts-insurance') { try { AccIns.load(); } catch (e) {} } }; window.__accInsWired = true; })();
+</script>

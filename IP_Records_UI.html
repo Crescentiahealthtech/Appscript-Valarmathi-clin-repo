@@ -1,0 +1,350 @@
+<div id="emr-workspace-ip-records" class="d-none hd-workspace mt-3 app-view h-100 flex-column px-2">
+  
+  <div id="ip-records-ledger-view" class="h-100 flex-column">
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
+      <div class="d-flex align-items-center">
+        <button class="btn btn-outline-secondary btn-sm py-1 px-3 me-3" onclick="returnToEMRMenu()">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <h5 class="m-0 text-white fw-bold"><i class="fa-solid fa-folder-tree text-info"></i> IP Master Records</h5>
+      </div>
+      
+      <div class="input-group input-group-sm" style="width: 300px;">
+        <span class="input-group-text bg-dark border-secondary text-secondary"><i class="fa-solid fa-magnifying-glass"></i></span>
+        <input type="text" class="form-control bg-dark border-secondary text-white" id="ip-record-search" placeholder="Search Name, ID, or IP No..." onkeyup="filterIPRecords()">
+        <button class="btn btn-outline-secondary" onclick="fetchIPRecordsLedger()"><i class="fa-solid fa-rotate-right"></i></button>
+      </div>
+    </div>
+
+    <div class="hd-panel flex-grow-1 overflow-auto" style="max-height: calc(100vh - 120px);">
+      <table class="table table-dark table-hover table-tight align-middle">
+        <thead style="position: sticky; top: 0; z-index: 10; background-color: #1e293b;">
+          <tr>
+            <th>Date / Time</th>
+            <th>Patient Details</th>
+            <th>IP Number</th>
+            <th>Ward & Bed</th>
+            <th class="text-end">Action</th>
+          </tr>
+        </thead>
+        <tbody id="ip-records-tbody">
+          <tr><td colspan="5" class="text-center text-secondary py-4">Loading records...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="ip-records-detail-view" class="d-none h-100 flex-column">
+    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
+      <div class="d-flex align-items-center">
+        <button class="btn btn-outline-secondary btn-sm py-1 px-3 me-3" onclick="closeIPRecordDetail()">
+          <i class="fa-solid fa-arrow-left"></i> Back to Ledger
+        </button>
+        <span class="fs-5 fw-bold text-white me-3" id="ip-det-name">Patient Name</span>
+        <span class="badge bg-dark border border-secondary text-light me-2" id="ip-det-id">ID: --</span>
+        <span class="badge bg-info text-dark fw-bold" id="ip-det-ipno">IP: --</span>
+      </div>
+      
+      <ul class="nav nav-pills" id="ip-record-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-casesheet" type="button" style="font-size: 0.8rem;">Admission</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-notes" type="button" style="font-size: 0.8rem;">Progress Notes</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-discharge" type="button" style="font-size: 0.8rem;">Discharge</button>
+        </li>
+      </ul>
+    </div>
+
+    <div class="tab-content flex-grow-1 overflow-auto pe-2" id="ip-record-tabContent" style="max-height: calc(100vh - 120px);">
+      
+      <div class="tab-pane fade show active" id="tab-casesheet" role="tabpanel">
+        <div class="hd-panel border-info">
+          <h6 class="text-info fw-bold mb-3 border-bottom border-secondary pb-2">
+            <i class="fa-solid fa-file-medical"></i> Admission Summary
+          </h6>
+          
+          <div class="row g-3 text-light small">
+            <div class="col-md-6"><strong>Primary Diagnosis:</strong> <span class="text-warning" id="det-cs-dx">--</span></div>
+            <div class="col-md-6"><strong>Admitting Doctor:</strong> <span class="text-white" id="det-cs-doc">--</span></div>
+            <div class="col-md-12 bg-dark p-2 rounded border border-secondary">
+              <strong>Admission Vitals:</strong> <span class="text-white" id="det-cs-vitals">--</span>
+            </div>
+
+            <div class="col-md-12 mt-3 border-top pt-3" style="border-color: #333 !important;">
+              <h6 class="text-info fw-bold mb-2">Clinical Details</h6>
+            </div>
+            
+            <div class="col-md-12 mb-2">
+              <div class="p-2 bg-dark rounded border" style="border-color: #444 !important;">
+                <strong class="text-info">Chief Complaints:</strong> 
+                <div id="det-cs-cc" class="text-white mt-1 small" style="white-space: pre-wrap;">--</div>
+              </div>
+            </div>
+            
+            <div class="col-md-12 mb-2">
+              <div class="p-2 bg-dark rounded border" style="border-color: #444 !important;">
+                <strong class="text-info">History / Comorbidities:</strong> 
+                <div id="det-cs-hx" class="text-white mt-1 small" style="white-space: pre-wrap;">--</div>
+              </div>
+            </div>
+            
+            <div class="col-md-6 mt-2">
+              <strong class="text-info">General Exam:</strong> <br><span id="det-cs-ge" class="text-white small">--</span>
+            </div>
+            <div class="col-md-6 mt-2">
+              <strong class="text-info">Systemic Exam:</strong> <br><span id="det-cs-se" class="text-white small">--</span>
+            </div>
+            
+            <div class="col-md-12 mt-2">
+              <strong class="text-info">Advice / Notes:</strong> <br><span id="det-cs-advice" class="text-white small">--</span>
+            </div>
+
+            <div class="col-md-12 mt-3 border-top pt-3" style="border-color: #333 !important;">
+              <h6 class="text-info fw-bold mb-2">Orders & Prescriptions</h6>
+            </div>
+            
+            <div class="col-md-12">
+              <strong class="text-white">Rx Prescribed:</strong>
+              <div id="det-cs-rx" class="mt-1 table-responsive">
+                </div>
+            </div>
+            
+            <div class="col-md-12 mt-2">
+              <strong class="text-white">Lab Requests:</strong>
+              <div id="det-cs-labs" class="mt-1 p-2 bg-dark rounded border text-white small" style="border-color: #444 !important; min-height: 40px;">--</div>
+            </div>
+
+            <div class="col-12 mt-4 text-center border-top border-secondary pt-3">
+               <button class="btn btn-info btn-sm fw-bold">
+                 <i class="fa-solid fa-print"></i> Print Full Casesheet
+               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="tab-notes" role="tabpanel">
+        <div class="hd-panel border-success">
+          <h6 class="text-success fw-bold mb-3 border-bottom border-secondary pb-2"><i class="fa-solid fa-clipboard-list"></i> Daily Progress Notes</h6>
+          <div id="det-notes-timeline" class="d-flex flex-column gap-3">
+             </div>
+        </div>
+      </div>
+
+      <div class="tab-pane fade" id="tab-discharge" role="tabpanel">
+        <div class="hd-panel border-warning">
+          <h6 class="text-warning fw-bold mb-3 border-bottom border-secondary pb-2"><i class="fa-solid fa-house-medical"></i> Discharge Summary</h6>
+          <div id="det-ds-content" class="text-light small">
+             <div class="text-center text-secondary py-5">
+               <i class="fa-solid fa-lock fa-2xl mb-3"></i><br>No discharge summary generated yet. Patient is currently active.
+             </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  let rawIPRecordsData = [];
+
+  function fetchIPRecordsLedger() {
+    document.getElementById('ip-records-tbody').innerHTML = '<tr><td colspan="5" class="text-center text-info py-4">Fetching records...</td></tr>';
+    
+    google.script.run.withSuccessHandler(res => {
+      rawIPRecordsData = JSON.parse(res);
+      renderIPRecordsTable(rawIPRecordsData);
+    }).fetchIPRecordsLedger();
+  }
+
+  function renderIPRecordsTable(data) {
+    const tbody = document.getElementById('ip-records-tbody');
+    tbody.innerHTML = "";
+
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary py-4">No IP Records Found.</td></tr>';
+      return;
+    }
+
+    data.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="text-light" style="font-size:0.8rem;">${p.date}</td>
+        <td>
+          <div class="fw-bold text-info">${p.name}</div>
+          <div class="text-secondary" style="font-size:0.7rem;">ID: ${p.patientId} | ${p.ageSex}</div>
+        </td>
+        <td class="text-warning fw-bold" style="font-size:0.8rem;">${p.ipNumber}</td>
+        <td class="text-light" style="font-size:0.8rem;">${p.ward} - ${p.bed}</td>
+        <td class="text-end">
+          <button class="btn btn-outline-info btn-sm py-1 px-3" style="font-size:0.75rem;" onclick="viewIPRecordDetail('${p.encounterId}')">
+            View File
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function filterIPRecords() {
+    const term = document.getElementById('ip-record-search').value.toLowerCase();
+    const filtered = rawIPRecordsData.filter(p => 
+      p.name.toLowerCase().includes(term) || 
+      p.patientId.toLowerCase().includes(term) || 
+      p.ipNumber.toLowerCase().includes(term)
+    );
+    renderIPRecordsTable(filtered);
+  }
+
+  function viewIPRecordDetail(encounterId) {
+    document.getElementById('ip-records-ledger-view').classList.add('d-none');
+    document.getElementById('ip-records-detail-view').classList.remove('d-none');
+    
+    // Reset contents
+    document.getElementById('det-cs-dx').innerText = "Loading...";
+    document.getElementById('det-notes-timeline').innerHTML = '<div class="text-center text-secondary">Fetching timeline...</div>';
+    
+    google.script.run.withSuccessHandler(res => {
+      const data = JSON.parse(res);
+      
+      // Populate Header
+      if (data.casesheet) {
+        document.getElementById('ip-det-name').innerText = data.casesheet.name;
+        document.getElementById('ip-det-id').innerText = "ID: " + data.casesheet.patientId;
+        document.getElementById('ip-det-ipno').innerText = "IP: " + data.casesheet.ipNumber;
+        
+        // Populate Casesheet Tab - Basic Text Fields
+        document.getElementById('det-cs-dx').innerText = data.casesheet.diagnosis || "--";
+        document.getElementById('det-cs-doc').innerText = data.casesheet.doctor || "--";
+        document.getElementById('det-cs-vitals').innerText = data.casesheet.vitals || "--";
+        document.getElementById('det-cs-ge').innerText = data.casesheet.generalExam || "--";
+        document.getElementById('det-cs-se').innerText = data.casesheet.systemicExam || "--";
+        document.getElementById('det-cs-advice').innerText = data.casesheet.advice || "--";
+
+        // --- THE PERFECT JSON UNWRAPPER ---
+        function safeParseArray(str) {
+            if (!str || str === "--" || str === "[]") return [];
+            if (typeof str === 'object') return Array.isArray(str) ? str : [str];
+            try { 
+                let parsed = JSON.parse(str); 
+                // Unwrap the double-stringify from Google Sheets
+                if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch (e) { 
+                return []; 
+            }
+        }
+
+        // --- FORMAT CHIEF COMPLAINTS & HISTORY ---
+        function formatClinicalText(rawStr) {
+            let arr = safeParseArray(rawStr);
+            if (arr.length === 0) return "--";
+
+            return arr.map(item => {
+                if (typeof item === 'string') return item;
+                // Maps perfectly to your IP_Casesheet buildIPPayload keys
+                let prefix = item.prefix ? item.prefix + ' ' : '';
+                let condition = item.condition || '';
+                let duration = item.duration ? ` (${item.duration})` : '';
+                return `${prefix}${condition}${duration}`.trim();
+            }).join('<br>');
+        }
+
+        document.getElementById('det-cs-cc').innerHTML = formatClinicalText(data.casesheet.chiefComplaints);
+        document.getElementById('det-cs-hx').innerHTML = formatClinicalText(data.casesheet.history);
+
+        // --- RENDER RX TABLE ---
+        let rxArr = safeParseArray(data.casesheet.prescriptions);
+        let rxHtml = "";
+        
+        if (rxArr.length > 0) {
+            rxHtml = `
+              <table class="table table-sm table-dark table-bordered mb-0" style="font-size: 0.8rem; border-color: #444;">
+                <thead>
+                  <tr>
+                    <th class="text-info">Drug Name</th>
+                    <th class="text-info" style="text-align: center;">Dosage</th>
+                    <th class="text-info" style="text-align: center;">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+            `;
+            rxArr.forEach(rx => {
+                // Formatting based on your IP_Casesheet payload keys: type, name, sig, days, comment
+                let typeBadge = rx.type ? `<span class="text-secondary" style="font-size: 0.7rem;">[${rx.type}]</span> ` : "";
+                let drugName = rx.name || "--";
+                let notes = rx.comment ? `<br><small class="text-secondary">${rx.comment}</small>` : "";
+                
+                rxHtml += `
+                  <tr>
+                    <td class="text-white fw-bold">${typeBadge}${drugName}${notes}</td>
+                    <td class="text-white text-center align-middle">${rx.sig || "-"}</td>
+                    <td class="text-white text-center align-middle">${rx.days || "-"}</td>
+                  </tr>
+                `;
+            });
+            rxHtml += `</tbody></table>`;
+        } else {
+            rxHtml = `<div class='text-white'>No medications prescribed.</div>`;
+        }
+        document.getElementById('det-cs-rx').innerHTML = rxHtml;
+
+        // --- RENDER LABS LIST ---
+        let labsArr = safeParseArray(data.casesheet.labOrders);
+        let labsHtml = "";
+
+        if (labsArr.length > 0) {
+            labsHtml = "<ul class='mb-0 ps-3 text-white'>";
+            labsArr.forEach(lab => {
+                // From your payload, labs is just a direct array of strings like ["CBC", "RFT"]
+                labsHtml += `<li>${lab}</li>`; 
+            });
+            labsHtml += "</ul>";
+        } else {
+            labsHtml = `<span class='text-white'>No labs requested.</span>`;
+        }
+        document.getElementById('det-cs-labs').innerHTML = labsHtml;
+      }
+
+      // Populate Notes Timeline 
+      const notesContainer = document.getElementById('det-notes-timeline');
+      notesContainer.innerHTML = "";
+      if (data.notes && data.notes.length > 0) {
+        data.notes.forEach(note => {
+          notesContainer.innerHTML += `
+            <div class="p-2 border border-secondary rounded" style="background-color: #121418;">
+               <div class="d-flex justify-content-between border-bottom border-dark pb-1 mb-2">
+                 <span class="text-success fw-bold" style="font-size:0.75rem;">${note.date}</span>
+                 <span class="text-secondary" style="font-size:0.7rem;">Dr. ${note.doctor}</span>
+               </div>
+               <div class="text-light small mb-1"><strong>Vitals:</strong> ${note.vitals}</div>
+               <div class="text-white small"><strong>Note:</strong> ${note.note}</div>
+            </div>
+          `;
+        });
+      } else {
+        notesContainer.innerHTML = '<div class="text-center text-secondary py-3">No progress notes recorded yet.</div>';
+      }
+
+      // Populate Discharge Tab
+      const dsContainer = document.getElementById('det-ds-content');
+      if (data.discharge) {
+        dsContainer.innerHTML = `
+           <div class="mb-2"><strong>Discharge Date:</strong> <span class="text-white">${data.discharge.date}</span></div>
+           <div class="mb-2"><strong>Outcome:</strong> <span class="text-warning">${data.discharge.outcome}</span></div>
+           <div class="mt-3 p-2 bg-dark border rounded text-white" style="border-color: #444 !important;">${data.discharge.summary}</div>
+        `;
+      }
+
+    }).fetchFullIPRecord(encounterId);
+  }
+
+  function closeIPRecordDetail() {
+    document.getElementById('ip-records-detail-view').classList.add('d-none');
+    document.getElementById('ip-records-ledger-view').classList.remove('d-none');
+  }
+</script>
