@@ -181,6 +181,17 @@ function routeToEMRTimeline(patientId) {
     }
 }
 
-function signOut() { location.reload(); }
-
+function signOut() {
+  if (typeof performSignOut === 'function') {
+    performSignOut();
+    return;
+  }
+  // Defensive fallback only if Auth.html failed to load. Do NOT use location.reload()
+  // (reloads the sandbox iframe -> blank page). Best-effort identity teardown only.
+  try { if (typeof firebase !== 'undefined' && firebase.auth) firebase.auth().signOut(); } catch (e) {}
+  var a = document.getElementById('app-screen');
+  var s = document.getElementById('auth-screen');
+  if (a) a.classList.add('d-none');
+  if (s) s.classList.remove('d-none');
+}
 </script>

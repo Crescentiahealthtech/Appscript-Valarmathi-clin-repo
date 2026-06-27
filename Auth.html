@@ -319,4 +319,49 @@
           switchTab('tab-admin-dash', document.getElementById('nav-tab-dash'));
     }
   }
+
+  // ==========================================
+  // 7. CENTRAL SIGN-OUT / SESSION TEARDOWN
+  // ==========================================
+  function performSignOut() {
+    // 1. Tear down the Google/Firebase identity session (idempotent, never throws)
+    try {
+      if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().signOut().catch(function () {});
+      }
+    } catch (e) { /* ignore — sign-out must never get stuck */ }
+
+    // 2. Wipe in-memory session + MFA state
+    window.loggedInUser = null;
+    window.loggedInRole = null;
+    pendingAuthRes = null;
+    pendingAuthName = null;
+
+    // 3. Reset the SPA shell back to the login screen (reverse of executeUIRouting)
+    var appScreen  = document.getElementById('app-screen');
+    var mfaScreen  = document.getElementById('mfa-screen');
+    var authScreen = document.getElementById('auth-screen');
+    if (appScreen)  appScreen.classList.add('d-none');
+    if (mfaScreen)  mfaScreen.classList.add('d-none');
+    if (authScreen) authScreen.classList.remove('d-none');
+
+    // 4. Clear sensitive inputs so credentials don't linger in the DOM
+    ['in-username', 'in-password', 'in-mfa-code'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // 5. Re-hide role-specific nav so the next login starts from a clean slate
+    ['nav-doctor', 'nav-patient'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.add('d-none');
+    });
+
+    // 6. Drop any active tab / section highlight
+    document.querySelectorAll('.page-section').forEach(function (s) { s.classList.remove('active-section'); });
+    document.querySelectorAll('.nav-link').forEach(function (l) { l.classList.remove('active'); });
+
+    window.scrollTo(0, 0);
+  }
+  
 </script>
