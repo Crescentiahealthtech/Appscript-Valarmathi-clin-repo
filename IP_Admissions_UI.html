@@ -338,16 +338,40 @@
   let ledgerDataMaster = [];
 
   function loadIPLedger() {
-    google.script.run.withSuccessHandler(renderLedgerTable).getIPLedgerData();
+    const tbody = document.getElementById('ip-ledger-tbody');
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border text-primary"></div><br>Loading Ledger...</td></tr>`;
+    }
+    // Watchdog: never let the spinner run forever.
+    let settled = false;
+    const watchdog = setTimeout(function () {
+      if (!settled && tbody) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Ledger request timed out. <a href="#" onclick="loadIPLedger();return false;">Retry</a></td></tr>`;
+      }
+    }, 15000);
+
+    google.script.run
+      .withSuccessHandler(function (res) { settled = true; clearTimeout(watchdog); renderLedgerTable(res); })
+      .withFailureHandler(function (err) {
+        settled = true; clearTimeout(watchdog);
+        if (tbody) tbody.innerHTML =
+          `<tr><td colspan="8" class="text-center text-danger py-4">Failed to load ledger: ${ (err && err.message) ? err.message : 'Server error' }. <a href="#" onclick="loadIPLedger();return false;">Retry</a></td></tr>`;
+      })
+      .getIPLedgerData();
   }
 
-  function renderLedgerTable(dataStr) {
+  function renderLedgerTable(res) {
     const tbody = document.getElementById('ip-ledger-tbody');
     try {
-      ledgerDataMaster = JSON.parse(dataStr);
-      filterLedger(); 
-    } catch(e) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error loading ledger.</td></tr>`;
+      let payload = (typeof res === 'string') ? JSON.parse(res) : res;
+      if (payload && payload.success === false) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${payload.message || 'Could not load ledger.'}</td></tr>`;
+        return;
+      }
+      ledgerDataMaster = Array.isArray(payload) ? payload : ((payload && payload.data) || []);
+      filterLedger();
+    } catch (e) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error rendering ledger: ${e.message}</td></tr>`;
     }
   }
 
@@ -360,8 +384,11 @@
     let count = 0;
 
     ledgerDataMaster.forEach(row => {
-      const matchSearch = row.ipNumber.toLowerCase().includes(query) || row.patientId.toLowerCase().includes(query) || row.patientName.toLowerCase().includes(query);
-      const matchStatus = statusFilter === 'ALL' || row.status.toUpperCase() === statusFilter;
+      const ip  = (row.ipNumber  || '').toString().toLowerCase();
+      const pid = (row.patientId || '').toString().toLowerCase();
+      const nm  = (row.patientName || '').toString().toLowerCase();
+      const matchSearch = ip.includes(query) || pid.includes(query) || nm.includes(query);
+      const matchStatus = statusFilter === 'ALL' || (row.status || '').toString().toUpperCase() === statusFilter;
 
       if(matchSearch && matchStatus) {
         count++;

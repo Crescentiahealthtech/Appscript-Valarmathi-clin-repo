@@ -16,7 +16,7 @@ function fetchPatientForAdmit(patientId) {
   return null;
 }
 
-function saveNewAdmissionLedger(payload) {
+function saveNewAdmissionLedger(pay) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyMM");
   const randomSeq = Math.floor(1000 + Math.random() * 9000); 
@@ -127,34 +127,42 @@ function getAvailableBedsByWard(ward) {
 }
 
 function getIPLedgerData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("IP_Admissions");
-  if (!sheet) return JSON.stringify([]);
-  
-  const data = sheet.getDataRange().getValues();
-  let ledger = [];
-  
-  // Skip header row (i=1)
-  for (let i = 1; i < data.length; i++) {
-    ledger.push({
-      ipNumber: data[i][0] || "",
-      patientId: data[i][1] || "",
-      patientName: data[i][2] || "",
-      ageSex: data[i][3] || "",
-      doa: data[i][4] || "",
-      toa: data[i][5] || "",
-      type: data[i][6] || "",
-      ward: data[i][7] || "",
-      bed: data[i][8] || "",
-      consultant: data[i][9] || "",
-      diagnosis: data[i][10] || "",
-      status: data[i][11] || "UNKNOWN",
-      dod: data[i][12] || ""
-    });
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("IP_Admissions");
+    if (!sheet || sheet.getLastRow() < 2) {
+      return JSON.stringify({ success: true, data: [] });
+    }
+    const tz = Session.getScriptTimeZone();
+    const fmt = function (v, pat) {
+      if (v instanceof Date) return Utilities.formatDate(v, tz, pat);
+      return (v == null ? "" : v).toString();
+    };
+    const data = sheet.getDataRange().getValues();
+    const ledger = [];
+    for (let i = 1; i < data.length; i++) {
+      const r = data[i];
+      if (!r[0]) continue; // skip blank/trailing rows
+      ledger.push({
+        ipNumber:   (r[0]  || "").toString(),
+        patientId:  (r[1]  || "").toString(),
+        patientName:(r[2]  || "").toString(),
+        ageSex:     (r[3]  || "").toString(),
+        doa:        fmt(r[4], "dd MMM yyyy"),
+        toa:        fmt(r[5], "hh:mm a"),
+        type:       (r[6]  || "").toString(),
+        ward:       (r[7]  || "").toString(),
+        bed:        (r[8]  || "").toString(),
+        consultant: (r[9]  || "").toString(),
+        diagnosis:  (r[10] || "").toString(),
+        status:     (r[11] || "UNKNOWN").toString(),
+        dod:        fmt(r[12], "dd MMM yyyy")
+      });
+    }
+    return JSON.stringify({ success: true, data: ledger.reverse() });
+  } catch (e) {
+    return JSON.stringify({ success: false, message: e.message });
   }
-  
-  // Reverse to show newest admissions first
-  return JSON.stringify(ledger.reverse());
 }
 
 function processPatientDischarge(ipNumber, bedId) {
