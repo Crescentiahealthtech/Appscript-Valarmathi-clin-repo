@@ -282,9 +282,12 @@
     const appScreen = document.getElementById('app-screen');
     if(appScreen) appScreen.classList.remove('d-none');
     
-    // UI Adjustments
+    // UI Adjustments — reveal the correct nav for this role, hide the other
+    const isPatient = res.role.toLowerCase() === 'patient';
     const navDoc = document.getElementById('nav-doctor');
-    if (navDoc && res.role.toLowerCase() !== 'patient') navDoc.classList.remove('d-none'); 
+    const navPat = document.getElementById('nav-patient');
+    if (navDoc) navDoc.classList.toggle('d-none', isPatient);
+    if (navPat) navPat.classList.toggle('d-none', !isPatient); 
     if (typeof setDateRestrictions === 'function') setDateRestrictions();
     
     // Profile Badge Updates
@@ -312,9 +315,15 @@
           switchTab('tab-admin-lab', document.getElementById('nav-tab-lab')); break;
       case 'accounts':
           switchTab('tab-admin-billing', document.getElementById('nav-tab-accounts')); break;
-      case 'patient':
-          if(document.getElementById('nav-pat-home')) switchTab('tab-pat-home', document.getElementById('nav-pat-home')); 
+      case 'patient': {
+          // Use the real Home link, not the non-existent #nav-pat-home
+          const patHome = document.querySelector('#nav-patient .nav-link');
+          switchTab('tab-pat-home', patHome);
+          // Hydrate the dashboard — the router previously loaded no patient data
+          if (typeof fetchProfileData === 'function') fetchProfileData();
+          if (typeof refreshPatientDashboard === 'function') refreshPatientDashboard();
           break;
+      }
       default:
           switchTab('tab-admin-dash', document.getElementById('nav-tab-dash'));
     }
