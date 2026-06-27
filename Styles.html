@@ -253,24 +253,74 @@
  }
  .sno-col { width: 60px; text-align: center; }
 
+/* ========================================= */
+ /* 11. THEME COMPATIBILITY LAYER             */
  /* ========================================= */
- /* 11. BOOTSTRAP THEME ENFORCERS (THE FIX)   */
- /* ========================================= */
- /* Intercept Bootstrap's utility classes and force them to respect Light Mode */
- 
- body.light-theme .text-white:not(.btn, .btn *, .badge, .badge *, .time-btn.selected, .nav-link.active *, .rounded-circle *) {
+ /* Centralised overrides so hardcoded Bootstrap utilities AND inline colors */
+ /* stay readable in BOTH themes without editing individual module files.    */
+ /* Compatibility layer — long-term fix is to purge hardcoded colors.        */
+
+ /* 11.1 — Component surfaces themed in BOTH light & dark (vars auto-adapt) */
+ .modal-content, .dropdown-menu, .dropdown-item, .offcanvas,
+ .list-group-item, .accordion-item, .accordion-button, .popover, .toast {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+    border-color: var(--border-color) !important;
+ }
+ .text-muted, .text-white-50 { color: var(--text-muted) !important; }
+
+ /* 11.2 — Bootstrap text utilities forced to theme in Light Mode.         */
+ /* Skips buttons, badges, alerts, active nav, FABs and any element that   */
+ /* sets its own background (intentional coloured surfaces keep light text).*/
+ body.light-theme .text-white:not(.btn):not(.btn *):not(.badge):not(.badge *):not(.alert):not(.alert *):not(.time-btn.selected):not(.nav-link.active):not(.nav-link.active *):not(.fab-action):not(.fab-action *):not(.rounded-circle *):not([style*="background"]) {
     color: var(--text-main) !important;
  }
- body.light-theme .text-light:not(.btn, .btn *, .badge, .badge *, .time-btn.selected) {
+ body.light-theme .text-light:not(.btn):not(.btn *):not(.badge):not(.badge *):not(.time-btn.selected):not([style*="background"]) {
     color: var(--text-label) !important;
  }
- body.light-theme .bg-dark {
+
+ /* 11.3 — Bootstrap background / border utilities in Light Mode */
+ body.light-theme .bg-dark, body.light-theme .bg-black { background-color: var(--bg-card) !important; }
+ body.light-theme .bg-secondary { background-color: var(--bg-input) !important; }
+ body.light-theme .border-secondary,
+ body.light-theme .border-dark,
+ body.light-theme .border-light { border-color: var(--border-color) !important; }
+
+ /* 11.4 — Dark close-button & dark tables in Light Mode */
+ body.light-theme .btn-close-white { filter: none !important; }
+ body.light-theme .table-dark {
+    --bs-table-bg: var(--bg-card);
+    --bs-table-color: var(--text-main);
+    --bs-table-border-color: var(--border-color);
     background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
  }
- body.light-theme .bg-secondary {
-    background-color: var(--bg-input) !important;
+
+ /* 11.5 — Inline white text (no class hook). Inline styles carry no        */
+ /* !important so this wins. Skips elements that set their own background.  */
+ body.light-theme [style*="color:#fff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
+ body.light-theme [style*="color: #fff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
+ body.light-theme [style*="color:#ffffff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
+ body.light-theme [style*="color: #ffffff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
+ body.light-theme [style*="color:white"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
+ body.light-theme [style*="color: white"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action) {
+    color: var(--text-main) !important;
  }
- body.light-theme .border-secondary, body.light-theme .border-dark {
-    border-color: var(--border-color) !important;
+
+ /* 11.6 — Inline hardcoded DARK backgrounds -> themed surface in Light Mode.*/
+ /* Anchored to the background property so var(--x,#hex) fallbacks are NOT   */
+ /* matched (those already resolve correctly).                              */
+ body.light-theme [style*="background:#1a1d21"],
+ body.light-theme [style*="background: #1a1d21"],
+ body.light-theme [style*="background-color:#1a1d21"],
+ body.light-theme [style*="background-color: #1a1d21"],
+ body.light-theme [style*="background:#1e293b"],
+ body.light-theme [style*="background: #1e293b"],
+ body.light-theme [style*="background-color:#1e293b"],
+ body.light-theme [style*="background-color: #1e293b"],
+ body.light-theme [style*="background:#020617"],
+ body.light-theme [style*="background: #020617"] {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
  }
 </style>
