@@ -92,11 +92,10 @@
     
     <div class="d-flex gap-3 align-items-center">
       <span id="ip-draft-status" class="text-secondary small fw-bold me-2"><i class="fa-solid fa-cloud"></i> Up to date</span>
-      <select id="ip-doctor-name" class="form-select form-select-sm bg-dark text-warning fw-bold border-secondary" style="width: 140px;">
-        <option value="">Consulting Dr.</option>
-        <option value="Dr. Valarmathi">Dr. Valarmathi</option>
-        <option value="Dr. Duty MO">Dr. Duty MO</option>
-      </select>
+      <div id="ip-doctor-name-wrap" class="form-control form-control-sm bg-dark text-warning fw-bold border-secondary d-flex align-items-center" style="width: 160px;">
+        <i class="fa-solid fa-user-doctor me-2"></i><span id="ip-doctor-name">--</span>
+      </div>
+      <input type="hidden" id="ip-doctor-id" value="">
       <select id="ip-triage-status" class="form-select form-select-sm bg-dark text-white fw-bold border-secondary" style="width: 100px;" onchange="updateIPTriageUI()">
         <option value="Stable" class="text-success" selected>🟢 Stable</option>
         <option value="Moderate" class="text-warning">🟠 Mod</option>
@@ -481,6 +480,7 @@
       if (document.getElementById('ip-hx-tbody').innerHTML.trim() === '') addIPDynamicRow('ip-hx-tbody', 'HX');
       if (document.getElementById('ip-rx-tbody').innerHTML.trim() === '') addIPRxRow();
       if (document.getElementById('ip-lab-res-tbody').innerHTML.trim() === '') addIPLabResRow();
+
       
       ipLoadIntegrationData(); // Natively loads OP-style rich masters
 
@@ -556,6 +556,8 @@
         
         if(patient) {
             currentIPPatientCtx = patient;
+            document.getElementById('ip-doctor-name').innerText = window.currentDoctorName || '--';
+            document.getElementById('ip-doctor-id').value       = window.currentDoctorId || '';
             document.getElementById('ip-cs-pat-name').innerText = patient.name;
             document.getElementById('ip-cs-pat-id').innerText = "ID: " + patient.id;
             document.getElementById('ip-cs-bed').innerText = "Bed: " + patient.bed;
@@ -899,7 +901,7 @@
       return {
         patientId: currentIPPatientCtx.id, ipNumber: currentIPPatientCtx.ipNumber, patientName: currentIPPatientCtx.name,
         age: currentIPPatientCtx.age, sex: currentIPPatientCtx.sex, bed: currentIPPatientCtx.bed, ward: currentIPPatientCtx.ward,
-        doctorName: document.getElementById('ip-doctor-name').value, triage: document.getElementById('ip-triage-status').value,
+        doctorName: window.currentDoctorName || '', doctorId: window.currentDoctorId || '', sessionToken: window.sessionToken || '', triage: document.getElementById('ip-triage-status').value,
         vitals: { sys: document.getElementById('ip-vit-sys').value, dia: document.getElementById('ip-vit-dia').value, hr: document.getElementById('ip-vit-pr').value, spo2: document.getElementById('ip-vit-spo2').value, temp: document.getElementById('ip-vit-temp').value, height: document.getElementById('ip-vit-ht').value, weight: document.getElementById('ip-vit-wt').value },
         complaints: ccArr, history: hxArr, provDiagnosis: document.getElementById('ip-prov-dx').value, 
         meds: orderArr, labs: labsArr, outsideLabs: resLabArr,

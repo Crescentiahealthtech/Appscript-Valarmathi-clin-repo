@@ -36,27 +36,39 @@
     <!-- ---- KPI BAND (census & beds headline first) ---- -->
     <div class="row g-3 mb-1">
 
-      <!-- HERO: Bed Occupancy -->
+      <!-- HERO: Bed Utilization -->
       <div class="col-12 col-lg-4">
-        <div class="card soft-glow p-4 h-100">
-          <div class="d-flex justify-content-between align-items-start">
+        <div class="card p-4 h-100" style="background: var(--bg-card); position: relative; overflow: hidden; border: 1px solid var(--border-color);">
+          <!-- Lunar Trust subtle aesthetic glow -->
+          <div style="position: absolute; top: -40px; right: -40px; width: 120px; height: 120px; background: var(--accent-purple); opacity: 0.08; filter: blur(35px); border-radius: 50%; pointer-events: none;"></div>
+          
+          <div class="d-flex justify-content-between align-items-start position-relative">
             <div>
-              <div class="label-bright small text-uppercase" style="letter-spacing:1px;">Bed Occupancy</div>
+              <div class="label-bright small text-uppercase" style="letter-spacing:1px;">Bed Utilization</div>
               <div class="d-flex align-items-baseline gap-2 mt-1">
                 <span id="kpi-occ-pct" class="fw-bold" style="font-size:2.6rem; line-height:1;">—</span>
-                <span class="label-bright">occupied</span>
+                <span class="label-bright">unavailable</span>
               </div>
             </div>
             <i class="fa-solid fa-bed-pulse" style="font-size:1.6rem; color: var(--accent-purple);"></i>
           </div>
-          <div class="progress mt-3" style="height:10px; background: var(--bg-input);">
-            <div id="kpi-occ-bar" class="progress-bar" role="progressbar" style="width:0%; background: var(--accent-purple);"></div>
+          
+          <!-- Multi-color Stacked Capacity Bar -->
+          <div class="progress mt-3 shadow-sm position-relative" style="height:12px; background: var(--bg-input); border-radius: 8px;">
+            <div id="kpi-bar-occ" class="progress-bar bg-danger" role="progressbar" style="width:0%;" title="Occupied"></div>
+            <div id="kpi-bar-res" class="progress-bar bg-warning" role="progressbar" style="width:0%;" title="Reserved"></div>
+            <div id="kpi-bar-cln" class="progress-bar bg-info" role="progressbar" style="width:0%;" title="Cleaning"></div>
           </div>
-          <div class="d-flex justify-content-between mt-2 small label-bright">
-            <span><span id="kpi-occ-used">0</span> / <span id="kpi-occ-total">0</span> beds</span>
-            <a href="#" onclick="gotoBeds(event)" style="color: var(--accent-purple); text-decoration:none;">View bed map →</a>
+          
+          <div class="d-flex justify-content-between mt-2 small label-bright position-relative">
+            <span><span id="kpi-occ-used">0</span> / <span id="kpi-occ-total">0</span> beds in use</span>
+            <a href="#" onclick="gotoBedMap(event)" style="color: var(--accent-purple); text-decoration:none;">View bed map →</a>
           </div>
-          <div id="kpi-ward-chips" class="mt-3"></div>
+
+          <!-- Dynamic Actionable Insight String -->
+          <div id="kpi-occ-insight" class="mt-3 small fw-bold" style="min-height: 20px;"></div>
+          
+          <div id="kpi-ward-chips" class="mt-2 position-relative"></div>
         </div>
       </div>
 
@@ -64,17 +76,35 @@
       <div class="col-12 col-lg-8">
         <div class="row g-3 h-100">
 
+          <!-- Current Inpatients Tile (Clickable) -->
           <div class="col-6 col-xl-3">
-            <div class="card p-3 h-100">
-              <i class="fa-solid fa-hospital-user mb-2" style="color: var(--info);"></i>
+            <div class="card p-3 h-100" 
+                 style="cursor: pointer; transition: all 0.2s ease-in-out;" 
+                 onclick="gotoBeds(event)" 
+                 onmouseover="this.classList.add('soft-glow'); this.style.transform='translateY(-2px)';" 
+                 onmouseout="this.classList.remove('soft-glow'); this.style.transform='translateY(0)';">
+              
+              <div class="d-flex justify-content-between align-items-start">
+                <i class="fa-solid fa-hospital-user mb-2" style="color: var(--info); font-size: 1.2rem;"></i>
+                <i class="fa-solid fa-arrow-up-right-from-square small text-muted" style="opacity: 0.5;"></i>
+              </div>
               <div class="fw-bold" style="font-size:1.8rem;" id="kpi-inpatients">—</div>
               <div class="label-bright small">Current Inpatients</div>
             </div>
           </div>
 
+          <!-- Appts Today Tile (Clickable) -->
           <div class="col-6 col-xl-3">
-            <div class="card p-3 h-100">
-              <i class="fa-solid fa-calendar-check mb-2" style="color: var(--success);"></i>
+            <div class="card p-3 h-100" 
+                 style="cursor: pointer; transition: all 0.2s ease-in-out;" 
+                 onclick="gotoApptsLedg(event)" 
+                 onmouseover="this.classList.add('soft-glow'); this.style.transform='translateY(-2px)';" 
+                 onmouseout="this.classList.remove('soft-glow'); this.style.transform='translateY(0)';">
+              
+              <div class="d-flex justify-content-between align-items-start">
+                <i class="fa-solid fa-calendar-check mb-2" style="color: var(--success); font-size: 1.2rem;"></i>
+                <i class="fa-solid fa-arrow-up-right-from-square small text-muted" style="opacity: 0.5;"></i>
+              </div>
               <div class="fw-bold" style="font-size:1.8rem;" id="kpi-appt-today">—</div>
               <div class="label-bright small">Appts Today</div>
               <div class="small mt-1"><span id="kpi-appt-pending" class="text-border">0</span> pending</div>
@@ -169,7 +199,7 @@
   }
 
   // ============================================================
-  // MAIN RENDER — single round-trip
+  // MAIN RENDER — Stale-While-Revalidate UI
   // ============================================================
   function renderAdminDashboard(bust) {
     if (__dashBusy) return;
@@ -181,8 +211,16 @@
     const elBtn  = document.getElementById('dash-refresh-btn');
 
     elErr.classList.add('d-none');
-    if (bust === true) { elBtn.disabled = true; elBtn.innerHTML = '<i class="fa-solid fa-rotate fa-spin me-1"></i> Refreshing'; }
-    else { elLoad.classList.remove('d-none'); elBody.classList.add('d-none'); }
+    
+    if (bust === true) { 
+      elBtn.disabled = true; elBtn.innerHTML = '<i class="fa-solid fa-rotate fa-spin me-1"></i> Refreshing'; 
+    } else { 
+      // FIX: Only show loading spinner if we don't already have data on screen
+      if (!__dashData) {
+        elLoad.classList.remove('d-none'); 
+        elBody.classList.add('d-none'); 
+      }
+    }
 
     google.script.run
       .withSuccessHandler(function (res) {
@@ -196,7 +234,7 @@
         }
         __dashData = res.data;
         elBody.classList.remove('d-none');
-        paintDashboard(__dashData);
+        paintDashboard(__dashData); 
       })
       .withFailureHandler(function (err) {
         __dashBusy = false;
@@ -211,21 +249,56 @@
   function paintDashboard(d) {
     document.getElementById('dash-generated').innerText = 'Live • ' + (d.meta ? d.meta.generatedAt : '');
 
-    // ---- Census / beds ----
+    // ---- Census / beds & Stacked Bar Logic ----
     const c = d.census || {};
     document.getElementById('kpi-occ-pct').innerText   = (c.hasData ? c.occupancyPct + '%' : '—');
-    document.getElementById('kpi-occ-used').innerText  = c.occupied || 0;
+    
+    // Sum of all unavailable states
+    const totalUnavailable = (c.occupied || 0) + (c.reserved || 0) + (c.cleaning || 0);
+    document.getElementById('kpi-occ-used').innerText  = totalUnavailable;
     document.getElementById('kpi-occ-total').innerText = c.totalBeds || 0;
-    const bar = document.getElementById('kpi-occ-bar');
-    bar.style.width = (c.occupancyPct || 0) + '%';
-    bar.style.background = (c.occupancyPct >= 85) ? cssVar('--danger')
-                          : (c.occupancyPct >= 60) ? cssVar('--warning')
-                          : cssVar('--accent-purple');
+    
+    // Calculate and apply stacked widths
+    const occPct = c.totalBeds ? ((c.occupied || 0) / c.totalBeds) * 100 : 0;
+    const resPct = c.totalBeds ? ((c.reserved || 0) / c.totalBeds) * 100 : 0;
+    const clnPct = c.totalBeds ? ((c.cleaning || 0) / c.totalBeds) * 100 : 0;
+    
+    document.getElementById('kpi-bar-occ').style.width = occPct + '%';
+    document.getElementById('kpi-bar-res').style.width = resPct + '%';
+    document.getElementById('kpi-bar-cln').style.width = clnPct + '%';
+
+    // ---- Dynamic Operational Insight Engine ----
+    const insightEl = document.getElementById('kpi-occ-insight');
+    let insights = [];
+
+    // Build the string dynamically based on actual counts
+    if (c.occupied > 0) {
+      insights.push(`<span style="color: var(--danger);"><i class="fa-solid fa-bed me-1"></i> ${c.occupied} Occupied</span>`);
+    }
+    if (c.reserved > 0) {
+      insights.push(`<span style="color: var(--warning);"><i class="fa-solid fa-bookmark me-1"></i> ${c.reserved} Reserved</span>`);
+    }
+    if (c.cleaning > 0) {
+      insights.push(`<span style="color: var(--info);"><i class="fa-solid fa-broom me-1"></i> ${c.cleaning} Cleaning</span>`);
+    }
+
+    // Join them together with a subtle divider, or show the critical capacity warning
+    if (insights.length > 0) {
+      insightEl.innerHTML = insights.join('<span class="text-muted mx-2">|</span>');
+    } else if (c.occupancyPct >= 85) {
+      insightEl.innerHTML = `<span style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation me-1"></i> Approaching critical capacity.</span>`;
+    } else {
+      insightEl.innerText = '';
+    }
+
+    // Ward chips
     const chips = (c.wards || []).map(function (w) {
-      return '<span class="status-chip">' + w.ward + ' · ' + w.occupied + '/' + w.total + '</span>';
+      return '<span class="status-chip">' + w.ward + ' · ' + w.utilized + '/' + w.total + '</span>';
     }).join('');
     document.getElementById('kpi-ward-chips').innerHTML = chips ||
       '<span class="label-bright small">No bed map configured.</span>';
+      
+    // FIX: Current Inpatients count mapped from the backend
     document.getElementById('kpi-inpatients').innerText = c.currentInpatients || 0;
 
     // ---- Appointments ----
@@ -239,31 +312,46 @@
       document.getElementById('kpi-credit').innerText  = fmtMoney(d.revenue.pendingCredit);
     }
 
-    // ---- Alerts ----
+    // ---- Alerts, Footfall, Gateway ----
     paintAlerts(o);
-
-    // ---- Footfall chart ----
     renderFootfall();
-
-    // ---- Gateway hubs ----
     paintGateway(d);
   }
 
+  // ============================================================
+  // ALERTS STRIP (Updated with specific sub-view routing)
+  // ============================================================
   function paintAlerts(o) {
     const wrap = document.getElementById('dash-alerts');
     const items = [];
-    if (o.labPending)    items.push(alertChip('flask-vial', o.labPending + ' lab orders pending', 'info', 'gotoLab'));
-    if (o.lowStock)      items.push(alertChip('triangle-exclamation', o.lowStock + ' drugs low on stock', 'warning', 'gotoPharmacy'));
-    if (o.expiringSoon)  items.push(alertChip('hourglass-end', o.expiringSoon + ' batches expiring', 'danger', 'gotoPharmacy'));
-    if (o.apptPending)   items.push(alertChip('clock', o.apptPending + ' patients awaiting', 'success', 'gotoAppts'));
+    
+    if (o.labPending) {
+      items.push(alertChip('flask-vial', o.labPending + ' lab orders pending', 'info', 'gotoLab'));
+    }
+    
+    // Routed strictly to Pharmacy Inventory Ledger
+    if (o.lowStock) {
+      items.push(alertChip('triangle-exclamation', o.lowStock + ' drugs low on stock', 'warning', 'gotoPharmacyInventory'));
+    }
+    if (o.expiringSoon) {
+      items.push(alertChip('hourglass-end', o.expiringSoon + ' batches expiring', 'danger', 'gotoPharmacyInventory'));
+    }
+    
+    // Routed strictly to the admin appointments tab
+    if (o.apptPending) {
+      items.push(alertChip('clock', o.apptPending + ' patients awaiting', 'success', 'gotoApptsAwaiting'));
+    }
+    
     wrap.innerHTML = items.length ? items.join('')
       : '<span class="label-bright small"><i class="fa-solid fa-check me-1" style="color:var(--success);"></i>No operational alerts.</span>';
   }
+
   function alertChip(icon, text, color, handler) {
     return '<a href="#" onclick="' + handler + '(event)" class="status-chip" ' +
            'style="background: var(--' + color + '-bg); color: var(--' + color + '); text-decoration:none;">' +
            '<i class="fa-solid fa-' + icon + ' me-1"></i>' + text + '</a>';
   }
+
 
   // ============================================================
   // FOOTFALL YoY CHART
@@ -330,23 +418,24 @@
   }
 
   // ============================================================
-  // GATEWAY HUBS (reuse existing sidebar wiring; financial = RBAC id)
-  // Each card clicks the real sidebar nav link → fires all existing hooks.
+  // GATEWAY HUBS (Updated to use dedicated fn wrappers)
   // ============================================================
   function paintGateway(d) {
     const hubs = [
-      { id:'',                    icon:'calendar-check',     title:'Appointments', sub:(d.operations.apptToday||0)+' today',           nav:'nav-tab-appt' },
-      { id:'',                    icon:'hospital-user',      title:'Patients',     sub:'Registry & search',                            nav:'nav-tab-patients' },
-      { id:'',                    icon:'bed-pulse',          title:'Inpatients',   sub:(d.census.currentInpatients||0)+' admitted',    nav:'nav-tab-emr', fn:'gotoBeds' },
-      { id:'',                    icon:'laptop-medical',     title:'EMR',          sub:'Clinical records',                             nav:'nav-tab-emr' },
-      { id:'',                    icon:'flask-vial',         title:'Laboratory',   sub:(d.operations.labPending||0)+' pending',        nav:'nav-tab-lab' },
-      { id:'',                    icon:'pills',              title:'Pharmacy',     sub:(d.operations.lowStock||0)+' low stock',        nav:'nav-tab-pharmacy' },
-      { id:'dash-gateway-accounts', icon:'file-invoice-dollar', title:'Accounts', sub:'Billing & ledger',                            nav:'nav-tab-accounts' },
-      { id:'',                    icon:'chart-column',       title:'Analytics',    sub:'Trends & footfall',                            fn:'gotoAnalytics' }
+      { id:'', icon:'calendar-check', title:'Appointments', sub:(d.operations.apptToday||0)+' today', fn:'gotoApptsLedg' },
+      { id:'', icon:'hospital-user', title:'Patients', sub:'Registry & search', fn:'gotoPatients' },
+      { id:'', icon:'bed-pulse', title:'Inpatients', sub:(d.census.currentInpatients||0)+' admitted', fn:'gotoBeds' },
+      { id:'', icon:'laptop-medical', title:'EMR', sub:'Clinical records', fn:'gotoEMR' },
+      { id:'', icon:'flask-vial', title:'Laboratory', sub:(d.operations.labPending||0)+' pending', fn:'gotoLab' },
+      { id:'', icon:'pills', title:'Pharmacy', sub:(d.operations.lowStock||0)+' low stock', fn:'gotoPharmacy' },
+      { id:'dash-gateway-accounts', icon:'file-invoice-dollar', title:'Accounts', sub:'Billing & ledger', fn:'gotoAccounts' },
+      { id:'', icon:'chart-column', title:'Analytics', sub:'Trends & footfall', fn:'gotoAnalytics' }
     ];
+    
     const html = hubs.map(function (h) {
       const idAttr = h.id ? ' id="' + h.id + '"' : '';
-      const click  = h.fn ? (h.fn + '(event)') : ("gotoNav('" + h.nav + "', event)");
+      // We rely entirely on the assigned function (fn) now for precise routing
+      const click  = h.fn ? (h.fn + '(event)') : ''; 
       return '<div class="col-6 col-md-4 col-xl-3"' + idAttr + '>' +
         '<div class="card p-3 h-100" style="cursor:pointer;" onclick="' + click + '" ' +
         'onmouseover="this.classList.add(\'soft-glow\')" onmouseout="this.classList.remove(\'soft-glow\')">' +
@@ -366,23 +455,84 @@
     document.getElementById('dash-gateway').innerHTML = html;
   }
 
-  // ---- Navigation helpers: drive existing sidebar links (single source of truth) ----
-  function gotoNav(navId, ev) {
+  // ============================================================
+  // SPA ROUTING MASTER CONTROL
+  // ============================================================
+  function gotoNav(tabId, ev) {
     if (ev) ev.preventDefault();
-    const link = document.getElementById(navId);
-    if (link) link.click();              // reuses your switchTab + module hooks
+    if (typeof switchTab === 'function') {
+      switchTab(tabId, null);
+    } else {
+      const link = document.getElementById(tabId);
+      if (link) link.click();              
+    }
   }
-  function gotoBeds(ev)      { gotoNav('nav-tab-emr', ev); }       // IP/bed map lives under the clinical hub
-  function gotoAppts(ev)     { gotoNav('nav-tab-appt', ev); }
-  function gotoLab(ev)       { gotoNav('nav-tab-lab', ev); }
-  function gotoPharmacy(ev)  { gotoNav('nav-tab-pharmacy', ev); }
-  function gotoAccounts(ev)  { gotoNav('nav-tab-accounts', ev); }
+
+  // --- Main Workspace Routes (Preserved as working) ---
+  function gotoBeds(ev)              { gotoNav('ip-ledger-view', ev); }       
+  function gotoPatients(ev)          { gotoNav('workspace-patients', ev); }
+  function gotoEMR(ev)               { gotoNav('tab-admin-emr', ev); }
+  function gotoLab(ev)               { gotoNav('workspace-lab', ev); }
+  function gotoPharmacy(ev)          { gotoNav('workspace-pharmacy', ev); }
+  function gotoAccounts(ev)          { gotoNav('workspace-accounts', ev); } 
+  
+ // --- Specific Sub-View Routes (The Fixes) ---
+  function gotoBedMap(ev) { 
+    gotoNav('ip-bed-management-view', ev); 
+    
+    // Use a slight delay to ensure the CSS tab transition finishes smoothly 
+    // before the JavaScript thread locks up to fetch data.
+    setTimeout(function() {
+      if (typeof initBedMap === 'function') {
+        initBedMap(); 
+      } else {
+        console.warn("Bed Map initialization failed: initBedMap is not defined in this scope.");
+      }
+    }, 150);
+  } 
+
+  function gotoPharmacyInventory(ev) { gotoNav('tab-admin-pharmacy', ev); } 
+  
+  // ============================================================
+  // APPOINTMENTS ROUTING & AUTO-REFRESH FIX
+  // ============================================================
+  function gotoApptsAwaiting(ev) { 
+    gotoNav('tab-admin-appt', ev); 
+    refreshAppointmentsModule();
+  } 
+  
+  function gotoApptsLedg(ev) { 
+    gotoNav('tab-admin-appt', ev); 
+    refreshAppointmentsModule();
+  }
+
+  function gotoAppts(ev) { 
+    gotoNav('workspace-appointments', ev); 
+    refreshAppointmentsModule();
+  }
+
+  // Safely calls the exact function from your Appointments module
+  function refreshAppointmentsModule() {
+    // 150ms delay ensures the CSS tab transition finishes smoothly 
+    // before the JavaScript thread gets locked up by data fetching.
+    setTimeout(function() {
+      if (typeof initAdminLedger === 'function') {
+        initAdminLedger(); // Resets date to today and fetches live data
+      } else {
+        console.warn("Auto-refresh failed: initAdminLedger is not defined in this scope.");
+      }
+    }, 150);
+  }
+
+  // ============================================================
+  // ANALYTICS ROUTING
+  // ============================================================
   function gotoAnalytics(ev) {
     if (ev) ev.preventDefault();
     if (typeof switchTab === 'function') switchTab('tab-admin-analytics', null);
     if (typeof renderAnalyticsPage === 'function') renderAnalyticsPage();
   }
-
+  
   // ---- Theme reactivity: re-tint charts when light/dark toggles ----
   (function () {
     const obs = new MutationObserver(function () {
@@ -394,19 +544,17 @@
     obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
   })();
 
-  // ---- Self-initializer: paint when the dashboard section becomes active ----
-  // Works even if the switchTab() hook (Edit 3) was not applied.
+  // ---- Self-initializer Fix (Triggers silently on tab switch) ----
   (function () {
     function maybeInit() {
       const sec = document.getElementById('tab-admin-dash');
-      if (sec && sec.classList.contains('active-section') && !__dashData && !__dashBusy) {
-        renderAdminDashboard();
+      if (sec && sec.classList.contains('active-section') && !__dashBusy) {
+        renderAdminDashboard(false); 
       }
     }
     const secObs = new MutationObserver(maybeInit);
     const sec = document.getElementById('tab-admin-dash');
     if (sec) secObs.observe(sec, { attributes: true, attributeFilter: ['class'] });
-    // Catch the login case where the section is already active before observers attach.
     setTimeout(maybeInit, 600);
   })();
 </script>

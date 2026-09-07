@@ -71,27 +71,54 @@ function invalidateDashboardCache() {
 // IP_Admissions: IP_No[0] PatientID[1] Name[2] AgeSex[3] DOA[4] ... Status[11] DOD[12]
 // ------------------------------------------------------------
 function _dashCensus_(ss) {
-  var out = { totalBeds: 0, occupied: 0, available: 0, occupancyPct: 0,
-              wards: [], currentInpatients: 0, hasData: false };
+  var out = { 
+    totalBeds: 0, 
+    occupied: 0, 
+    reserved: 0, 
+    cleaning: 0, 
+    available: 0, 
+    occupancyPct: 0,
+    wards: [], 
+    currentInpatients: 0, 
+    hasData: false 
+  };
 
   var bedSheet = ss.getSheetByName("Master_Beds");
   if (bedSheet && bedSheet.getLastRow() > 1) {
     var d = bedSheet.getDataRange().getValues();
     var wardMap = {};
+    
     for (var i = 1; i < d.length; i++) {
       if (!d[i][0]) continue;
       out.totalBeds++;
+      
       var ward = (d[i][1] || "GEN").toString().trim();
       var status = (d[i][2] || "Available").toString().trim().toUpperCase();
-      var occ = (status !== "AVAILABLE"); // Occupied / Cleaning / Blocked => not free
-      if (occ) out.occupied++; else out.available++;
-      if (!wardMap[ward]) wardMap[ward] = { ward: ward, total: 0, occupied: 0 };
+      
+      // Categorize the bed statuses exactly matching your UI
+      if (status === "OCCUPIED" || status === "ISOLATION") {
+        out.occupied++;
+      } else if (status === "RESERVED") {
+        out.reserved++;
+      } else if (status === "CLEANING" || status === "MAINTENANCE") {
+        out.cleaning++;
+      } else {
+        out.available++;
+      }
+      
+      // Any bed that is not strictly "AVAILABLE" is considered utilized
+      var isUtilized = (status !== "AVAILABLE"); 
+      
+      if (!wardMap[ward]) wardMap[ward] = { ward: ward, total: 0, utilized: 0 };
       wardMap[ward].total++;
-      if (occ) wardMap[ward].occupied++;
+      if (isUtilized) wardMap[ward].utilized++;
     }
+    
     out.wards = Object.keys(wardMap).map(function (k) { return wardMap[k]; })
                       .sort(function (a, b) { return a.ward < b.ward ? -1 : 1; });
-    out.occupancyPct = out.totalBeds ? Math.round((out.occupied / out.totalBeds) * 100) : 0;
+    
+    var totalUnavailable = out.occupied + out.reserved + out.cleaning;
+    out.occupancyPct = out.totalBeds ? Math.round((totalUnavailable / out.totalBeds) * 100) : 0;
     out.hasData = out.totalBeds > 0;
   }
 
@@ -99,9 +126,14 @@ function _dashCensus_(ss) {
   if (ipSheet && ipSheet.getLastRow() > 1) {
     var ip = ipSheet.getDataRange().getValues();
     for (var j = 1; j < ip.length; j++) {
-      if ((ip[j][11] || "").toString().trim().toUpperCase() === "ADMITTED") out.currentInpatients++;
+      // FIX: Check for both "ACTIVE" and "ADMITTED" to match the database
+      var stat = (ip[j][11] || "").toString().trim().toUpperCase();
+      if (stat === "ACTIVE" || stat === "ADMITTED") {
+        out.currentInpatients++;
+      }
     }
   }
+  
   return out;
 }
 

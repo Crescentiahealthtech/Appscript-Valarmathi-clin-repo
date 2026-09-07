@@ -13,27 +13,36 @@
     </div>
 
     <div class="row g-3 mb-4">
-      <div class="col-md-4 col-12">
+      <div class="col-md-3 col-12">
         <div class="card bg-dark border-secondary h-100">
           <div class="card-body d-flex align-items-center">
             <i class="fa-solid fa-magnifying-glass text-secondary me-3 fs-4"></i>
-            <input type="text" id="inventorySearch" class="form-control custom-input-dark border-0 shadow-none w-100" placeholder="Search Inventory (Brand, Batch, Generic)..." onkeyup="filterInventoryTable()">
+            <input type="text" id="inventorySearch" class="form-control custom-input-dark border-0 shadow-none w-100" placeholder="Search Inventory..." onkeyup="filterInventoryTable()">
           </div>
         </div>
       </div>
-      <div class="col-md-4 col-6">
+      <div class="col-md-3 col-4">
         <div class="card border-0 h-100" style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444 !important;">
           <div class="card-body py-2">
-            <h6 class="text-danger fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Low Stock Alerts</h6>
+            <h6 class="text-danger fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Low Stock</h6>
             <h3 class="text-white m-0 fw-bold" id="kpi-low-stock">0</h3>
           </div>
         </div>
       </div>
-      <div class="col-md-4 col-6">
+      <div class="col-md-3 col-4">
         <div class="card border-0 h-100" style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b !important;">
           <div class="card-body py-2">
             <h6 class="text-warning fw-bold mb-1"><i class="fa-regular fa-clock me-1"></i>Expiring Soon</h6>
             <h3 class="text-white m-0 fw-bold" id="kpi-expiring">0</h3>
+          </div>
+        </div>
+      </div>
+      <!-- New Expired KPI Card -->
+      <div class="col-md-3 col-4">
+        <div class="card border-0 h-100" style="background: rgba(220, 53, 69, 0.15); border-left: 4px solid #dc3545 !important;">
+          <div class="card-body py-2">
+            <h6 class="text-danger fw-bold mb-1"><i class="fa-solid fa-ban me-1"></i>Expired</h6>
+            <h3 class="text-white m-0 fw-bold" id="kpi-expired">0</h3>
           </div>
         </div>
       </div>
@@ -51,6 +60,8 @@
                 <th class="py-3">Batch</th>
                 <th class="py-3 text-warning">Stock</th>
                 <th class="py-3">Expiry</th>
+                <!-- New Status Column -->
+                <th class="py-3 text-center">Status</th>
                 <th class="py-3">MRP (₹)</th>
                 <th class="py-3">GST (%)</th>
                 <th class="py-3">Rack</th>
@@ -60,7 +71,7 @@
               </tr>
             </thead>
             <tbody id="inventoryTbody" style="font-size: 0.85rem;">
-              </tbody>
+            </tbody>
           </table>
         </div>
       </div>
@@ -151,13 +162,43 @@
     tbody.innerHTML = '';
     
     if(data.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-secondary">No inventory found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" class="text-center py-4 text-secondary">No inventory found.</td></tr>`;
       return;
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const ninetyDaysFromNow = new Date();
+    ninetyDaysFromNow.setDate(today.getDate() + 90);
+
     data.forEach((item, index) => {
       const safeItem = JSON.stringify(item).replace(/"/g, '&quot;');
-      const stockColor = item.stock < 50 ? 'text-danger fw-bold' : 'text-light';
+      
+      // Stock Highlight Logic
+      const isLowStock = item.stock < 50;
+      const stockDisplay = isLowStock 
+          ? `<span class="badge bg-danger fs-6">${item.stock}</span>` 
+          : `<span class="text-light">${item.stock}</span>`;
+      
+      // Expiry & Status Highlight Logic
+      let statusBadge = '<span class="badge bg-secondary">N/A</span>';
+      
+      if (item.expiry) {
+        const parts = item.expiry.split('-');
+        if(parts.length === 2) {
+           // parts[0] is Year, parts[1] is Month. Month "0" gets the last day of the previous month.
+           // This checks validity against the absolute last day of the expiry month.
+           const expDate = new Date(parts[0], parts[1], 0); 
+           
+           if (expDate < today) {
+             statusBadge = '<span class="badge bg-danger"><i class="fa-solid fa-ban me-1"></i>Expired</span>';
+           } else if (expDate <= ninetyDaysFromNow) {
+             statusBadge = '<span class="badge bg-warning text-dark"><i class="fa-regular fa-clock me-1"></i>Expiring</span>';
+           } else {
+             statusBadge = '<span class="badge bg-success">Valid</span>';
+           }
+        }
+      }
       
       const row = `
         <tr>
@@ -165,8 +206,9 @@
           <td><span class="badge bg-secondary bg-opacity-25 text-light fw-normal">${item.genericName}</span></td>
           <td class="text-info fw-semibold">${item.brandName}</td>
           <td class="text-secondary">${item.batch}</td>
-          <td class="${stockColor}">${item.stock}</td>
+          <td>${stockDisplay}</td>
           <td>${item.expiry}</td>
+          <td class="text-center">${statusBadge}</td>
           <td>${item.mrp.toFixed(2)}</td>
           <td class="text-secondary">${item.gst}%</td>
           <td>${item.rack || '-'}</td>
@@ -186,8 +228,10 @@
   function calculateInventoryKPIs(data) {
     let lowStock = 0;
     let expiring = 0;
+    let expired = 0; // Added tracker for expired stock
     
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const ninetyDaysFromNow = new Date();
     ninetyDaysFromNow.setDate(today.getDate() + 90);
 
@@ -198,13 +242,22 @@
         const parts = item.expiry.split('-');
         if(parts.length === 2) {
            const expDate = new Date(parts[0], parts[1], 0); 
-           if (expDate <= ninetyDaysFromNow) expiring++;
+           
+           if (expDate < today) {
+             expired++; // Increment expired counter
+           } else if (expDate <= ninetyDaysFromNow) {
+             expiring++;
+           }
         }
       }
     });
 
     document.getElementById('kpi-low-stock').innerText = lowStock;
     document.getElementById('kpi-expiring').innerText = expiring;
+    
+    // Bind to new expired KPI card
+    const expiredElem = document.getElementById('kpi-expired');
+    if(expiredElem) expiredElem.innerText = expired;
   }
 
   function filterInventoryTable() {

@@ -263,7 +263,10 @@
   // ==========================================
   function executeUIRouting(res, loggedInName, isRestore = false) {
     window.loggedInUser = loggedInName; 
-    window.loggedInRole = res.role.toLowerCase();
+    window.loggedInRole   = (res.role || "").toLowerCase();
+    window.currentDoctorId   = res.doctorId || "";
+    window.currentDoctorName = res.displayName || loggedInName;
+    window.sessionToken      = res.sessionToken || "";
 
     // --- NEW: Save Session State & Start Timer ---
     if (!isRestore) {
@@ -293,7 +296,8 @@
     // Profile Badge Updates
     const dispName = document.getElementById('display-user-name');
     const profInit = document.getElementById('profile-initial');
-    if (dispName) dispName.innerText = (res.role.toLowerCase() === 'patient' ? "Patient Portal" : "Staff: " + res.role.toUpperCase());
+    if (dispName) dispName.innerText = (res.role.toLowerCase() === 'patient')
+        ? "Patient Portal" : (res.displayName || ("Staff: " + res.role.toUpperCase()));
     if (profInit) profInit.innerText = res.role.charAt(0).toUpperCase();
 
     // Trigger Layer 2 Security (Hides tabs based on role)

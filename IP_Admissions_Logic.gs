@@ -16,7 +16,7 @@ function fetchPatientForAdmit(patientId) {
   return null;
 }
 
-function saveNewAdmissionLedger(pay) {
+function saveNewAdmissionLedger(payload) { // <-- FIX: Changed 'pay' to 'payload'
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyMM");
   const randomSeq = Math.floor(1000 + Math.random() * 9000); 
@@ -25,11 +25,9 @@ function saveNewAdmissionLedger(pay) {
   let admitSheet = ss.getSheetByName("IP_Admissions");
   if(!admitSheet) { 
     admitSheet = ss.insertSheet("IP_Admissions"); 
-    // Add Headers if it's a new sheet
     admitSheet.appendRow(["IP Number", "Patient ID", "Patient Name", "Age/Sex", "DOA", "TOA", "Type", "Ward", "Bed", "Consultant", "Diagnosis", "Status", "DOD"]);
   }
   
-  // Appending ALL payload data matching the headers above
   admitSheet.appendRow([
     newIpNumber, 
     payload.patientId, 
@@ -43,7 +41,7 @@ function saveNewAdmissionLedger(pay) {
     payload.consultant,
     payload.diagnosis, 
     "ACTIVE",
-    "" // DOD (Date of Discharge) left blank initially
+    "" 
   ]);
 
   let bedSheet = ss.getSheetByName("Master_Beds");
@@ -130,38 +128,52 @@ function getIPLedgerData() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("IP_Admissions");
-    if (!sheet || sheet.getLastRow() < 2) {
-      return JSON.stringify({ success: true, data: [] });
+    
+    // Failover if sheet doesn't exist
+    if (!sheet) return { success: true, data: [] }; 
+    
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    // Prevent fetching if sheet is virtually empty
+    if (lastRow < 2 || lastCol < 1) {
+      return { success: true, data: [] };
     }
+    
     const tz = Session.getScriptTimeZone();
     const fmt = function (v, pat) {
       if (v instanceof Date) return Utilities.formatDate(v, tz, pat);
       return (v == null ? "" : v).toString();
     };
-    const data = sheet.getDataRange().getValues();
+    
+    // Dynamically fetch columns
+    const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
     const ledger = [];
-    for (let i = 1; i < data.length; i++) {
+    
+    for (let i = 0; i < data.length; i++) {
       const r = data[i];
-      if (!r[0]) continue; // skip blank/trailing rows
+      if (!r[0]) continue; // Skip blank rows
+      
       ledger.push({
         ipNumber:   (r[0]  || "").toString(),
         patientId:  (r[1]  || "").toString(),
         patientName:(r[2]  || "").toString(),
         ageSex:     (r[3]  || "").toString(),
-        doa:        fmt(r[4], "dd MMM yyyy"),
-        toa:        fmt(r[5], "hh:mm a"),
+        doa:        fmt(r[4],  "dd MMM yyyy"),
+        toa:        fmt(r[5],  "hh:mm a"),
         type:       (r[6]  || "").toString(),
         ward:       (r[7]  || "").toString(),
         bed:        (r[8]  || "").toString(),
         consultant: (r[9]  || "").toString(),
         diagnosis:  (r[10] || "").toString(),
         status:     (r[11] || "UNKNOWN").toString(),
-        dod:        fmt(r[12], "dd MMM yyyy")
+        dod:        lastCol > 12 ? fmt(r[12], "dd MMM yyyy") : ""
       });
     }
-    return JSON.stringify({ success: true, data: ledger.reverse() });
+    // Return a raw object, NOT a JSON string
+    return { success: true, data: ledger.reverse() };
   } catch (e) {
-    return JSON.stringify({ success: false, message: e.message });
+    return { success: false, message: e.message };
   }
 }
 
@@ -198,4 +210,22 @@ function processPatientDischarge(ipNumber, bedId) {
     }
   }
   return true;
+}
+
+function getLedgerDiagnostics() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("IP_Admissions");
+    if (!sheet) {
+      return JSON.stringify({ ok: true, sheetExists: false, rowCount: 0 });
+    }
+    return JSON.stringify({
+      ok: true,
+      sheetExists: true,
+      rowCount: Math.max(0, sheet.getLastRow() - 1),
+      lastCol: sheet.getLastColumn()
+    });
+  } catch (e) {
+    return JSON.stringify({ ok: false, message: e.message });
+  }
 }

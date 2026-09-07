@@ -32,10 +32,22 @@ function verifyLogin(credentials) {
 
         // Password Validation
         if (storedPassword.toString().trim() === passwordInput) {
+          const role = storedRole.toString().trim().toLowerCase();
+          const doc  = resolveDoctorByUsername_(storedUsername);
+          const token = issueSession_({
+            username: storedUsername,
+            role: role,
+            doctorId: doc ? doc.doctorId : "",
+            name: doc ? doc.name : storedUsername
+          });
           return {
             success: true,
-            role: storedRole.toString().trim().toLowerCase(),
+            role: role,
             portal: 'hospital',
+            username: storedUsername,
+            displayName: doc ? doc.name : storedUsername,
+            doctorId: doc ? doc.doctorId : "",
+            sessionToken: token,
             message: "Welcome " + storedRole
           };
         } else {
@@ -139,11 +151,22 @@ function verifyGoogleLogin(userEmail) {
           return { success: false, message: "Access Denied: This staff credential context is deactivated." };
         }
 
+        const role = storedRole.toString().trim().toLowerCase();
+        const doc  = resolveDoctorByUsername_(storedUsername);
+        const token = issueSession_({
+          username: storedUsername,
+          role: role,
+          doctorId: doc ? doc.doctorId : "",
+          name: doc ? doc.name : storedUsername
+        });
         return {
           success: true,
-          role: storedRole.toString().trim().toLowerCase(),
+          role: role,
           portal: 'hospital',
           username: storedUsername,
+          displayName: doc ? doc.name : storedUsername,
+          doctorId: doc ? doc.doctorId : "",
+          sessionToken: token,
           message: "Welcome back " + storedUsername
         };
       }

@@ -5,8 +5,9 @@
     border-radius: 0.5rem;
     overflow: hidden;
   }
+</style> <!-- <-- FIX: Changed from <style> to </style> -->
 
-  <style>
+<style>
   /* Fix for Dropdown Option Visibility in Dark Mode */
   select.form-select, select.bed-status-select {
     color: #ffffff !important;
@@ -335,46 +336,35 @@
 </div>
 
 <script>
-  let ledgerDataMaster = [];
+let ledgerDataMaster = [];
 
   function loadIPLedger() {
     const tbody = document.getElementById('ip-ledger-tbody');
     if (tbody) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border text-primary"></div><br>Loading Ledger...</td></tr>`;
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border text-primary"></div><br>Fetching Live Ledger...</td></tr>';
     }
-    // Watchdog: never let the spinner run forever.
-    let settled = false;
-    const watchdog = setTimeout(function () {
-      if (!settled && tbody) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Ledger request timed out. <a href="#" onclick="loadIPLedger();return false;">Retry</a></td></tr>`;
-      }
-    }, 15000);
-
+    
     google.script.run
-      .withSuccessHandler(function (res) { settled = true; clearTimeout(watchdog); renderLedgerTable(res); })
-      .withFailureHandler(function (err) {
-        settled = true; clearTimeout(watchdog);
-        if (tbody) tbody.innerHTML =
-          `<tr><td colspan="8" class="text-center text-danger py-4">Failed to load ledger: ${ (err && err.message) ? err.message : 'Server error' }. <a href="#" onclick="loadIPLedger();return false;">Retry</a></td></tr>`;
+      .withSuccessHandler(renderLedgerTable)
+      .withFailureHandler(err => {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">⚠️ Server Error: ${err.message}<br><button class="btn btn-sm btn-outline-light mt-3" onclick="loadIPLedger()">Retry</button></td></tr>`;
       })
       .getIPLedgerData();
   }
 
-  function renderLedgerTable(res) {
+    function renderLedgerTable(payload) {
     const tbody = document.getElementById('ip-ledger-tbody');
-    try {
-      let payload = (typeof res === 'string') ? JSON.parse(res) : res;
-      if (payload && payload.success === false) {
-        tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${payload.message || 'Could not load ledger.'}</td></tr>`;
-        return;
-      }
-      ledgerDataMaster = Array.isArray(payload) ? payload : ((payload && payload.data) || []);
-      filterLedger();
-    } catch (e) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error rendering ledger: ${e.message}</td></tr>`;
+    
+    // Directly access the object payload without parsing
+    if (payload && payload.success === false) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${payload.message || 'Could not load ledger.'}</td></tr>`;
+      return;
     }
+    
+      ledgerDataMaster = payload.data || [];
+      filterLedger();
   }
-
+  // 3. Robust Filtering logic mapping ADMITTED to ACTIVE
   function filterLedger() {
     const query = document.getElementById('ledger-search').value.toLowerCase();
     const statusFilter = document.getElementById('ledger-filter-status').value;
@@ -388,13 +378,20 @@
       const pid = (row.patientId || '').toString().toLowerCase();
       const nm  = (row.patientName || '').toString().toLowerCase();
       const matchSearch = ip.includes(query) || pid.includes(query) || nm.includes(query);
-      const matchStatus = statusFilter === 'ALL' || (row.status || '').toString().toUpperCase() === statusFilter;
+      
+      const rowStat = (row.status || '').toString().toUpperCase();
+      const isRowActive = (rowStat === 'ACTIVE' || rowStat === 'ADMITTED');
+      
+      let matchStatus = false;
+      if (statusFilter === 'ALL') matchStatus = true;
+      else if (statusFilter === 'ACTIVE' && isRowActive) matchStatus = true;
+      else if (statusFilter === 'DISCHARGED' && rowStat === 'DISCHARGED') matchStatus = true;
 
       if(matchSearch && matchStatus) {
         count++;
-        let statusBadge = row.status === 'ACTIVE' ? `<span class="badge bg-success">Active</span>` : `<span class="badge bg-secondary">Discharged<br><small>${row.dod}</small></span>`;
+        let statusBadge = isRowActive ? `<span class="badge bg-success">Active</span>` : `<span class="badge bg-secondary">Discharged<br><small>${row.dod}</small></span>`;
         
-        let actionBtn = row.status === 'ACTIVE' ? 
+        let actionBtn = isRowActive ? 
           `<button class="btn btn-sm btn-outline-warning rounded-pill px-3 me-1" onclick="openChangeBedModal('${row.ipNumber}', '${row.bed}', '${row.ward}')"><i class="fa-solid fa-right-left"></i> Change Bed</button>
            <button class="btn btn-sm btn-outline-danger rounded-pill px-3" onclick="triggerDischarge('${row.ipNumber}', '${row.bed}')"><i class="fa-solid fa-arrow-right-from-bracket"></i> Discharge</button>` : 
           `<button class="btn btn-sm btn-outline-light rounded-pill px-3" disabled>Closed</button>`;
@@ -415,8 +412,10 @@
     });
 
     if(count === 0) html = `<tr><td colspan="8" class="text-center py-4 text-muted">No records found.</td></tr>`;
-    tbody.innerHTML = html;
+    if (tbody) tbody.innerHTML = html;
   }
+
+    
 
   // UPDATED: Prepares Modal Data silently in the background
   function prepAdmitModal() {
@@ -496,15 +495,22 @@
     btn.innerText = "Processing...";
     btn.disabled = true;
     
-    google.script.run.withSuccessHandler(newIpNum => {
+
+    google.script.run
+      .withSuccessHandler(newIpNum => {
       alert(`Admission Successful!\nGenerated IP Number: ${newIpNum}`);
-      // Hide modal programmatically after success
       bootstrap.Modal.getInstance(document.getElementById('modalAdmitPatient')).hide();
       btn.innerText = "Admit & Generate IP";
       btn.disabled = false;
       loadIPLedger(); 
-    }).saveNewAdmissionLedger(payload);
-  }
+      })
+      .withFailureHandler(err => { // <-- ADDED: Catch backend crashes
+      alert("Error saving admission: " + err.message);
+      btn.innerText = "Admit & Generate IP";
+      btn.disabled = false;
+      })
+      .saveNewAdmissionLedger(payload);
+    }
 
   // Bed Transfer Handlers
   function openChangeBedModal(ipNumber, currentBed, currentWard) {
@@ -530,13 +536,21 @@
     btn.innerText = "Transferring...";
     btn.disabled = true;
 
-    google.script.run.withSuccessHandler(() => {
+    // Inside submitBedTransfer()
+    google.script.run
+     .withSuccessHandler(() => {
       bootstrap.Modal.getInstance(document.getElementById('modalChangeBed')).hide();
       btn.innerText = "Confirm Transfer";
       btn.disabled = false;
       alert(`Bed successfully changed from ${oldBed} to ${newBed}.`);
       loadIPLedger();
-    }).processBedTransfer(ipNumber, oldBed, newWard, newBed);
+      })
+      .withFailureHandler(err => { // <-- ADDED: Catch backend crashes
+      alert("Error transferring bed: " + err.message);
+      btn.innerText = "Confirm Transfer";
+      btn.disabled = false;
+      })
+  .processBedTransfer(ipNumber, oldBed, newWard, newBed);
   }
 
   // Discharge Handler

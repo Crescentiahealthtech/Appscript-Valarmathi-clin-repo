@@ -7,12 +7,7 @@ function getIPAdmissions() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("IP_Admissions"); 
     
-    if (!sheet) {
-      return JSON.stringify([
-        { id: "LMTVS0003", ipNumber: "IP260501", name: "THIYAGARAJAN N", age: "45", sex: "M", bed: "ICU-01", ward: "ICU", doa: "2026-05-20", triage: "Moderate" },
-        { id: "LMTVS0005", ipNumber: "IP260502", name: "SULOCHANA", age: "62", sex: "F", bed: "GenWard-A", ward: "Gen Ward", doa: "2026-05-21", triage: "Stable" }
-      ]);
-    }
+    if (!sheet) return JSON.stringify([]); // clean empty state — never fabricate patients
 
     const data = sheet.getDataRange().getValues();
     if (data.length <= 1) return JSON.stringify([]);
@@ -42,6 +37,12 @@ function getIPAdmissions() {
 function saveIPRecord(payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000); 
+
+  // --- Server-side identity & authorization (ABDM attribution) ---
+    const sess = validateSession_(payload.sessionToken);
+    if (!sess)                  return { success: false, message: "Session expired. Please log in again." };
+    if (sess.role !== 'doctor') return { success: false, message: "Only a logged-in doctor can author a casesheet." };
+    if (!sess.doctorId)         return { success: false, message: "Your account is not linked to a doctor profile. Contact admin." };
   
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -56,7 +57,7 @@ function saveIPRecord(payload) {
         "Sys_BP", "Dia_BP", "PR", "SpO2", "Temp", "Height", "Weight", 
         "Chief_Complaints", "History", "Pallor", "Icterus", "Cyanosis", "Clubbing", "Edema", "Other GE findings", 
         "CVS", "RS", "PA", "CNS", "Primary Diagnosis", "Prescription_JSON", "Lab_Orders_JSON", 
-        "Outside Lab Records", "Radiological records", "Advice", "Doctor's Name"
+        "Outside Lab Records", "Radiological records", "Advice", "Doctor's Name", "Doctor_ID"
       ]);
       sheet.getRange("A1:AI1").setFontWeight("bold").setBackground("#d9ead3");
     }
@@ -106,8 +107,12 @@ function saveIPRecord(payload) {
       JSON.stringify(payload.outsideLabs), 
       payload.radiology,
       payload.advice,
-      payload.doctorName
+      sess.name
     ];
+
+    ensureColumn_(sheet, "Doctor_ID");
+    rowData.push(sess.doctorId);
+    sheet.appendRow(rowData);
 
     sheet.appendRow(rowData);
 
@@ -123,7 +128,7 @@ function saveIPRecord(payload) {
           dateStr, 
           `${med.strength || ""} ${med.drugName || ""}`.trim(),
           med.sig || "", 
-          payload.doctorName || "Doctor", 
+          sess.name || "Doctor", 
           "Pending", 
           med.duration || ""
         ]);
@@ -144,7 +149,7 @@ function saveIPRecord(payload) {
           admissionId:        payload.ipNumber || encounterId,
           sourceModule:       'IP_CASESHEET',
           visitId:            encounterId,
-          orderingDoctorName: payload.doctorName || '',
+          orderingDoctorName: sess.name || '',
           testNames:          testNameList,
           priority:           hasStat ? 'STAT' : 'ROUTINE',
           clinicalNote:       payload.provDiagnosis || ''
@@ -157,6 +162,10 @@ function saveIPRecord(payload) {
     // 3. TEMPLATE LEARNING
     try { if (payload.templateLearn) learnTemplates(payload.templateLearn); } 
     catch (tErr) { Logger.log("template learn skipped: " + tErr.message); }
+
+    logAudit_(sess, "CASESHEET_SAVE", "IP_CaseSheet", encounterId, {
+      patientId: payload.patientId, ipNumber: payload.ipNumber, diagnosis: payload.provDiagnosis
+    });
 
     SpreadsheetApp.flush();
     return { success: true, message: "IP Casesheet Locked & Saved to DB Successfully!", encounterId: encounterId };
