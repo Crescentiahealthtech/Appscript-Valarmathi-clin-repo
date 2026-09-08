@@ -1,623 +1,606 @@
-<style>
-  .ledger-table-container {
-    background-color: #212529;
-    border: 1px solid #495057;
-    border-radius: 0.5rem;
-    overflow: hidden;
-  }
-</style> <!-- <-- FIX: Changed from <style> to </style> -->
+<!-- =====================================================================
+     IP_Admissions_UI.html — CresRx
+     Full replacement. Theme-neutral (Bootstrap 5.3 data-bs-theme aware).
 
-<style>
-  /* Fix for Dropdown Option Visibility in Dark Mode */
-  select.form-select, select.bed-status-select {
-    color: #ffffff !important;
-  }
-  select option {
-    background-color: #212529 !important;
-    color: #ffffff !important;
-  }
-  
-  /* Fix for readonly inputs sometimes graying out text */
-  input[readonly] {
-    background-color: #2b3035 !important;
-    color: #ffffff !important;
-  }
-</style>
+     IMPORTANT: this file is currently included in BOTH the Appointments
+     and Patients workspaces, which puts two copies of every ID in the DOM
+     and is why the ledger spun forever. The renderer below writes to ALL
+     matching nodes so it works either way — but you should still include
+     it once and route to it.
+     ===================================================================== -->
 
-<style>
-  /* 1. Fix Label Visibility in Dark Mode */
-  .modal-body label, 
-  .modal-body .form-label, 
-  .modal-body .text-muted {
-    color: #e9ecef !important; /* Bright White/Grey */
-    font-weight: 600;
-    letter-spacing: 0.5px;
-  }
-  
-  .modal-body .form-control, 
-  .modal-body .form-select {
-    background-color: #2b3035 !important;
-    border: 1px solid #6c757d !important;
-    color: #ffffff !important;
-  }
+<div id="ip-ledger-view" class="ip-ledger-module d-flex flex-column h-100 d-none">
 
-  /* 2. Bed Management Box Grid Structure */
-  .bed-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1.2rem;
-    margin-bottom: 2rem;
-  }
-  
-  .bed-card {
-    background-color: #1a1d20;
-    border: 2px solid #495057;
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  
-  .bed-card .bed-id {
-    font-size: 1.4rem;
-    font-weight: 900;
-    color: #ffffff;
-    border-bottom: 1px solid #343a40;
-    padding-bottom: 8px;
-    margin-bottom: 10px;
-  }
-
-  .bed-status-available { border-top: 4px solid #198754; }
-  .bed-status-occupied { border-top: 4px solid #dc3545; }
-  .bed-status-cleaning { border-top: 4px solid #0dcaf0; }
-</style>
-
-<style>
-  /* 1. Modal Theme Corrections for Text Visibility */
-  .modal-content, #form-admission {
-    background-color: #1a1d20 !important;
-    color: #ffffff !important;
-  }
-  
-  .modal-body label,
-  .modal-body .form-label,
-  .modal-body h6,
-  .modal-body .text-muted {
-    color: #f8f9fa !important; /* Forces Labels to Bright High-Clear White */
-    font-weight: 600 !important;
-  }
-
-  .modal-body .form-control,
-  .modal-body .form-select {
-    background-color: #2b3035 !important;
-    border: 1px solid #495057 !important;
-    color: #ffffff !important;
-  }
-
-  .modal-body .form-control[readonly] {
-    background-color: #343a40 !important;
-    color: #e9ecef !important;
-  }
-
-  /* 2. Structured Box Grid Layout for Bed Maps */
-  .bed-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
-    gap: 1.25rem !important;
-    margin-top: 1rem;
-    margin-bottom: 2rem;
-  }
-  
-  .bed-card {
-    background-color: #212529 !important;
-    border: 2px solid #495057 !important;
-    border-radius: 0.5rem !important;
-    padding: 1.25rem !important;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4) !important;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    transition: transform 0.2s ease, border-color 0.2s ease;
-  }
-
-  .bed-card:hover {
-    transform: translateY(-3px) !important;
-  }
-
-  /* Distinct Top Borders Representing Realtime Statuses */
-  .bed-status-available { border-top: 5px solid #198754 !important; }
-  .bed-status-occupied { border-top: 5px solid #dc3545 !important; }
-  .bed-status-reserved { border-top: 5px solid #ffc107 !important; }
-  .bed-status-cleaning { border-top: 5px solid #0dcaf0 !important; }
-  .bed-status-maintenance { border-top: 5px solid #6c757d !important; }
-  .bed-status-isolation { border-top: 5px solid #fd7e14 !important; }
-
-  .bed-id {
-    font-size: 1.35rem !important;
-    font-weight: 800 !important;
-    color: #ffffff !important;
-    margin-bottom: 0.5rem;
-  }
-
-  .bed-patient-info {
-    font-size: 0.85rem !important;
-    color: #cfd4da !important;
-    min-height: 45px;
-    line-height: 1.4;
-  }
-</style>
-
-<div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
-  <div>
-    <h4 class="m-0 fw-bold"><i class="fa-solid fa-folder-open me-2 text-primary"></i> IP Admissions Ledger</h4>
-    <small class="text-body-secondary">Master log of all active and historical hospital admissions</small>
+  <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+    <div>
+      <h4 class="m-0 fw-bold">
+        <i class="fa-solid fa-folder-open me-2 text-primary"></i> IP Admissions Ledger
+      </h4>
+      <small class="text-body-secondary">Master log of all active and historical hospital admissions</small>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary fw-bold px-4"
+              data-bs-toggle="modal" data-bs-target="#modalAdmitPatient" onclick="prepAdmitModal()">
+        <i class="fa-solid fa-plus me-2"></i> New Admission
+      </button>
+      <button class="btn btn-outline-secondary fw-bold px-4"
+              onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
+        <i class="fa-solid fa-arrow-left me-2"></i> Go Back
+      </button>
+    </div>
   </div>
-  <div class="d-flex gap-2">
-    <button class="btn btn-primary fw-bold shadow-sm px-4"
-            data-bs-toggle="modal" data-bs-target="#modalAdmitPatient" onclick="prepAdmitModal()">
-      <i class="fa-solid fa-plus me-2"></i> New Admission
-    </button>
-    <button class="btn btn-outline-secondary fw-bold px-4"
-            onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
-      <i class="fa-solid fa-arrow-left me-2"></i> Go Back
-    </button>
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-4">
+      <input type="text" class="form-control js-ledger-search"
+             placeholder="Search IP No, Patient ID, or Name..." onkeyup="filterLedger()">
+    </div>
+    <div class="col-md-3">
+      <select class="form-select js-ledger-status" onchange="filterLedger()">
+        <option value="ALL">All Statuses</option>
+        <option value="ACTIVE" selected>Active Admissions</option>
+        <option value="DISCHARGED">Discharged</option>
+      </select>
+    </div>
+    <div class="col-md-5 d-flex align-items-center justify-content-end gap-3">
+      <span class="js-ledger-count text-body-secondary small"></span>
+      <button class="btn btn-outline-secondary" onclick="loadIPLedger()">
+        <i class="fa-solid fa-rotate me-1"></i> Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="flex-grow-1 overflow-auto border rounded">
+    <table class="table table-hover align-middle m-0">
+      <thead class="sticky-top bg-body-tertiary">
+        <tr class="small text-body-secondary">
+          <th>IP Number</th>
+          <th>Patient Details</th>
+          <th>Admitted On</th>
+          <th>Ward / Bed</th>
+          <th>Consultant</th>
+          <th>Diagnosis</th>
+          <th>Status</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="js-ledger-body">
+        <tr><td colspan="8" class="text-center py-5 text-body-secondary">
+          <div class="spinner-border text-primary"></div><br>Loading Ledger...
+        </td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
- 
-<div class="row g-2 mb-3">
-  <div class="col-md-4">
-    <input type="text" id="ledger-search" class="form-control"
-           placeholder="Search IP No, Patient ID, or Name..." onkeyup="filterLedger()">
-  </div>
-  <div class="col-md-3">
-    <select id="ledger-filter-status" class="form-select" onchange="filterLedger()">
-      <option value="ALL">All Statuses</option>
-      <option value="ACTIVE" selected>Active Admissions</option>
-      <option value="DISCHARGED">Discharged</option>
-    </select>
-  </div>
-  <div class="col-md-5 text-end d-flex align-items-center justify-content-end gap-2">
-    <span id="ledger-count" class="text-body-secondary small"></span>
-    <button class="btn btn-outline-secondary" onclick="loadIPLedger()">
-      <i class="fa-solid fa-rotate me-1"></i> Refresh
-    </button>
-  </div>
-</div>
- 
-<div class="ledger-table-container flex-grow-1 overflow-auto border rounded">
-  <table class="table table-hover align-middle m-0" id="ip-ledger-table">
-    <thead class="sticky-top">
-      <tr class="small text-body-secondary">
-        <th>IP Number</th>
-        <th>Patient Details</th>
-        <th>Admitted On</th>
-        <th>Ward / Bed</th>
-        <th>Consultant</th>
-        <th>Diagnosis</th>
-        <th>Status</th>
-        <th class="text-end">Actions</th>
-      </tr>
-    </thead>
-    <tbody id="ip-ledger-tbody">
-      <tr><td colspan="8" class="text-center py-5 text-body-secondary">
-        <div class="spinner-border text-primary"></div><br>Loading Ledger...
-      </td></tr>
-    </tbody>
-  </table>
-</div>
 
+
+<!-- ===================== ADMIT MODAL =================================== -->
 <div class="modal fade" id="modalAdmitPatient" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content bg-dark text-white border-secondary">
-      <div class="modal-header border-secondary bg-black">
-        <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-bed-pulse me-2"></i> New Patient Admission</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    <div class="modal-content">
+      <div class="modal-header bg-body-tertiary">
+        <h5 class="modal-title fw-bold text-primary">
+          <i class="fa-solid fa-bed-pulse me-2"></i> New Patient Admission
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
+        <div id="adm-alert" class="alert alert-warning d-none py-2 small mb-3"></div>
+
         <form id="form-admission">
-          <h6 class="text-muted small fw-bold mb-3 border-bottom border-secondary pb-1">1. PATIENT IDENTITY</h6>
+          <h6 class="text-body-secondary small fw-bold mb-3 border-bottom pb-1">1. PATIENT IDENTITY</h6>
           <div class="row g-3 mb-4">
             <div class="col-md-4">
-              <label class="form-label small text-muted">Patient ID</label>
+              <label class="form-label small text-body-secondary">Patient ID</label>
               <div class="input-group">
-                <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-id" placeholder="LMTVS0001">
-                <button class="btn btn-outline-info" type="button" onclick="fetchAdmitPatientDetails()"><i class="fa-solid fa-magnifying-glass"></i></button>
+                <input type="text" class="form-control" id="adm-pat-id" placeholder="LMTVS0001">
+                <button class="btn btn-outline-primary" type="button" onclick="fetchAdmitPatientDetails()">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
               </div>
             </div>
             <div class="col-md-4">
-              <label class="form-label small text-muted">Patient Name</label>
-              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-name" readonly>
+              <label class="form-label small text-body-secondary">Patient Name</label>
+              <input type="text" class="form-control" id="adm-pat-name" readonly>
             </div>
             <div class="col-md-2">
-              <label class="form-label small text-muted">Age</label>
-              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-age" readonly>
+              <label class="form-label small text-body-secondary">Age</label>
+              <input type="text" class="form-control" id="adm-pat-age" readonly>
             </div>
             <div class="col-md-2">
-              <label class="form-label small text-muted">Sex</label>
-              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-pat-sex" readonly>
+              <label class="form-label small text-body-secondary">Sex</label>
+              <input type="text" class="form-control" id="adm-pat-sex" readonly>
             </div>
           </div>
 
-          <h6 class="text-muted small fw-bold mb-3 border-bottom border-secondary pb-1">2. ADMISSION LOGISTICS</h6>
+          <h6 class="text-body-secondary small fw-bold mb-3 border-bottom pb-1">2. ADMISSION DETAILS</h6>
           <div class="row g-3 mb-4">
-            <div class="col-md-4">
-              <label class="form-label small text-muted">Date of Admission</label>
-              <input type="date" class="form-control bg-dark text-white border-secondary" id="adm-doa" required>
+            <div class="col-md-3">
+              <label class="form-label small text-body-secondary">Date of Admission</label>
+              <input type="date" class="form-control" id="adm-doa">
             </div>
-            <div class="col-md-4">
-              <label class="form-label small text-muted">Time</label>
-              <input type="time" class="form-control bg-dark text-white border-secondary" id="adm-toa" required>
+            <div class="col-md-3">
+              <label class="form-label small text-body-secondary">Time of Admission</label>
+              <input type="time" class="form-control" id="adm-toa">
             </div>
-            <div class="col-md-4">
-              <label class="form-label small text-muted">Admission Type</label>
-              <select class="form-select bg-dark text-white border-secondary" id="adm-type">
-                <option value="Elective" selected>Elective</option>
+            <div class="col-md-6">
+              <label class="form-label small text-body-secondary">Admission Type</label>
+              <select class="form-select" id="adm-type">
+                <option value="Elective">Elective</option>
                 <option value="Emergency">Emergency</option>
+                <option value="Day Care">Day Care</option>
                 <option value="Observation">Observation</option>
-                <option value="Daycare">Daycare</option>
               </select>
             </div>
-            
-            <div class="col-md-6">
-              <label class="form-label small text-muted">Ward</label>
-              <select class="form-select bg-dark text-white border-secondary" id="adm-ward" onchange="loadAvailableBeds('adm-ward', 'adm-bed')">
-                <option value="">Select Ward...</option>
-                <option value="A">Ward A (General)</option>
-                <option value="B">Ward B (Private)</option>
-                <option value="ICU">ICU</option>
+          </div>
+
+          <h6 class="text-body-secondary small fw-bold mb-3 border-bottom pb-1">3. BED &amp; CLINICAL</h6>
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label class="form-label small text-body-secondary">Ward</label>
+              <select class="form-select" id="adm-ward" onchange="loadAvailableBeds('adm-ward','adm-bed')">
+                <option value="">Loading wards...</option>
               </select>
             </div>
-            <div class="col-md-6">
-              <label class="form-label small text-muted text-success fw-bold">Available Bed No.</label>
-              <select class="form-select bg-dark text-white border-success" id="adm-bed" required>
+            <div class="col-md-3">
+              <label class="form-label small text-body-secondary">Available Bed</label>
+              <select class="form-select" id="adm-bed">
                 <option value="">Select Ward First...</option>
               </select>
             </div>
-          </div>
-
-          <h6 class="text-muted small fw-bold mb-3 border-bottom border-secondary pb-1">3. CLINICAL INFO</h6>
-          <div class="row g-3">
-             <div class="col-md-6">
-              <label class="form-label small text-muted">Consulting Doctor</label>
-              <select class="form-select bg-dark text-white border-secondary" id="adm-doctor">
-                <option value="Dr. Meivasagam">Dr. Meivasagam</option>
-                <option value="Dr. Thiyagarajan">Dr. Thiyagarajan</option>
-                <option value="Dr. Valarmathi">Dr. Valarmathi</option>
-                <option value="Dr. Logavignesh">Dr. Logavignesh</option>
-              </select>
-            </div>
             <div class="col-md-6">
-              <label class="form-label small text-muted">Provisional Diagnosis</label>
-              <input type="text" class="form-control bg-dark text-white border-secondary" id="adm-diagnosis" required>
+              <label class="form-label small text-body-secondary">Consultant</label>
+              <input type="text" class="form-control" id="adm-doctor" placeholder="Dr. ...">
+            </div>
+            <div class="col-12">
+              <label class="form-label small text-body-secondary">Provisional Diagnosis</label>
+              <textarea class="form-control" id="adm-diagnosis" rows="2"></textarea>
             </div>
           </div>
         </form>
       </div>
-      <div class="modal-footer border-secondary bg-black">
-        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary px-4 fw-bold" id="btn-submit-admit" onclick="submitAdmissionForm()">Admit & Generate IP</button>
+      <div class="modal-footer bg-body-tertiary">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary px-4 fw-bold" id="btn-submit-admit" onclick="submitAdmission()">
+          Admit &amp; Generate IP
+        </button>
       </div>
     </div>
   </div>
 </div>
 
+
+<!-- ===================== TRANSFER MODAL ================================ -->
 <div class="modal fade" id="modalChangeBed" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content bg-dark text-white border-secondary">
-      <div class="modal-header border-secondary bg-black">
-        <h5 class="modal-title fw-bold text-warning"><i class="fa-solid fa-right-left me-2"></i> Change Bed</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    <div class="modal-content">
+      <div class="modal-header bg-body-tertiary">
+        <h5 class="modal-title fw-bold text-warning">
+          <i class="fa-solid fa-right-left me-2"></i> Transfer Bed
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="transfer-ip-no">
         <input type="hidden" id="transfer-old-bed">
         <div class="mb-3">
-          <label class="form-label small text-muted">Current Bed</label>
-          <input type="text" class="form-control bg-dark text-white border-secondary" id="transfer-current" readonly>
+          <label class="form-label small text-body-secondary">Current Ward / Bed</label>
+          <input type="text" class="form-control" id="transfer-current" readonly>
         </div>
         <div class="mb-3">
-          <label class="form-label small text-muted">New Ward</label>
-          <select class="form-select bg-dark text-white border-secondary" id="transfer-ward" onchange="loadAvailableBeds('transfer-ward', 'transfer-bed')">
-            <option value="">Select Ward...</option>
-            <option value="A">Ward A</option>
-            <option value="B">Ward B</option>
-            <option value="ICU">ICU</option>
+          <label class="form-label small text-body-secondary">New Ward</label>
+          <select class="form-select" id="transfer-ward" onchange="loadAvailableBeds('transfer-ward','transfer-bed')">
+            <option value="">Loading wards...</option>
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label small text-muted text-success fw-bold">New Available Bed</label>
-          <select class="form-select bg-dark text-white border-success" id="transfer-bed">
+          <label class="form-label small text-body-secondary fw-bold">New Available Bed</label>
+          <select class="form-select" id="transfer-bed">
             <option value="">Select Ward First...</option>
           </select>
         </div>
       </div>
-      <div class="modal-footer border-secondary bg-black">
-        <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-warning px-4 fw-bold" id="btn-submit-transfer" onclick="submitBedTransfer()">Confirm Transfer</button>
+      <div class="modal-footer bg-body-tertiary">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-warning px-4 fw-bold" id="btn-submit-transfer" onclick="submitBedTransfer()">
+          Confirm Transfer
+        </button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ===================== (B) SCRIPT BLOCK ============================== -->
+
 <script>
-let ledgerDataMaster = [];
- 
-/** Escape user/DB text before it touches innerHTML. */
-function esc(v) {
-  return String(v === null || v === undefined ? '' : v)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
- 
-function ledgerMessage(html, tone) {
-  const tbody = document.getElementById('ip-ledger-tbody');
-  if (!tbody) return;
-  const cls = tone === 'error' ? 'text-danger' : 'text-body-secondary';
-  tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 ${cls}">${html}</td></tr>`;
-}
- 
-function loadIPLedger() {
-  ledgerMessage('<div class="spinner-border text-primary"></div><br>Fetching Live Ledger...');
- 
-  if (typeof google === 'undefined' || !google.script || !google.script.run) {
-    ledgerMessage('&#9888; Backend bridge unavailable on this page.', 'error');
-    return;
+(function () {
+  'use strict';
+
+  var ledgerDataMaster = [];
+
+  // ---- DOM helpers --------------------------------------------------------
+  // The module may be included more than once. Never trust getElementById
+  // for module-scoped nodes — resolve ALL of them and write to every copy.
+
+  function nodes(selector) {
+    return Array.prototype.slice.call(document.querySelectorAll(selector));
   }
- 
-  google.script.run
-    .withSuccessHandler(function (payload) {
-      // Wrapped: an exception here would otherwise leave the spinner forever
-      // with NO failure handler firing and NO console error.
-      try {
-        renderLedgerTable(payload);
-      } catch (err) {
-        ledgerMessage('&#9888; Render error: ' + esc(err && err.message) +
-          '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>',
-          'error');
-      }
-    })
-    .withFailureHandler(function (err) {
-      ledgerMessage('&#9888; Server Error: ' + esc(err && err.message) +
-        '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>',
-        'error');
-    })
-    .getIPLedgerData();
-}
- 
-function renderLedgerTable(payload) {
-  // Guard the three ways this used to blow up.
-  if (!payload) {
-    ledgerMessage('&#9888; Backend returned nothing. Check for a duplicate ' +
-      '<code>getIPLedgerData</code> definition in another .gs file.', 'error');
-    return;
+
+  function firstValue(selector, fallback) {
+    var els = nodes(selector);
+    for (var i = 0; i < els.length; i++) {
+      // Prefer the copy that is actually visible to the user.
+      if (els[i].offsetParent !== null) return els[i].value;
+    }
+    return els.length ? els[0].value : fallback;
   }
-  if (payload.success === false) {
-    ledgerMessage('&#9888; ' + esc(payload.message || 'Could not load ledger.'), 'error');
-    return;
+
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
-  ledgerDataMaster = Array.isArray(payload.data) ? payload.data : [];
-  filterLedger();
-}
- 
-function filterLedger() {
-  const tbody = document.getElementById('ip-ledger-tbody');
-  if (!tbody) return; // module not in the DOM yet — bail, don't throw
- 
-  const searchEl = document.getElementById('ledger-search');
-  const statusEl = document.getElementById('ledger-filter-status');
-  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
-  const statusFilter = statusEl ? statusEl.value : 'ALL';
- 
-  let html = '';
-  let count = 0;
- 
-  ledgerDataMaster.forEach(function (row) {
-    const ip = String(row.ipNumber || '').toLowerCase();
-    const pid = String(row.patientId || '').toLowerCase();
-    const nm = String(row.patientName || '').toLowerCase();
-    const matchSearch = !query || ip.indexOf(query) > -1 ||
-                        pid.indexOf(query) > -1 || nm.indexOf(query) > -1;
- 
-    const rowStat = String(row.status || '').toUpperCase();
-    const isLive = (rowStat === 'ACTIVE' || rowStat === 'ADMITTED');
- 
-    let matchStatus = false;
-    if (statusFilter === 'ALL') matchStatus = true;
-    else if (statusFilter === 'ACTIVE' && isLive) matchStatus = true;
-    else if (statusFilter === 'DISCHARGED' && rowStat === 'DISCHARGED') matchStatus = true;
- 
-    if (!matchSearch || !matchStatus) return;
-    count++;
- 
-    const statusBadge = isLive
-      ? '<span class="badge text-bg-success">Active</span>'
-      : '<span class="badge text-bg-secondary">Discharged</span>' +
-        (row.dod ? '<br><small class="text-body-secondary">' + esc(row.dod) + '</small>' : '');
- 
-    const args = "'" + esc(row.ipNumber) + "','" + esc(row.bed) + "','" + esc(row.ward) + "'";
-    const actions = isLive
-      ? '<button class="btn btn-sm btn-outline-warning me-1" onclick="openChangeBedModal(' + args + ')">' +
-        '<i class="fa-solid fa-right-left"></i></button>' +
-        '<button class="btn btn-sm btn-outline-danger" onclick="confirmDischarge(' + args + ')">' +
-        '<i class="fa-solid fa-door-open"></i></button>'
-      : '<span class="text-body-secondary small">&mdash;</span>';
- 
-    html += '<tr>' +
-      '<td class="fw-bold">' + esc(row.ipNumber) + '</td>' +
-      '<td>' + esc(row.patientName) +
-        '<br><small class="text-body-secondary">' + esc(row.patientId) + ' &middot; ' + esc(row.ageSex) + '</small></td>' +
-      '<td>' + esc(row.doa) + '<br><small class="text-body-secondary">' + esc(row.toa) + '</small></td>' +
-      '<td>' + (row.ward || row.bed ? esc(row.ward) + ' / ' + esc(row.bed) : '<span class="text-body-secondary">Unassigned</span>') + '</td>' +
-      '<td>' + esc(row.consultant) + '</td>' +
-      '<td>' + (row.diagnosis ? esc(row.diagnosis) : '<span class="text-body-secondary">Pending</span>') + '</td>' +
-      '<td>' + statusBadge + '</td>' +
-      '<td class="text-end">' + actions + '</td>' +
-      '</tr>';
-  });
- 
-  const countEl = document.getElementById('ledger-count');
-  if (countEl) countEl.textContent = count + ' of ' + ledgerDataMaster.length + ' shown';
- 
-  if (count === 0) {
-    const empty = ledgerDataMaster.length === 0
-      ? 'No admissions recorded yet.<br><small>Use <strong>New Admission</strong> to admit the first patient.</small>'
-      : 'No admissions match this search or filter.';
-    ledgerMessage('<i class="fa-solid fa-folder-open fa-2x mb-3 d-block opacity-50"></i>' + empty);
-    return;
+
+  function attr(v) { return esc(v).replace(/\\/g, '&#92;'); }
+
+  function setBody(html) {
+    nodes('.js-ledger-body').forEach(function (tb) { tb.innerHTML = html; });
   }
-  tbody.innerHTML = html;
-}
- 
-// ---- Admit modal ---------------------------------------------------------
- 
-function prepAdmitModal() {
-  const form = document.getElementById('form-admission');
-  if (form) form.reset();
-  ['adm-pat-name', 'adm-pat-age', 'adm-pat-sex'].forEach(function (id) {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-}
- 
-function fetchAdmitPatientDetails() {
-  const idEl = document.getElementById('adm-pat-id');
-  if (!idEl || !idEl.value.trim()) { alert('Enter a Patient ID first.'); return; }
- 
-  google.script.run
-    .withSuccessHandler(function (res) {
-      if (!res || res.success === false) {
-        alert((res && res.message) || 'Patient not found.');
-        return;
-      }
-      const setVal = function (id, v) {
-        const el = document.getElementById(id);
-        if (el) el.value = v || '';
-      };
-      setVal('adm-pat-name', res.data.name);
-      setVal('adm-pat-age', res.data.age);
-      setVal('adm-pat-sex', res.data.sex);
-    })
-    .withFailureHandler(function (err) { alert('Lookup failed: ' + err.message); })
-    .fetchPatientForAdmit(idEl.value.trim());
-}
- 
-function loadAvailableBeds(wardSelectId, bedSelectId) {
-  const wardEl = document.getElementById(wardSelectId);
-  const bedEl = document.getElementById(bedSelectId);
-  if (!wardEl || !bedEl) return;
- 
-  if (!wardEl.value) { bedEl.innerHTML = '<option value="">Select Ward First...</option>'; return; }
-  bedEl.innerHTML = '<option value="">Loading beds...</option>';
- 
-  google.script.run
-    .withSuccessHandler(function (res) {
-      const beds = (res && Array.isArray(res.data)) ? res.data : [];
-      if (!beds.length) { bedEl.innerHTML = '<option value="">No beds available</option>'; return; }
-      bedEl.innerHTML = '<option value="">Select Bed...</option>' +
-        beds.map(function (b) { return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('');
-    })
-    .withFailureHandler(function (err) {
-      bedEl.innerHTML = '<option value="">Error loading beds</option>';
-      alert('Bed lookup failed: ' + err.message);
-    })
-    .getAvailableBedsByWard(wardEl.value);
-}
- 
-function submitAdmission() {
-  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
- 
-  const pid = val('adm-pat-id');
-  const name = val('adm-pat-name');
-  const bed = val('adm-bed');
-  if (!pid || !name) { alert('Look up a valid Patient ID first.'); return; }
-  if (!bed) { alert('Select an available bed.'); return; }
- 
-  const payload = {
-    patientId: pid,
-    patientName: name,
-    ageSex: val('adm-pat-age') + ' / ' + val('adm-pat-sex'),
-    doa: val('adm-doa'),
-    toa: val('adm-toa'),
-    type: val('adm-type'),
-    ward: val('adm-ward'),
-    bed: bed,
-    consultant: val('adm-doctor'),
-    diagnosis: val('adm-diagnosis')
-  };
- 
-  const btn = document.getElementById('btn-submit-admit');
-  const reset = function () {
-    if (btn) { btn.innerHTML = 'Admit &amp; Generate IP'; btn.disabled = false; }
-  };
-  if (btn) {
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
-    btn.disabled = true;
+
+  function message(inner, tone) {
+    var cls = tone === 'error' ? 'text-danger' : 'text-body-secondary';
+    setBody('<tr><td colspan="8" class="text-center py-5 ' + cls + '">' + inner + '</td></tr>');
   }
- 
-  google.script.run
-    .withSuccessHandler(function (res) {
-      reset();
-      if (!res || res.success === false) { alert((res && res.message) || 'Admission failed.'); return; }
-      alert(res.message);
-      const modalEl = document.getElementById('modalAdmitPatient');
-      const inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
-      if (inst) inst.hide();
-      loadIPLedger();
-    })
-    .withFailureHandler(function (err) { reset(); alert('Error saving admission: ' + err.message); })
-    .saveNewAdmissionLedger(payload);
-}
- 
-// ---- Bed transfer --------------------------------------------------------
- 
-function openChangeBedModal(ipNumber, currentBed, currentWard) {
-  const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v; };
-  set('transfer-ip-no', ipNumber);
-  set('transfer-old-bed', currentBed);
-  set('transfer-current', currentWard + ' - ' + currentBed);
-  set('transfer-ward', '');
-  const bedEl = document.getElementById('transfer-bed');
-  if (bedEl) bedEl.innerHTML = '<option value="">Select Ward First...</option>';
-  new bootstrap.Modal(document.getElementById('modalChangeBed')).show();
-}
- 
-function submitBedTransfer() {
-  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
-  const newBed = val('transfer-bed');
-  if (!newBed) { alert('Please select a new bed.'); return; }
- 
-  const btn = document.getElementById('btn-submit-transfer');
-  const reset = function () { if (btn) { btn.innerText = 'Confirm Transfer'; btn.disabled = false; } };
-  if (btn) { btn.innerText = 'Transferring...'; btn.disabled = true; }
- 
-  google.script.run
-    .withSuccessHandler(function (res) {
-      reset();
-      if (!res || res.success === false) { alert((res && res.message) || 'Transfer failed.'); return; }
-      alert(res.message);
-      const inst = bootstrap.Modal.getInstance(document.getElementById('modalChangeBed'));
-      if (inst) inst.hide();
-      loadIPLedger();
-    })
-    .withFailureHandler(function (err) { reset(); alert('Transfer failed: ' + err.message); })
-    .processBedTransfer(val('transfer-ip-no'), val('transfer-old-bed'), val('transfer-ward'), newBed);
-}
- 
-// ---- Discharge -----------------------------------------------------------
- 
-function confirmDischarge(ipNumber, bedId) {
-  if (!confirm('Discharge ' + ipNumber + '? This frees bed ' + bedId + '.')) return;
-  ledgerMessage('<div class="spinner-border text-primary"></div><br>Processing discharge...');
-  google.script.run
-    .withSuccessHandler(function (res) {
-      if (!res || res.success === false) { alert((res && res.message) || 'Discharge failed.'); }
-      loadIPLedger();
-    })
-    .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPLedger(); })
-    .processPatientDischarge(ipNumber, bedId);
-}
+
+  function retryBtn() {
+    return '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>';
+  }
+
+  function bridgeReady() {
+    return typeof google !== 'undefined' && google.script && google.script.run;
+  }
+
+  // ---- Ledger -------------------------------------------------------------
+
+  function loadIPLedger() {
+    message('<div class="spinner-border text-primary"></div><br>Fetching Live Ledger...');
+
+    if (!bridgeReady()) {
+      message('&#9888; Backend bridge unavailable on this page.' + retryBtn(), 'error');
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function (payload) {
+        // An exception in here would otherwise strand the spinner silently.
+        try {
+          renderLedgerTable(payload);
+        } catch (err) {
+          message('&#9888; Render error: ' + esc(err && err.message) + retryBtn(), 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        message('&#9888; Server Error: ' + esc(err && err.message) + retryBtn(), 'error');
+      })
+      .getIPLedgerData();
+  }
+
+  function renderLedgerTable(payload) {
+    if (!payload) {
+      message('&#9888; Backend returned nothing. Check for a duplicate ' +
+              '<code>getIPLedgerData</code> in another .gs file.' + retryBtn(), 'error');
+      return;
+    }
+    if (payload.success === false) {
+      message('&#9888; ' + esc(payload.message || 'Could not load ledger.') + retryBtn(), 'error');
+      return;
+    }
+    ledgerDataMaster = Array.isArray(payload.data) ? payload.data : [];
+    filterLedger();
+  }
+
+  function filterLedger() {
+    if (!nodes('.js-ledger-body').length) return;
+
+    var query  = String(firstValue('.js-ledger-search', '')).toLowerCase().trim();
+    var status = firstValue('.js-ledger-status', 'ALL');
+
+    var html = '';
+    var count = 0;
+
+    ledgerDataMaster.forEach(function (row) {
+      var hay = [row.ipNumber, row.patientId, row.patientName]
+                  .join(' ').toLowerCase();
+      if (query && hay.indexOf(query) === -1) return;
+
+      var stat = String(row.status || '').toUpperCase();
+      var isLive = (stat === 'ACTIVE' || stat === 'ADMITTED');
+
+      if (status === 'ACTIVE' && !isLive) return;
+      if (status === 'DISCHARGED' && stat !== 'DISCHARGED') return;
+
+      count++;
+
+      var badge = isLive
+        ? '<span class="badge text-bg-success">Active</span>'
+        : '<span class="badge text-bg-secondary">Discharged</span>' +
+          (row.dod ? '<br><small class="text-body-secondary">' + esc(row.dod) + '</small>' : '');
+
+      var warn = row.dataWarning
+        ? ' <i class="fa-solid fa-triangle-exclamation text-warning" title="' + attr(row.dataWarning) + '"></i>'
+        : '';
+
+      var args = '&#39;' + attr(row.ipNumber) + '&#39;,&#39;' + attr(row.bed) +
+                 '&#39;,&#39;' + attr(row.ward) + '&#39;';
+
+      var actions = isLive
+        ? '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
+            'onclick="openChangeBedModal(' + args + ')"><i class="fa-solid fa-right-left"></i></button>' +
+          '<button class="btn btn-sm btn-outline-danger" title="Discharge" ' +
+            'onclick="confirmDischarge(' + args + ')"><i class="fa-solid fa-door-open"></i></button>'
+        : '<span class="text-body-secondary small">&mdash;</span>';
+
+      var wardBed = (row.ward || row.bed)
+        ? esc(row.ward) + ' / ' + esc(row.bed) + warn
+        : '<span class="text-body-secondary">Unassigned</span>';
+
+      html += '<tr>' +
+        '<td class="fw-bold">' + esc(row.ipNumber) + '</td>' +
+        '<td>' + esc(row.patientName) +
+          '<br><small class="text-body-secondary">' + esc(row.patientId) +
+          ' &middot; ' + esc(row.ageSex) + '</small></td>' +
+        '<td>' + esc(row.doa) +
+          (row.toa ? '<br><small class="text-body-secondary">' + esc(row.toa) + '</small>' : '') + '</td>' +
+        '<td>' + wardBed + '</td>' +
+        '<td>' + esc(row.consultant) + '</td>' +
+        '<td>' + (row.diagnosis ? esc(row.diagnosis)
+                                : '<span class="text-body-secondary">Pending</span>') + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td class="text-end text-nowrap">' + actions + '</td>' +
+        '</tr>';
+    });
+
+    nodes('.js-ledger-count').forEach(function (el) {
+      el.textContent = count + ' of ' + ledgerDataMaster.length + ' shown';
+    });
+
+    if (count === 0) {
+      message('<i class="fa-solid fa-folder-open fa-2x mb-3 d-block opacity-50"></i>' +
+        (ledgerDataMaster.length === 0
+          ? 'No admissions recorded yet.<br><small>Use <strong>New Admission</strong> to admit the first patient.</small>'
+          : 'No admissions match this search or filter.'));
+      return;
+    }
+    setBody(html);
+  }
+
+  // ---- Wards --------------------------------------------------------------
+
+  function loadWardOptions() {
+    if (!bridgeReady()) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var wards = (res && Array.isArray(res.data)) ? res.data : [];
+        var opts = '<option value="">Select Ward...</option>' +
+          wards.map(function (w) {
+            return '<option value="' + attr(w) + '">' + esc(w) + '</option>';
+          }).join('');
+        ['adm-ward', 'transfer-ward'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.innerHTML = wards.length ? opts : '<option value="">No wards configured</option>';
+        });
+      })
+      .withFailureHandler(function () {
+        ['adm-ward', 'transfer-ward'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.innerHTML = '<option value="">Error loading wards</option>';
+        });
+      })
+      .getWardList();
+  }
+
+  function loadAvailableBeds(wardSelectId, bedSelectId) {
+    var wardEl = document.getElementById(wardSelectId);
+    var bedEl  = document.getElementById(bedSelectId);
+    if (!wardEl || !bedEl) return;
+
+    if (!wardEl.value) {
+      bedEl.innerHTML = '<option value="">Select Ward First...</option>';
+      return;
+    }
+    bedEl.innerHTML = '<option value="">Loading beds...</option>';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var beds = (res && Array.isArray(res.data)) ? res.data : [];
+        if (!beds.length) {
+          bedEl.innerHTML = '<option value="">No beds available in this ward</option>';
+          return;
+        }
+        bedEl.innerHTML = '<option value="">Select Bed...</option>' +
+          beds.map(function (b) {
+            return '<option value="' + attr(b) + '">' + esc(b) + '</option>';
+          }).join('');
+      })
+      .withFailureHandler(function (err) {
+        bedEl.innerHTML = '<option value="">Error loading beds</option>';
+        alert('Bed lookup failed: ' + err.message);
+      })
+      .getAvailableBedsByWard(wardEl.value);
+  }
+
+  // ---- Admit --------------------------------------------------------------
+
+  function admAlert(msg, level) {
+    var box = document.getElementById('adm-alert');
+    if (!box) return;
+    if (!msg) { box.className = 'alert d-none'; box.textContent = ''; return; }
+    box.className = 'alert alert-' + (level || 'warning') + ' py-2 small mb-3';
+    box.textContent = msg;
+  }
+
+  function prepAdmitModal() {
+    var form = document.getElementById('form-admission');
+    if (form) form.reset();
+    ['adm-pat-name', 'adm-pat-age', 'adm-pat-sex'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    admAlert('');
+
+    var now = new Date();
+    var doa = document.getElementById('adm-doa');
+    var toa = document.getElementById('adm-toa');
+    if (doa) doa.value = now.toISOString().slice(0, 10);
+    if (toa) toa.value = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+
+    loadWardOptions();
+  }
+
+  function fetchAdmitPatientDetails() {
+    var idEl = document.getElementById('adm-pat-id');
+    if (!idEl || !idEl.value.trim()) { admAlert('Enter a Patient ID first.'); return; }
+    admAlert('');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || res.success === false) {
+          admAlert((res && res.message) || 'Patient not found.', 'danger');
+          return;
+        }
+        var set = function (id, v) {
+          var el = document.getElementById(id);
+          if (el) el.value = v || '';
+        };
+        idEl.value = res.data.patientId;   // normalise casing in the field too
+        set('adm-pat-name', res.data.name);
+        set('adm-pat-age',  res.data.age);
+        set('adm-pat-sex',  res.data.sex);
+
+        if (res.activeAdmission) {
+          admAlert('This patient is already admitted under ' + res.activeAdmission +
+                   '. Discharge that admission before creating a new one.', 'danger');
+        }
+      })
+      .withFailureHandler(function (err) { admAlert('Lookup failed: ' + err.message, 'danger'); })
+      .fetchPatientForAdmit(idEl.value.trim());
+  }
+
+  function submitAdmission() {
+    var val = function (id) {
+      var el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    };
+
+    var pid = val('adm-pat-id');
+    var name = val('adm-pat-name');
+    if (!pid || !name) { admAlert('Look up a valid Patient ID first.'); return; }
+    if (!val('adm-ward')) { admAlert('Select a ward.'); return; }
+    if (!val('adm-bed'))  { admAlert('Select an available bed.'); return; }
+    admAlert('');
+
+    var payload = {
+      patientId: pid,
+      patientName: name,
+      ageSex: val('adm-pat-age') + ' / ' + val('adm-pat-sex'),
+      doa: val('adm-doa'),
+      toa: val('adm-toa'),
+      type: val('adm-type'),
+      ward: val('adm-ward'),
+      bed: val('adm-bed'),
+      consultant: val('adm-doctor'),
+      diagnosis: val('adm-diagnosis')
+    };
+
+    var btn = document.getElementById('btn-submit-admit');
+    var reset = function () {
+      if (btn) { btn.innerHTML = 'Admit &amp; Generate IP'; btn.disabled = false; }
+    };
+    if (btn) {
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+      btn.disabled = true;
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        reset();
+        if (!res || res.success === false) {
+          admAlert((res && res.message) || 'Admission failed.', 'danger');
+          return;
+        }
+        var modalEl = document.getElementById('modalAdmitPatient');
+        var inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+        if (inst) inst.hide();
+        alert(res.message);
+        loadIPLedger();
+      })
+      .withFailureHandler(function (err) {
+        reset();
+        admAlert('Error saving admission: ' + err.message, 'danger');
+      })
+      .saveNewAdmissionLedger(payload);
+  }
+
+  // ---- Transfer -----------------------------------------------------------
+
+  function openChangeBedModal(ipNumber, currentBed, currentWard) {
+    var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
+    set('transfer-ip-no', ipNumber);
+    set('transfer-old-bed', currentBed);
+    set('transfer-current', (currentWard || '?') + ' / ' + (currentBed || '?'));
+    var bedEl = document.getElementById('transfer-bed');
+    if (bedEl) bedEl.innerHTML = '<option value="">Select Ward First...</option>';
+    loadWardOptions();
+    new bootstrap.Modal(document.getElementById('modalChangeBed')).show();
+  }
+
+  function submitBedTransfer() {
+    var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    if (!val('transfer-ward')) { alert('Select a destination ward.'); return; }
+    if (!val('transfer-bed'))  { alert('Select a destination bed.'); return; }
+
+    var btn = document.getElementById('btn-submit-transfer');
+    var reset = function () { if (btn) { btn.innerText = 'Confirm Transfer'; btn.disabled = false; } };
+    if (btn) { btn.innerText = 'Transferring...'; btn.disabled = true; }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        reset();
+        if (!res || res.success === false) { alert((res && res.message) || 'Transfer failed.'); return; }
+        var inst = bootstrap.Modal.getInstance(document.getElementById('modalChangeBed'));
+        if (inst) inst.hide();
+        alert(res.message);
+        loadIPLedger();
+      })
+      .withFailureHandler(function (err) { reset(); alert('Transfer failed: ' + err.message); })
+      .processBedTransfer(val('transfer-ip-no'), val('transfer-old-bed'),
+                          val('transfer-ward'), val('transfer-bed'));
+  }
+
+  // ---- Discharge ----------------------------------------------------------
+
+  function confirmDischarge(ipNumber, bedId) {
+    if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId + ' and closes the admission.')) return;
+    message('<div class="spinner-border text-primary"></div><br>Processing discharge...');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || res.success === false) alert((res && res.message) || 'Discharge failed.');
+        loadIPLedger();
+      })
+      .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPLedger(); })
+      .processPatientDischarge(ipNumber, bedId);
+  }
+
+  // ---- Expose the handlers the markup calls -------------------------------
+
+  window.loadIPLedger           = loadIPLedger;
+  window.filterLedger           = filterLedger;
+  window.prepAdmitModal         = prepAdmitModal;
+  window.fetchAdmitPatientDetails = fetchAdmitPatientDetails;
+  window.loadAvailableBeds      = loadAvailableBeds;
+  window.submitAdmission        = submitAdmission;
+  window.openChangeBedModal     = openChangeBedModal;
+  window.submitBedTransfer      = submitBedTransfer;
+  window.confirmDischarge       = confirmDischarge;
+})();
 </script>
