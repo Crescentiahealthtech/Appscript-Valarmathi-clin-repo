@@ -150,56 +150,63 @@
   }
 </style>
 
-<div id="ip-ledger-view" class="app-view d-none h-100 flex-column px-2 page-section">
-  
-  <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
-    <div>
-      <h4 class="m-0 text-white fw-bold"><i class="fa-solid fa-folder-open me-2 text-primary"></i> IP Admissions Ledger</h4>
-      <small class="text-muted">Master log of all active and historical hospital admissions</small>
-    </div>
-    <button class="btn btn-primary fw-bold shadow px-4" style="background-color: var(--accent-purple); border:none;" data-bs-toggle="modal" data-bs-target="#modalAdmitPatient" onclick="prepAdmitModal()">
+<div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+  <div>
+    <h4 class="m-0 fw-bold"><i class="fa-solid fa-folder-open me-2 text-primary"></i> IP Admissions Ledger</h4>
+    <small class="text-body-secondary">Master log of all active and historical hospital admissions</small>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary fw-bold shadow-sm px-4"
+            data-bs-toggle="modal" data-bs-target="#modalAdmitPatient" onclick="prepAdmitModal()">
       <i class="fa-solid fa-plus me-2"></i> New Admission
     </button>
-    <button class="btn btn-outline-light fw-bold shadow px-4" onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
-    <i class="fa-solid fa-arrow-left me-2"></i> Go Back
+    <button class="btn btn-outline-secondary fw-bold px-4"
+            onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
+      <i class="fa-solid fa-arrow-left me-2"></i> Go Back
     </button>
   </div>
-
-  <div class="row g-2 mb-3">
-    <div class="col-md-4">
-      <input type="text" id="ledger-search" class="form-control bg-dark text-white border-secondary" placeholder="Search IP No, Patient ID, or Name..." onkeyup="filterLedger()">
-    </div>
-    <div class="col-md-2">
-      <select id="ledger-filter-status" class="form-select bg-dark text-white border-secondary" onchange="filterLedger()">
-        <option value="ALL">All Statuses</option>
-        <option value="ACTIVE" selected>Active Admissions</option>
-        <option value="DISCHARGED">Discharged</option>
-      </select>
-    </div>
-    <div class="col-md-6 text-end">
-      <button class="btn btn-outline-light"><i class="fa-solid fa-file-export me-1"></i> Export CSV</button>
-    </div>
+</div>
+ 
+<div class="row g-2 mb-3">
+  <div class="col-md-4">
+    <input type="text" id="ledger-search" class="form-control"
+           placeholder="Search IP No, Patient ID, or Name..." onkeyup="filterLedger()">
   </div>
-
-  <div class="ledger-table-container flex-grow-1 overflow-auto">
-    <table class="table table-dark table-hover align-middle m-0" id="ip-ledger-table">
-      <thead style="position: sticky; top: 0; z-index: 1; background-color: #1a1d20;">
-        <tr class="text-muted small">
-          <th>IP Number</th>
-          <th>Patient Details</th>
-          <th>Admitted On</th>
-          <th>Ward / Bed</th>
-          <th>Consultant</th>
-          <th>Diagnosis</th>
-          <th>Status</th>
-          <th class="text-end">Actions</th>
-        </tr>
-      </thead>
-      <tbody id="ip-ledger-tbody">
-        <tr><td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border text-primary"></div><br>Loading Ledger...</td></tr>
-      </tbody>
-    </table>
+  <div class="col-md-3">
+    <select id="ledger-filter-status" class="form-select" onchange="filterLedger()">
+      <option value="ALL">All Statuses</option>
+      <option value="ACTIVE" selected>Active Admissions</option>
+      <option value="DISCHARGED">Discharged</option>
+    </select>
   </div>
+  <div class="col-md-5 text-end d-flex align-items-center justify-content-end gap-2">
+    <span id="ledger-count" class="text-body-secondary small"></span>
+    <button class="btn btn-outline-secondary" onclick="loadIPLedger()">
+      <i class="fa-solid fa-rotate me-1"></i> Refresh
+    </button>
+  </div>
+</div>
+ 
+<div class="ledger-table-container flex-grow-1 overflow-auto border rounded">
+  <table class="table table-hover align-middle m-0" id="ip-ledger-table">
+    <thead class="sticky-top">
+      <tr class="small text-body-secondary">
+        <th>IP Number</th>
+        <th>Patient Details</th>
+        <th>Admitted On</th>
+        <th>Ward / Bed</th>
+        <th>Consultant</th>
+        <th>Diagnosis</th>
+        <th>Status</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="ip-ledger-tbody">
+      <tr><td colspan="8" class="text-center py-5 text-body-secondary">
+        <div class="spinner-border text-primary"></div><br>Loading Ledger...
+      </td></tr>
+    </tbody>
+  </table>
 </div>
 
 <div class="modal fade" id="modalAdmitPatient" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -335,231 +342,282 @@
   </div>
 </div>
 
+<!-- ===================== (B) SCRIPT BLOCK ============================== -->
 <script>
 let ledgerDataMaster = [];
-
-  function loadIPLedger() {
-    const tbody = document.getElementById('ip-ledger-tbody');
-    if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-muted"><div class="spinner-border text-primary"></div><br>Fetching Live Ledger...</td></tr>';
-    }
-    
-    google.script.run
-      .withSuccessHandler(renderLedgerTable)
-      .withFailureHandler(err => {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">⚠️ Server Error: ${err.message}<br><button class="btn btn-sm btn-outline-light mt-3" onclick="loadIPLedger()">Retry</button></td></tr>`;
-      })
-      .getIPLedgerData();
+ 
+/** Escape user/DB text before it touches innerHTML. */
+function esc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+ 
+function ledgerMessage(html, tone) {
+  const tbody = document.getElementById('ip-ledger-tbody');
+  if (!tbody) return;
+  const cls = tone === 'error' ? 'text-danger' : 'text-body-secondary';
+  tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5 ${cls}">${html}</td></tr>`;
+}
+ 
+function loadIPLedger() {
+  ledgerMessage('<div class="spinner-border text-primary"></div><br>Fetching Live Ledger...');
+ 
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    ledgerMessage('&#9888; Backend bridge unavailable on this page.', 'error');
+    return;
   }
-
-    function renderLedgerTable(payload) {
-    const tbody = document.getElementById('ip-ledger-tbody');
-    
-    // Directly access the object payload without parsing
-    if (payload && payload.success === false) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">${payload.message || 'Could not load ledger.'}</td></tr>`;
-      return;
-    }
-    
-      ledgerDataMaster = payload.data || [];
-      filterLedger();
-  }
-  // 3. Robust Filtering logic mapping ADMITTED to ACTIVE
-  function filterLedger() {
-    const query = document.getElementById('ledger-search').value.toLowerCase();
-    const statusFilter = document.getElementById('ledger-filter-status').value;
-    const tbody = document.getElementById('ip-ledger-tbody');
-    
-    let html = '';
-    let count = 0;
-
-    ledgerDataMaster.forEach(row => {
-      const ip  = (row.ipNumber  || '').toString().toLowerCase();
-      const pid = (row.patientId || '').toString().toLowerCase();
-      const nm  = (row.patientName || '').toString().toLowerCase();
-      const matchSearch = ip.includes(query) || pid.includes(query) || nm.includes(query);
-      
-      const rowStat = (row.status || '').toString().toUpperCase();
-      const isRowActive = (rowStat === 'ACTIVE' || rowStat === 'ADMITTED');
-      
-      let matchStatus = false;
-      if (statusFilter === 'ALL') matchStatus = true;
-      else if (statusFilter === 'ACTIVE' && isRowActive) matchStatus = true;
-      else if (statusFilter === 'DISCHARGED' && rowStat === 'DISCHARGED') matchStatus = true;
-
-      if(matchSearch && matchStatus) {
-        count++;
-        let statusBadge = isRowActive ? `<span class="badge bg-success">Active</span>` : `<span class="badge bg-secondary">Discharged<br><small>${row.dod}</small></span>`;
-        
-        let actionBtn = isRowActive ? 
-          `<button class="btn btn-sm btn-outline-warning rounded-pill px-3 me-1" onclick="openChangeBedModal('${row.ipNumber}', '${row.bed}', '${row.ward}')"><i class="fa-solid fa-right-left"></i> Change Bed</button>
-           <button class="btn btn-sm btn-outline-danger rounded-pill px-3" onclick="triggerDischarge('${row.ipNumber}', '${row.bed}')"><i class="fa-solid fa-arrow-right-from-bracket"></i> Discharge</button>` : 
-          `<button class="btn btn-sm btn-outline-light rounded-pill px-3" disabled>Closed</button>`;
-
-        html += `
-          <tr>
-            <td class="fw-bold text-info">${row.ipNumber}</td>
-            <td><strong class="text-white">${row.patientName}</strong><br><small class="text-muted">${row.patientId} | ${row.ageSex}</small></td>
-            <td>${row.doa}<br><small class="text-muted">${row.toa}</small></td>
-            <td><span class="badge bg-dark border border-secondary">${row.ward} - ${row.bed}</span></td>
-            <td>${row.consultant}</td>
-            <td class="small">${row.diagnosis}</td>
-            <td>${statusBadge}</td>
-            <td class="text-end">${actionBtn}</td>
-          </tr>
-        `;
+ 
+  google.script.run
+    .withSuccessHandler(function (payload) {
+      // Wrapped: an exception here would otherwise leave the spinner forever
+      // with NO failure handler firing and NO console error.
+      try {
+        renderLedgerTable(payload);
+      } catch (err) {
+        ledgerMessage('&#9888; Render error: ' + esc(err && err.message) +
+          '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>',
+          'error');
       }
-    });
-
-    if(count === 0) html = `<tr><td colspan="8" class="text-center py-4 text-muted">No records found.</td></tr>`;
-    if (tbody) tbody.innerHTML = html;
+    })
+    .withFailureHandler(function (err) {
+      ledgerMessage('&#9888; Server Error: ' + esc(err && err.message) +
+        '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>',
+        'error');
+    })
+    .getIPLedgerData();
+}
+ 
+function renderLedgerTable(payload) {
+  // Guard the three ways this used to blow up.
+  if (!payload) {
+    ledgerMessage('&#9888; Backend returned nothing. Check for a duplicate ' +
+      '<code>getIPLedgerData</code> definition in another .gs file.', 'error');
+    return;
   }
-
-    
-
-  // UPDATED: Prepares Modal Data silently in the background
-  function prepAdmitModal() {
-    try {
-      document.getElementById('form-admission').reset();
-      document.getElementById('adm-pat-name').value = '';
-      document.getElementById('adm-pat-age').value = '';
-      document.getElementById('adm-pat-sex').value = '';
-      document.getElementById('adm-doa').valueAsDate = new Date();
-      document.getElementById('adm-toa').value = new Date().toTimeString().substring(0,5);
-      document.getElementById('adm-bed').innerHTML = '<option value="">Select Ward First...</option>';
-    } catch (error) {
-      console.error("Data prep error: ", error);
-    }
+  if (payload.success === false) {
+    ledgerMessage('&#9888; ' + esc(payload.message || 'Could not load ledger.'), 'error');
+    return;
   }
-
-  function fetchAdmitPatientDetails() {
-    const pid = document.getElementById('adm-pat-id').value.trim();
-    if(!pid) return;
-    document.getElementById('adm-pat-name').value = "Fetching...";
-    
-    // Assumes fetchPatientForAdmit exists in your .gs file
-    google.script.run.withSuccessHandler(res => {
-      if(res) {
-        document.getElementById('adm-pat-name').value = res.name;
-        document.getElementById('adm-pat-age').value = res.age;
-        document.getElementById('adm-pat-sex').value = res.sex;
-      } else {
-        document.getElementById('adm-pat-name').value = "Not Found!";
-        document.getElementById('adm-pat-age').value = "";
-        document.getElementById('adm-pat-sex').value = "";
+  ledgerDataMaster = Array.isArray(payload.data) ? payload.data : [];
+  filterLedger();
+}
+ 
+function filterLedger() {
+  const tbody = document.getElementById('ip-ledger-tbody');
+  if (!tbody) return; // module not in the DOM yet — bail, don't throw
+ 
+  const searchEl = document.getElementById('ledger-search');
+  const statusEl = document.getElementById('ledger-filter-status');
+  const query = searchEl ? searchEl.value.toLowerCase().trim() : '';
+  const statusFilter = statusEl ? statusEl.value : 'ALL';
+ 
+  let html = '';
+  let count = 0;
+ 
+  ledgerDataMaster.forEach(function (row) {
+    const ip = String(row.ipNumber || '').toLowerCase();
+    const pid = String(row.patientId || '').toLowerCase();
+    const nm = String(row.patientName || '').toLowerCase();
+    const matchSearch = !query || ip.indexOf(query) > -1 ||
+                        pid.indexOf(query) > -1 || nm.indexOf(query) > -1;
+ 
+    const rowStat = String(row.status || '').toUpperCase();
+    const isLive = (rowStat === 'ACTIVE' || rowStat === 'ADMITTED');
+ 
+    let matchStatus = false;
+    if (statusFilter === 'ALL') matchStatus = true;
+    else if (statusFilter === 'ACTIVE' && isLive) matchStatus = true;
+    else if (statusFilter === 'DISCHARGED' && rowStat === 'DISCHARGED') matchStatus = true;
+ 
+    if (!matchSearch || !matchStatus) return;
+    count++;
+ 
+    const statusBadge = isLive
+      ? '<span class="badge text-bg-success">Active</span>'
+      : '<span class="badge text-bg-secondary">Discharged</span>' +
+        (row.dod ? '<br><small class="text-body-secondary">' + esc(row.dod) + '</small>' : '');
+ 
+    const args = "'" + esc(row.ipNumber) + "','" + esc(row.bed) + "','" + esc(row.ward) + "'";
+    const actions = isLive
+      ? '<button class="btn btn-sm btn-outline-warning me-1" onclick="openChangeBedModal(' + args + ')">' +
+        '<i class="fa-solid fa-right-left"></i></button>' +
+        '<button class="btn btn-sm btn-outline-danger" onclick="confirmDischarge(' + args + ')">' +
+        '<i class="fa-solid fa-door-open"></i></button>'
+      : '<span class="text-body-secondary small">&mdash;</span>';
+ 
+    html += '<tr>' +
+      '<td class="fw-bold">' + esc(row.ipNumber) + '</td>' +
+      '<td>' + esc(row.patientName) +
+        '<br><small class="text-body-secondary">' + esc(row.patientId) + ' &middot; ' + esc(row.ageSex) + '</small></td>' +
+      '<td>' + esc(row.doa) + '<br><small class="text-body-secondary">' + esc(row.toa) + '</small></td>' +
+      '<td>' + (row.ward || row.bed ? esc(row.ward) + ' / ' + esc(row.bed) : '<span class="text-body-secondary">Unassigned</span>') + '</td>' +
+      '<td>' + esc(row.consultant) + '</td>' +
+      '<td>' + (row.diagnosis ? esc(row.diagnosis) : '<span class="text-body-secondary">Pending</span>') + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+      '<td class="text-end">' + actions + '</td>' +
+      '</tr>';
+  });
+ 
+  const countEl = document.getElementById('ledger-count');
+  if (countEl) countEl.textContent = count + ' of ' + ledgerDataMaster.length + ' shown';
+ 
+  if (count === 0) {
+    const empty = ledgerDataMaster.length === 0
+      ? 'No admissions recorded yet.<br><small>Use <strong>New Admission</strong> to admit the first patient.</small>'
+      : 'No admissions match this search or filter.';
+    ledgerMessage('<i class="fa-solid fa-folder-open fa-2x mb-3 d-block opacity-50"></i>' + empty);
+    return;
+  }
+  tbody.innerHTML = html;
+}
+ 
+// ---- Admit modal ---------------------------------------------------------
+ 
+function prepAdmitModal() {
+  const form = document.getElementById('form-admission');
+  if (form) form.reset();
+  ['adm-pat-name', 'adm-pat-age', 'adm-pat-sex'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+}
+ 
+function fetchAdmitPatientDetails() {
+  const idEl = document.getElementById('adm-pat-id');
+  if (!idEl || !idEl.value.trim()) { alert('Enter a Patient ID first.'); return; }
+ 
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || res.success === false) {
+        alert((res && res.message) || 'Patient not found.');
+        return;
       }
-    }).fetchPatientForAdmit(pid);
-  }
-
-  function loadAvailableBeds(wardElementId, targetElementId) {
-    const ward = document.getElementById(wardElementId).value;
-    const bedSelect = document.getElementById(targetElementId);
-    if(!ward) { bedSelect.innerHTML = '<option value="">Select Ward First...</option>'; return; }
-    
-    bedSelect.innerHTML = '<option value="">Loading...</option>';
-    google.script.run.withSuccessHandler(beds => {
-      if(beds.length === 0) bedSelect.innerHTML = '<option value="" disabled>No beds available</option>';
-      else {
-        bedSelect.innerHTML = '<option value="">Select Bed...</option>';
-        beds.forEach(b => bedSelect.innerHTML += `<option value="${b}">${b}</option>`);
-      }
-    }).getAvailableBedsByWard(ward);
-  }
-
-  function submitAdmissionForm() {
-    const pid = document.getElementById('adm-pat-id').value;
-    const bed = document.getElementById('adm-bed').value;
-    const name = document.getElementById('adm-pat-name').value;
-    const age = document.getElementById('adm-pat-age').value;
-    const sex = document.getElementById('adm-pat-sex').value;
-    
-    if(!pid || !bed || name === "Not Found!") {
-      alert("Valid Patient ID and Available Bed are required."); return;
-    }
-
-    const payload = {
-      patientId: pid,
-      patientName: name,
-      ageSex: age + " / " + sex,
-      doa: document.getElementById('adm-doa').value,
-      toa: document.getElementById('adm-toa').value,
-      type: document.getElementById('adm-type').value,
-      ward: document.getElementById('adm-ward').value,
-      bed: bed,
-      consultant: document.getElementById('adm-doctor').value,
-      diagnosis: document.getElementById('adm-diagnosis').value,
-      insurance: "Not Specified" // Keeping payload structure intact for DB
-    };
-
-    const btn = document.getElementById('btn-submit-admit');
-    btn.innerText = "Processing...";
+      const setVal = function (id, v) {
+        const el = document.getElementById(id);
+        if (el) el.value = v || '';
+      };
+      setVal('adm-pat-name', res.data.name);
+      setVal('adm-pat-age', res.data.age);
+      setVal('adm-pat-sex', res.data.sex);
+    })
+    .withFailureHandler(function (err) { alert('Lookup failed: ' + err.message); })
+    .fetchPatientForAdmit(idEl.value.trim());
+}
+ 
+function loadAvailableBeds(wardSelectId, bedSelectId) {
+  const wardEl = document.getElementById(wardSelectId);
+  const bedEl = document.getElementById(bedSelectId);
+  if (!wardEl || !bedEl) return;
+ 
+  if (!wardEl.value) { bedEl.innerHTML = '<option value="">Select Ward First...</option>'; return; }
+  bedEl.innerHTML = '<option value="">Loading beds...</option>';
+ 
+  google.script.run
+    .withSuccessHandler(function (res) {
+      const beds = (res && Array.isArray(res.data)) ? res.data : [];
+      if (!beds.length) { bedEl.innerHTML = '<option value="">No beds available</option>'; return; }
+      bedEl.innerHTML = '<option value="">Select Bed...</option>' +
+        beds.map(function (b) { return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('');
+    })
+    .withFailureHandler(function (err) {
+      bedEl.innerHTML = '<option value="">Error loading beds</option>';
+      alert('Bed lookup failed: ' + err.message);
+    })
+    .getAvailableBedsByWard(wardEl.value);
+}
+ 
+function submitAdmission() {
+  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+ 
+  const pid = val('adm-pat-id');
+  const name = val('adm-pat-name');
+  const bed = val('adm-bed');
+  if (!pid || !name) { alert('Look up a valid Patient ID first.'); return; }
+  if (!bed) { alert('Select an available bed.'); return; }
+ 
+  const payload = {
+    patientId: pid,
+    patientName: name,
+    ageSex: val('adm-pat-age') + ' / ' + val('adm-pat-sex'),
+    doa: val('adm-doa'),
+    toa: val('adm-toa'),
+    type: val('adm-type'),
+    ward: val('adm-ward'),
+    bed: bed,
+    consultant: val('adm-doctor'),
+    diagnosis: val('adm-diagnosis')
+  };
+ 
+  const btn = document.getElementById('btn-submit-admit');
+  const reset = function () {
+    if (btn) { btn.innerHTML = 'Admit &amp; Generate IP'; btn.disabled = false; }
+  };
+  if (btn) {
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
     btn.disabled = true;
-    
-
-    google.script.run
-      .withSuccessHandler(newIpNum => {
-      alert(`Admission Successful!\nGenerated IP Number: ${newIpNum}`);
-      bootstrap.Modal.getInstance(document.getElementById('modalAdmitPatient')).hide();
-      btn.innerText = "Admit & Generate IP";
-      btn.disabled = false;
-      loadIPLedger(); 
-      })
-      .withFailureHandler(err => { // <-- ADDED: Catch backend crashes
-      alert("Error saving admission: " + err.message);
-      btn.innerText = "Admit & Generate IP";
-      btn.disabled = false;
-      })
-      .saveNewAdmissionLedger(payload);
-    }
-
-  // Bed Transfer Handlers
-  function openChangeBedModal(ipNumber, currentBed, currentWard) {
-    document.getElementById('transfer-ip-no').value = ipNumber;
-    document.getElementById('transfer-old-bed').value = currentBed;
-    document.getElementById('transfer-current').value = `${currentWard} - ${currentBed}`;
-    
-    document.getElementById('transfer-ward').value = '';
-    document.getElementById('transfer-bed').innerHTML = '<option value="">Select Ward First...</option>';
-    
-    new bootstrap.Modal(document.getElementById('modalChangeBed')).show();
   }
-
-  function submitBedTransfer() {
-    const ipNumber = document.getElementById('transfer-ip-no').value;
-    const oldBed = document.getElementById('transfer-old-bed').value;
-    const newWard = document.getElementById('transfer-ward').value;
-    const newBed = document.getElementById('transfer-bed').value;
-
-    if(!newBed) { alert("Please select a new bed."); return; }
-
-    const btn = document.getElementById('btn-submit-transfer');
-    btn.innerText = "Transferring...";
-    btn.disabled = true;
-
-    // Inside submitBedTransfer()
-    google.script.run
-     .withSuccessHandler(() => {
-      bootstrap.Modal.getInstance(document.getElementById('modalChangeBed')).hide();
-      btn.innerText = "Confirm Transfer";
-      btn.disabled = false;
-      alert(`Bed successfully changed from ${oldBed} to ${newBed}.`);
+ 
+  google.script.run
+    .withSuccessHandler(function (res) {
+      reset();
+      if (!res || res.success === false) { alert((res && res.message) || 'Admission failed.'); return; }
+      alert(res.message);
+      const modalEl = document.getElementById('modalAdmitPatient');
+      const inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+      if (inst) inst.hide();
       loadIPLedger();
-      })
-      .withFailureHandler(err => { // <-- ADDED: Catch backend crashes
-      alert("Error transferring bed: " + err.message);
-      btn.innerText = "Confirm Transfer";
-      btn.disabled = false;
-      })
-  .processBedTransfer(ipNumber, oldBed, newWard, newBed);
-  }
-
-  // Discharge Handler
-  function triggerDischarge(ipNumber, bedId) {
-    if(confirm(`WARNING: You are about to discharge IP No: ${ipNumber}.\nThis will release Bed ${bedId} for cleaning.\n\nProceed?`)) {
-      google.script.run.withSuccessHandler(() => {
-        alert("Patient Discharged. Bed sent to cleaning.");
-        loadIPLedger(); 
-      }).processPatientDischarge(ipNumber, bedId);
-    }
-  }
+    })
+    .withFailureHandler(function (err) { reset(); alert('Error saving admission: ' + err.message); })
+    .saveNewAdmissionLedger(payload);
+}
+ 
+// ---- Bed transfer --------------------------------------------------------
+ 
+function openChangeBedModal(ipNumber, currentBed, currentWard) {
+  const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v; };
+  set('transfer-ip-no', ipNumber);
+  set('transfer-old-bed', currentBed);
+  set('transfer-current', currentWard + ' - ' + currentBed);
+  set('transfer-ward', '');
+  const bedEl = document.getElementById('transfer-bed');
+  if (bedEl) bedEl.innerHTML = '<option value="">Select Ward First...</option>';
+  new bootstrap.Modal(document.getElementById('modalChangeBed')).show();
+}
+ 
+function submitBedTransfer() {
+  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const newBed = val('transfer-bed');
+  if (!newBed) { alert('Please select a new bed.'); return; }
+ 
+  const btn = document.getElementById('btn-submit-transfer');
+  const reset = function () { if (btn) { btn.innerText = 'Confirm Transfer'; btn.disabled = false; } };
+  if (btn) { btn.innerText = 'Transferring...'; btn.disabled = true; }
+ 
+  google.script.run
+    .withSuccessHandler(function (res) {
+      reset();
+      if (!res || res.success === false) { alert((res && res.message) || 'Transfer failed.'); return; }
+      alert(res.message);
+      const inst = bootstrap.Modal.getInstance(document.getElementById('modalChangeBed'));
+      if (inst) inst.hide();
+      loadIPLedger();
+    })
+    .withFailureHandler(function (err) { reset(); alert('Transfer failed: ' + err.message); })
+    .processBedTransfer(val('transfer-ip-no'), val('transfer-old-bed'), val('transfer-ward'), newBed);
+}
+ 
+// ---- Discharge -----------------------------------------------------------
+ 
+function confirmDischarge(ipNumber, bedId) {
+  if (!confirm('Discharge ' + ipNumber + '? This frees bed ' + bedId + '.')) return;
+  ledgerMessage('<div class="spinner-border text-primary"></div><br>Processing discharge...');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || res.success === false) { alert((res && res.message) || 'Discharge failed.'); }
+      loadIPLedger();
+    })
+    .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPLedger(); })
+    .processPatientDischarge(ipNumber, bedId);
+}
 </script>

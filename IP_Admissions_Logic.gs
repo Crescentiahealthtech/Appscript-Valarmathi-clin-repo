@@ -1,231 +1,363 @@
-// ==========================================
-// IP_Admissions_Logic.gs
-// ==========================================
+// =========================================================================
+// IP_Admissions_Logic.gs  —  CRESCENTIA HEALTHTECH / CresRx
+// Hardened admissions ledger. All writes are lock-guarded and return
+// the standard { success, message } contract.
+//
+// IP_Admissions schema (13 cols, FROZEN — do not reorder):
+// [0]IP Number [1]Patient ID [2]Patient Name [3]Age/Sex [4]DOA [5]TOA
+// [6]Type [7]Ward [8]Bed [9]Consultant [10]Diagnosis [11]Status [12]DOD
+// =========================================================================
 
-function fetchPatientForAdmit(patientId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Patients"); 
-  if (!sheet) return null;
+var IPA_CFG = {
+  SHEET: 'IP_Admissions',
+  BEDS: 'Master_Beds',
+  PATIENTS: 'Patients',
+  HEADERS: ['IP Number', 'Patient ID', 'Patient Name', 'Age/Sex', 'DOA', 'TOA',
+            'Type', 'Ward', 'Bed', 'Consultant', 'Diagnosis', 'Status', 'DOD'],
+  LOCK_MS: 10000
+};
 
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0].toString().trim().toUpperCase() === patientId.trim().toUpperCase()) {
-      return { name: data[i][2], age: data[i][3], sex: data[i][4] };
-    }
+// Column indices, by name. Never hardcode a number outside this object.
+var IPA_COL = {
+  IP: 0, PATIENT_ID: 1, NAME: 2, AGE_SEX: 3, DOA: 4, TOA: 5,
+  TYPE: 6, WARD: 7, BED: 8, CONSULTANT: 9, DIAGNOSIS: 10, STATUS: 11, DOD: 12
+};
+
+// ---- helpers --------------------------------------------------------------
+
+function ipa_ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
+
+function ipa_str_(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
+
+function ipa_sheet_() {
+  var ss = ipa_ss_();
+  var sh = ss.getSheetByName(IPA_CFG.SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(IPA_CFG.SHEET);
+    sh.appendRow(IPA_CFG.HEADERS);
+    sh.setFrozenRows(1);
   }
-  return null;
+  return sh;
 }
 
-function saveNewAdmissionLedger(payload) { // <-- FIX: Changed 'pay' to 'payload'
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyMM");
-  const randomSeq = Math.floor(1000 + Math.random() * 9000); 
-  const newIpNumber = `IP${dateStr}-${randomSeq}`;
-
-  let admitSheet = ss.getSheetByName("IP_Admissions");
-  if(!admitSheet) { 
-    admitSheet = ss.insertSheet("IP_Admissions"); 
-    admitSheet.appendRow(["IP Number", "Patient ID", "Patient Name", "Age/Sex", "DOA", "TOA", "Type", "Ward", "Bed", "Consultant", "Diagnosis", "Status", "DOD"]);
+function ipa_fmt_(v, pattern) {
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), pattern);
   }
-  
-  admitSheet.appendRow([
-    newIpNumber, 
-    payload.patientId, 
-    payload.patientName, 
-    payload.ageSex,
-    payload.doa, 
-    payload.toa,
-    payload.type,
-    payload.ward,
-    payload.bed,
-    payload.consultant,
-    payload.diagnosis, 
-    "ACTIVE",
-    "" 
-  ]);
-
-  let bedSheet = ss.getSheetByName("Master_Beds");
-  if(bedSheet) {
-    const bData = bedSheet.getDataRange().getValues();
-    for(let i=1; i<bData.length; i++) {
-      if(bData[i][0] === payload.bed) {
-        bedSheet.getRange(i+1, 3).setValue("Occupied");
-        bedSheet.getRange(i+1, 4).setValue(payload.patientId);
-        bedSheet.getRange(i+1, 5).setValue(payload.patientName); 
-        bedSheet.getRange(i+1, 6).setValue(payload.doa);
-        bedSheet.getRange(i+1, 7).setValue(newIpNumber);
-        break;
-      }
-    }
-  }
-  return newIpNumber;
+  return ipa_str_(v);
 }
 
-function processBedTransfer(ipNumber, oldBedId, newWard, newBedId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let admitSheet = ss.getSheetByName("IP_Admissions");
-  let patientId = "", patientName = "", doa = "";
-  
-  if (admitSheet) {
-    const aData = admitSheet.getDataRange().getValues();
-    for (let i = 1; i < aData.length; i++) {
-      if (aData[i][0] === ipNumber) {
-        admitSheet.getRange(i+1, 8).setValue(`${newWard} - ${newBedId}`);
-        patientId = aData[i][1];
-        patientName = aData[i][2];
-        doa = aData[i][4];
-        break;
-      }
-    }
-  }
-
-  let bedSheet = ss.getSheetByName("Master_Beds");
-  if (bedSheet) {
-    const bData = bedSheet.getDataRange().getValues();
-    for (let i = 1; i < bData.length; i++) {
-      if (bData[i][0] === oldBedId) {
-        bedSheet.getRange(i+1, 3).setValue("Cleaning");
-        bedSheet.getRange(i+1, 4).clearContent();
-        bedSheet.getRange(i+1, 5).clearContent();
-        bedSheet.getRange(i+1, 6).clearContent();
-        bedSheet.getRange(i+1, 7).clearContent();
-        break;
-      }
-    }
-    for (let i = 1; i < bData.length; i++) {
-      if (bData[i][0] === newBedId) {
-        bedSheet.getRange(i+1, 3).setValue("Occupied");
-        bedSheet.getRange(i+1, 4).setValue(patientId);
-        bedSheet.getRange(i+1, 5).setValue(patientName);
-        bedSheet.getRange(i+1, 6).setValue(doa);
-        bedSheet.getRange(i+1, 7).setValue(ipNumber);
-        break;
-      }
-    }
-  }
-  return true;
+// ACTIVE and ADMITTED are treated as the same live state.
+function ipa_isLive_(status) {
+  var s = ipa_str_(status).toUpperCase();
+  return s === 'ACTIVE' || s === 'ADMITTED';
 }
 
-function getAvailableBedsByWard(ward) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = initializeBedsIfEmpty(ss); // Calls the initializer safely
-  
-  const data = sheet.getDataRange().getValues();
-  let availableBeds = [];
-  
-  for (let i = 1; i < data.length; i++) {
-    const rowWard = data[i][1] ? data[i][1].toString().trim() : "";
-    const rowStatus = data[i][2] ? data[i][2].toString().trim().toUpperCase() : "";
-    
-    if (rowWard === ward && rowStatus === "AVAILABLE") {
-      availableBeds.push(data[i][0]);
+/**
+ * Next sequential IP number for the current month: IP2609-0001.
+ * MUST be called from inside an acquired script lock.
+ */
+function ipa_nextIpNumber_(sheet) {
+  var prefix = 'IP' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyMM') + '-';
+  var lastRow = sheet.getLastRow();
+  var maxSeq = 0;
+
+  if (lastRow >= 2) {
+    var existing = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < existing.length; i++) {
+      var val = ipa_str_(existing[i][0]);
+      if (val.indexOf(prefix) !== 0) continue;
+      var seq = parseInt(val.substring(prefix.length), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
     }
   }
-  return availableBeds;
+
+  var next = maxSeq + 1;
+  return prefix + ('0000' + next).slice(-4);
 }
 
+// ---- READ: ledger ---------------------------------------------------------
+
+/**
+ * Returns the full admissions ledger, newest first.
+ * Contract: { success, message, data: [...] } — data is ALWAYS an array.
+ */
 function getIPLedgerData() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("IP_Admissions");
-    
-    // Failover if sheet doesn't exist
-    if (!sheet) return { success: true, data: [] }; 
-    
-    const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
-    
-    // Prevent fetching if sheet is virtually empty
-    if (lastRow < 2 || lastCol < 1) {
-      return { success: true, data: [] };
+    var ss = ipa_ss_();
+    var sheet = ss.getSheetByName(IPA_CFG.SHEET);
+
+    if (!sheet) {
+      return { success: true, message: 'Ledger not yet created.', data: [] };
     }
-    
-    const tz = Session.getScriptTimeZone();
-    const fmt = function (v, pat) {
-      if (v instanceof Date) return Utilities.formatDate(v, tz, pat);
-      return (v == null ? "" : v).toString();
-    };
-    
-    // Dynamically fetch columns
-    const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-    const ledger = [];
-    
-    for (let i = 0; i < data.length; i++) {
-      const r = data[i];
-      if (!r[0]) continue; // Skip blank rows
-      
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+
+    if (lastRow < 2 || lastCol < 1) {
+      return { success: true, message: 'No admissions recorded.', data: [] };
+    }
+
+    var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    var ledger = [];
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[IPA_COL.IP]) continue;
+
       ledger.push({
-        ipNumber:   (r[0]  || "").toString(),
-        patientId:  (r[1]  || "").toString(),
-        patientName:(r[2]  || "").toString(),
-        ageSex:     (r[3]  || "").toString(),
-        doa:        fmt(r[4],  "dd MMM yyyy"),
-        toa:        fmt(r[5],  "hh:mm a"),
-        type:       (r[6]  || "").toString(),
-        ward:       (r[7]  || "").toString(),
-        bed:        (r[8]  || "").toString(),
-        consultant: (r[9]  || "").toString(),
-        diagnosis:  (r[10] || "").toString(),
-        status:     (r[11] || "UNKNOWN").toString(),
-        dod:        lastCol > 12 ? fmt(r[12], "dd MMM yyyy") : ""
+        rowIndex:    i + 2,
+        ipNumber:    ipa_str_(r[IPA_COL.IP]),
+        patientId:   ipa_str_(r[IPA_COL.PATIENT_ID]),
+        patientName: ipa_str_(r[IPA_COL.NAME]),
+        ageSex:      ipa_str_(r[IPA_COL.AGE_SEX]),
+        doa:         ipa_fmt_(r[IPA_COL.DOA], 'dd MMM yyyy'),
+        toa:         ipa_fmt_(r[IPA_COL.TOA], 'hh:mm a'),
+        type:        ipa_str_(r[IPA_COL.TYPE]),
+        ward:        ipa_str_(r[IPA_COL.WARD]),
+        bed:         ipa_str_(r[IPA_COL.BED]),
+        consultant:  ipa_str_(r[IPA_COL.CONSULTANT]),
+        diagnosis:   ipa_str_(r[IPA_COL.DIAGNOSIS]),
+        status:      ipa_str_(r[IPA_COL.STATUS]) || 'UNKNOWN',
+        dod:         lastCol > IPA_COL.DOD ? ipa_fmt_(r[IPA_COL.DOD], 'dd MMM yyyy') : ''
       });
     }
-    // Return a raw object, NOT a JSON string
-    return { success: true, data: ledger.reverse() };
+
+    ledger.reverse();
+    return { success: true, message: ledger.length + ' record(s).', data: ledger };
+
   } catch (e) {
-    return { success: false, message: e.message };
+    return { success: false, message: 'Ledger read failed: ' + e.message, data: [] };
   }
 }
+
+// ---- READ: patient lookup for the admit modal -----------------------------
+
+function fetchPatientForAdmit(patientId) {
+  try {
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.PATIENTS);
+    if (!sheet) return { success: false, message: 'Patients sheet not found.' };
+
+    var target = ipa_str_(patientId).toUpperCase();
+    if (!target) return { success: false, message: 'Enter a Patient ID.' };
+
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (ipa_str_(data[i][0]).toUpperCase() === target) {
+        return {
+          success: true,
+          message: 'Patient found.',
+          data: {
+            patientId: ipa_str_(data[i][0]),
+            name: ipa_str_(data[i][2]),
+            age:  ipa_str_(data[i][3]),
+            sex:  ipa_str_(data[i][4])
+          }
+        };
+      }
+    }
+    return { success: false, message: 'No patient with ID ' + patientId + '.' };
+
+  } catch (e) {
+    return { success: false, message: 'Lookup failed: ' + e.message };
+  }
+}
+
+// ---- READ: available beds -------------------------------------------------
+
+function getAvailableBedsByWard(ward) {
+  try {
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
+    if (!sheet) return { success: true, message: 'No bed master.', data: [] };
+
+    var target = ipa_str_(ward).toUpperCase();
+    var data = sheet.getDataRange().getValues();
+    var beds = [];
+
+    for (var i = 1; i < data.length; i++) {
+      var rowWard = ipa_str_(data[i][1]).toUpperCase();
+      var rowStatus = ipa_str_(data[i][2]).toUpperCase();
+      if (rowWard === target && rowStatus === 'AVAILABLE') {
+        beds.push(ipa_str_(data[i][0]));
+      }
+    }
+    return { success: true, message: beds.length + ' bed(s) available.', data: beds };
+
+  } catch (e) {
+    return { success: false, message: 'Bed lookup failed: ' + e.message, data: [] };
+  }
+}
+
+// ---- WRITE: new admission -------------------------------------------------
+
+function saveNewAdmissionLedger(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(IPA_CFG.LOCK_MS);
+
+    var patientId = ipa_str_(payload && payload.patientId);
+    var bed       = ipa_str_(payload && payload.bed);
+    if (!patientId) return { success: false, message: 'Patient ID is required.' };
+    if (!bed)       return { success: false, message: 'A bed must be selected.' };
+
+    var sheet = ipa_sheet_();
+
+    // Reject a second live admission for the same patient.
+    var lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+      var existing = sheet.getRange(2, 1, lastRow - 1, IPA_CFG.HEADERS.length).getValues();
+      for (var i = 0; i < existing.length; i++) {
+        if (ipa_str_(existing[i][IPA_COL.PATIENT_ID]).toUpperCase() === patientId.toUpperCase() &&
+            ipa_isLive_(existing[i][IPA_COL.STATUS])) {
+          return { success: false,
+                   message: 'Patient ' + patientId + ' already has an active admission (' +
+                            ipa_str_(existing[i][IPA_COL.IP]) + ').' };
+        }
+      }
+    }
+
+    var newIpNumber = ipa_nextIpNumber_(sheet);
+    var doaRaw = ipa_str_(payload.doa);
+    var doaVal = doaRaw ? new Date(doaRaw) : new Date();
+    if (isNaN(doaVal.getTime())) doaVal = new Date();
+
+    sheet.appendRow([
+      String(newIpNumber),
+      String(patientId),
+      ipa_str_(payload.patientName),
+      ipa_str_(payload.ageSex),
+      doaVal,
+      ipa_str_(payload.toa),
+      ipa_str_(payload.type),
+      ipa_str_(payload.ward),
+      String(bed),
+      ipa_str_(payload.consultant),
+      ipa_str_(payload.diagnosis),
+      'ACTIVE',
+      ''
+    ]);
+
+    ipa_occupyBed_(bed, patientId, ipa_str_(payload.patientName), doaVal, newIpNumber);
+
+    SpreadsheetApp.flush();
+    return { success: true, message: 'Admitted. IP Number ' + newIpNumber, ipNumber: newIpNumber };
+
+  } catch (e) {
+    return { success: false, message: 'Admission failed: ' + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---- WRITE: bed transfer --------------------------------------------------
+
+function processBedTransfer(ipNumber, oldBedId, newWard, newBedId) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(IPA_CFG.LOCK_MS);
+
+    var ip = ipa_str_(ipNumber);
+    var newBed = ipa_str_(newBedId);
+    if (!ip)     return { success: false, message: 'IP Number is required.' };
+    if (!newBed) return { success: false, message: 'A destination bed is required.' };
+
+    var sheet = ipa_sheet_();
+    var data = sheet.getDataRange().getValues();
+    var patientId = '', patientName = '', doa = '';
+    var found = false;
+
+    for (var i = 1; i < data.length; i++) {
+      if (ipa_str_(data[i][IPA_COL.IP]) !== ip) continue;
+      if (!ipa_isLive_(data[i][IPA_COL.STATUS])) {
+        return { success: false, message: 'Admission ' + ip + ' is not active.' };
+      }
+      sheet.getRange(i + 1, IPA_COL.WARD + 1).setValue(ipa_str_(newWard));
+      sheet.getRange(i + 1, IPA_COL.BED + 1).setValue(String(newBed));
+      patientId   = ipa_str_(data[i][IPA_COL.PATIENT_ID]);
+      patientName = ipa_str_(data[i][IPA_COL.NAME]);
+      doa         = data[i][IPA_COL.DOA];
+      found = true;
+      break;
+    }
+    if (!found) return { success: false, message: 'Admission ' + ip + ' not found.' };
+
+    ipa_releaseBed_(ipa_str_(oldBedId));
+    ipa_occupyBed_(newBed, patientId, patientName, doa, ip);
+
+    SpreadsheetApp.flush();
+    return { success: true, message: 'Transferred to ' + newWard + ' / ' + newBed + '.' };
+
+  } catch (e) {
+    return { success: false, message: 'Transfer failed: ' + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---- WRITE: discharge -----------------------------------------------------
 
 function processPatientDischarge(ipNumber, bedId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-  
-  // 1. Update Admission Ledger Status
-  let admitSheet = ss.getSheetByName("IP_Admissions");
-  if (admitSheet) {
-    const aData = admitSheet.getDataRange().getValues();
-    for (let i = 1; i < aData.length; i++) {
-      if (aData[i][0] === ipNumber) {
-        admitSheet.getRange(i+1, 12).setValue("DISCHARGED"); // Status Col
-        admitSheet.getRange(i+1, 13).setValue(dateStr);      // DOD Col
-        break;
-      }
-    }
-  }
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(IPA_CFG.LOCK_MS);
 
-  // 2. Free up the Bed (Set to Cleaning)
-  let bedSheet = ss.getSheetByName("Master_Beds");
-  if (bedSheet) {
-    const bData = bedSheet.getDataRange().getValues();
-    for (let i = 1; i < bData.length; i++) {
-      if (bData[i][0] === bedId) {
-        bedSheet.getRange(i+1, 3).setValue("Cleaning");
-        bedSheet.getRange(i+1, 4).clearContent();
-        bedSheet.getRange(i+1, 5).clearContent();
-        bedSheet.getRange(i+1, 6).clearContent();
-        bedSheet.getRange(i+1, 7).clearContent();
-        break;
+    var ip = ipa_str_(ipNumber);
+    if (!ip) return { success: false, message: 'IP Number is required.' };
+
+    var sheet = ipa_sheet_();
+    var data = sheet.getDataRange().getValues();
+    var found = false;
+
+    for (var i = 1; i < data.length; i++) {
+      if (ipa_str_(data[i][IPA_COL.IP]) !== ip) continue;
+      if (!ipa_isLive_(data[i][IPA_COL.STATUS])) {
+        return { success: false, message: 'Admission ' + ip + ' is already discharged.' };
       }
+      sheet.getRange(i + 1, IPA_COL.STATUS + 1).setValue('DISCHARGED');
+      sheet.getRange(i + 1, IPA_COL.DOD + 1).setValue(new Date());
+      found = true;
+      break;
     }
+    if (!found) return { success: false, message: 'Admission ' + ip + ' not found.' };
+
+    ipa_releaseBed_(ipa_str_(bedId));
+
+    SpreadsheetApp.flush();
+    return { success: true, message: 'Discharged ' + ip + '.' };
+
+  } catch (e) {
+    return { success: false, message: 'Discharge failed: ' + e.message };
+  } finally {
+    lock.releaseLock();
   }
-  return true;
 }
 
-function getLedgerDiagnostics() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("IP_Admissions");
-    if (!sheet) {
-      return JSON.stringify({ ok: true, sheetExists: false, rowCount: 0 });
-    }
-    return JSON.stringify({
-      ok: true,
-      sheetExists: true,
-      rowCount: Math.max(0, sheet.getLastRow() - 1),
-      lastCol: sheet.getLastColumn()
-    });
-  } catch (e) {
-    return JSON.stringify({ ok: false, message: e.message });
+// ---- bed state (private; callers already hold the lock) -------------------
+
+function ipa_occupyBed_(bedId, patientId, patientName, doa, ipNumber) {
+  var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (ipa_str_(data[i][0]) !== ipa_str_(bedId)) continue;
+    sheet.getRange(i + 1, 3).setValue('Occupied');
+    sheet.getRange(i + 1, 4).setValue(String(patientId));
+    sheet.getRange(i + 1, 5).setValue(String(patientName));
+    sheet.getRange(i + 1, 6).setValue(doa);
+    sheet.getRange(i + 1, 7).setValue(String(ipNumber));
+    return;
+  }
+}
+
+function ipa_releaseBed_(bedId) {
+  if (!bedId) return;
+  var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (ipa_str_(data[i][0]) !== ipa_str_(bedId)) continue;
+    sheet.getRange(i + 1, 3).setValue('Cleaning');
+    sheet.getRange(i + 1, 4, 1, 4).clearContent();
+    return;
   }
 }
