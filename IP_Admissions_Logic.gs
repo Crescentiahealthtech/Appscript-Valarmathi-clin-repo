@@ -746,3 +746,293 @@ function repairWardBedColumns() {
     lock.releaseLock();
   }
 }
+
+// =========================================================================
+// CONSULTANT MASTER + BED LIFECYCLE  (append to IP_Admissions_Logic.gs)
+// =========================================================================
+
+IPA_CFG.DOCTORS = 'Master_Doctors';
+IPA_CFG.DOCTOR_HEADERS = ['Doctor_Name', 'Department', 'Status'];
+
+/** Fallback if Master_Doctors does not exist yet. Sheet always wins. */
+var IPA_DEFAULT_CONSULTANTS = [
+  'Dr. Meivasagam',
+  'Dr. Nagamanikandan',
+  'Dr. Logavignesh',
+  'Dr. Sivakumar'
+];
+
+/**
+ * Active consultants for the admission dropdown.
+ * Contract: { success, message, data:[String] }. data is ALWAYS an array.
+ */
+function getConsultantList() {
+  try {
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.DOCTORS);
+    if (!sheet) {
+      return { success: true, message: 'Using default consultant list.',
+               data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'fallback' };
+    }
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return { success: true, message: 'Using default consultant list.',
+               data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'fallback' };
+    }
+
+    var rows = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    var seen = {}, out = [];
+    for (var i = 0; i < rows.length; i++) {
+      var name = ipa_str_(rows[i][0]);
+      if (!name) continue;
+      var status = ipa_str_(rows[i][2]).toUpperCase();
+      if (status && status !== 'ACTIVE') continue;   // blank status = active
+      if (seen[name.toUpperCase()]) continue;
+      seen[name.toUpperCase()] = true;
+      out.push(name);
+    }
+    out.sort();
+
+    if (!out.length) {
+      return { success: true, message: 'No active consultants on file.',
+               data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'fallback' };
+    }
+    return { success: true, message: out.length + ' consultant(s).',
+             data: out, source: 'sheet' };
+
+  } catch (e) {
+    return { success: false, message: 'Consultant lookup failed: ' + e.message,
+             data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'error' };
+  }
+}
+
+/** One-shot. Creates Master_Doctors and seeds the four consultants. */
+function seedMasterDoctors() {
+  var lock = LockService.getScriptLock();
+  var acquired = false;
+  try {
+    lock.waitLock(IPA_CFG.LOCK_MS);
+    acquired = true;
+
+    var ss = ipa_ss_();
+    var sh = ss.getSheetByName(IPA_CFG.DOCTORS);
+    if (sh) return { success: false, message: 'Master_Doctors already exists.' };
+
+    sh = ss.insertSheet(IPA_CFG.DOCTORS);
+    sh.appendRow(IPA_CFG.DOCTOR_HEADERS);
+    sh.setFrozenRows(1);
+    for (var i = 0; i < IPA_DEFAULT_CONSULTANTS.length; i++) {
+      sh.appendRow([String(IPA_DEFAULT_CONSULTANTS[i]), 'General', 'ACTIVE']);
+    }
+    SpreadsheetApp.flush();
+    return { success: true, message: 'Seeded ' + IPA_DEFAULT_CONSULTANTS.length + ' consultant(s).' };
+
+  } catch (e) {
+    return { success: false, message: 'Seed failed: ' + e.message };
+  } finally {
+    if (acquired) lock.releaseLock();
+  }
+}
+
+// ---- BED BOARD: full occupancy picture, not just "available" -------------
+
+/**
+ * Every bed in a ward with its true status. Drives the housekeeping board
+ * and lets the UI explain WHY no beds are selectable.
+ */
+function getWardBedBoard(ward) {
+  try {
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
+    if (!sheet) return { success: true, message: 'No bed master.', data: [], counts: {} };
+
+    var target = ipa_str_(ward).toUpperCase();
+    if (!target) return { success: true, message: 'Select a ward.', data: [], counts: {} };
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return { success: true, message: 'No beds configured.', data: [], counts: {} };
+
+    var rows = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    var beds = [], counts = { available: 0, occupied: 0, cleaning: 0, reserved: 0, other: 0 };
+
+    for (var i = 0; i < rows.length; i++) {
+      if (ipa_str_(rows[i][1]).toUpperCase() !== target) continue;
+      var status = ipa_str_(rows[i][2]).toUpperCase() || 'UNKNOWN';
+      beds.push({
+        bedId:       ipa_str_(rows[i][0]),
+        ward:        ipa_str_(rows[i][1]),
+        status:      status,
+        patientId:   ipa_pid_(rows[i][3]),
+        patientName: ipa_str_(rows[i][4]),
+        ipNumber:    ipa_str_(rows[i][6])
+      });
+      if      (status === 'AVAILABLE') counts.available++;
+      else if (status === 'OCCUPIED')  counts.occupied++;
+      else if (status === 'CLEANING')  counts.cleaning++;
+      else if (status === 'RESERVED')  counts.reserved++;
+      else counts.other++;
+    }
+
+    beds.sort(function (a, b) { return a.bedId < b.bedId ? -1 : 1; });
+    return { success: true, message: beds.length + ' bed(s) in ward ' + ward + '.',
+             data: beds, counts: counts };
+
+  } catch (e) {
+    return { success: false, message: 'Bed board failed: ' + e.message, data: [], counts: {} };
+  }
+}
+
+/**
+ * Housekeeping: return a bed from Cleaning/Reserved to Available.
+ * Refuses on OCCUPIED — that must go through discharge or transfer.
+ */
+function markBedReady(bedId) {
+  var lock = LockService.getScriptLock();
+  var acquired = false;
+  try {
+    lock.waitLock(IPA_CFG.LOCK_MS);
+    acquired = true;
+
+    var target = ipa_str_(bedId);
+    if (!target) return { success: false, message: 'Bed ID is required.' };
+
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
+    if (!sheet) return { success: false, message: 'Master_Beds sheet not found.' };
+
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (ipa_str_(data[i][0]) !== target) continue;
+
+      var status = ipa_str_(data[i][2]).toUpperCase();
+      if (status === 'OCCUPIED') {
+        return { success: false,
+                 message: 'Bed ' + target + ' is occupied by ' + ipa_str_(data[i][4]) +
+                          ' (' + ipa_str_(data[i][6]) + '). Discharge or transfer first.' };
+      }
+      if (status === 'AVAILABLE') {
+        return { success: false, message: 'Bed ' + target + ' is already available.' };
+      }
+
+      sheet.getRange(i + 1, 3).setValue('Available');
+      sheet.getRange(i + 1, 4, 1, 4).clearContent();
+      SpreadsheetApp.flush();
+      return { success: true, message: 'Bed ' + target + ' is ready for admission.' };
+    }
+    return { success: false, message: 'Bed ' + target + ' not found in Master_Beds.' };
+
+  } catch (e) {
+    return { success: false, message: 'Housekeeping failed: ' + e.message };
+  } finally {
+    if (acquired) lock.releaseLock();
+  }
+}
+
+// ---- RECONCILIATION: ledger is truth, Master_Beds is the cache -----------
+
+/** DRY RUN. Logs divergence between the ledger and Master_Beds. Writes nothing. */
+function dryRunBedReconciliation() {
+  var report = ipa_computeBedReconciliation_();
+  Logger.log('--- BED RECONCILIATION DRY RUN ---');
+  Logger.log('Beds to free (no live admission): ' + JSON.stringify(report.toFree));
+  Logger.log('Beds to occupy (live admission not reflected): ' + JSON.stringify(report.toOccupy));
+  Logger.log('Ledger rows pointing at unknown beds: ' + JSON.stringify(report.unknownBeds));
+  return report;
+}
+
+/** Applies the dry-run result. Run dryRunBedReconciliation() first. */
+function reconcileBedOccupancy() {
+  var lock = LockService.getScriptLock();
+  var acquired = false;
+  try {
+    lock.waitLock(IPA_CFG.LOCK_MS);
+    acquired = true;
+
+    var report = ipa_computeBedReconciliation_();
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
+    if (!sheet) return { success: false, message: 'Master_Beds sheet not found.' };
+
+    var data = sheet.getDataRange().getValues();
+    var freed = 0, occupied = 0;
+
+    for (var i = 1; i < data.length; i++) {
+      var bedId = ipa_str_(data[i][0]);
+
+      if (report.toFreeMap[bedId]) {
+        sheet.getRange(i + 1, 3).setValue('Cleaning');
+        sheet.getRange(i + 1, 4, 1, 4).clearContent();
+        freed++;
+        continue;
+      }
+      var live = report.toOccupyMap[bedId];
+      if (live) {
+        sheet.getRange(i + 1, 3).setValue('Occupied');
+        sheet.getRange(i + 1, 4).setValue(String(live.patientId));
+        sheet.getRange(i + 1, 5).setValue(String(live.patientName));
+        sheet.getRange(i + 1, 6).setValue(live.doa);
+        sheet.getRange(i + 1, 7).setValue(String(live.ipNumber));
+        occupied++;
+      }
+    }
+
+    SpreadsheetApp.flush();
+    return { success: true,
+             message: 'Reconciled. ' + freed + ' bed(s) released to Cleaning, ' +
+                      occupied + ' bed(s) marked Occupied.' };
+
+  } catch (e) {
+    return { success: false, message: 'Reconciliation failed: ' + e.message };
+  } finally {
+    if (acquired) lock.releaseLock();
+  }
+}
+
+/** Private. Pure computation — no writes. Shared by dry run and apply. */
+function ipa_computeBedReconciliation_() {
+  var ledger = ipa_ss_().getSheetByName(IPA_CFG.SHEET);
+  var bedsSheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
+  var out = { toFree: [], toOccupy: [], unknownBeds: [], toFreeMap: {}, toOccupyMap: {} };
+  if (!ledger || !bedsSheet) return out;
+
+  // 1. Build the live-admission map from the ledger (the system of record).
+  var liveByBed = {};
+  var lastRow = ledger.getLastRow();
+  if (lastRow >= 2) {
+    var rows = ledger.getRange(2, 1, lastRow - 1, IPA_CFG.HEADERS.length).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (!ipa_isLive_(rows[i][IPA_COL.STATUS])) continue;
+      var wb = ipa_resolveWardBed_(rows[i][IPA_COL.WARD], rows[i][IPA_COL.BED]);
+      if (!wb.bed) continue;
+      liveByBed[wb.bed] = {
+        ipNumber:    ipa_str_(rows[i][IPA_COL.IP]),
+        patientId:   ipa_pid_(rows[i][IPA_COL.PATIENT_ID]),
+        patientName: ipa_str_(rows[i][IPA_COL.NAME]),
+        doa:         rows[i][IPA_COL.DOA]
+      };
+    }
+  }
+
+  // 2. Compare against Master_Beds.
+  var bedData = bedsSheet.getDataRange().getValues();
+  var knownBeds = {};
+  for (var j = 1; j < bedData.length; j++) {
+    var bedId = ipa_str_(bedData[j][0]);
+    if (!bedId) continue;
+    knownBeds[bedId] = true;
+
+    var status = ipa_str_(bedData[j][2]).toUpperCase();
+    var live = liveByBed[bedId];
+    var hasPatientData = !!ipa_str_(bedData[j][3]) || !!ipa_str_(bedData[j][6]);
+
+    if (!live && (status === 'OCCUPIED' || hasPatientData)) {
+      out.toFree.push(bedId);
+      out.toFreeMap[bedId] = true;
+    } else if (live && status !== 'OCCUPIED') {
+      out.toOccupy.push(bedId + ' -> ' + live.ipNumber);
+      out.toOccupyMap[bedId] = live;
+    }
+  }
+
+  for (var b in liveByBed) {
+    if (!knownBeds[b]) out.unknownBeds.push(b + ' (' + liveByBed[b].ipNumber + ')');
+  }
+  return out;
+}

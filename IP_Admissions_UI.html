@@ -155,7 +155,9 @@
             </div>
             <div class="col-md-6">
               <label class="form-label small text-body-secondary">Consultant</label>
-              <input type="text" class="form-control" id="adm-doctor" placeholder="Dr. ...">
+              <select class="form-select" id="adm-doctor">
+               <option value="">Loading consultants...</option>
+              </select>
             </div>
             <div class="col-12">
               <label class="form-label small text-body-secondary">Provisional Diagnosis</label>
@@ -201,7 +203,7 @@
         <div class="mb-3">
           <label class="form-label small text-body-secondary fw-bold">New Available Bed</label>
           <select class="form-select" id="transfer-bed">
-            <option value="">Select Ward First...</option>
+             <option value="">Select Ward First...</option>
           </select>
         </div>
       </div>
@@ -381,22 +383,47 @@
   function loadAvailableBeds(wardSelectId, bedSelectId) {
     var wardEl = $(wardSelectId), bedEl = $(bedSelectId);
     if (!wardEl || !bedEl) return;
+
+    var isAdmit = (bedSelectId === 'adm-bed');
+    if (isAdmit) bedHint('');
+
     if (!wardEl.value) { bedEl.innerHTML = '<option value="">Select Ward First...</option>'; return; }
     bedEl.innerHTML = '<option value="">Loading beds...</option>';
 
     google.script.run
       .withSuccessHandler(function (res) {
         var beds = (res && Array.isArray(res.data)) ? res.data : [];
-        bedEl.innerHTML = beds.length
-          ? '<option value="">Select Bed...</option>' +
-            beds.map(function (b) { return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('')
-          : '<option value="">No beds available in this ward</option>';
+        if (beds.length) {
+          bedEl.innerHTML = '<option value="">Select Bed...</option>' +
+            beds.map(function (b) { return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('');
+          return;
+        }
+        bedEl.innerHTML = '<option value="">No beds available</option>';
+        if (isAdmit) explainEmptyWard(wardEl.value);
       })
       .withFailureHandler(function (err) {
         bedEl.innerHTML = '<option value="">Error loading beds</option>';
-        alert('Bed lookup failed: ' + err.message);
+        if (isAdmit) bedHint('Bed lookup failed: ' + err.message, 'danger');
+        else alert('Bed lookup failed: ' + err.message);
       })
       .getAvailableBedsByWard(wardEl.value);
+  }
+
+  /** No beds free — say WHY, so the user isn't staring at a dead dropdown. */
+  function explainEmptyWard(ward) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var c = (res && res.counts) || {};
+        var parts = [];
+        if (c.occupied) parts.push(c.occupied + ' occupied');
+        if (c.cleaning) parts.push(c.cleaning + ' awaiting housekeeping');
+        if (c.reserved) parts.push(c.reserved + ' reserved');
+        bedHint(parts.length
+          ? 'Ward ' + ward + ': ' + parts.join(', ') + '. Clear a bed or choose another ward.'
+          : 'No beds configured for ward ' + ward + '.', 'warning');
+      })
+      .withFailureHandler(function () { bedHint('No beds available in this ward.', 'warning'); })
+      .getWardBedBoard(ward);
   }
 
   // ---- admit --------------------------------------------------------------
@@ -414,6 +441,7 @@
     if (form) form.reset();
     ['adm-pat-name', 'adm-pat-age', 'adm-pat-sex'].forEach(function (id) { if ($(id)) $(id).value = ''; });
     admAlert('');
+    bedHint('');
 
     var now = new Date();
     if ($('adm-doa')) $('adm-doa').value = now.toISOString().slice(0, 10);
@@ -421,6 +449,15 @@
       ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
 
     loadWardOptions();
+    loadConsultantOptions();
+  }
+
+  function bedHint(msg, tone) {
+    var el = $('adm-bed-hint');
+    if (!el) return;
+    if (!msg) { el.className = 'form-text small d-none'; el.textContent = ''; return; }
+    el.className = 'form-text small text-' + (tone || 'body-secondary');
+    el.textContent = msg;
   }
 
   function fetchAdmitPatientDetails() {
@@ -454,6 +491,7 @@
     if (!val('adm-pat-id') || !val('adm-pat-name')) { admAlert('Look up a valid Patient ID first.'); return; }
     if (!val('adm-ward')) { admAlert('Select a ward.'); return; }
     if (!val('adm-bed'))  { admAlert('Select an available bed.'); return; }
+    if (!val('adm-doctor')) { admAlert('Select the admitting consultant.'); return; }
     admAlert('');
 
     var payload = {
@@ -535,6 +573,43 @@
       .processPatientDischarge(ipNumber, bedId);
   }
 
+  // ---- consultants --------------------------------------------------------
+
+  var ipwConsultantCache = null;   // session cache; one fetch per page load
+
+  function loadConsultantOptions() {
+    var sel = $('adm-doctor');
+    if (!sel) return;
+
+    var render = function (list) {
+      var current = sel.value;
+      sel.innerHTML = '<option value="">-- Select Consultant --</option>' +
+        list.map(function (n) {
+          return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
+        }).join('');
+      if (current) sel.value = current;
+    };
+
+    if (ipwConsultantCache) { render(ipwConsultantCache); return; }
+
+    sel.innerHTML = '<option value="">Loading consultants...</option>';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var list = (res && Array.isArray(res.data)) ? res.data : [];
+        if (!list.length) {
+          sel.innerHTML = '<option value="">No consultants configured</option>';
+          return;
+        }
+        ipwConsultantCache = list;
+        render(list);
+      })
+      .withFailureHandler(function () {
+        sel.innerHTML = '<option value="">Error loading consultants</option>';
+      })
+      .getConsultantList();
+  }
+
+
   // ---- exports ------------------------------------------------------------
 
   window.loadIPLedger             = loadIPLedger;
@@ -547,5 +622,8 @@
   window.submitBedTransfer        = submitBedTransfer;
   window.confirmDischarge         = confirmDischarge;
   window.filterLedger             = loadIPLedger;  // legacy callers
+  window.loadConsultantOptions = loadConsultantOptions;
 })();
+
+
 </script>
