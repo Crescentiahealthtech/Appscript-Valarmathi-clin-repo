@@ -24,46 +24,28 @@
     </div>
   </div>
 
-  <!-- =====================================================================
-     PATCH — Admin_Appointments_Workspace.html
-     Replace the existing "Inpatient (IP) Management" row (the block that
-     currently holds the two cards) with the three cards below.
-
-     The old card was:
-       onclick="switchTab('ip-ledger-view'); loadIPLedger();"
-       <h6>IP Admissions & Ledger</h6>
-     It is now split into IP Admissions and IP Ledger.
-     ===================================================================== -->
-
-<h5 class="fw-bold text-white mt-5 mb-3">Inpatient (IP) Management</h5>
-<hr class="border-secondary">
-
-<div class="row g-4">
-
-  <div class="col-md-4 col-6">
-    <div class="card p-4 text-center soft-glow h-100 style-workspace-btn"
-         onclick="switchTab('ip-ledger-view'); loadIPLedger();">
-      <i class="fa-solid fa-bed-pulse fa-2x mb-3 text-primary"></i>
-      <h6 class="text-white fw-bold m-0">IP Admissions</h6>
-      <small class="text-muted">Current ward &middot; admit, transfer, discharge</small>
+  <h5 class="fw-bold m-0 text-white mt-5 mb-3 border-bottom border-secondary pb-2">Inpatient (IP) Management</h5>
+  <div class="row g-4">
+    <div class="col-md-4 col-6">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('ip-ledger-view'); loadIPLedger();">
+        <i class="fa-solid fa-folder-open fa-2x mb-3 text-primary"></i>
+        <h6 class="text-white fw-bold m-0">IP Admissions</h6>
+      </div>
     </div>
-  </div>
 
-  <div class="col-md-4 col-6">
-    <div class="card p-4 text-center soft-glow h-100 style-workspace-btn"
-         onclick="switchTab('ip-history-view'); loadIPHistory();">
-      <i class="fa-solid fa-book fa-2x mb-3 text-info"></i>
-      <h6 class="text-white fw-bold m-0">IP Ledger</h6>
-      <small class="text-muted">Full admission history &middot; search &amp; filter</small>
+    <div class="col-md-4 col-6">
+        <div class="card p-4 text-center soft-glow h-100 style-workspace-btn"
+           onclick="switchTab('ip-history-view'); loadIPHistory();">
+        <i class="fa-solid fa-book fa-2x mb-3 text-info"></i>
+        <h6 class="text-white fw-bold m-0">IP Ledger</h6>
+      </div>
     </div>
-  </div>
 
-  <div class="col-md-4 col-6">
-    <div class="card p-4 text-center soft-glow h-100 style-workspace-btn"
-         onclick="switchTab('ip-bedmap-view'); loadBedMap();">
-      <i class="fa-solid fa-map-location-dot fa-2x mb-3 text-success"></i>
-      <h6 class="text-white fw-bold m-0">Bed Occupancy Map</h6>
-      <small class="text-muted">Live bed status by ward</small>
+    <div class="col-md-4 col-6">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('ip-bed-management-view'); initBedMap();">
+        <i class="fa-solid fa-map-location-dot fa-2x mb-3 text-success"></i>
+        <h6 class="text-white fw-bold m-0">Bed Occupancy Map</h6>
+      </div>
     </div>
   </div>
 </div>
