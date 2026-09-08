@@ -146,6 +146,147 @@ function getIPLedgerData() {
   }
 }
 
+// ---- READ: paginated / filtered ledger ------------------------------------
+
+/**
+ * Server-side filtered, faceted, paginated ledger. Use this from the UI.
+ * getIPLedgerData() above is kept for other modules that call it.
+ *
+ * query = {
+ *   status:     'ACTIVE' | 'DISCHARGED' | 'ALL'
+ *   search:     free text over IP number / patient ID / name
+ *   ward:       exact ward, or '' for all
+ *   consultant: exact consultant, or '' for all
+ *   fromDate:   'yyyy-MM-dd' admitted on/after, or ''
+ *   toDate:     'yyyy-MM-dd' admitted on/before, or ''
+ *   page:       1-based
+ *   pageSize:   default 25, capped at 100
+ * }
+ *
+ * Returns { success, message, data, page, pageSize, total, totalPages,
+ *           activeCount, facets:{wards,consultants} }
+ */
+function getIPLedgerPage(query) {
+  try {
+    var q = query || {};
+    var status     = ipa_str_(q.status).toUpperCase() || 'ACTIVE';
+    var search     = ipa_str_(q.search).toLowerCase();
+    var wardF      = ipa_str_(q.ward).toUpperCase();
+    var consultF   = ipa_str_(q.consultant).toUpperCase();
+    var pageSize   = Math.min(Math.max(parseInt(q.pageSize, 10) || 25, 5), 100);
+    var page       = Math.max(parseInt(q.page, 10) || 1, 1);
+
+    var fromD = ipa_str_(q.fromDate) ? new Date(ipa_str_(q.fromDate) + 'T00:00:00') : null;
+    var toD   = ipa_str_(q.toDate)   ? new Date(ipa_str_(q.toDate)   + 'T23:59:59') : null;
+    if (fromD && isNaN(fromD.getTime())) fromD = null;
+    if (toD   && isNaN(toD.getTime()))   toD   = null;
+
+    var empty = {
+      success: true, message: 'No admissions recorded.', data: [],
+      page: 1, pageSize: pageSize, total: 0, totalPages: 0, activeCount: 0,
+      facets: { wards: [], consultants: [] }
+    };
+
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.SHEET);
+    if (!sheet) return empty;
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) return empty;
+
+    var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+    var matched = [];
+    var wardSet = {}, consultSet = {};
+    var activeCount = 0;
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[IPA_COL.IP]) continue;
+
+      var wb = ipa_resolveWardBed_(r[IPA_COL.WARD], r[IPA_COL.BED]);
+      var stat = ipa_str_(r[IPA_COL.STATUS]).toUpperCase() || 'UNKNOWN';
+      var isLive = ipa_isLive_(stat);
+      var consultant = ipa_str_(r[IPA_COL.CONSULTANT]);
+
+      if (isLive) activeCount++;
+
+      // Facets are built from the whole sheet, not the filtered subset, so the
+      // dropdowns don't collapse to one option after the first selection.
+      if (wb.ward) wardSet[wb.ward] = true;
+      if (consultant) consultSet[consultant] = true;
+
+      // --- filters ---
+      if (status === 'ACTIVE' && !isLive) continue;
+      if (status === 'DISCHARGED' && stat !== 'DISCHARGED') continue;
+
+      if (wardF && wb.ward.toUpperCase() !== wardF) continue;
+      if (consultF && consultant.toUpperCase() !== consultF) continue;
+
+      if (fromD || toD) {
+        var doaVal = r[IPA_COL.DOA];
+        if (!(doaVal instanceof Date) || isNaN(doaVal.getTime())) continue;
+        if (fromD && doaVal < fromD) continue;
+        if (toD && doaVal > toD) continue;
+      }
+
+      if (search) {
+        var hay = (ipa_str_(r[IPA_COL.IP]) + ' ' +
+                   ipa_str_(r[IPA_COL.PATIENT_ID]) + ' ' +
+                   ipa_str_(r[IPA_COL.NAME])).toLowerCase();
+        if (hay.indexOf(search) === -1) continue;
+      }
+
+      matched.push({
+        rowIndex:    i + 2,
+        ipNumber:    ipa_str_(r[IPA_COL.IP]),
+        patientId:   ipa_pid_(r[IPA_COL.PATIENT_ID]),
+        patientName: ipa_str_(r[IPA_COL.NAME]),
+        ageSex:      ipa_str_(r[IPA_COL.AGE_SEX]),
+        doa:         ipa_fmt_(r[IPA_COL.DOA], 'dd MMM yyyy'),
+        toa:         ipa_fmt_(r[IPA_COL.TOA], 'hh:mm a'),
+        type:        ipa_str_(r[IPA_COL.TYPE]),
+        ward:        wb.ward,
+        bed:         wb.bed,
+        dataWarning: wb.repaired ? 'Ward/Bed columns disagree on this row.' : '',
+        consultant:  consultant,
+        diagnosis:   ipa_str_(r[IPA_COL.DIAGNOSIS]),
+        status:      stat,
+        dod:         lastCol > IPA_COL.DOD ? ipa_fmt_(r[IPA_COL.DOD], 'dd MMM yyyy') : ''
+      });
+    }
+
+    matched.reverse(); // newest first
+
+    var total = matched.length;
+    var totalPages = Math.ceil(total / pageSize) || 0;
+    if (page > totalPages && totalPages > 0) page = totalPages;
+    var start = (page - 1) * pageSize;
+
+    return {
+      success: true,
+      message: total + ' record(s) matched.',
+      data: matched.slice(start, start + pageSize),
+      page: page,
+      pageSize: pageSize,
+      total: total,
+      totalPages: totalPages,
+      activeCount: activeCount,
+      facets: {
+        wards: Object.keys(wardSet).sort(),
+        consultants: Object.keys(consultSet).sort()
+      }
+    };
+
+  } catch (e) {
+    return {
+      success: false, message: 'Ledger query failed: ' + e.message, data: [],
+      page: 1, pageSize: 25, total: 0, totalPages: 0, activeCount: 0,
+      facets: { wards: [], consultants: [] }
+    };
+  }
+}
+
 // ---- READ: patient lookup -------------------------------------------------
 
 function fetchPatientForAdmit(patientId) {

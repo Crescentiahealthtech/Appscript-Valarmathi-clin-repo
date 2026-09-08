@@ -1,17 +1,22 @@
 <!-- =====================================================================
      IP_Admissions_UI.html — CresRx
-     Full replacement. Theme-neutral (Bootstrap 5.3 data-bs-theme aware).
+     Full replacement.
 
-     IMPORTANT: this file is currently included in BOTH the Appointments
-     and Patients workspaces, which puts two copies of every ID in the DOM
-     and is why the ledger spun forever. The renderer below writes to ALL
-     matching nodes so it works either way — but you should still include
-     it once and route to it.
+     CRITICAL: the outer wrapper MUST be
+       <div id="ip-ledger-view" class="page-section">
+     Styles.html line 100 is `.page-section { display: none; }` and
+     switchTab() adds `.active-section`. Without this wrapper the module
+     is an always-visible sibling in .main-content and bleeds into every
+     workspace. Opened by Admin_Appointments_Workspace.html:
+       onclick="switchTab('ip-ledger-view'); loadIPLedger();"
+
+     Data comes from getIPLedgerPage() — server-side filtered and paged.
+     The client never holds more than one page.
      ===================================================================== -->
 
-<div id="ip-ledger-view" class="ip-ledger-module d-flex flex-column h-100 d-none">
+<div id="ip-ledger-view" class="page-section">
 
-  <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 mt-4 border-bottom pb-3">
     <div>
       <h4 class="m-0 fw-bold">
         <i class="fa-solid fa-folder-open me-2 text-primary"></i> IP Admissions Ledger
@@ -24,33 +29,87 @@
         <i class="fa-solid fa-plus me-2"></i> New Admission
       </button>
       <button class="btn btn-outline-secondary fw-bold px-4"
-              onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
+              onclick="switchTab('workspace-appointments')">
         <i class="fa-solid fa-arrow-left me-2"></i> Go Back
       </button>
     </div>
   </div>
 
+  <!-- Quick status pills: the ward-round view first, history behind a click -->
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <div class="btn-group" role="group">
+      <button type="button" class="btn btn-sm btn-primary" id="ipl-pill-ACTIVE"
+              onclick="iplSetStatus('ACTIVE')">
+        In Ward <span class="badge text-bg-light ms-1" id="ipl-active-count">0</span>
+      </button>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="ipl-pill-DISCHARGED"
+              onclick="iplSetStatus('DISCHARGED')">Discharged</button>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="ipl-pill-ALL"
+              onclick="iplSetStatus('ALL')">All</button>
+    </div>
+
+    <button class="btn btn-sm btn-outline-secondary" type="button"
+            data-bs-toggle="collapse" data-bs-target="#ipl-advanced">
+      <i class="fa-solid fa-sliders me-1"></i> Filters
+    </button>
+
+    <button class="btn btn-sm btn-outline-secondary" onclick="iplResetFilters()">
+      <i class="fa-solid fa-eraser me-1"></i> Clear
+    </button>
+
+    <div class="flex-grow-1"></div>
+
+    <span class="text-body-secondary small" id="ipl-summary"></span>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadIPLedger()">
+      <i class="fa-solid fa-rotate me-1"></i> Refresh
+    </button>
+  </div>
+
   <div class="row g-2 mb-3">
-    <div class="col-md-4">
-      <input type="text" class="form-control js-ledger-search"
-             placeholder="Search IP No, Patient ID, or Name..." onkeyup="filterLedger()">
+    <div class="col-md-6">
+      <div class="input-group">
+        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+        <input type="text" id="ipl-search" class="form-control"
+               placeholder="Search IP No, Patient ID, or Name..." oninput="iplDebouncedSearch()">
+      </div>
     </div>
     <div class="col-md-3">
-      <select class="form-select js-ledger-status" onchange="filterLedger()">
-        <option value="ALL">All Statuses</option>
-        <option value="ACTIVE" selected>Active Admissions</option>
-        <option value="DISCHARGED">Discharged</option>
+      <select id="ipl-page-size" class="form-select" onchange="iplSetPageSize()">
+        <option value="25" selected>25 per page</option>
+        <option value="50">50 per page</option>
+        <option value="100">100 per page</option>
       </select>
-    </div>
-    <div class="col-md-5 d-flex align-items-center justify-content-end gap-3">
-      <span class="js-ledger-count text-body-secondary small"></span>
-      <button class="btn btn-outline-secondary" onclick="loadIPLedger()">
-        <i class="fa-solid fa-rotate me-1"></i> Refresh
-      </button>
     </div>
   </div>
 
-  <div class="flex-grow-1 overflow-auto border rounded">
+  <div class="collapse mb-3" id="ipl-advanced">
+    <div class="card card-body bg-body-tertiary">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label small text-body-secondary">Ward</label>
+          <select id="ipl-ward" class="form-select form-select-sm" onchange="iplApply()">
+            <option value="">All wards</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-body-secondary">Consultant</label>
+          <select id="ipl-consultant" class="form-select form-select-sm" onchange="iplApply()">
+            <option value="">All consultants</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-body-secondary">Admitted from</label>
+          <input type="date" id="ipl-from" class="form-control form-control-sm" onchange="iplApply()">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-body-secondary">Admitted to</label>
+          <input type="date" id="ipl-to" class="form-control form-control-sm" onchange="iplApply()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="border rounded overflow-auto" style="max-height: 60vh;">
     <table class="table table-hover align-middle m-0">
       <thead class="sticky-top bg-body-tertiary">
         <tr class="small text-body-secondary">
@@ -64,13 +123,18 @@
           <th class="text-end">Actions</th>
         </tr>
       </thead>
-      <tbody class="js-ledger-body">
+      <tbody id="ipl-tbody">
         <tr><td colspan="8" class="text-center py-5 text-body-secondary">
           <div class="spinner-border text-primary"></div><br>Loading Ledger...
         </td></tr>
       </tbody>
     </table>
   </div>
+
+  <nav class="d-flex justify-content-between align-items-center mt-3">
+    <span class="text-body-secondary small" id="ipl-page-label"></span>
+    <div class="btn-group" id="ipl-pager"></div>
+  </nav>
 </div>
 
 
@@ -85,7 +149,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div id="adm-alert" class="alert alert-warning d-none py-2 small mb-3"></div>
+        <div id="adm-alert" class="alert d-none"></div>
 
         <form id="form-admission">
           <h6 class="text-body-secondary small fw-bold mb-3 border-bottom pb-1">1. PATIENT IDENTITY</h6>
@@ -215,24 +279,18 @@
 (function () {
   'use strict';
 
-  var ledgerDataMaster = [];
+  // Current query state. The client caches nothing but this.
+  var iplQuery = {
+    status: 'ACTIVE', search: '', ward: '', consultant: '',
+    fromDate: '', toDate: '', page: 1, pageSize: 25
+  };
+  var iplFacetsLoaded = false;
+  var iplSearchTimer = null;
+  var iplInFlight = false;
 
-  // ---- DOM helpers --------------------------------------------------------
-  // The module may be included more than once. Never trust getElementById
-  // for module-scoped nodes — resolve ALL of them and write to every copy.
+  // ---- small helpers ------------------------------------------------------
 
-  function nodes(selector) {
-    return Array.prototype.slice.call(document.querySelectorAll(selector));
-  }
-
-  function firstValue(selector, fallback) {
-    var els = nodes(selector);
-    for (var i = 0; i < els.length; i++) {
-      // Prefer the copy that is actually visible to the user.
-      if (els[i].offsetParent !== null) return els[i].value;
-    }
-    return els.length ? els[0].value : fallback;
-  }
+  function $(id) { return document.getElementById(id); }
 
   function esc(v) {
     return String(v === null || v === undefined ? '' : v)
@@ -240,15 +298,11 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function attr(v) { return esc(v).replace(/\\/g, '&#92;'); }
-
-  function setBody(html) {
-    nodes('.js-ledger-body').forEach(function (tb) { tb.innerHTML = html; });
-  }
+  function setBody(html) { var tb = $('ipl-tbody'); if (tb) tb.innerHTML = html; }
 
   function message(inner, tone) {
-    var cls = tone === 'error' ? 'text-danger' : 'text-body-secondary';
-    setBody('<tr><td colspan="8" class="text-center py-5 ' + cls + '">' + inner + '</td></tr>');
+    setBody('<tr><td colspan="8" class="text-center py-5 ' +
+            (tone === 'error' ? 'text-danger' : 'text-body-secondary') + '">' + inner + '</td></tr>');
   }
 
   function retryBtn() {
@@ -259,9 +313,61 @@
     return typeof google !== 'undefined' && google.script && google.script.run;
   }
 
-  // ---- Ledger -------------------------------------------------------------
+  // ---- filter controls ----------------------------------------------------
+
+  function iplSetStatus(status) {
+    iplQuery.status = status;
+    iplQuery.page = 1;
+    ['ACTIVE', 'DISCHARGED', 'ALL'].forEach(function (s) {
+      var b = $('ipl-pill-' + s);
+      if (!b) return;
+      b.className = 'btn btn-sm ' + (s === status ? 'btn-primary' : 'btn-outline-primary');
+    });
+    loadIPLedger();
+  }
+
+  function iplApply() {
+    iplQuery.ward       = $('ipl-ward') ? $('ipl-ward').value : '';
+    iplQuery.consultant = $('ipl-consultant') ? $('ipl-consultant').value : '';
+    iplQuery.fromDate   = $('ipl-from') ? $('ipl-from').value : '';
+    iplQuery.toDate     = $('ipl-to') ? $('ipl-to').value : '';
+    iplQuery.page = 1;
+    loadIPLedger();
+  }
+
+  function iplDebouncedSearch() {
+    clearTimeout(iplSearchTimer);
+    iplSearchTimer = setTimeout(function () {
+      iplQuery.search = $('ipl-search') ? $('ipl-search').value.trim() : '';
+      iplQuery.page = 1;
+      loadIPLedger();
+    }, 350);
+  }
+
+  function iplSetPageSize() {
+    iplQuery.pageSize = parseInt($('ipl-page-size').value, 10) || 25;
+    iplQuery.page = 1;
+    loadIPLedger();
+  }
+
+  function iplResetFilters() {
+    iplQuery.search = ''; iplQuery.ward = ''; iplQuery.consultant = '';
+    iplQuery.fromDate = ''; iplQuery.toDate = ''; iplQuery.page = 1;
+    ['ipl-search', 'ipl-ward', 'ipl-consultant', 'ipl-from', 'ipl-to'].forEach(function (id) {
+      if ($(id)) $(id).value = '';
+    });
+    loadIPLedger();
+  }
+
+  function iplGoPage(n) {
+    iplQuery.page = n;
+    loadIPLedger();
+  }
+
+  // ---- load ---------------------------------------------------------------
 
   function loadIPLedger() {
+    if (iplInFlight) return;           // stop rapid clicks stacking requests
     message('<div class="spinner-border text-primary"></div><br>Fetching Live Ledger...');
 
     if (!bridgeReady()) {
@@ -269,56 +375,60 @@
       return;
     }
 
+    iplInFlight = true;
     google.script.run
       .withSuccessHandler(function (payload) {
-        // An exception in here would otherwise strand the spinner silently.
+        iplInFlight = false;
         try {
-          renderLedgerTable(payload);
+          renderLedgerPage(payload);
         } catch (err) {
           message('&#9888; Render error: ' + esc(err && err.message) + retryBtn(), 'error');
         }
       })
       .withFailureHandler(function (err) {
+        iplInFlight = false;
         message('&#9888; Server Error: ' + esc(err && err.message) + retryBtn(), 'error');
       })
-      .getIPLedgerData();
+      .getIPLedgerPage(iplQuery);
   }
 
-  function renderLedgerTable(payload) {
-    if (!payload) {
+  function renderLedgerPage(p) {
+    if (!p) {
       message('&#9888; Backend returned nothing. Check for a duplicate ' +
-              '<code>getIPLedgerData</code> in another .gs file.' + retryBtn(), 'error');
+              '<code>getIPLedgerPage</code> in another .gs file.' + retryBtn(), 'error');
       return;
     }
-    if (payload.success === false) {
-      message('&#9888; ' + esc(payload.message || 'Could not load ledger.') + retryBtn(), 'error');
+    if (p.success === false) {
+      message('&#9888; ' + esc(p.message || 'Could not load ledger.') + retryBtn(), 'error');
       return;
     }
-    ledgerDataMaster = Array.isArray(payload.data) ? payload.data : [];
-    filterLedger();
-  }
 
-  function filterLedger() {
-    if (!nodes('.js-ledger-body').length) return;
+    if ($('ipl-active-count')) $('ipl-active-count').textContent = p.activeCount || 0;
+    populateFacets(p.facets);
 
-    var query  = String(firstValue('.js-ledger-search', '')).toLowerCase().trim();
-    var status = firstValue('.js-ledger-status', 'ALL');
+    var rows = Array.isArray(p.data) ? p.data : [];
+
+    if ($('ipl-summary')) {
+      $('ipl-summary').textContent = p.total
+        ? p.total + ' matching admission' + (p.total === 1 ? '' : 's')
+        : '';
+    }
+
+    if (!rows.length) {
+      renderPager(p);
+      var filtered = iplQuery.search || iplQuery.ward || iplQuery.consultant ||
+                     iplQuery.fromDate || iplQuery.toDate || iplQuery.status !== 'ALL';
+      message('<i class="fa-solid fa-folder-open fa-2x mb-3 d-block opacity-50"></i>' +
+        (filtered
+          ? 'No admissions match these filters.<br>' +
+            '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="iplResetFilters()">Clear filters</button>'
+          : 'No admissions recorded yet.<br><small>Use <strong>New Admission</strong> to admit the first patient.</small>'));
+      return;
+    }
 
     var html = '';
-    var count = 0;
-
-    ledgerDataMaster.forEach(function (row) {
-      var hay = [row.ipNumber, row.patientId, row.patientName]
-                  .join(' ').toLowerCase();
-      if (query && hay.indexOf(query) === -1) return;
-
-      var stat = String(row.status || '').toUpperCase();
-      var isLive = (stat === 'ACTIVE' || stat === 'ADMITTED');
-
-      if (status === 'ACTIVE' && !isLive) return;
-      if (status === 'DISCHARGED' && stat !== 'DISCHARGED') return;
-
-      count++;
+    rows.forEach(function (row) {
+      var isLive = (row.status === 'ACTIVE' || row.status === 'ADMITTED');
 
       var badge = isLive
         ? '<span class="badge text-bg-success">Active</span>'
@@ -326,11 +436,11 @@
           (row.dod ? '<br><small class="text-body-secondary">' + esc(row.dod) + '</small>' : '');
 
       var warn = row.dataWarning
-        ? ' <i class="fa-solid fa-triangle-exclamation text-warning" title="' + attr(row.dataWarning) + '"></i>'
+        ? ' <i class="fa-solid fa-triangle-exclamation text-warning" title="' + esc(row.dataWarning) + '"></i>'
         : '';
 
-      var args = '&#39;' + attr(row.ipNumber) + '&#39;,&#39;' + attr(row.bed) +
-                 '&#39;,&#39;' + attr(row.ward) + '&#39;';
+      var args = '&#39;' + esc(row.ipNumber) + '&#39;,&#39;' + esc(row.bed) +
+                 '&#39;,&#39;' + esc(row.ward) + '&#39;';
 
       var actions = isLive
         ? '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
@@ -339,10 +449,6 @@
             'onclick="confirmDischarge(' + args + ')"><i class="fa-solid fa-door-open"></i></button>'
         : '<span class="text-body-secondary small">&mdash;</span>';
 
-      var wardBed = (row.ward || row.bed)
-        ? esc(row.ward) + ' / ' + esc(row.bed) + warn
-        : '<span class="text-body-secondary">Unassigned</span>';
-
       html += '<tr>' +
         '<td class="fw-bold">' + esc(row.ipNumber) + '</td>' +
         '<td>' + esc(row.patientName) +
@@ -350,7 +456,9 @@
           ' &middot; ' + esc(row.ageSex) + '</small></td>' +
         '<td>' + esc(row.doa) +
           (row.toa ? '<br><small class="text-body-secondary">' + esc(row.toa) + '</small>' : '') + '</td>' +
-        '<td>' + wardBed + '</td>' +
+        '<td>' + ((row.ward || row.bed)
+                    ? esc(row.ward) + ' / ' + esc(row.bed) + warn
+                    : '<span class="text-body-secondary">Unassigned</span>') + '</td>' +
         '<td>' + esc(row.consultant) + '</td>' +
         '<td>' + (row.diagnosis ? esc(row.diagnosis)
                                 : '<span class="text-body-secondary">Pending</span>') + '</td>' +
@@ -359,21 +467,73 @@
         '</tr>';
     });
 
-    nodes('.js-ledger-count').forEach(function (el) {
-      el.textContent = count + ' of ' + ledgerDataMaster.length + ' shown';
-    });
-
-    if (count === 0) {
-      message('<i class="fa-solid fa-folder-open fa-2x mb-3 d-block opacity-50"></i>' +
-        (ledgerDataMaster.length === 0
-          ? 'No admissions recorded yet.<br><small>Use <strong>New Admission</strong> to admit the first patient.</small>'
-          : 'No admissions match this search or filter.'));
-      return;
-    }
     setBody(html);
+    renderPager(p);
   }
 
-  // ---- Wards --------------------------------------------------------------
+  function populateFacets(facets) {
+    if (iplFacetsLoaded || !facets) return;
+
+    var fill = function (id, values, allLabel) {
+      var el = $(id);
+      if (!el) return;
+      var current = el.value;
+      el.innerHTML = '<option value="">' + allLabel + '</option>' +
+        (values || []).map(function (v) {
+          return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+        }).join('');
+      el.value = current;
+    };
+
+    fill('ipl-ward', facets.wards, 'All wards');
+    fill('ipl-consultant', facets.consultants, 'All consultants');
+    iplFacetsLoaded = true;
+  }
+
+  function renderPager(p) {
+    var pager = $('ipl-pager');
+    var label = $('ipl-page-label');
+    if (!pager) return;
+
+    var total = p.total || 0;
+    var totalPages = p.totalPages || 0;
+    var page = p.page || 1;
+
+    if (label) {
+      if (!total) { label.textContent = ''; }
+      else {
+        var first = (page - 1) * p.pageSize + 1;
+        var last = Math.min(page * p.pageSize, total);
+        label.textContent = 'Showing ' + first + '\u2013' + last + ' of ' + total;
+      }
+    }
+
+    if (totalPages <= 1) { pager.innerHTML = ''; return; }
+
+    // Windowed page numbers: never render 40 buttons.
+    var btn = function (n, text, disabled, active) {
+      return '<button class="btn btn-sm ' +
+             (active ? 'btn-primary' : 'btn-outline-secondary') + '"' +
+             (disabled ? ' disabled' : ' onclick="iplGoPage(' + n + ')"') + '>' +
+             text + '</button>';
+    };
+
+    var out = btn(page - 1, '&laquo;', page <= 1, false);
+    var from = Math.max(1, page - 2);
+    var to = Math.min(totalPages, from + 4);
+    from = Math.max(1, to - 4);
+
+    if (from > 1) out += btn(1, '1', false, false) +
+                         (from > 2 ? '<button class="btn btn-sm btn-outline-secondary" disabled>&hellip;</button>' : '');
+    for (var n = from; n <= to; n++) out += btn(n, String(n), false, n === page);
+    if (to < totalPages) out += (to < totalPages - 1 ? '<button class="btn btn-sm btn-outline-secondary" disabled>&hellip;</button>' : '') +
+                                btn(totalPages, String(totalPages), false, false);
+
+    out += btn(page + 1, '&raquo;', page >= totalPages, false);
+    pager.innerHTML = out;
+  }
+
+  // ---- wards --------------------------------------------------------------
 
   function loadWardOptions() {
     if (!bridgeReady()) return;
@@ -382,44 +542,34 @@
         var wards = (res && Array.isArray(res.data)) ? res.data : [];
         var opts = '<option value="">Select Ward...</option>' +
           wards.map(function (w) {
-            return '<option value="' + attr(w) + '">' + esc(w) + '</option>';
+            return '<option value="' + esc(w) + '">' + esc(w) + '</option>';
           }).join('');
         ['adm-ward', 'transfer-ward'].forEach(function (id) {
-          var el = document.getElementById(id);
-          if (el) el.innerHTML = wards.length ? opts : '<option value="">No wards configured</option>';
+          if ($(id)) $(id).innerHTML = wards.length ? opts : '<option value="">No wards configured</option>';
         });
       })
       .withFailureHandler(function () {
         ['adm-ward', 'transfer-ward'].forEach(function (id) {
-          var el = document.getElementById(id);
-          if (el) el.innerHTML = '<option value="">Error loading wards</option>';
+          if ($(id)) $(id).innerHTML = '<option value="">Error loading wards</option>';
         });
       })
       .getWardList();
   }
 
   function loadAvailableBeds(wardSelectId, bedSelectId) {
-    var wardEl = document.getElementById(wardSelectId);
-    var bedEl  = document.getElementById(bedSelectId);
+    var wardEl = $(wardSelectId), bedEl = $(bedSelectId);
     if (!wardEl || !bedEl) return;
 
-    if (!wardEl.value) {
-      bedEl.innerHTML = '<option value="">Select Ward First...</option>';
-      return;
-    }
+    if (!wardEl.value) { bedEl.innerHTML = '<option value="">Select Ward First...</option>'; return; }
     bedEl.innerHTML = '<option value="">Loading beds...</option>';
 
     google.script.run
       .withSuccessHandler(function (res) {
         var beds = (res && Array.isArray(res.data)) ? res.data : [];
-        if (!beds.length) {
-          bedEl.innerHTML = '<option value="">No beds available in this ward</option>';
-          return;
-        }
-        bedEl.innerHTML = '<option value="">Select Bed...</option>' +
-          beds.map(function (b) {
-            return '<option value="' + attr(b) + '">' + esc(b) + '</option>';
-          }).join('');
+        bedEl.innerHTML = beds.length
+          ? '<option value="">Select Bed...</option>' +
+            beds.map(function (b) { return '<option value="' + esc(b) + '">' + esc(b) + '</option>'; }).join('')
+          : '<option value="">No beds available in this ward</option>';
       })
       .withFailureHandler(function (err) {
         bedEl.innerHTML = '<option value="">Error loading beds</option>';
@@ -428,10 +578,10 @@
       .getAvailableBedsByWard(wardEl.value);
   }
 
-  // ---- Admit --------------------------------------------------------------
+  // ---- admit --------------------------------------------------------------
 
   function admAlert(msg, level) {
-    var box = document.getElementById('adm-alert');
+    var box = $('adm-alert');
     if (!box) return;
     if (!msg) { box.className = 'alert d-none'; box.textContent = ''; return; }
     box.className = 'alert alert-' + (level || 'warning') + ' py-2 small mb-3';
@@ -439,25 +589,21 @@
   }
 
   function prepAdmitModal() {
-    var form = document.getElementById('form-admission');
+    var form = $('form-admission');
     if (form) form.reset();
-    ['adm-pat-name', 'adm-pat-age', 'adm-pat-sex'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.value = '';
-    });
+    ['adm-pat-name', 'adm-pat-age', 'adm-pat-sex'].forEach(function (id) { if ($(id)) $(id).value = ''; });
     admAlert('');
 
     var now = new Date();
-    var doa = document.getElementById('adm-doa');
-    var toa = document.getElementById('adm-toa');
-    if (doa) doa.value = now.toISOString().slice(0, 10);
-    if (toa) toa.value = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+    if ($('adm-doa')) $('adm-doa').value = now.toISOString().slice(0, 10);
+    if ($('adm-toa')) $('adm-toa').value =
+      ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
 
     loadWardOptions();
   }
 
   function fetchAdmitPatientDetails() {
-    var idEl = document.getElementById('adm-pat-id');
+    var idEl = $('adm-pat-id');
     if (!idEl || !idEl.value.trim()) { admAlert('Enter a Patient ID first.'); return; }
     admAlert('');
 
@@ -467,14 +613,10 @@
           admAlert((res && res.message) || 'Patient not found.', 'danger');
           return;
         }
-        var set = function (id, v) {
-          var el = document.getElementById(id);
-          if (el) el.value = v || '';
-        };
-        idEl.value = res.data.patientId;   // normalise casing in the field too
-        set('adm-pat-name', res.data.name);
-        set('adm-pat-age',  res.data.age);
-        set('adm-pat-sex',  res.data.sex);
+        idEl.value = res.data.patientId;
+        if ($('adm-pat-name')) $('adm-pat-name').value = res.data.name || '';
+        if ($('adm-pat-age'))  $('adm-pat-age').value  = res.data.age || '';
+        if ($('adm-pat-sex'))  $('adm-pat-sex').value  = res.data.sex || '';
 
         if (res.activeAdmission) {
           admAlert('This patient is already admitted under ' + res.activeAdmission +
@@ -486,35 +628,24 @@
   }
 
   function submitAdmission() {
-    var val = function (id) {
-      var el = document.getElementById(id);
-      return el ? el.value.trim() : '';
-    };
+    var val = function (id) { return $(id) ? $(id).value.trim() : ''; };
 
-    var pid = val('adm-pat-id');
-    var name = val('adm-pat-name');
-    if (!pid || !name) { admAlert('Look up a valid Patient ID first.'); return; }
+    if (!val('adm-pat-id') || !val('adm-pat-name')) { admAlert('Look up a valid Patient ID first.'); return; }
     if (!val('adm-ward')) { admAlert('Select a ward.'); return; }
     if (!val('adm-bed'))  { admAlert('Select an available bed.'); return; }
     admAlert('');
 
     var payload = {
-      patientId: pid,
-      patientName: name,
+      patientId: val('adm-pat-id'),
+      patientName: val('adm-pat-name'),
       ageSex: val('adm-pat-age') + ' / ' + val('adm-pat-sex'),
-      doa: val('adm-doa'),
-      toa: val('adm-toa'),
-      type: val('adm-type'),
-      ward: val('adm-ward'),
-      bed: val('adm-bed'),
-      consultant: val('adm-doctor'),
-      diagnosis: val('adm-diagnosis')
+      doa: val('adm-doa'), toa: val('adm-toa'), type: val('adm-type'),
+      ward: val('adm-ward'), bed: val('adm-bed'),
+      consultant: val('adm-doctor'), diagnosis: val('adm-diagnosis')
     };
 
-    var btn = document.getElementById('btn-submit-admit');
-    var reset = function () {
-      if (btn) { btn.innerHTML = 'Admit &amp; Generate IP'; btn.disabled = false; }
-    };
+    var btn = $('btn-submit-admit');
+    var reset = function () { if (btn) { btn.innerHTML = 'Admit &amp; Generate IP'; btn.disabled = false; } };
     if (btn) {
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
       btn.disabled = true;
@@ -523,42 +654,34 @@
     google.script.run
       .withSuccessHandler(function (res) {
         reset();
-        if (!res || res.success === false) {
-          admAlert((res && res.message) || 'Admission failed.', 'danger');
-          return;
-        }
-        var modalEl = document.getElementById('modalAdmitPatient');
-        var inst = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+        if (!res || res.success === false) { admAlert((res && res.message) || 'Admission failed.', 'danger'); return; }
+        var inst = bootstrap.Modal.getInstance($('modalAdmitPatient'));
         if (inst) inst.hide();
         alert(res.message);
-        loadIPLedger();
+        iplFacetsLoaded = false;   // a new ward or consultant may now exist
+        iplSetStatus('ACTIVE');
       })
-      .withFailureHandler(function (err) {
-        reset();
-        admAlert('Error saving admission: ' + err.message, 'danger');
-      })
+      .withFailureHandler(function (err) { reset(); admAlert('Error saving admission: ' + err.message, 'danger'); })
       .saveNewAdmissionLedger(payload);
   }
 
-  // ---- Transfer -----------------------------------------------------------
+  // ---- transfer -----------------------------------------------------------
 
   function openChangeBedModal(ipNumber, currentBed, currentWard) {
-    var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v; };
-    set('transfer-ip-no', ipNumber);
-    set('transfer-old-bed', currentBed);
-    set('transfer-current', (currentWard || '?') + ' / ' + (currentBed || '?'));
-    var bedEl = document.getElementById('transfer-bed');
-    if (bedEl) bedEl.innerHTML = '<option value="">Select Ward First...</option>';
+    if ($('transfer-ip-no'))   $('transfer-ip-no').value = ipNumber;
+    if ($('transfer-old-bed')) $('transfer-old-bed').value = currentBed;
+    if ($('transfer-current')) $('transfer-current').value = (currentWard || '?') + ' / ' + (currentBed || '?');
+    if ($('transfer-bed'))     $('transfer-bed').innerHTML = '<option value="">Select Ward First...</option>';
     loadWardOptions();
-    new bootstrap.Modal(document.getElementById('modalChangeBed')).show();
+    new bootstrap.Modal($('modalChangeBed')).show();
   }
 
   function submitBedTransfer() {
-    var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    var val = function (id) { return $(id) ? $(id).value.trim() : ''; };
     if (!val('transfer-ward')) { alert('Select a destination ward.'); return; }
     if (!val('transfer-bed'))  { alert('Select a destination bed.'); return; }
 
-    var btn = document.getElementById('btn-submit-transfer');
+    var btn = $('btn-submit-transfer');
     var reset = function () { if (btn) { btn.innerText = 'Confirm Transfer'; btn.disabled = false; } };
     if (btn) { btn.innerText = 'Transferring...'; btn.disabled = true; }
 
@@ -566,7 +689,7 @@
       .withSuccessHandler(function (res) {
         reset();
         if (!res || res.success === false) { alert((res && res.message) || 'Transfer failed.'); return; }
-        var inst = bootstrap.Modal.getInstance(document.getElementById('modalChangeBed'));
+        var inst = bootstrap.Modal.getInstance($('modalChangeBed'));
         if (inst) inst.hide();
         alert(res.message);
         loadIPLedger();
@@ -576,7 +699,7 @@
                           val('transfer-ward'), val('transfer-bed'));
   }
 
-  // ---- Discharge ----------------------------------------------------------
+  // ---- discharge ----------------------------------------------------------
 
   function confirmDischarge(ipNumber, bedId) {
     if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId + ' and closes the admission.')) return;
@@ -591,16 +714,24 @@
       .processPatientDischarge(ipNumber, bedId);
   }
 
-  // ---- Expose the handlers the markup calls -------------------------------
+  // ---- exports ------------------------------------------------------------
 
-  window.loadIPLedger           = loadIPLedger;
-  window.filterLedger           = filterLedger;
-  window.prepAdmitModal         = prepAdmitModal;
+  window.loadIPLedger             = loadIPLedger;
+  window.iplSetStatus             = iplSetStatus;
+  window.iplApply                 = iplApply;
+  window.iplDebouncedSearch       = iplDebouncedSearch;
+  window.iplSetPageSize           = iplSetPageSize;
+  window.iplResetFilters          = iplResetFilters;
+  window.iplGoPage                = iplGoPage;
+  window.prepAdmitModal           = prepAdmitModal;
   window.fetchAdmitPatientDetails = fetchAdmitPatientDetails;
-  window.loadAvailableBeds      = loadAvailableBeds;
-  window.submitAdmission        = submitAdmission;
-  window.openChangeBedModal     = openChangeBedModal;
-  window.submitBedTransfer      = submitBedTransfer;
-  window.confirmDischarge       = confirmDischarge;
+  window.loadAvailableBeds        = loadAvailableBeds;
+  window.submitAdmission          = submitAdmission;
+  window.openChangeBedModal       = openChangeBedModal;
+  window.submitBedTransfer        = submitBedTransfer;
+  window.confirmDischarge         = confirmDischarge;
+
+  // Backwards compatibility: older callers may still invoke filterLedger().
+  window.filterLedger = loadIPLedger;
 })();
 </script>
