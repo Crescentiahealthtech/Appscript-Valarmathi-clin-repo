@@ -1,0 +1,419 @@
+<!-- =====================================================================
+     IP_Ledger_UI.html — CresRx  (NEW FILE)
+     SCREEN 2: the archive. Every admission, active and discharged.
+
+     Register in Index.html next to the admissions module:
+       <?!= include('IP_Ledger_UI'); ?>
+
+     Opened by: switchTab('ip-history-view'); loadIPHistory();
+     Live ward operations live in IP_Admissions_UI.html (#ip-ledger-view).
+     ===================================================================== -->
+
+<div id="ip-history-view" class="page-section">
+
+  <div class="d-flex justify-content-between align-items-center mb-3 mt-4 border-bottom pb-3">
+    <div>
+      <h4 class="m-0 fw-bold">
+        <i class="fa-solid fa-book me-2 text-primary"></i> IP Ledger
+      </h4>
+      <small class="text-body-secondary">Complete record of every admission, past and present</small>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary fw-bold px-4"
+              onclick="switchTab('ip-ledger-view'); loadIPLedger();">
+        <i class="fa-solid fa-bed-pulse me-2"></i> IP Admissions
+      </button>
+      <button class="btn btn-outline-secondary fw-bold px-4"
+              onclick="switchTab('tab-admin-appt-workspace')">
+        <i class="fa-solid fa-arrow-left me-2"></i> Go Back
+      </button>
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <div class="btn-group btn-group-sm" role="group">
+      <button type="button" class="btn btn-primary" id="iph-pill-ALL" onclick="iphSetStatus('ALL')">
+        All <span class="badge text-bg-light ms-1" id="iph-count-all">0</span>
+      </button>
+      <button type="button" class="btn btn-outline-primary" id="iph-pill-ACTIVE" onclick="iphSetStatus('ACTIVE')">
+        In Ward <span class="badge text-bg-light ms-1" id="iph-count-active">0</span>
+      </button>
+      <button type="button" class="btn btn-outline-primary" id="iph-pill-DISCHARGED" onclick="iphSetStatus('DISCHARGED')">
+        Discharged <span class="badge text-bg-light ms-1" id="iph-count-discharged">0</span>
+      </button>
+    </div>
+
+    <button class="btn btn-sm btn-outline-secondary" onclick="iphResetFilters()">
+      <i class="fa-solid fa-eraser me-1"></i> Clear
+    </button>
+
+    <div class="flex-grow-1"></div>
+
+    <span class="text-body-secondary small" id="iph-summary"></span>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadIPHistory()">
+      <i class="fa-solid fa-rotate me-1"></i> Refresh
+    </button>
+  </div>
+
+  <div class="card card-body bg-body-tertiary mb-3">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label small text-body-secondary">Search</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+          <input type="text" id="iph-search" class="form-control"
+                 placeholder="IP No, Patient ID, Name, Diagnosis..." oninput="iphDebounced()">
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-body-secondary">Consultant</label>
+        <select id="iph-consultant" class="form-select form-select-sm" onchange="loadIPHistory()">
+          <option value="">All consultants</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-body-secondary">Ward</label>
+        <select id="iph-ward" class="form-select form-select-sm" onchange="loadIPHistory()">
+          <option value="">All wards</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-body-secondary">Admitted between</label>
+        <div class="input-group input-group-sm">
+          <input type="date" id="iph-from" class="form-control" onchange="loadIPHistory()">
+          <span class="input-group-text">to</span>
+          <input type="date" id="iph-to" class="form-control" onchange="loadIPHistory()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="iph-cap-warning" class="alert alert-warning py-2 small d-none"></div>
+
+  <div class="border rounded overflow-auto" style="max-height: 62vh;">
+    <table class="table table-hover align-middle m-0">
+      <thead class="sticky-top bg-body-tertiary">
+        <tr class="small text-body-secondary">
+          <th>IP Number</th>
+          <th>Patient Details</th>
+          <th>Admitted</th>
+          <th>Discharged</th>
+          <th>Ward / Bed</th>
+          <th>Consultant</th>
+          <th>Diagnosis</th>
+          <th>LOS</th>
+          <th>Status</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="iph-tbody">
+        <tr><td colspan="10" class="text-center py-5 text-body-secondary">
+          <div class="spinner-border text-primary"></div><br>Loading ledger...
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ===================== DETAIL MODAL ================================== -->
+<div class="modal fade" id="modalAdmissionDetail" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-body-tertiary">
+        <h5 class="modal-title fw-bold text-primary">
+          <i class="fa-solid fa-file-medical me-2"></i>
+          <span id="iph-detail-title">Admission Record</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="iph-detail-body">
+        <div class="text-center py-5 text-body-secondary">
+          <div class="spinner-border text-primary"></div>
+        </div>
+      </div>
+      <div class="modal-footer bg-body-tertiary">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+(function () {
+  'use strict';
+
+  var iphQuery = { status: 'ALL', search: '', consultant: '', ward: '', fromDate: '', toDate: '' };
+  var iphFacetsLoaded = false;
+  var iphTimer = null;
+  var iphInFlight = false;
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function message(inner, tone) {
+    var tb = $('iph-tbody');
+    if (!tb) return;
+    tb.innerHTML = '<tr><td colspan="10" class="text-center py-5 ' +
+      (tone === 'error' ? 'text-danger' : 'text-body-secondary') + '">' + inner + '</td></tr>';
+  }
+
+  function bridgeReady() {
+    return typeof google !== 'undefined' && google.script && google.script.run;
+  }
+
+  // ---- filters ------------------------------------------------------------
+
+  function iphSetStatus(status) {
+    iphQuery.status = status;
+    ['ALL', 'ACTIVE', 'DISCHARGED'].forEach(function (s) {
+      var b = $('iph-pill-' + s);
+      if (b) b.className = 'btn ' + (s === status ? 'btn-primary' : 'btn-outline-primary');
+    });
+    loadIPHistory();
+  }
+
+  function iphDebounced() {
+    clearTimeout(iphTimer);
+    iphTimer = setTimeout(loadIPHistory, 350);
+  }
+
+  function iphResetFilters() {
+    ['iph-search', 'iph-consultant', 'iph-ward', 'iph-from', 'iph-to'].forEach(function (id) {
+      if ($(id)) $(id).value = '';
+    });
+    loadIPHistory();
+  }
+
+  // ---- load ---------------------------------------------------------------
+
+  function loadIPHistory() {
+    if (iphInFlight) return;
+
+    iphQuery.search     = $('iph-search') ? $('iph-search').value.trim() : '';
+    iphQuery.consultant = $('iph-consultant') ? $('iph-consultant').value : '';
+    iphQuery.ward       = $('iph-ward') ? $('iph-ward').value : '';
+    iphQuery.fromDate   = $('iph-from') ? $('iph-from').value : '';
+    iphQuery.toDate     = $('iph-to') ? $('iph-to').value : '';
+
+    message('<div class="spinner-border text-primary"></div><br>Loading ledger...');
+
+    if (!bridgeReady()) {
+      message('&#9888; Backend bridge unavailable on this page.', 'error');
+      return;
+    }
+
+    iphInFlight = true;
+    google.script.run
+      .withSuccessHandler(function (p) {
+        iphInFlight = false;
+        try { renderHistory(p); }
+        catch (err) {
+          message('&#9888; Render error: ' + esc(err && err.message) +
+            '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPHistory()">Retry</button>', 'error');
+        }
+      })
+      .withFailureHandler(function (err) {
+        iphInFlight = false;
+        message('&#9888; Server Error: ' + esc(err && err.message) +
+          '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPHistory()">Retry</button>', 'error');
+      })
+      .getIPHistory(iphQuery);
+  }
+
+  function renderHistory(p) {
+    if (!p) { message('&#9888; Backend returned nothing.', 'error'); return; }
+    if (p.success === false) { message('&#9888; ' + esc(p.message), 'error'); return; }
+
+    var c = p.counts || { all: 0, active: 0, discharged: 0 };
+    if ($('iph-count-all'))        $('iph-count-all').textContent = c.all;
+    if ($('iph-count-active'))     $('iph-count-active').textContent = c.active;
+    if ($('iph-count-discharged')) $('iph-count-discharged').textContent = c.discharged;
+
+    if (!iphFacetsLoaded && p.facets) {
+      var fill = function (id, values, allLabel) {
+        var el = $(id);
+        if (!el) return;
+        var keep = el.value;
+        el.innerHTML = '<option value="">' + allLabel + '</option>' +
+          (values || []).map(function (v) {
+            return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
+          }).join('');
+        el.value = keep;
+      };
+      fill('iph-consultant', p.facets.consultants, 'All consultants');
+      fill('iph-ward', p.facets.wards, 'All wards');
+      iphFacetsLoaded = true;
+    }
+
+    var rows = Array.isArray(p.data) ? p.data : [];
+
+    if ($('iph-summary')) {
+      $('iph-summary').textContent = p.total
+        ? p.total + ' record' + (p.total === 1 ? '' : 's') + ' matched' : '';
+    }
+
+    var capBox = $('iph-cap-warning');
+    if (capBox) {
+      if (p.capped) {
+        capBox.className = 'alert alert-warning py-2 small';
+        capBox.textContent = 'Showing the first ' + p.cap + ' of ' + p.total +
+          ' matching records. Narrow the date range or consultant to see the rest.';
+      } else {
+        capBox.className = 'alert alert-warning py-2 small d-none';
+      }
+    }
+
+    if (!rows.length) {
+      var filtered = iphQuery.search || iphQuery.consultant || iphQuery.ward ||
+                     iphQuery.fromDate || iphQuery.toDate || iphQuery.status !== 'ALL';
+      message('<i class="fa-solid fa-book fa-2x mb-3 d-block opacity-50"></i>' +
+        (filtered
+          ? 'No admissions match these filters.<br>' +
+            '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="iphResetFilters()">Clear filters</button>'
+          : 'No admissions recorded yet.'));
+      return;
+    }
+
+    var html = '';
+    rows.forEach(function (row) {
+      var isLive = (row.status === 'ACTIVE' || row.status === 'ADMITTED');
+
+      var badge = isLive
+        ? '<span class="badge text-bg-success">In Ward</span>'
+        : '<span class="badge text-bg-secondary">Discharged</span>';
+
+      var warn = row.dataWarning
+        ? ' <i class="fa-solid fa-triangle-exclamation text-warning" title="' + esc(row.dataWarning) + '"></i>'
+        : '';
+
+      var ipArg = '&#39;' + esc(row.ipNumber) + '&#39;';
+      var wardArgs = ipArg + ',&#39;' + esc(row.bed) + '&#39;,&#39;' + esc(row.ward) + '&#39;';
+
+      // Live rows keep their ward actions here too, so staff don't have to
+      // switch screens after finding a patient in the archive.
+      var actions =
+        '<button class="btn btn-sm btn-outline-primary me-1" title="View record" ' +
+          'onclick="openAdmissionDetail(' + ipArg + ')"><i class="fa-solid fa-eye"></i></button>' +
+        (isLive
+          ? '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
+              'onclick="openChangeBedModal(' + wardArgs + ')"><i class="fa-solid fa-right-left"></i></button>' +
+            '<button class="btn btn-sm btn-outline-danger" title="Discharge" ' +
+              'onclick="iphDischarge(' + wardArgs + ')"><i class="fa-solid fa-door-open"></i></button>'
+          : '');
+
+      html += '<tr>' +
+        '<td class="fw-bold">' + esc(row.ipNumber) + '</td>' +
+        '<td>' + esc(row.patientName) +
+          '<br><small class="text-body-secondary">' + esc(row.patientId) +
+          ' &middot; ' + esc(row.ageSex) + '</small></td>' +
+        '<td>' + esc(row.doa) +
+          (row.toa ? '<br><small class="text-body-secondary">' + esc(row.toa) + '</small>' : '') + '</td>' +
+        '<td>' + (row.dod ? esc(row.dod) : '<span class="text-body-secondary">&mdash;</span>') + '</td>' +
+        '<td>' + ((row.ward || row.bed)
+                    ? esc(row.ward) + ' / ' + esc(row.bed) + warn
+                    : '<span class="text-body-secondary">Unassigned</span>') + '</td>' +
+        '<td>' + esc(row.consultant) + '</td>' +
+        '<td>' + (row.diagnosis ? esc(row.diagnosis)
+                                : '<span class="text-body-secondary">Pending</span>') + '</td>' +
+        '<td>' + (row.los ? esc(row.los) + 'd' : '<span class="text-body-secondary">&mdash;</span>') + '</td>' +
+        '<td>' + badge + '</td>' +
+        '<td class="text-end text-nowrap">' + actions + '</td>' +
+        '</tr>';
+    });
+
+    $('iph-tbody').innerHTML = html;
+  }
+
+  // ---- detail drill-down --------------------------------------------------
+
+  function openAdmissionDetail(ipNumber) {
+    var body = $('iph-detail-body');
+    if ($('iph-detail-title')) $('iph-detail-title').textContent = ipNumber;
+    if (body) {
+      body.innerHTML = '<div class="text-center py-5 text-body-secondary">' +
+                       '<div class="spinner-border text-primary"></div></div>';
+    }
+    new bootstrap.Modal($('modalAdmissionDetail')).show();
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || res.success === false) {
+          body.innerHTML = '<div class="alert alert-danger mb-0">' +
+                           esc((res && res.message) || 'Record not found.') + '</div>';
+          return;
+        }
+        var d = res.data;
+        var isLive = (d.status === 'ACTIVE' || d.status === 'ADMITTED');
+
+        var field = function (label, value) {
+          return '<div class="col-md-4 mb-3">' +
+                 '<div class="small text-body-secondary">' + esc(label) + '</div>' +
+                 '<div class="fw-bold">' + (value ? esc(value) : '&mdash;') + '</div></div>';
+        };
+
+        body.innerHTML =
+          '<div class="d-flex align-items-center gap-3 mb-3 pb-3 border-bottom">' +
+            '<div><h5 class="m-0 fw-bold">' + esc(d.patientName) + '</h5>' +
+            '<small class="text-body-secondary">' + esc(d.patientId) + ' &middot; ' +
+            esc(d.ageSex) + '</small></div>' +
+            '<div class="ms-auto">' + (isLive
+              ? '<span class="badge text-bg-success">In Ward</span>'
+              : '<span class="badge text-bg-secondary">Discharged</span>') + '</div>' +
+          '</div>' +
+          (d.dataWarning ? '<div class="alert alert-warning py-2 small">' + esc(d.dataWarning) + '</div>' : '') +
+          '<div class="row">' +
+            field('IP Number', d.ipNumber) +
+            field('Admission Type', d.type) +
+            field('Length of Stay', d.los ? d.los + ' day' + (d.los === 1 ? '' : 's') : '') +
+            field('Date of Admission', d.doa) +
+            field('Time of Admission', d.toa) +
+            field('Date of Discharge', d.dod) +
+            field('Ward', d.ward) +
+            field('Bed', d.bed) +
+            field('Consultant', d.consultant) +
+          '</div>' +
+          '<div class="mt-2">' +
+            '<div class="small text-body-secondary">Diagnosis</div>' +
+            '<div class="fw-bold">' + (d.diagnosis ? esc(d.diagnosis) : 'Pending') + '</div>' +
+          '</div>';
+      })
+      .withFailureHandler(function (err) {
+        body.innerHTML = '<div class="alert alert-danger mb-0">Lookup failed: ' +
+                         esc(err.message) + '</div>';
+      })
+      .getAdmissionDetail(ipNumber);
+  }
+
+  // ---- discharge from the archive ----------------------------------------
+
+  function iphDischarge(ipNumber, bedId) {
+    if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
+                 ' and closes the admission.')) return;
+    message('<div class="spinner-border text-primary"></div><br>Processing discharge...');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || res.success === false) alert((res && res.message) || 'Discharge failed.');
+        loadIPHistory();
+      })
+      .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPHistory(); })
+      .processPatientDischarge(ipNumber, bedId);
+  }
+
+  // ---- exports ------------------------------------------------------------
+
+  window.loadIPHistory       = loadIPHistory;
+  window.iphSetStatus        = iphSetStatus;
+  window.iphDebounced        = iphDebounced;
+  window.iphResetFilters     = iphResetFilters;
+  window.openAdmissionDetail = openAdmissionDetail;
+  window.iphDischarge        = iphDischarge;
+})();
+</script>

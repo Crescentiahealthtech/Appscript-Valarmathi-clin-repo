@@ -1,17 +1,13 @@
 <!-- =====================================================================
      IP_Admissions_UI.html — CresRx
-     Full replacement.
+     SCREEN 1: the live ward. Active admissions only.
 
-     CRITICAL: the outer wrapper MUST be
-       <div id="ip-ledger-view" class="page-section">
-     Styles.html line 100 is `.page-section { display: none; }` and
-     switchTab() adds `.active-section`. Without this wrapper the module
-     is an always-visible sibling in .main-content and bleeds into every
-     workspace. Opened by Admin_Appointments_Workspace.html:
-       onclick="switchTab('ip-ledger-view'); loadIPLedger();"
+     Wrapper MUST stay <div id="ip-ledger-view" class="page-section">.
+     Styles.html: `.page-section { display: none; }`; switchTab() adds
+     `.active-section`. Without it the module bleeds into every workspace.
 
-     Data comes from getIPLedgerPage() — server-side filtered and paged.
-     The client never holds more than one page.
+     Opened by: switchTab('ip-ledger-view'); loadIPLedger();
+     Historical records live in IP_Ledger_UI.html (#ip-history-view).
      ===================================================================== -->
 
 <div id="ip-ledger-view" class="page-section">
@@ -19,9 +15,9 @@
   <div class="d-flex justify-content-between align-items-center mb-3 mt-4 border-bottom pb-3">
     <div>
       <h4 class="m-0 fw-bold">
-        <i class="fa-solid fa-folder-open me-2 text-primary"></i> IP Admissions Ledger
+        <i class="fa-solid fa-bed-pulse me-2 text-primary"></i> IP Admissions
       </h4>
-      <small class="text-body-secondary">Master log of all active and historical hospital admissions</small>
+      <small class="text-body-secondary">Patients currently admitted in the ward</small>
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-primary fw-bold px-4"
@@ -29,87 +25,38 @@
         <i class="fa-solid fa-plus me-2"></i> New Admission
       </button>
       <button class="btn btn-outline-secondary fw-bold px-4"
-              onclick="switchTab('workspace-appointments')">
+              onclick="switchTab('ip-history-view'); loadIPHistory();">
+        <i class="fa-solid fa-book me-2"></i> IP Ledger
+      </button>
+      <button class="btn btn-outline-secondary fw-bold px-4"
+              onclick="switchTab('tab-admin-appt-workspace')">
         <i class="fa-solid fa-arrow-left me-2"></i> Go Back
       </button>
     </div>
   </div>
 
-  <!-- Quick status pills: the ward-round view first, history behind a click -->
-  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-    <div class="btn-group" role="group">
-      <button type="button" class="btn btn-sm btn-primary" id="ipl-pill-ACTIVE"
-              onclick="iplSetStatus('ACTIVE')">
-        In Ward <span class="badge text-bg-light ms-1" id="ipl-active-count">0</span>
-      </button>
-      <button type="button" class="btn btn-sm btn-outline-primary" id="ipl-pill-DISCHARGED"
-              onclick="iplSetStatus('DISCHARGED')">Discharged</button>
-      <button type="button" class="btn btn-sm btn-outline-primary" id="ipl-pill-ALL"
-              onclick="iplSetStatus('ALL')">All</button>
-    </div>
-
-    <button class="btn btn-sm btn-outline-secondary" type="button"
-            data-bs-toggle="collapse" data-bs-target="#ipl-advanced">
-      <i class="fa-solid fa-sliders me-1"></i> Filters
-    </button>
-
-    <button class="btn btn-sm btn-outline-secondary" onclick="iplResetFilters()">
-      <i class="fa-solid fa-eraser me-1"></i> Clear
-    </button>
-
-    <div class="flex-grow-1"></div>
-
-    <span class="text-body-secondary small" id="ipl-summary"></span>
-    <button class="btn btn-sm btn-outline-secondary" onclick="loadIPLedger()">
-      <i class="fa-solid fa-rotate me-1"></i> Refresh
-    </button>
-  </div>
-
-  <div class="row g-2 mb-3">
-    <div class="col-md-6">
+  <div class="row g-2 mb-3 align-items-center">
+    <div class="col-md-5">
       <div class="input-group">
         <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
-        <input type="text" id="ipl-search" class="form-control"
-               placeholder="Search IP No, Patient ID, or Name..." oninput="iplDebouncedSearch()">
+        <input type="text" id="ipw-search" class="form-control"
+               placeholder="Search IP No, Patient ID, Name, Ward or Bed..." oninput="ipwDebounced()">
       </div>
     </div>
-    <div class="col-md-3">
-      <select id="ipl-page-size" class="form-select" onchange="iplSetPageSize()">
-        <option value="25" selected>25 per page</option>
-        <option value="50">50 per page</option>
-        <option value="100">100 per page</option>
+    <div class="col-md-4">
+      <select id="ipw-consultant" class="form-select" onchange="loadIPLedger()">
+        <option value="">All consultants</option>
       </select>
     </div>
-  </div>
-
-  <div class="collapse mb-3" id="ipl-advanced">
-    <div class="card card-body bg-body-tertiary">
-      <div class="row g-3">
-        <div class="col-md-3">
-          <label class="form-label small text-body-secondary">Ward</label>
-          <select id="ipl-ward" class="form-select form-select-sm" onchange="iplApply()">
-            <option value="">All wards</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small text-body-secondary">Consultant</label>
-          <select id="ipl-consultant" class="form-select form-select-sm" onchange="iplApply()">
-            <option value="">All consultants</option>
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small text-body-secondary">Admitted from</label>
-          <input type="date" id="ipl-from" class="form-control form-control-sm" onchange="iplApply()">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small text-body-secondary">Admitted to</label>
-          <input type="date" id="ipl-to" class="form-control form-control-sm" onchange="iplApply()">
-        </div>
-      </div>
+    <div class="col-md-3 d-flex align-items-center justify-content-end gap-3">
+      <span class="text-body-secondary small" id="ipw-summary"></span>
+      <button class="btn btn-outline-secondary" onclick="loadIPLedger()">
+        <i class="fa-solid fa-rotate me-1"></i> Refresh
+      </button>
     </div>
   </div>
 
-  <div class="border rounded overflow-auto" style="max-height: 60vh;">
+  <div class="border rounded overflow-auto">
     <table class="table table-hover align-middle m-0">
       <thead class="sticky-top bg-body-tertiary">
         <tr class="small text-body-secondary">
@@ -119,22 +66,17 @@
           <th>Ward / Bed</th>
           <th>Consultant</th>
           <th>Diagnosis</th>
-          <th>Status</th>
+          <th>Day</th>
           <th class="text-end">Actions</th>
         </tr>
       </thead>
-      <tbody id="ipl-tbody">
+      <tbody id="ipw-tbody">
         <tr><td colspan="8" class="text-center py-5 text-body-secondary">
-          <div class="spinner-border text-primary"></div><br>Loading Ledger...
+          <div class="spinner-border text-primary"></div><br>Loading ward...
         </td></tr>
       </tbody>
     </table>
   </div>
-
-  <nav class="d-flex justify-content-between align-items-center mt-3">
-    <span class="text-body-secondary small" id="ipl-page-label"></span>
-    <div class="btn-group" id="ipl-pager"></div>
-  </nav>
 </div>
 
 
@@ -279,16 +221,10 @@
 (function () {
   'use strict';
 
-  // Current query state. The client caches nothing but this.
-  var iplQuery = {
-    status: 'ACTIVE', search: '', ward: '', consultant: '',
-    fromDate: '', toDate: '', page: 1, pageSize: 25
-  };
-  var iplFacetsLoaded = false;
-  var iplSearchTimer = null;
-  var iplInFlight = false;
-
-  // ---- small helpers ------------------------------------------------------
+  var ipwQuery = { consultant: '', search: '' };
+  var ipwFacetsLoaded = false;
+  var ipwTimer = null;
+  var ipwInFlight = false;
 
   function $(id) { return document.getElementById(id); }
 
@@ -298,142 +234,95 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function setBody(html) { var tb = $('ipl-tbody'); if (tb) tb.innerHTML = html; }
-
   function message(inner, tone) {
-    setBody('<tr><td colspan="8" class="text-center py-5 ' +
-            (tone === 'error' ? 'text-danger' : 'text-body-secondary') + '">' + inner + '</td></tr>');
-  }
-
-  function retryBtn() {
-    return '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>';
+    var tb = $('ipw-tbody');
+    if (!tb) return;
+    tb.innerHTML = '<tr><td colspan="8" class="text-center py-5 ' +
+      (tone === 'error' ? 'text-danger' : 'text-body-secondary') + '">' + inner + '</td></tr>';
   }
 
   function bridgeReady() {
     return typeof google !== 'undefined' && google.script && google.script.run;
   }
 
-  // ---- filter controls ----------------------------------------------------
-
-  function iplSetStatus(status) {
-    iplQuery.status = status;
-    iplQuery.page = 1;
-    ['ACTIVE', 'DISCHARGED', 'ALL'].forEach(function (s) {
-      var b = $('ipl-pill-' + s);
-      if (!b) return;
-      b.className = 'btn btn-sm ' + (s === status ? 'btn-primary' : 'btn-outline-primary');
-    });
-    loadIPLedger();
+  function ipwDebounced() {
+    clearTimeout(ipwTimer);
+    ipwTimer = setTimeout(loadIPLedger, 300);
   }
 
-  function iplApply() {
-    iplQuery.ward       = $('ipl-ward') ? $('ipl-ward').value : '';
-    iplQuery.consultant = $('ipl-consultant') ? $('ipl-consultant').value : '';
-    iplQuery.fromDate   = $('ipl-from') ? $('ipl-from').value : '';
-    iplQuery.toDate     = $('ipl-to') ? $('ipl-to').value : '';
-    iplQuery.page = 1;
-    loadIPLedger();
-  }
-
-  function iplDebouncedSearch() {
-    clearTimeout(iplSearchTimer);
-    iplSearchTimer = setTimeout(function () {
-      iplQuery.search = $('ipl-search') ? $('ipl-search').value.trim() : '';
-      iplQuery.page = 1;
-      loadIPLedger();
-    }, 350);
-  }
-
-  function iplSetPageSize() {
-    iplQuery.pageSize = parseInt($('ipl-page-size').value, 10) || 25;
-    iplQuery.page = 1;
-    loadIPLedger();
-  }
-
-  function iplResetFilters() {
-    iplQuery.search = ''; iplQuery.ward = ''; iplQuery.consultant = '';
-    iplQuery.fromDate = ''; iplQuery.toDate = ''; iplQuery.page = 1;
-    ['ipl-search', 'ipl-ward', 'ipl-consultant', 'ipl-from', 'ipl-to'].forEach(function (id) {
-      if ($(id)) $(id).value = '';
-    });
-    loadIPLedger();
-  }
-
-  function iplGoPage(n) {
-    iplQuery.page = n;
-    loadIPLedger();
-  }
-
-  // ---- load ---------------------------------------------------------------
+  // ---- load ward ----------------------------------------------------------
 
   function loadIPLedger() {
-    if (iplInFlight) return;           // stop rapid clicks stacking requests
-    message('<div class="spinner-border text-primary"></div><br>Fetching Live Ledger...');
+    if (ipwInFlight) return;
+    ipwQuery.search     = $('ipw-search') ? $('ipw-search').value.trim() : '';
+    ipwQuery.consultant = $('ipw-consultant') ? $('ipw-consultant').value : '';
+
+    message('<div class="spinner-border text-primary"></div><br>Loading ward...');
 
     if (!bridgeReady()) {
-      message('&#9888; Backend bridge unavailable on this page.' + retryBtn(), 'error');
+      message('&#9888; Backend bridge unavailable on this page.', 'error');
       return;
     }
 
-    iplInFlight = true;
+    ipwInFlight = true;
     google.script.run
-      .withSuccessHandler(function (payload) {
-        iplInFlight = false;
-        try {
-          renderLedgerPage(payload);
-        } catch (err) {
-          message('&#9888; Render error: ' + esc(err && err.message) + retryBtn(), 'error');
+      .withSuccessHandler(function (p) {
+        ipwInFlight = false;
+        try { renderWard(p); }
+        catch (err) {
+          message('&#9888; Render error: ' + esc(err && err.message) +
+            '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>', 'error');
         }
       })
       .withFailureHandler(function (err) {
-        iplInFlight = false;
-        message('&#9888; Server Error: ' + esc(err && err.message) + retryBtn(), 'error');
+        ipwInFlight = false;
+        message('&#9888; Server Error: ' + esc(err && err.message) +
+          '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>', 'error');
       })
-      .getIPLedgerPage(iplQuery);
+      .getActiveIPWard(ipwQuery);
   }
 
-  function renderLedgerPage(p) {
-    if (!p) {
-      message('&#9888; Backend returned nothing. Check for a duplicate ' +
-              '<code>getIPLedgerPage</code> in another .gs file.' + retryBtn(), 'error');
-      return;
-    }
-    if (p.success === false) {
-      message('&#9888; ' + esc(p.message || 'Could not load ledger.') + retryBtn(), 'error');
-      return;
-    }
+  function renderWard(p) {
+    if (!p) { message('&#9888; Backend returned nothing.', 'error'); return; }
+    if (p.success === false) { message('&#9888; ' + esc(p.message), 'error'); return; }
 
-    if ($('ipl-active-count')) $('ipl-active-count').textContent = p.activeCount || 0;
-    populateFacets(p.facets);
+    // Consultant list is loaded once, from all active patients.
+    if (!ipwFacetsLoaded && p.facets && $('ipw-consultant')) {
+      var sel = $('ipw-consultant'), keep = sel.value;
+      sel.innerHTML = '<option value="">All consultants</option>' +
+        (p.facets.consultants || []).map(function (c) {
+          return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+        }).join('');
+      sel.value = keep;
+      ipwFacetsLoaded = true;
+    }
 
     var rows = Array.isArray(p.data) ? p.data : [];
-
-    if ($('ipl-summary')) {
-      $('ipl-summary').textContent = p.total
-        ? p.total + ' matching admission' + (p.total === 1 ? '' : 's')
-        : '';
+    if ($('ipw-summary')) {
+      $('ipw-summary').textContent = rows.length
+        ? rows.length + ' in ward' : '';
     }
 
     if (!rows.length) {
-      renderPager(p);
-      var filtered = iplQuery.search || iplQuery.ward || iplQuery.consultant ||
-                     iplQuery.fromDate || iplQuery.toDate || iplQuery.status !== 'ALL';
-      message('<i class="fa-solid fa-folder-open fa-2x mb-3 d-block opacity-50"></i>' +
+      var filtered = ipwQuery.search || ipwQuery.consultant;
+      message('<i class="fa-solid fa-bed fa-2x mb-3 d-block opacity-50"></i>' +
         (filtered
-          ? 'No admissions match these filters.<br>' +
-            '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="iplResetFilters()">Clear filters</button>'
-          : 'No admissions recorded yet.<br><small>Use <strong>New Admission</strong> to admit the first patient.</small>'));
+          ? 'No admitted patients match this filter.'
+          : 'No patients currently admitted.<br><small>Use <strong>New Admission</strong> to admit a patient.</small>'));
       return;
     }
 
     var html = '';
-    rows.forEach(function (row) {
-      var isLive = (row.status === 'ACTIVE' || row.status === 'ADMITTED');
+    var lastWard = null;
 
-      var badge = isLive
-        ? '<span class="badge text-bg-success">Active</span>'
-        : '<span class="badge text-bg-secondary">Discharged</span>' +
-          (row.dod ? '<br><small class="text-body-secondary">' + esc(row.dod) + '</small>' : '');
+    rows.forEach(function (row) {
+      // Ward round order — a subtle divider each time the ward changes.
+      if (row.ward !== lastWard) {
+        lastWard = row.ward;
+        html += '<tr class="table-active"><td colspan="8" class="small fw-bold text-body-secondary py-1">' +
+                '<i class="fa-solid fa-hospital me-2"></i>Ward ' + esc(row.ward || 'Unassigned') +
+                '</td></tr>';
+      }
 
       var warn = row.dataWarning
         ? ' <i class="fa-solid fa-triangle-exclamation text-warning" title="' + esc(row.dataWarning) + '"></i>'
@@ -442,12 +331,9 @@
       var args = '&#39;' + esc(row.ipNumber) + '&#39;,&#39;' + esc(row.bed) +
                  '&#39;,&#39;' + esc(row.ward) + '&#39;';
 
-      var actions = isLive
-        ? '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
-            'onclick="openChangeBedModal(' + args + ')"><i class="fa-solid fa-right-left"></i></button>' +
-          '<button class="btn btn-sm btn-outline-danger" title="Discharge" ' +
-            'onclick="confirmDischarge(' + args + ')"><i class="fa-solid fa-door-open"></i></button>'
-        : '<span class="text-body-secondary small">&mdash;</span>';
+      var losBadge = row.los
+        ? '<span class="badge text-bg-light">Day ' + esc(row.los) + '</span>'
+        : '<span class="text-body-secondary">&mdash;</span>';
 
       html += '<tr>' +
         '<td class="fw-bold">' + esc(row.ipNumber) + '</td>' +
@@ -456,84 +342,23 @@
           ' &middot; ' + esc(row.ageSex) + '</small></td>' +
         '<td>' + esc(row.doa) +
           (row.toa ? '<br><small class="text-body-secondary">' + esc(row.toa) + '</small>' : '') + '</td>' +
-        '<td>' + ((row.ward || row.bed)
-                    ? esc(row.ward) + ' / ' + esc(row.bed) + warn
-                    : '<span class="text-body-secondary">Unassigned</span>') + '</td>' +
+        '<td class="fw-bold">' + esc(row.bed || '\u2014') + warn + '</td>' +
         '<td>' + esc(row.consultant) + '</td>' +
         '<td>' + (row.diagnosis ? esc(row.diagnosis)
                                 : '<span class="text-body-secondary">Pending</span>') + '</td>' +
-        '<td>' + badge + '</td>' +
-        '<td class="text-end text-nowrap">' + actions + '</td>' +
-        '</tr>';
+        '<td>' + losBadge + '</td>' +
+        '<td class="text-end text-nowrap">' +
+          '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
+            'onclick="openChangeBedModal(' + args + ')"><i class="fa-solid fa-right-left"></i></button>' +
+          '<button class="btn btn-sm btn-outline-danger" title="Discharge" ' +
+            'onclick="confirmDischarge(' + args + ')"><i class="fa-solid fa-door-open"></i></button>' +
+        '</td></tr>';
     });
 
-    setBody(html);
-    renderPager(p);
+    $('ipw-tbody').innerHTML = html;
   }
 
-  function populateFacets(facets) {
-    if (iplFacetsLoaded || !facets) return;
-
-    var fill = function (id, values, allLabel) {
-      var el = $(id);
-      if (!el) return;
-      var current = el.value;
-      el.innerHTML = '<option value="">' + allLabel + '</option>' +
-        (values || []).map(function (v) {
-          return '<option value="' + esc(v) + '">' + esc(v) + '</option>';
-        }).join('');
-      el.value = current;
-    };
-
-    fill('ipl-ward', facets.wards, 'All wards');
-    fill('ipl-consultant', facets.consultants, 'All consultants');
-    iplFacetsLoaded = true;
-  }
-
-  function renderPager(p) {
-    var pager = $('ipl-pager');
-    var label = $('ipl-page-label');
-    if (!pager) return;
-
-    var total = p.total || 0;
-    var totalPages = p.totalPages || 0;
-    var page = p.page || 1;
-
-    if (label) {
-      if (!total) { label.textContent = ''; }
-      else {
-        var first = (page - 1) * p.pageSize + 1;
-        var last = Math.min(page * p.pageSize, total);
-        label.textContent = 'Showing ' + first + '\u2013' + last + ' of ' + total;
-      }
-    }
-
-    if (totalPages <= 1) { pager.innerHTML = ''; return; }
-
-    // Windowed page numbers: never render 40 buttons.
-    var btn = function (n, text, disabled, active) {
-      return '<button class="btn btn-sm ' +
-             (active ? 'btn-primary' : 'btn-outline-secondary') + '"' +
-             (disabled ? ' disabled' : ' onclick="iplGoPage(' + n + ')"') + '>' +
-             text + '</button>';
-    };
-
-    var out = btn(page - 1, '&laquo;', page <= 1, false);
-    var from = Math.max(1, page - 2);
-    var to = Math.min(totalPages, from + 4);
-    from = Math.max(1, to - 4);
-
-    if (from > 1) out += btn(1, '1', false, false) +
-                         (from > 2 ? '<button class="btn btn-sm btn-outline-secondary" disabled>&hellip;</button>' : '');
-    for (var n = from; n <= to; n++) out += btn(n, String(n), false, n === page);
-    if (to < totalPages) out += (to < totalPages - 1 ? '<button class="btn btn-sm btn-outline-secondary" disabled>&hellip;</button>' : '') +
-                                btn(totalPages, String(totalPages), false, false);
-
-    out += btn(page + 1, '&raquo;', page >= totalPages, false);
-    pager.innerHTML = out;
-  }
-
-  // ---- wards --------------------------------------------------------------
+  // ---- wards / beds -------------------------------------------------------
 
   function loadWardOptions() {
     if (!bridgeReady()) return;
@@ -541,9 +366,7 @@
       .withSuccessHandler(function (res) {
         var wards = (res && Array.isArray(res.data)) ? res.data : [];
         var opts = '<option value="">Select Ward...</option>' +
-          wards.map(function (w) {
-            return '<option value="' + esc(w) + '">' + esc(w) + '</option>';
-          }).join('');
+          wards.map(function (w) { return '<option value="' + esc(w) + '">' + esc(w) + '</option>'; }).join('');
         ['adm-ward', 'transfer-ward'].forEach(function (id) {
           if ($(id)) $(id).innerHTML = wards.length ? opts : '<option value="">No wards configured</option>';
         });
@@ -559,7 +382,6 @@
   function loadAvailableBeds(wardSelectId, bedSelectId) {
     var wardEl = $(wardSelectId), bedEl = $(bedSelectId);
     if (!wardEl || !bedEl) return;
-
     if (!wardEl.value) { bedEl.innerHTML = '<option value="">Select Ward First...</option>'; return; }
     bedEl.innerHTML = '<option value="">Loading beds...</option>';
 
@@ -636,8 +458,7 @@
     admAlert('');
 
     var payload = {
-      patientId: val('adm-pat-id'),
-      patientName: val('adm-pat-name'),
+      patientId: val('adm-pat-id'), patientName: val('adm-pat-name'),
       ageSex: val('adm-pat-age') + ' / ' + val('adm-pat-sex'),
       doa: val('adm-doa'), toa: val('adm-toa'), type: val('adm-type'),
       ward: val('adm-ward'), bed: val('adm-bed'),
@@ -658,8 +479,8 @@
         var inst = bootstrap.Modal.getInstance($('modalAdmitPatient'));
         if (inst) inst.hide();
         alert(res.message);
-        iplFacetsLoaded = false;   // a new ward or consultant may now exist
-        iplSetStatus('ACTIVE');
+        ipwFacetsLoaded = false;   // a new consultant may now be on the ward
+        loadIPLedger();
       })
       .withFailureHandler(function (err) { reset(); admAlert('Error saving admission: ' + err.message, 'danger'); })
       .saveNewAdmissionLedger(payload);
@@ -702,7 +523,8 @@
   // ---- discharge ----------------------------------------------------------
 
   function confirmDischarge(ipNumber, bedId) {
-    if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId + ' and closes the admission.')) return;
+    if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
+                 ', closes the admission, and moves it to the IP Ledger.')) return;
     message('<div class="spinner-border text-primary"></div><br>Processing discharge...');
 
     google.script.run
@@ -717,12 +539,7 @@
   // ---- exports ------------------------------------------------------------
 
   window.loadIPLedger             = loadIPLedger;
-  window.iplSetStatus             = iplSetStatus;
-  window.iplApply                 = iplApply;
-  window.iplDebouncedSearch       = iplDebouncedSearch;
-  window.iplSetPageSize           = iplSetPageSize;
-  window.iplResetFilters          = iplResetFilters;
-  window.iplGoPage                = iplGoPage;
+  window.ipwDebounced             = ipwDebounced;
   window.prepAdmitModal           = prepAdmitModal;
   window.fetchAdmitPatientDetails = fetchAdmitPatientDetails;
   window.loadAvailableBeds        = loadAvailableBeds;
@@ -730,8 +547,6 @@
   window.openChangeBedModal       = openChangeBedModal;
   window.submitBedTransfer        = submitBedTransfer;
   window.confirmDischarge         = confirmDischarge;
-
-  // Backwards compatibility: older callers may still invoke filterLedger().
-  window.filterLedger = loadIPLedger;
+  window.filterLedger             = loadIPLedger;  // legacy callers
 })();
 </script>

@@ -146,35 +146,132 @@ function getIPLedgerData() {
   }
 }
 
-// ---- READ: paginated / filtered ledger ------------------------------------
+// ---- shared row mapper ----------------------------------------------------
+
+function ipa_mapRow_(r, rowIndex, lastCol) {
+  var wb = ipa_resolveWardBed_(r[IPA_COL.WARD], r[IPA_COL.BED]);
+  return {
+    rowIndex:    rowIndex,
+    ipNumber:    ipa_str_(r[IPA_COL.IP]),
+    patientId:   ipa_pid_(r[IPA_COL.PATIENT_ID]),
+    patientName: ipa_str_(r[IPA_COL.NAME]),
+    ageSex:      ipa_str_(r[IPA_COL.AGE_SEX]),
+    doa:         ipa_fmt_(r[IPA_COL.DOA], 'dd MMM yyyy'),
+    toa:         ipa_fmt_(r[IPA_COL.TOA], 'hh:mm a'),
+    type:        ipa_str_(r[IPA_COL.TYPE]),
+    ward:        wb.ward,
+    bed:         wb.bed,
+    dataWarning: wb.repaired ? 'Ward/Bed columns disagree on this row.' : '',
+    consultant:  ipa_str_(r[IPA_COL.CONSULTANT]),
+    diagnosis:   ipa_str_(r[IPA_COL.DIAGNOSIS]),
+    status:      ipa_str_(r[IPA_COL.STATUS]).toUpperCase() || 'UNKNOWN',
+    dod:         lastCol > IPA_COL.DOD ? ipa_fmt_(r[IPA_COL.DOD], 'dd MMM yyyy') : ''
+  };
+}
+
+/** Length of stay in days. Discharged uses DOD; active uses today. */
+function ipa_los_(doaVal, dodVal) {
+  if (!(doaVal instanceof Date) || isNaN(doaVal.getTime())) return null;
+  var end = (dodVal instanceof Date && !isNaN(dodVal.getTime())) ? dodVal : new Date();
+  return Math.max(1, Math.floor((end.getTime() - doaVal.getTime()) / 86400000) + 1);
+}
+
+// =========================================================================
+// SCREEN 1 — IP ADMISSIONS (live ward). Active admissions only.
+// =========================================================================
 
 /**
- * Server-side filtered, faceted, paginated ledger. Use this from the UI.
- * getIPLedgerData() above is kept for other modules that call it.
+ * The current ward roster. No pagination — a live ward is a bounded list.
+ * Sorted by ward, then bed, so it reads like a round.
  *
- * query = {
- *   status:     'ACTIVE' | 'DISCHARGED' | 'ALL'
- *   search:     free text over IP number / patient ID / name
- *   ward:       exact ward, or '' for all
- *   consultant: exact consultant, or '' for all
- *   fromDate:   'yyyy-MM-dd' admitted on/after, or ''
- *   toDate:     'yyyy-MM-dd' admitted on/before, or ''
- *   page:       1-based
- *   pageSize:   default 25, capped at 100
- * }
- *
- * Returns { success, message, data, page, pageSize, total, totalPages,
- *           activeCount, facets:{wards,consultants} }
+ * query = { consultant: exact consultant or '', search: free text }
+ * Returns { success, message, data, total, facets:{consultants,wards} }
  */
-function getIPLedgerPage(query) {
+function getActiveIPWard(query) {
   try {
     var q = query || {};
-    var status     = ipa_str_(q.status).toUpperCase() || 'ACTIVE';
-    var search     = ipa_str_(q.search).toLowerCase();
-    var wardF      = ipa_str_(q.ward).toUpperCase();
-    var consultF   = ipa_str_(q.consultant).toUpperCase();
-    var pageSize   = Math.min(Math.max(parseInt(q.pageSize, 10) || 25, 5), 100);
-    var page       = Math.max(parseInt(q.page, 10) || 1, 1);
+    var consultF = ipa_str_(q.consultant).toUpperCase();
+    var search   = ipa_str_(q.search).toLowerCase();
+
+    var empty = {
+      success: true, message: 'No active admissions.', data: [], total: 0,
+      facets: { consultants: [], wards: [] }
+    };
+
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.SHEET);
+    if (!sheet) return empty;
+
+    var lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) return empty;
+
+    var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    var out = [], consultSet = {}, wardSet = {};
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r[IPA_COL.IP]) continue;
+      if (!ipa_isLive_(r[IPA_COL.STATUS])) continue;
+
+      var rec = ipa_mapRow_(r, i + 2, lastCol);
+      rec.los = ipa_los_(r[IPA_COL.DOA], null);
+
+      // Facets reflect every active patient, not the filtered subset.
+      if (rec.consultant) consultSet[rec.consultant] = true;
+      if (rec.ward) wardSet[rec.ward] = true;
+
+      if (consultF && rec.consultant.toUpperCase() !== consultF) continue;
+      if (search) {
+        var hay = (rec.ipNumber + ' ' + rec.patientId + ' ' + rec.patientName + ' ' +
+                   rec.ward + ' ' + rec.bed).toLowerCase();
+        if (hay.indexOf(search) === -1) continue;
+      }
+      out.push(rec);
+    }
+
+    // Ward round order: ward, then bed.
+    out.sort(function (a, b) {
+      if (a.ward !== b.ward) return a.ward < b.ward ? -1 : 1;
+      return a.bed < b.bed ? -1 : (a.bed > b.bed ? 1 : 0);
+    });
+
+    return {
+      success: true,
+      message: out.length + ' patient(s) in ward.',
+      data: out,
+      total: out.length,
+      facets: {
+        consultants: Object.keys(consultSet).sort(),
+        wards: Object.keys(wardSet).sort()
+      }
+    };
+
+  } catch (e) {
+    return { success: false, message: 'Ward roster failed: ' + e.message, data: [], total: 0,
+             facets: { consultants: [], wards: [] } };
+  }
+}
+
+// =========================================================================
+// SCREEN 2 — IP LEDGER (archive). Every admission, active and discharged.
+// =========================================================================
+
+/**
+ * Full historical ledger. No pagination for now — filters carry the load.
+ * A hard cap protects the client if the sheet grows faster than expected;
+ * when `capped` comes back true, narrow the filters (or add paging).
+ *
+ * query = { status:'ALL'|'ACTIVE'|'DISCHARGED', search, consultant, ward,
+ *           fromDate:'yyyy-MM-dd', toDate:'yyyy-MM-dd' }
+ * Returns { success, message, data, total, capped, cap, facets, counts }
+ */
+function getIPHistory(query) {
+  var CAP = 500;
+  try {
+    var q = query || {};
+    var status   = ipa_str_(q.status).toUpperCase() || 'ALL';
+    var search   = ipa_str_(q.search).toLowerCase();
+    var consultF = ipa_str_(q.consultant).toUpperCase();
+    var wardF    = ipa_str_(q.ward).toUpperCase();
 
     var fromD = ipa_str_(q.fromDate) ? new Date(ipa_str_(q.fromDate) + 'T00:00:00') : null;
     var toD   = ipa_str_(q.toDate)   ? new Date(ipa_str_(q.toDate)   + 'T23:59:59') : null;
@@ -182,46 +279,41 @@ function getIPLedgerPage(query) {
     if (toD   && isNaN(toD.getTime()))   toD   = null;
 
     var empty = {
-      success: true, message: 'No admissions recorded.', data: [],
-      page: 1, pageSize: pageSize, total: 0, totalPages: 0, activeCount: 0,
-      facets: { wards: [], consultants: [] }
+      success: true, message: 'No admissions recorded.', data: [], total: 0,
+      capped: false, cap: CAP,
+      facets: { consultants: [], wards: [] },
+      counts: { all: 0, active: 0, discharged: 0 }
     };
 
     var sheet = ipa_ss_().getSheetByName(IPA_CFG.SHEET);
     if (!sheet) return empty;
 
-    var lastRow = sheet.getLastRow();
-    var lastCol = sheet.getLastColumn();
+    var lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
     if (lastRow < 2 || lastCol < 1) return empty;
 
     var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-
-    var matched = [];
-    var wardSet = {}, consultSet = {};
-    var activeCount = 0;
+    var out = [], consultSet = {}, wardSet = {};
+    var counts = { all: 0, active: 0, discharged: 0 };
 
     for (var i = 0; i < rows.length; i++) {
       var r = rows[i];
       if (!r[IPA_COL.IP]) continue;
 
-      var wb = ipa_resolveWardBed_(r[IPA_COL.WARD], r[IPA_COL.BED]);
-      var stat = ipa_str_(r[IPA_COL.STATUS]).toUpperCase() || 'UNKNOWN';
-      var isLive = ipa_isLive_(stat);
-      var consultant = ipa_str_(r[IPA_COL.CONSULTANT]);
+      var rec = ipa_mapRow_(r, i + 2, lastCol);
+      rec.los = ipa_los_(r[IPA_COL.DOA], r[IPA_COL.DOD]);
+      var isLive = ipa_isLive_(rec.status);
 
-      if (isLive) activeCount++;
+      counts.all++;
+      if (isLive) counts.active++;
+      else if (rec.status === 'DISCHARGED') counts.discharged++;
 
-      // Facets are built from the whole sheet, not the filtered subset, so the
-      // dropdowns don't collapse to one option after the first selection.
-      if (wb.ward) wardSet[wb.ward] = true;
-      if (consultant) consultSet[consultant] = true;
+      if (rec.consultant) consultSet[rec.consultant] = true;
+      if (rec.ward) wardSet[rec.ward] = true;
 
-      // --- filters ---
       if (status === 'ACTIVE' && !isLive) continue;
-      if (status === 'DISCHARGED' && stat !== 'DISCHARGED') continue;
-
-      if (wardF && wb.ward.toUpperCase() !== wardF) continue;
-      if (consultF && consultant.toUpperCase() !== consultF) continue;
+      if (status === 'DISCHARGED' && rec.status !== 'DISCHARGED') continue;
+      if (consultF && rec.consultant.toUpperCase() !== consultF) continue;
+      if (wardF && rec.ward.toUpperCase() !== wardF) continue;
 
       if (fromD || toD) {
         var doaVal = r[IPA_COL.DOA];
@@ -231,59 +323,61 @@ function getIPLedgerPage(query) {
       }
 
       if (search) {
-        var hay = (ipa_str_(r[IPA_COL.IP]) + ' ' +
-                   ipa_str_(r[IPA_COL.PATIENT_ID]) + ' ' +
-                   ipa_str_(r[IPA_COL.NAME])).toLowerCase();
+        var hay = (rec.ipNumber + ' ' + rec.patientId + ' ' + rec.patientName + ' ' +
+                   rec.consultant + ' ' + rec.diagnosis).toLowerCase();
         if (hay.indexOf(search) === -1) continue;
       }
 
-      matched.push({
-        rowIndex:    i + 2,
-        ipNumber:    ipa_str_(r[IPA_COL.IP]),
-        patientId:   ipa_pid_(r[IPA_COL.PATIENT_ID]),
-        patientName: ipa_str_(r[IPA_COL.NAME]),
-        ageSex:      ipa_str_(r[IPA_COL.AGE_SEX]),
-        doa:         ipa_fmt_(r[IPA_COL.DOA], 'dd MMM yyyy'),
-        toa:         ipa_fmt_(r[IPA_COL.TOA], 'hh:mm a'),
-        type:        ipa_str_(r[IPA_COL.TYPE]),
-        ward:        wb.ward,
-        bed:         wb.bed,
-        dataWarning: wb.repaired ? 'Ward/Bed columns disagree on this row.' : '',
-        consultant:  consultant,
-        diagnosis:   ipa_str_(r[IPA_COL.DIAGNOSIS]),
-        status:      stat,
-        dod:         lastCol > IPA_COL.DOD ? ipa_fmt_(r[IPA_COL.DOD], 'dd MMM yyyy') : ''
-      });
+      out.push(rec);
     }
 
-    matched.reverse(); // newest first
+    out.reverse(); // newest first
 
-    var total = matched.length;
-    var totalPages = Math.ceil(total / pageSize) || 0;
-    if (page > totalPages && totalPages > 0) page = totalPages;
-    var start = (page - 1) * pageSize;
+    var total = out.length;
+    var capped = total > CAP;
+    if (capped) out = out.slice(0, CAP);
 
     return {
       success: true,
       message: total + ' record(s) matched.',
-      data: matched.slice(start, start + pageSize),
-      page: page,
-      pageSize: pageSize,
-      total: total,
-      totalPages: totalPages,
-      activeCount: activeCount,
+      data: out, total: total, capped: capped, cap: CAP,
       facets: {
-        wards: Object.keys(wardSet).sort(),
-        consultants: Object.keys(consultSet).sort()
-      }
+        consultants: Object.keys(consultSet).sort(),
+        wards: Object.keys(wardSet).sort()
+      },
+      counts: counts
     };
 
   } catch (e) {
-    return {
-      success: false, message: 'Ledger query failed: ' + e.message, data: [],
-      page: 1, pageSize: 25, total: 0, totalPages: 0, activeCount: 0,
-      facets: { wards: [], consultants: [] }
-    };
+    return { success: false, message: 'History query failed: ' + e.message, data: [], total: 0,
+             capped: false, cap: CAP, facets: { consultants: [], wards: [] },
+             counts: { all: 0, active: 0, discharged: 0 } };
+  }
+}
+
+/** Full record for the archive drill-down. */
+function getAdmissionDetail(ipNumber) {
+  try {
+    var ip = ipa_str_(ipNumber);
+    if (!ip) return { success: false, message: 'IP Number is required.' };
+
+    var sheet = ipa_ss_().getSheetByName(IPA_CFG.SHEET);
+    if (!sheet) return { success: false, message: 'Ledger not found.' };
+
+    var lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+    if (lastRow < 2) return { success: false, message: 'Admission ' + ip + ' not found.' };
+
+    var rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (ipa_str_(rows[i][IPA_COL.IP]) !== ip) continue;
+      var rec = ipa_mapRow_(rows[i], i + 2, lastCol);
+      rec.los = ipa_los_(rows[i][IPA_COL.DOA], rows[i][IPA_COL.DOD]);
+      return { success: true, message: 'Found.', data: rec };
+    }
+    return { success: false, message: 'Admission ' + ip + ' not found.' };
+
+  } catch (e) {
+    return { success: false, message: 'Detail lookup failed: ' + e.message };
   }
 }
 
