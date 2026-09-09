@@ -1,15 +1,20 @@
 <div id="tab-admin-reg" class="page-section d-none">
-  <div class="d-flex align-items-center gap-2 mb-3 mt-4">
-    <button class="btn btn-sm btn-outline-secondary label-bright" onclick="switchTab('workspace-patients')"><i class="fa-solid fa-arrow-left"></i></button>
+  <div class="d-flex align-items-center gap-3 mb-4 mt-4">
+    <button class="btn btn-sm btn-outline-secondary label-bright rounded-circle px-2 py-1" onclick="switchTab('workspace-patients')" title="Back">
+      <i class="fa-solid fa-arrow-left"></i>
+    </button>
     <h3 class="fw-bold m-0 text-white">Register Patient</h3>
   </div>
   
-  <div class="card p-4" style="max-width: 1000px;">
+  <div class="card p-4 bg-dark-subtle border-secondary shadow-sm" style="max-width: 1000px; border-radius: 12px;">
     
-    <div class="row g-2 mb-3">
+    <!-- Section: Personal Information -->
+    <h6 class="text-uppercase text-muted fw-bold mb-3" style="letter-spacing: 1px; font-size: 0.8rem;">Personal Information</h6>
+    <div class="row g-3 mb-4">
       <div class="col-md-3">
-        <select id="reg-salutation" class="form-select text-white-force">
-          <option value="" disabled selected>Salutation</option>
+        <label class="form-label small text-muted mb-1">Salutation</label>
+        <select id="reg-salutation" class="form-select text-white-force bg-dark border-secondary">
+          <option value="" disabled selected>Select...</option>
           <option value="Mr.">Mr.</option>
           <option value="Mrs.">Mrs.</option>
           <option value="Ms.">Ms.</option>
@@ -18,32 +23,32 @@
         </select>
       </div>
       <div class="col-md-9">
-        <input type="text" id="reg-name" class="form-control text-white-force" placeholder="Full Name">
+        <label class="form-label small text-muted mb-1">Full Name <span class="text-danger">*</span></label>
+        <input type="text" id="reg-name" class="form-control text-white-force bg-dark border-secondary" placeholder="e.g., Jane Doe">
       </div>
-    </div>
-
-    <div class="row g-2 mb-3">
+      
       <div class="col-md-4">
-        <label class="small mb-1 text-muted">Date of Birth</label>
-        <input type="date" id="reg-dob" class="form-control text-white-force" onchange="calculateAge()">
+        <label class="form-label small text-muted mb-1">Date of Birth <span class="text-danger">*</span></label>
+        <input type="date" id="reg-dob" class="form-control text-white-force bg-dark border-secondary" onchange="calculateAge()">
       </div>
-      <div class="col-md-4 align-self-end">
-        <input type="number" id="reg-age" class="form-control text-white-force" placeholder="Age (Auto-calculated)" readonly>
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">Age</label>
+        <input type="number" id="reg-age" class="form-control text-white-force bg-dark border-secondary" placeholder="Auto-calculated" readonly>
       </div>
-      <div class="col-md-4 align-self-end">
-        <select id="reg-gender" class="form-select text-white-force">
-          <option value="" disabled selected>Gender</option>
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">Gender</label>
+        <select id="reg-gender" class="form-select text-white-force bg-dark border-secondary">
+          <option value="" disabled selected>Select...</option>
           <option value="Male">Male</option>
           <option value="Female">Female</option>
           <option value="Other">Other</option>
         </select>
       </div>
-    </div>
 
-    <div class="row g-2 mb-3">
       <div class="col-md-4">
-        <select id="reg-marital" class="form-select text-white-force">
-          <option value="" disabled selected>Marital Status</option>
+        <label class="form-label small text-muted mb-1">Marital Status</label>
+        <select id="reg-marital" class="form-select text-white-force bg-dark border-secondary">
+          <option value="" disabled selected>Select...</option>
           <option value="Single">Single</option>
           <option value="Married">Married</option>
           <option value="Divorced">Divorced</option>
@@ -51,84 +56,100 @@
         </select>
       </div>
       <div class="col-md-4">
-        <select id="reg-blood" class="form-select text-white-force">
-          <option value="" disabled selected>Blood Group</option>
-          <option value="A+">A+</option>
-          <option value="A-">A-</option>
-          <option value="B+">B+</option>
-          <option value="B-">B-</option>
-          <option value="O+">O+</option>
-          <option value="O-">O-</option>
-          <option value="AB+">AB+</option>
-          <option value="AB-">AB-</option>
+        <label class="form-label small text-muted mb-1">Blood Group</label>
+        <select id="reg-blood" class="form-select text-white-force bg-dark border-secondary">
+          <option value="" disabled selected>Select...</option>
+          <option value="A+">A+</option><option value="A-">A-</option>
+          <option value="B+">B+</option><option value="B-">B-</option>
+          <option value="O+">O+</option><option value="O-">O-</option>
+          <option value="AB+">AB+</option><option value="AB-">AB-</option>
         </select>
       </div>
       <div class="col-md-4">
-        <input type="text" id="reg-occupation" class="form-control text-white-force" placeholder="Occupation">
+        <label class="form-label small text-muted mb-1">Occupation</label>
+        <input type="text" id="reg-occupation" class="form-control text-white-force bg-dark border-secondary" placeholder="e.g., Software Engineer">
       </div>
     </div>
 
-    <div class="row g-2 mb-3">
+    <!-- Section: Contact Details -->
+    <hr class="border-secondary mb-4">
+    <h6 class="text-uppercase text-muted fw-bold mb-3" style="letter-spacing: 1px; font-size: 0.8rem;">Contact Details</h6>
+    <div class="row g-3 mb-4">
       <div class="col-md-6">
-        <input type="text" id="reg-education" class="form-control text-white-force" placeholder="Educational Qualification">
+        <label class="form-label small text-muted mb-1">Mobile Number <span class="text-danger">*</span></label>
+        <input type="tel" id="reg-mobile" class="form-control text-white-force bg-dark border-secondary" placeholder="Primary contact" oninput="syncWhatsApp()">
       </div>
       <div class="col-md-6">
-        <input type="email" id="reg-email" class="form-control text-white-force" placeholder="Email Address">
+        <label class="form-label small text-muted mb-1">WhatsApp Number</label>
+        <input type="tel" id="reg-whatsapp" class="form-control text-white-force bg-dark border-secondary" placeholder="For notifications">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small text-muted mb-1">Email Address</label>
+        <input type="email" id="reg-email" class="form-control text-white-force bg-dark border-secondary" placeholder="patient@example.com">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small text-muted mb-1">Educational Qualification</label>
+        <input type="text" id="reg-education" class="form-control text-white-force bg-dark border-secondary" placeholder="e.g., BSc, PhD">
+      </div>
+      <div class="col-12">
+        <label class="form-label small text-muted mb-1">Residential Address</label>
+        <textarea id="reg-address" class="form-control text-white-force bg-dark border-secondary" placeholder="Full street address..." rows="2"></textarea>
       </div>
     </div>
 
-    <div class="row g-2 mb-3">
-      <div class="col-md-6">
-        <input type="tel" id="reg-mobile" class="form-control text-white-force" placeholder="Mobile Number (Primary)" oninput="syncWhatsApp()">
-      </div>
-      <div class="col-md-6">
-        <input type="tel" id="reg-whatsapp" class="form-control text-white-force" placeholder="WhatsApp Number">
-      </div>
-    </div>
-
-    <div class="row g-2 mb-3">
+    <!-- Section: Emergency & Family -->
+    <hr class="border-secondary mb-4">
+    <h6 class="text-uppercase text-muted fw-bold mb-3" style="letter-spacing: 1px; font-size: 0.8rem;">Emergency & Family</h6>
+    <div class="row g-3 mb-4">
       <div class="col-md-4">
-        <select id="reg-relation-type" class="form-select text-white-force">
-          <option value="" disabled selected>Relation</option>
-          <option value="Father">Father Name</option>
-          <option value="Mother">Mother Name</option>
-          <option value="Spouse">Spouse Name</option>
-          <option value="Guardian">Guardian Name (For Children)</option>
+        <label class="form-label small text-muted mb-1">Relation Type</label>
+        <select id="reg-relation-type" class="form-select text-white-force bg-dark border-secondary">
+          <option value="" disabled selected>Select...</option>
+          <option value="Father">Father</option>
+          <option value="Mother">Mother</option>
+          <option value="Spouse">Spouse</option>
+          <option value="Guardian">Guardian</option>
         </select>
       </div>
       <div class="col-md-8">
-        <input type="text" id="reg-relation-name" class="form-control text-white-force" placeholder="Name of Relative/Guardian">
+        <label class="form-label small text-muted mb-1">Name of Relative/Guardian</label>
+        <input type="text" id="reg-relation-name" class="form-control text-white-force bg-dark border-secondary" placeholder="Relative's full name">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small text-muted mb-1">Emergency Contact Person</label>
+        <input type="text" id="reg-emergency-name" class="form-control text-white-force bg-dark border-secondary" placeholder="Who to call in emergency">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small text-muted mb-1">Emergency Contact Number</label>
+        <input type="tel" id="reg-emergency-number" class="form-control text-white-force bg-dark border-secondary" placeholder="Emergency phone">
       </div>
     </div>
 
-    <div class="row g-2 mb-3">
+    <!-- Section: Medical & Referral -->
+    <hr class="border-secondary mb-4">
+    <h6 class="text-uppercase text-muted fw-bold mb-3" style="letter-spacing: 1px; font-size: 0.8rem;">Medical & Referral</h6>
+    <div class="row g-3 mb-4">
       <div class="col-md-6">
-        <input type="text" id="reg-emergency-name" class="form-control text-white-force" placeholder="Emergency Contact Person">
+        <label class="form-label small text-muted mb-1">Referred By</label>
+        <input type="text" id="reg-referred" class="form-control text-white-force bg-dark border-secondary" placeholder="Doctor or clinic name">
       </div>
       <div class="col-md-6">
-        <input type="tel" id="reg-emergency-number" class="form-control text-white-force" placeholder="Emergency Contact Number">
-      </div>
-    </div>
-
-    <div class="mb-3">
-      <textarea id="reg-address" class="form-control text-white-force" placeholder="Residential Address" rows="2"></textarea>
-    </div>
-
-    <div class="row g-2 mb-4">
-      <div class="col-md-6">
-        <input type="text" id="reg-referred" class="form-control text-white-force" placeholder="Referred By (If any)">
-      </div>
-      <div class="col-md-6">
-        <input type="text" id="reg-comorb" class="form-control text-white-force" placeholder="Conditions (e.g., DM, HTN)">
+        <label class="form-label small text-muted mb-1">Known Conditions / Co-morbidities</label>
+        <input type="text" id="reg-comorb" class="form-control text-white-force bg-dark border-secondary" placeholder="e.g., DM, HTN, Asthma">
       </div>
     </div>
 
-    <button id="btn-admin-reg" class="btn text-white w-100 fw-bold py-2" style="background-color: var(--accent-purple);" onclick="adminRegisterPatient()">Create Patient ID</button>
+    <!-- Status Message Area -->
+    <div id="reg-status-msg" class="mb-3 small fw-bold d-none"></div>
+
+    <button id="btn-admin-reg" class="btn text-white w-100 fw-bold py-3 mt-2" style="background-color: var(--accent-purple); border-radius: 8px;" onclick="adminRegisterPatient()">
+      <span id="btn-text">Create Patient ID</span>
+      <i id="btn-spinner" class="fa-solid fa-circle-notch fa-spin d-none ms-2"></i>
+    </button>
   </div>
 </div>
 
 <script>
-  // Auto-calculate Age based on Date of Birth
   function calculateAge() {
     const dobInput = document.getElementById('reg-dob').value;
     if (dobInput) {
@@ -143,7 +164,6 @@
     }
   }
 
-  // Optional: Copies Mobile to WhatsApp automatically to save typing time
   function syncWhatsApp() {
     const mob = document.getElementById('reg-mobile').value;
     const wa = document.getElementById('reg-whatsapp');
@@ -152,51 +172,77 @@
     }
   }
 
+  function showStatus(message, isError = false) {
+    const statusDiv = document.getElementById('reg-status-msg');
+    statusDiv.className = `mb-3 small fw-bold p-2 rounded ${isError ? 'bg-danger text-white' : 'bg-success text-white'}`;
+    statusDiv.innerText = message;
+    statusDiv.classList.remove('d-none');
+    
+    // Auto hide after 5 seconds
+    setTimeout(() => {
+        statusDiv.classList.add('d-none');
+    }, 5000);
+  }
+
   function adminRegisterPatient() {
     const btn = document.getElementById('btn-admin-reg');
+    const btnText = document.getElementById('btn-text');
+    const btnSpinner = document.getElementById('btn-spinner');
     
-    // Collecting all fields into the payload
     const data = {
       salutation: document.getElementById('reg-salutation').value,
-      name: document.getElementById('reg-name').value,
+      name: document.getElementById('reg-name').value.trim(),
       dob: document.getElementById('reg-dob').value,
       age: document.getElementById('reg-age').value,
       gender: document.getElementById('reg-gender').value,
       maritalStatus: document.getElementById('reg-marital').value,
       bloodGroup: document.getElementById('reg-blood').value,
-      occupation: document.getElementById('reg-occupation').value,
-      education: document.getElementById('reg-education').value,
-      mobile: document.getElementById('reg-mobile').value,
-      whatsapp: document.getElementById('reg-whatsapp').value,
-      email: document.getElementById('reg-email').value,
-      address: document.getElementById('reg-address').value,
+      occupation: document.getElementById('reg-occupation').value.trim(),
+      education: document.getElementById('reg-education').value.trim(),
+      mobile: document.getElementById('reg-mobile').value.trim(),
+      whatsapp: document.getElementById('reg-whatsapp').value.trim(),
+      email: document.getElementById('reg-email').value.trim(),
+      address: document.getElementById('reg-address').value.trim(),
       relationType: document.getElementById('reg-relation-type').value,
-      relationName: document.getElementById('reg-relation-name').value,
-      emergencyName: document.getElementById('reg-emergency-name').value,
-      emergencyNumber: document.getElementById('reg-emergency-number').value,
-      referredBy: document.getElementById('reg-referred').value,
-      comorb: document.getElementById('reg-comorb').value
+      relationName: document.getElementById('reg-relation-name').value.trim(),
+      emergencyName: document.getElementById('reg-emergency-name').value.trim(),
+      emergencyNumber: document.getElementById('reg-emergency-number').value.trim(),
+      referredBy: document.getElementById('reg-referred').value.trim(),
+      comorb: document.getElementById('reg-comorb').value.trim()
     };
     
+    // Frontend Validation
     if (!data.name || !data.dob || !data.mobile) { 
-      alert("Name, Date of Birth, and Mobile Number are required."); 
+      showStatus("Name, Date of Birth, and Mobile Number are required fields.", true);
       return; 
     }
     
-    btn.innerText = "Generating ID...";
+    // Loading State
+    btnText.innerText = "Generating ID...";
+    btnSpinner.classList.remove('d-none');
     btn.disabled = true;
 
+    // Google Apps Script Call
     google.script.run.withSuccessHandler(res => {
-      btn.innerText = "Create Patient ID"; 
+      // Reset Button State
+      btnText.innerText = "Create Patient ID"; 
+      btnSpinner.classList.add('d-none');
       btn.disabled = false;
-      alert(res.message);
       
       if (res.success) { 
-        // Clears all inputs and select fields natively
+        showStatus(res.message || "Patient successfully registered!");
+        // Clear all inputs
         document.querySelectorAll('#tab-admin-reg input, #tab-admin-reg textarea, #tab-admin-reg select').forEach(el => {
           if(el.type !== 'button') el.value = '';
         });
+      } else {
+        showStatus(res.message || "Registration failed. Please try again.", true);
       }
-    }).registerPatient(data); // Calls backend Google Apps Script function
+    }).withFailureHandler(err => {
+      btnText.innerText = "Create Patient ID"; 
+      btnSpinner.classList.add('d-none');
+      btn.disabled = false;
+      showStatus("An error occurred connecting to the server.", true);
+    }).registerPatient(data); 
   }
 </script>

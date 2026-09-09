@@ -116,15 +116,15 @@ function saveOPEncounter(payload) {
     );
     if (labOrders.length > 0) {
       try {
-        const testNameList = labOrders.map(l => l.testName).filter(Boolean);
+        const testIdList = labOrders.map(l => l.testId).filter(Boolean);
         const hasStat = labOrders.some(l => (l.priority || '').toUpperCase() === 'STAT');
-        createLabRequest({
-          patientId:    payload.patientId,
-          patientName:  '',
-          sourceModule: 'OPD',
-          visitId:      encounterId,
-          testNames:    testNameList,
-          priority:     hasStat ? 'STAT' : 'ROUTINE',
+        createOPDLabOrder({
+          patientId:   payload.patientId,
+          encounterId: encounterId,
+          doctorId:    payload.doctorId || '',
+          doctorName:  payload.doctorName || '',
+          testIds:     testIdList,
+          priority:    hasStat ? 'STAT' : 'ROUTINE',
           clinicalNote: payload.diagnosis || ''
         });
       } catch (labErr) {

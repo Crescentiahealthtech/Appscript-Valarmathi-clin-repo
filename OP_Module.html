@@ -149,47 +149,31 @@
   <div id="op-safety-bar" class="no-print"></div>
 
   <!-- ==================== ASSIST PANEL (collapsed) ==================== -->
-  <div id="op-assist-panel" class="op-assist d-none no-print">
+    <div id="op-assist-panel" class="op-assist d-none no-print">
 
-    <div class="op-assist-sec">
-      <div class="op-assist-head">Previous visit</div>
-      <div id="op-recall-slot" class="label-bright small" style="opacity:.6;">Fetch a patient to see their last consultation.</div>
+    <!-- One search box replaces three always-open lists -->
+    <div class="position-relative mb-2">
+      <input type="text" id="op-assist-search" class="hd-input" autocomplete="off"
+             placeholder="Search templates, bundles and investigations..."
+             oninput="renderAssistSearch()">
+      <div id="op-assist-results" class="autocomplete-items d-none"></div>
     </div>
 
-    <div class="op-assist-sec">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <div class="op-assist-head m-0">Consultation templates</div>
-        <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveTemplateModal()"><i class="fa-solid fa-plus"></i> Save current as template</button>
-      </div>
-      <div id="op-template-strip" class="op-suggest-strip"><span class="label-bright small" style="opacity:.5;">Loading...</span></div>
-    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center" id="op-assist-recent"></div>
 
-    <div class="op-assist-sec">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <div class="op-assist-head m-0">Medicine bundles &mdash; click <span class="text-success">+</span> to add</div>
-        <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveBundleModal()"><i class="fa-solid fa-plus"></i> Save current Rx as bundle</button>
-      </div>
-      <div id="op-bundle-strip" class="op-suggest-strip"><span class="label-bright small" style="opacity:.5;">Loading...</span></div>
-    </div>
+    <div id="op-recall-slot" class="mt-2"></div>
 
-    <div class="op-assist-sec">
-      <div class="op-assist-head">Based on your past prescribing for this diagnosis</div>
-          <div class="op-assist-sec" id="op-assist-dx-section">
+    <div id="op-assist-dx-section" class="op-assist-sec d-none">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="op-assist-head m-0" id="op-assist-dx-head">Treatment assist</div>
         <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:0.7rem;" id="btn-add-selected" onclick="addSelectedAssist()">Add selected</button>
       </div>
-      <div id="op-assist-body">
-        <span class="label-bright small" style="opacity:.5;">Enter a diagnosis to see suggestions.</span>
-      </div>
-    </div>
+      <div id="op-assist-body"></div>
     </div>
 
-    <div class="op-assist-sec">
-      <div class="op-assist-head">Tip</div>
-      <div class="label-bright small" style="opacity:.7;">
-        Type <code style="color:#7dd3fc;">/</code> in a complaint, history or advice field to search templates by keyword &mdash; including alternative wordings.
-      </div>
+    <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top border-secondary">
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveTemplateModal()">Save as template</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveBundleModal()">Save Rx as bundle</button>
     </div>
   </div>
 
@@ -203,7 +187,7 @@
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">Chief Complaints</label>
             <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="addOPDynamicRow('op-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
           </div>
-          <div class="table-responsive"><table class="table table-borderless table-tight m-0"><tbody id="op-cc-tbody"></tbody></table></div>
+          <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="op-cc-tbody"></tbody></table></div>
           <div id="op-workup-hint" class="mt-2"></div>
         </div>
         <div class="border-top border-secondary pt-3">
@@ -211,7 +195,7 @@
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">History / Comorbidities</label>
             <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="addOPDynamicRow('op-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
           </div>
-          <div class="table-responsive"><table class="table table-borderless table-tight m-0"><tbody id="op-hx-tbody"></tbody></table></div>
+          <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="op-hx-tbody"></tbody></table></div>
         </div>
       </div>
 
@@ -533,14 +517,24 @@
         <h6 class="modal-title text-info m-0"><i class="fa-solid fa-flask"></i> Order Current Labs</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
+      
+      <!-- UPDATED MODAL BODY START -->
       <div class="modal-body p-3">
-        <div class="mb-2 text-info fw-bold small"><i class="fa-solid fa-flask"></i> Our lab &mdash; routed for processing</div>
-        <div class="row g-2" id="op-lab-internal-list"></div>
-        <hr class="border-secondary my-3">
-        <div class="mb-2 text-secondary fw-bold small">External lab &mdash; printed only, not routed</div>
-        <div class="row g-2" id="op-lab-external-list"></div>
-        <div class="col-12 mt-2"><input type="text" class="hd-input" id="op-lab-other" placeholder="Other external investigation..."></div>
+        <input type="text" class="hd-input mb-3" id="op-lab-search" placeholder="Search investigations..." oninput="renderOPLabModal()" autocomplete="off">
+        
+        <div id="op-lab-catalog" style="max-height:50vh; overflow-y:auto;">
+          <div class="text-center text-info py-3">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          </div>
+        </div>
+        
+        <div class="mt-2 pt-2 border-top border-secondary">
+          <label class="hd-label">Not in our catalog (external, printed only)</label>
+          <input type="text" class="hd-input" id="op-lab-other" placeholder="e.g. MRI Brain">
+        </div>
       </div>
+      <!-- UPDATED MODAL BODY END -->
+
       <div class="modal-footer border-secondary py-1">
         <button type="button" class="btn btn-info btn-sm fw-bold text-white" data-bs-dismiss="modal" onclick="compileOPLabs()">Add to Orders</button>
       </div>
@@ -717,7 +711,7 @@ function toggleAssistPanel() {
     p.classList.toggle('d-none', !hidden);
     b.classList.toggle('btn-outline-light', !hidden);
     b.classList.toggle('btn-light', hidden);
-    if (hidden) { renderBundleStrip(); renderTemplateStrip(); }
+    if (hidden) { renderAssistRecent(); }
 }
 
 // ============================================================================
@@ -733,7 +727,7 @@ function loadComposerContext() {
                 applyExamDefaults(opSysDefaults);
             }
             renderAdviceChecklist();
-            renderBundleStrip();
+            renderAssistRecent();
         })
         .withFailureHandler(function (e) { console.error('composer context:', e && e.message); })
         .getComposerContext(window.currentDoctorId || '', window.sessionToken);
@@ -1067,29 +1061,22 @@ function loadConsultTemplates() {
     google.script.run
         .withSuccessHandler(function (res) {
             opConsultTemplates = (res && res.success) ? res.templates : [];
-            renderTemplateStrip();
+            renderAssistRecent();
         })
-        .withFailureHandler(function () { renderTemplateStrip(); })
+        .withFailureHandler(function () { renderAssistRecent(); })
         .listConsultTemplates(window.currentDoctorId || '', window.sessionToken);
 }
 
-function renderTemplateStrip() {
-    const strip = document.getElementById('op-template-strip');
-    if (!strip) return;
-    if (!opConsultTemplates.length) {
-        strip.innerHTML = '<span class="label-bright small" style="opacity:.5;">No templates yet. Fill a consult and save it as one.</span>';
-        return;
-    }
-    strip.innerHTML = opConsultTemplates.map(function (t) {
-        return '<span class="op-chip" onclick="useConsultTemplate(\'' + opEsc(t.templateId) + '\')">' +
-               '<span class="op-chip-add">+</span>' + opEsc(t.name) +
-               '<span class="op-scope-tag op-scope-' + opEsc(t.scope) + '">' + opEsc(t.scope) + '</span></span>';
-    }).join('');
-}
+
 
 function useConsultTemplate(id) {
+    const _tplBusy = document.getElementById('op-assist-recent');
+    if (_tplBusy) _tplBusy.insertAdjacentHTML('afterbegin', '<span class="op-chip" id="tpl-busy"><i class="fa-solid fa-spinner fa-spin"></i> Applying...</span>');
+
     google.script.run
         .withSuccessHandler(function (res) {
+            document.getElementById('tpl-busy')?.remove();
+            
             if (!res || !res.success) { alert((res && res.message) || 'Could not apply template.'); return; }
             const t = res.template;
 
@@ -1127,7 +1114,10 @@ function useConsultTemplate(id) {
             }
             onDiagnosisChanged();
         })
-        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { 
+            document.getElementById('tpl-busy')?.remove();
+            alert('Network error: ' + e.message); 
+        })
         .applyConsultTemplate(id, window.sessionToken);
 }
 
@@ -1171,39 +1161,31 @@ function saveCurrentAsTemplate() {
 // ============================================================================
 // Rx BUNDLES — suggested, added by explicit click
 // ============================================================================
-function renderBundleStrip() {
-    const strip = document.getElementById('op-bundle-strip');
-    if (!strip) return;
-    const list = opComposer.bundles || [];
-    if (!list.length) {
-        strip.innerHTML = '<span class="label-bright small" style="opacity:.5;">No bundles yet. Write an Rx and save it as one.</span>';
-        return;
-    }
-    strip.innerHTML = list.map(function (b, i) {
-        return '<span class="op-chip" onclick="previewBundle(' + i + ')">' +
-               opEsc(b.name) + ' <span class="op-evidence">' + b.itemCount + ' med</span>' +
-               '<span class="op-scope-tag op-scope-' + opEsc(b.scope) + '">' + opEsc(b.scope) + '</span></span>';
-    }).join('') + '<div id="op-bundle-detail" class="w-100 mt-2"></div>';
-}
+
 
 function previewBundle(idx) {
     const b = (opComposer.bundles || [])[idx];
     const box = document.getElementById('op-bundle-detail');
     if (!b || !box) return;
 
-    box.innerHTML = '<div class="op-recall-card">' +
-        '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
-        (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
-        b.items.map(function (it, j) {
-            return '<div class="d-flex justify-content-between align-items-center py-1">' +
-                   '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
-                   ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
-                   '<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.65rem;" ' +
-                   'onclick="addBundleItem(' + idx + ',' + j + ')">+ Add</button></div>';
-        }).join('') +
-        '<div class="mt-2 text-end"><button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
-        'onclick="addWholeBundle(' + idx + ')">+ Add all ' + b.items.length + '</button></div>' +
-        '</div>';
+    box.insertAdjacentHTML('afterbegin', '<span class="op-chip" id="tpl-busy"><i class="fa-solid fa-spinner fa-spin"></i> Previewing...</span>');
+
+    setTimeout(() => {
+        document.getElementById('tpl-busy')?.remove();
+        box.innerHTML = '<div class="op-recall-card">' +
+            '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
+            (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
+            b.items.map(function (it, j) {
+                return '<div class="d-flex justify-content-between align-items-center py-1">' +
+                       '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
+                       ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
+                       '<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.65rem;" ' +
+                       'onclick="addBundleItem(' + idx + ',' + j + ')">+ Add</button></div>';
+            }).join('') +
+            '<div class="mt-2 text-end"><button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
+            'onclick="addWholeBundle(' + idx + ')">+ Add all ' + b.items.length + '</button></div>' +
+            '</div>';
+    }, 100);
 }
 
 function addBundleItem(bi, ii) {
@@ -1255,6 +1237,67 @@ function saveCurrentAsBundle() {
 }
 
 // ============================================================================
+// ASSIST — search-first. Nothing is listed until asked for, except the four
+// most-used items. Showing 27 chips at once is not assistance, it's noise.
+// ============================================================================
+
+function renderAssistRecent() {
+    const host = document.getElementById('op-assist-recent');
+    if (!host) return;
+
+    const tpl = (opConsultTemplates || []).slice(0, 2).map(function (t) {
+        return { kind: 'TPL', id: t.templateId, label: t.name };
+    });
+    const bnd = (opComposer.bundles || []).slice(0, 2).map(function (b, i) {
+        return { kind: 'BND', id: String(i), label: b.name + ' \u00b7 ' + b.itemCount };
+    });
+
+    const items = tpl.concat(bnd);
+    host.innerHTML = items.length
+        ? '<span class="op-evidence me-1">Most used:</span>' + items.map(function (it) {
+              return '<span class="op-chip" onclick="assistPick(\'' + it.kind + '\',\'' + opEsc(it.id) + '\')">' +
+                     '<span class="op-chip-add">+</span>' + opEsc(it.label) + '</span>';
+          }).join('')
+        : '<span class="op-evidence">Search above, or save a template from a completed consult.</span>';
+}
+
+function renderAssistSearch() {
+    const q = (document.getElementById('op-assist-search').value || '').toLowerCase().trim();
+    const box = document.getElementById('op-assist-results');
+    if (!q) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+
+    const hits = [];
+    (opConsultTemplates || []).forEach(function (t) {
+        if ((t.name + ' ' + (t.diagnosis || '')).toLowerCase().indexOf(q) === -1) return;
+        hits.push({ kind: 'TPL', id: t.templateId, label: t.name, meta: 'Template' });
+    });
+    (opComposer.bundles || []).forEach(function (b, i) {
+        if ((b.name + ' ' + (b.indication || '')).toLowerCase().indexOf(q) === -1) return;
+        hits.push({ kind: 'BND', id: String(i), label: b.name, meta: b.itemCount + ' medicines' });
+    });
+
+    if (!hits.length) {
+        box.classList.remove('d-none');
+        box.innerHTML = '<div class="label-bright small" style="opacity:.6;">Nothing matches "' + opEsc(q) + '".</div>';
+        return;
+    }
+
+    box.classList.remove('d-none');
+    box.innerHTML = hits.slice(0, 8).map(function (h) {
+        return '<div onmousedown="assistPick(\'' + h.kind + '\',\'' + opEsc(h.id) + '\')">' +
+               '<span>' + opEsc(h.label) + '</span>' +
+               '<small class="op-evidence">' + opEsc(h.meta) + '</small></div>';
+    }).join('');
+}
+
+function assistPick(kind, id) {
+    document.getElementById('op-assist-search').value = '';
+    document.getElementById('op-assist-results').classList.add('d-none');
+    if (kind === 'TPL') useConsultTemplate(id);
+    else previewBundle(parseInt(id, 10));
+}
+
+// ============================================================================
 // DIAGNOSIS → learned drug suggestions
 // ============================================================================
 // ============================================================================
@@ -1263,25 +1306,37 @@ function saveCurrentAsBundle() {
 let opDoctorList = [];
 
 function loadConsultDoctors() {
+    const sel = document.getElementById('op-doctor-select');
+    sel.innerHTML = '<option value="">Loading...</option>';
+
     google.script.run
         .withSuccessHandler(function (res) {
-            if (!res || !res.success) return;
+            if (!res || !res.success) {
+                // Never fail silently here — an empty picker blocks every save.
+                sel.innerHTML = '<option value="">Unavailable</option>';
+                console.error('getDoctorsForPicker:', res);
+                alert('Could not load the doctor list: ' +
+                      ((res && res.message) || 'no response') +
+                      '\n\nsessionToken present: ' + (window.sessionToken ? 'yes' : 'NO'));
+                return;
+            }
             opDoctorList = res.doctors || [];
-            const sel = document.getElementById('op-doctor-select');
-            const ref = document.getElementById('ref-to-doctor');
             const opts = opDoctorList.map(function (d) {
                 return '<option value="' + opEsc(d.doctorId) + '">' + opEsc(d.name) + '</option>';
             }).join('');
 
             sel.innerHTML = '<option value="">Select doctor</option>' + opts;
+            const ref = document.getElementById('ref-to-doctor');
             if (ref) ref.innerHTML = '<option value="">Select doctor</option>' + opts;
 
-            // A doctor logs in as themselves; reception/admin must choose.
             if (res.selfDoctorId) { sel.value = res.selfDoctorId; sel.disabled = res.locked; }
             else if (opDoctorList.length === 1) sel.value = opDoctorList[0].doctorId;
             onConsultDoctorChanged();
         })
-        .withFailureHandler(function () {})
+        .withFailureHandler(function (e) {
+            sel.innerHTML = '<option value="">Unavailable</option>';
+            alert('Network error loading doctors: ' + e.message);
+        })
         .getDoctorsForPicker(window.sessionToken);
 }
 
@@ -1828,69 +1883,62 @@ function applyTaperToRow() {
 // ============================================================================
 // LABS
 // ============================================================================
-function compileOPLabs() {
-    const labNames = [];
-    document.querySelectorAll('.op-lab-chk:checked').forEach(c => labNames.push(c.value));
-    const otherLab = document.getElementById('op-lab-other').value;
-    if (otherLab) labNames.push(otherLab + ' (ext)');
-    document.getElementById('op-active-labs-container').innerHTML =
-        labNames.length ? "Queued for today: " + opEsc(labNames.join(", ")) : "";
-}
+
+let opLabCatalog = { panels: [], tests: [], packages: [] };
 
 function loadOPLabCatalog() {
-    const candidates = ['getOrderableTests', 'getLabCatalog', 'fetchLabTestMaster'];
-    (function tryNext(i) {
-        if (i >= candidates.length) { opLabMaster = { internal: [], external: [] }; renderOPLabModal(); return; }
-        google.script.run
-            .withSuccessHandler(function (res) {
-                const norm = normalizeOPCatalog(res);
-                if (norm.internal.length || norm.external.length) { opLabMaster = norm; renderOPLabModal(); }
-                else tryNext(i + 1);
-            })
-            .withFailureHandler(function () { tryNext(i + 1); })
-            [candidates[i]]();
-    })(0);
-}
-
-function normalizeOPCatalog(res) {
-    const out = { internal: [], external: [] };
-    if (!res) return out;
-    let items = [];
-    if (Array.isArray(res)) items = res;
-    else if (Array.isArray(res.data)) items = res.data;
-    else {
-        if (res.internal) return res;
-        ['tests', 'panels', 'individuals', 'packages'].forEach(function (k) {
-            if (Array.isArray(res[k])) items = items.concat(res[k]);
-        });
-    }
-    items.forEach(function (it) {
-        const name = it.testName || it.name || it.title || it.test || '';
-        if (!name) return;
-        const activeRaw = (it.isActive !== undefined) ? it.isActive : (it.active !== undefined ? it.active : true);
-        const isActive = (activeRaw === true) || ['ACTIVE', 'Y', '1'].indexOf(String(activeRaw).toUpperCase()) !== -1;
-        if (!isActive) return;
-        out.internal.push({ testName: name, department: it.department || it.dept || '', price: it.price || 0, source: 'INTERNAL' });
-    });
-    out.internal.sort(function (a, b) { return a.testName.localeCompare(b.testName); });
-    return out;
+    google.script.run
+        .withSuccessHandler(function (res) {
+            opLabCatalog = (res && res.success) ? res : { panels: [], tests: [], packages: [] };
+            renderOPLabModal();
+        })
+        .withFailureHandler(function () { renderOPLabModal(); })
+        .getOPDOrderableTests();
 }
 
 function renderOPLabModal() {
-    const intC = document.getElementById('op-lab-internal-list');
-    const extC = document.getElementById('op-lab-external-list');
-    if (!intC || !extC) return;
-    intC.innerHTML = ''; extC.innerHTML = '';
-    const mk = function (t, src) {
-        const col = document.createElement('div'); col.className = 'col-6';
-        col.innerHTML = '<div class="form-check">' +
-            '<input class="form-check-input op-lab-chk" type="checkbox" value="' + opEsc(t.testName) + '" data-source="' + src + '">' +
-            '<label class="form-check-label small ' + (src === 'INTERNAL' ? '' : 'text-secondary') + '">' + opEsc(t.testName) + '</label></div>';
-        return col;
+    const host = document.getElementById('op-lab-catalog');
+    if (!host) return;
+    const q = (document.getElementById('op-lab-search')?.value || '').toLowerCase().trim();
+
+    const match = function (t) {
+        if (!q) return true;
+        return (t.testName + ' ' + t.testCode).toLowerCase().indexOf(q) !== -1;
     };
-    (opLabMaster.internal || []).forEach(t => intC.appendChild(mk(t, 'INTERNAL')));
-    (opLabMaster.external || []).forEach(t => extC.appendChild(mk(t, 'EXTERNAL')));
-    if (!opLabMaster.internal.length) intC.innerHTML = '<div class="col-12 text-muted small">No tests loaded from the Test Catalog yet.</div>';
+
+    const section = function (label, list, icon) {
+        const items = list.filter(match);
+        if (!items.length) return '';
+        return '<div class="op-assist-head mt-2 mb-1">' + icon + ' ' + label + '</div>' +
+            '<div class="row g-1">' + items.map(function (t) {
+                return '<div class="col-6"><div class="form-check">' +
+                    '<input class="form-check-input op-lab-chk" type="checkbox" ' +
+                    'value="' + opEsc(t.testId) + '" data-name="' + opEsc(t.testName) + '">' +
+                    '<label class="form-check-label small text-white">' + opEsc(t.testName) +
+                    (t.requiresConsent ? ' <span class="text-warning" title="Requires patient consent">&#9888;</span>' : '') +
+                    '</label></div></div>';
+            }).join('') + '</div>';
+    };
+
+    let html = '';
+    html += section('Panels', opLabCatalog.panels || [], '&#129516;');
+    html += section('Tests', opLabCatalog.tests || [], '&#128300;');
+    html += section('Packages', opLabCatalog.packages || [], '&#128230;');
+
+    host.innerHTML = html || '<div class="label-bright small py-3 text-center" style="opacity:.6;">' +
+        (q ? 'No investigation matches "' + opEsc(q) + '".'
+           : 'Catalog is empty. Add tests under Labs &rsaquo; Test Catalog.') + '</div>';
+}
+
+function compileOPLabs() {
+    const names = [];
+    document.querySelectorAll('.op-lab-chk:checked').forEach(function (c) {
+        names.push(c.dataset.name);
+    });
+    const other = document.getElementById('op-lab-other').value;
+    if (other) names.push(other + ' (external)');
+    document.getElementById('op-active-labs-container').innerHTML =
+        names.length ? 'Ordered: ' + opEsc(names.join(', ')) : '';
 }
 
 // ============================================================================
@@ -2034,10 +2082,11 @@ function buildOPFlatPayload() {
 
     const labs = [];
     document.querySelectorAll('.op-lab-chk:checked').forEach(function (chk) {
-        labs.push({ testName: chk.value, priority: "Routine", type: "Order", source: chk.dataset.source || 'INTERNAL' });
+        labs.push({ testId: chk.value, testName: chk.dataset.name,
+                    priority: "Routine", type: "Order", source: 'INTERNAL' });
     });
     const otherLab = document.getElementById('op-lab-other')?.value;
-    if (otherLab) labs.push({ testName: otherLab, priority: "Routine", type: "Order", source: "EXTERNAL" });
+    if (otherLab) labs.push({ testId: '', testName: otherLab, priority: "Routine", type: "Order", source: "EXTERNAL" });
 
     document.querySelectorAll('#op-lab-results-tbody tr').forEach(function (row) {
         const t = row.querySelector('.op-lab-res-name').value;
@@ -2250,7 +2299,8 @@ function dispatchOPEmail() {
 // Close open dropdowns on outside click
 document.addEventListener('click', function (e) {
     if (!e.target.closest('.op-rx-name') && !e.target.closest('.op-array-text') &&
-        !e.target.closest('#op-advice-free') && !e.target.closest('.autocomplete-items')) {
+        !e.target.closest('#op-advice-free') && !e.target.closest('#op-assist-search') &&
+        !e.target.closest('#op-assist-results') && !e.target.closest('.autocomplete-items')) {
         document.querySelectorAll('#emr-workspace-op-consult .autocomplete-items').forEach(d => d.classList.add('d-none'));
     }
 });

@@ -132,7 +132,7 @@ function labAudit(action, entityType, entityId, oldVal, newVal) {
 
 /** Order-level status machine. */
 var LAB_ORDER_STATUS_OK = {
-  PENDING:            ['BILLED','CANCELLED'],
+  PENDING:            ['BILLED','SAMPLE_COLLECTED','CANCELLED'],
   BILLED:             ['SAMPLE_COLLECTED','CANCELLED'],
   RECOLLECT:          ['SAMPLE_COLLECTED','CANCELLED'],
   SAMPLE_COLLECTED:   ['IN_PROCESS','RECOLLECT'],

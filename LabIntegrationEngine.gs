@@ -634,7 +634,9 @@ function generateLabBill(d) {
     const od = getLabOrderDetail(d.orderId);
     if (!od.success) return { success: false, message: od.message };
     const order = od.order;
-    if (order.status !== 'PENDING') return { success: false, message: 'Order already billed (status: '+order.status+').' };
+    if (['PENDING','SAMPLE_COLLECTED'].indexOf(order.status) === -1) {
+      return { success: false, message: 'Order already billed (status: '+order.status+').' };
+    }
 
     const catalog = _loadCatalogById();
     let gross = 0;
@@ -718,7 +720,7 @@ function generateLabBill(d) {
     // 👆 END NEW HOOK 👆
 
     labAudit('BILL_GENERATED','BILL',billId,null,{orderId:order.orderId,net:net,category:category});
-    advanceOrderStatus(order.orderId,'BILLED');
+    if (order.status === 'PENDING') advanceOrderStatus(order.orderId,'BILLED');
     SpreadsheetApp.flush();
 
     return { success:true, message: ip?('₹'+net.toFixed(2)+' posted to IP account.'):(billId+' · '+receipt+' · ₹'+net.toFixed(2)+' '+payStatus+'.'), billId:billId, receiptNumber:receipt, netAmount:net, category:category };
@@ -763,7 +765,7 @@ function collectLabSample(d) {
     const od = getLabOrderDetail(d.orderId);
     if(!od.success) return {success:false,message:od.message};
     const order = od.order;
-    if(['BILLED','RECOLLECT'].indexOf(order.status)===-1) return {success:false,message:'Order must be billed before collection (status: '+order.status+').'};
+    if(['PENDING','BILLED','RECOLLECT'].indexOf(order.status)===-1) return {success:false,message:'Cannot collect at status: '+order.status+'.'};
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.SAMPLES);
