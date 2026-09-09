@@ -1,18 +1,33 @@
+<style>
+  .doc-chip { font-size: .7rem; padding: 2px 8px; border-radius: 10px;
+              border: 1px solid var(--border-color, #334155);
+              background: rgba(148,163,184,.12); white-space: nowrap; }
+</style>
 
 <div id="tab-admin-appt" class="page-section d-none">
   <div id="daily-ledger-container">
+
     <div class="d-flex justify-content-between align-items-center mb-3 mt-4 me-md-5">
       <div class="d-flex align-items-center gap-2">
         <button class="btn btn-sm btn-outline-secondary label-bright" onclick="switchTab('workspace-appointments')"><i class="fa-solid fa-arrow-left"></i></button>
         <h3 class="fw-bold m-0 text-white">Daily Ledger</h3>
       </div>
-      <button class="btn btn-sm btn-outline-success shadow-sm" onclick="openAdminBookingModal('','')"><i class="fa-solid fa-plus"></i> Manual Booking</button>
-    </div>
-    <div class="card p-3 mb-3 d-flex flex-row align-items-center justify-content-between">
       <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-info shadow-sm" onclick="openWorkingHours()"><i class="fa-solid fa-clock"></i> Hours</button>
+        <button class="btn btn-sm btn-outline-success shadow-sm" onclick="openAdminBookingModal('','')"><i class="fa-solid fa-plus"></i> Manual Booking</button>
+      </div>
+    </div>
+
+    <div class="card p-3 mb-3 d-flex flex-row flex-wrap align-items-center justify-content-between gap-2">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
         <button class="btn btn-sm btn-outline-secondary label-bright" onclick="changeLedgerDate(-1)"><i class="fa-solid fa-chevron-left"></i> Prev</button>
         <input type="date" id="admin-ledger-date" class="form-control form-control-sm text-white-force" style="width: 140px;" onchange="loadAdminLedger()">
         <button class="btn btn-sm btn-outline-secondary label-bright" onclick="changeLedgerDate(1)">Next <i class="fa-solid fa-chevron-right"></i></button>
+
+        <span class="label-bright small ms-2 fw-bold">Doctor</span>
+        <select id="ledger-doctor-filter" class="form-select form-select-sm text-white-force" style="width: 215px;" onchange="loadAdminLedger()">
+          <option value="">All doctors</option>
+        </select>
       </div>
       <div class="d-flex gap-3 small fw-bold">
         <span class="text-info">Booked: <span id="stat-booked">0</span></span>
@@ -20,23 +35,25 @@
         <span class="text-success">Completed: <span id="stat-completed">0</span></span>
       </div>
     </div>
+
     <div class="card overflow-hidden">
       <div class="table-responsive">
         <table class="table table-dark table-ledger mb-0">
           <thead>
             <tr>
-              <th style="width: 10%;">Time</th>
-              <th style="width: 8%;">Token</th>
-              <th style="width: 12%;">Patient ID</th>
-              <th style="width: 25%;">Name</th>
-              <th style="width: 15%;">Age/Sex</th>
-              <th style="width: 15%;">Purpose</th>
-              <th style="width: 10%;">Status</th>
+              <th style="width: 9%;">Time</th>
+              <th style="width: 7%;">Token</th>
+              <th style="width: 11%;">Patient ID</th>
+              <th style="width: 20%;">Name</th>
+              <th style="width: 9%;">Age/Sex</th>
+              <th style="width: 16%;">Doctor</th>
+              <th style="width: 12%;">Purpose</th>
+              <th style="width: 11%;">Status</th>
               <th style="width: 5%; text-align: center;">Action</th>
             </tr>
           </thead>
           <tbody id="ledger-table-body">
-            <tr><td colspan="8" class="text-center label-bright py-4">Loading Schedule...</td></tr>
+            <tr><td colspan="9" class="text-center label-bright py-4">Loading schedule...</td></tr>
           </tbody>
         </table>
       </div>
@@ -45,196 +62,164 @@
 </div>
 
 <script>
-  const CLINIC_SLOTS = ["10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM", "11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM", "12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM", "05:00 PM", "05:15 PM", "05:30 PM", "05:45 PM", "06:00 PM", "06:15 PM", "06:30 PM", "06:45 PM", "07:00 PM", "07:15 PM", "07:30 PM", "07:45 PM", "08:00 PM", "08:15 PM", "08:30 PM", "08:45 PM"];
-  
-  let selectedTimeSlot = "";
+// ============================================================================
+// DOCTOR-SCOPED APPOINTMENTS LEDGER  (Phase 3)
+// Backend: fetchDailyLedgerScoped / updateAppointmentStatus
+// The booking modal lives in Modals.html — this file never renders it.
+// Shared helpers (loadDoctorContext, crescDoctorOptions, crescEsc) come from Auth.html.
+// ============================================================================
 
-  function initAdminLedger() {
-    document.getElementById('admin-ledger-date').value = new Date().toISOString().split('T')[0];
+function apptToken(purpose, counters) {
+  const isEmergency = String(purpose || '').toLowerCase().indexOf('emerg') !== -1;
+  const c = isEmergency ? 'E' : 'A';
+  return c + String(counters[c]++).padStart(2, '0');
+}
+
+// ---------------------------------------------------------------- INIT ----
+function initAdminLedger() {
+  document.getElementById('admin-ledger-date').value = new Date().toISOString().split('T')[0];
+
+  window.loadDoctorContext(function (ctx) {
+    const filter = document.getElementById('ledger-doctor-filter');
+
+    // A doctor without cross-clinic rights gets no "All doctors" option:
+    // the server would refuse it anyway, so do not offer it.
+    filter.innerHTML = (ctx.locked ? '' : '<option value="">All doctors</option>') +
+                       window.crescDoctorOptions('');
+
+    if (ctx.locked && ctx.selfDoctorId) filter.value = ctx.selfDoctorId;
+    filter.disabled = (ctx.locked && ctx.doctors.length <= 1);
+
     loadAdminLedger();
-  }
-  
-  function changeLedgerDate(days) {
-    let dateInput = document.getElementById('admin-ledger-date');
-    let current = new Date(dateInput.value);
-    current.setDate(current.getDate() + days);
-    dateInput.value = current.toISOString().split('T')[0];
-    loadAdminLedger();
-  }
+  });
+}
 
-  function loadAdminLedger() {
-    const dateVal = document.getElementById('admin-ledger-date').value;
-    const tbody = document.getElementById('ledger-table-body');
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center label-bright py-4"><i class="fa-solid fa-spinner fa-spin"></i> Loading Schedule...</td></tr>`;
-    
-    google.script.run.withSuccessHandler(appts => {
-      try {
-        tbody.innerHTML = "";
-        if(!Array.isArray(appts)) appts = [];
-        appts = appts.filter(a => a.status !== 'DELETE' && a.status !== 'Deleted' && a.status !== 'Cancelled');
-        
-        let booked = 0, arrived = 0, completed = 0;
-        let apptMap = {}; let tokenCounters = { A: 1, E: 1 };
-        
-        appts.sort((a,b) => parseTimeForSort(a.time) - parseTimeForSort(b.time));
+function changeLedgerDate(days) {
+  const input = document.getElementById('admin-ledger-date');
+  const cur = new Date(input.value);
+  cur.setDate(cur.getDate() + days);
+  input.value = cur.toISOString().split('T')[0];
+  loadAdminLedger();
+}
 
-        appts.forEach(a => {
-          if(a.status !== 'Blocked' && a.patientId !== 'ADMIN') {
-            let p = (a.purpose || '').toLowerCase();
-            let isEmergency = p.includes('emerg');
-            let char = isEmergency ? 'E' : 'A';
-            a.token = char + String(tokenCounters[char]++).padStart(2, '0');
-          } else { a.token = "-"; }
+// -------------------------------------------------------------- LEDGER ----
+function loadAdminLedger() {
+  const dateVal  = document.getElementById('admin-ledger-date').value;
+  const doctorId = document.getElementById('ledger-doctor-filter').value || '';
+  const tbody    = document.getElementById('ledger-table-body');
 
-          if(!apptMap[a.time]) apptMap[a.time] = [];
-          apptMap[a.time].push(a);
+  if (!dateVal) return;
 
-          if(a.status === 'Booked') booked++;
-          if(a.status === 'Arrived' || a.status === 'In-Progress') arrived++;
-          if(a.status === 'Completed') completed++;
-        });
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center label-bright py-4">' +
+                    '<i class="fa-solid fa-spinner fa-spin"></i> Loading schedule...</td></tr>';
 
-        if(document.getElementById('stat-booked')) document.getElementById('stat-booked').innerText = booked;
-        if(document.getElementById('stat-arrived')) document.getElementById('stat-arrived').innerText = arrived;
-        if(document.getElementById('stat-completed')) document.getElementById('stat-completed').innerText = completed;
-
-        let masterTimes = [...CLINIC_SLOTS];
-        Object.keys(apptMap).forEach(t => { if(!masterTimes.includes(t)) masterTimes.push(t); });
-        masterTimes.sort((a,b) => parseTimeForSort(a) - parseTimeForSort(b));
-
-        masterTimes.forEach(time => {
-          if(apptMap[time] && apptMap[time].length > 0) {
-            apptMap[time].forEach(a => {
-              if(a.status === 'Blocked') {
-                tbody.innerHTML += `<tr><td class="text-white-force fw-bold">${time}</td><td class="text-muted text-center">-</td><td colspan="5" class="text-danger small fw-bold">UNAVAILABLE (BLOCKED)</td><td class="text-center"><button class="btn btn-sm btn-outline-success py-0" onclick="cycleStatus('${a.apptId}', 'DELETE', true)">Unblock</button></td></tr>`;
-              } else {
-                let badgeClass = "badge-booked";
-                if(a.status === 'Arrived') badgeClass = "badge-arrived";
-                if(a.status === 'In-Progress') badgeClass = "badge-progress";
-                if(a.status === 'Completed') badgeClass = "badge-completed";
-
-                let statusDropdown = `
-                  <select class="form-select form-select-sm select-badge ${badgeClass}" onchange="changeAppointmentStatus('${a.apptId}', this.value)" style="width: 130px; cursor: pointer;">
-                    <option value="Booked" ${a.status === 'Booked' ? 'selected' : ''} style="background: #1a1d21; color: #38bdf8;">Booked</option>
-                    <option value="Arrived" ${a.status === 'Arrived' ? 'selected' : ''} style="background: #1a1d21; color: #f59e0b;">Arrived / Queue</option>
-                    <option value="In-Progress" ${a.status === 'In-Progress' ? 'selected' : ''} style="background: #1a1d21; color: #a855f7;">Consultation</option>
-                    <option value="Completed" ${a.status === 'Completed' ? 'selected' : ''} style="background: #1a1d21; color: #10b981;">Completed</option>
-                  </select>
-                `;
-
-                // 🌟 THE HYPERLINK CONNECTION TO THE EMR TIMELINE 🌟
-                let hyperlinkedPatientId = `<span class="text-info fw-bold" style="cursor: pointer; text-decoration: underline; text-underline-offset: 2px;" onclick="routeToEMRTimeline('${a.patientId}')" title="View Clinical History">${a.patientId}</span>`;
-
-                tbody.innerHTML += `<tr><td class="text-white-force fw-bold">${time}</td><td><span class="badge-token">${a.token}</span></td><td>${hyperlinkedPatientId}</td><td class="fw-bold text-white">${a.patientName || a.name}</td><td class="text-white">${a.age || '-'} / ${a.sex ? a.sex.charAt(0) : '-'}</td><td class="label-bright small">${a.purpose}</td><td>${statusDropdown}</td><td class="text-center"><button class="btn btn-sm btn-link text-danger p-0" title="Delete" onclick="cycleStatus('${a.apptId}', 'DELETE', true)"><i class="fa-solid fa-trash"></i></button></td></tr>`;
-              }
-            });
-          } else {
-            if(CLINIC_SLOTS.includes(time)) {
-              tbody.innerHTML += `<tr><td class="label-bright">${time}</td><td class="text-muted text-center">-</td><td colspan="5" class="label-bright" style="opacity: 0.3;">--- Empty Slot ---</td><td class="text-center"><button class="btn btn-sm btn-outline-success py-0" title="Add Walk-In" onclick="openAdminBookingModal('${dateVal}', '${time}')"><i class="fa-solid fa-plus"></i> Add</button></td></tr>`;
-            }
-          }
-        });
-      } catch(e) { tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Error Rendering Ledger</td></tr>`; }
-    }).fetchDailyLedger(dateVal); 
-  }
-
-  function changeAppointmentStatus(apptId, newStatus) {
-    google.script.run.withSuccessHandler(res => { loadAdminLedger(); }).updateAppointmentStatus(apptId, newStatus);
-  }
-
-  function cycleStatus(apptId, currentStatus, refreshLedger) {
-    if(currentStatus === 'DELETE') {
-       if(!confirm("Are you sure you want to delete this appointment?")) return;
-       google.script.run.withSuccessHandler(res => { if(refreshLedger) loadAdminLedger(); }).updateAppointmentStatus(apptId, "DELETE");
-    }
-  }
-
-  function openAdminBookingModal(preFillDate, preFillTime) {
-    document.getElementById('ab-id').value = ''; 
-    document.getElementById('ab-name').value = ''; 
-    document.getElementById('ab-age').value = ''; 
-    document.getElementById('ab-sex').value = ''; 
-    document.getElementById('ab-purpose').value = 'Consultation'; 
-    document.getElementById('ab-fee').value = '500';
-    
-    let dateToUse = preFillDate || document.getElementById('admin-ledger-date').value;
-    document.getElementById('ab-date').value = dateToUse;
-    
-    if(preFillTime) document.getElementById('ab-time').value = convert12To24(preFillTime);
-    else document.getElementById('ab-time').value = "";
-
-    document.getElementById('admin-book-modal').classList.remove('d-none');
-  }
-  
-  function closeAdminBookModal() { document.getElementById('admin-book-modal').classList.add('d-none'); }
-
-  function autoFetchPatient() {
-    const pId = document.getElementById('ab-id').value;
-    if(!pId) return;
-    
-    document.getElementById('ab-name').value = "Fetching...";
-    document.getElementById('ab-age').value = "...";
-    document.getElementById('ab-sex').value = "...";
-    
-    google.script.run.withSuccessHandler(data => {
-      if(data) { 
-         document.getElementById('ab-name').value = data.name; 
-         document.getElementById('ab-age').value = data.age; 
-         document.getElementById('ab-sex').value = data.gender || data.sex; 
-      } else { 
-         document.getElementById('ab-name').value = ""; 
-         document.getElementById('ab-age').value = ""; 
-         document.getElementById('ab-sex').value = ""; 
-         alert("Patient ID not found."); 
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">' +
+                          window.crescEsc((res && res.message) || 'Could not load the ledger.') +
+                          '</td></tr>';
+        setLedgerStats(0, 0, 0);
+        return;
       }
-    }).getPatientDemographics(pId);
+      renderLedger(res.ledger || []);
+    })
+    .withFailureHandler(function (err) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">Network error: ' +
+                        window.crescEsc(err.message) + '</td></tr>';
+      setLedgerStats(0, 0, 0);
+    })
+    .fetchDailyLedgerScoped(dateVal, doctorId, window.sessionToken);
+}
+
+function setLedgerStats(b, a, c) {
+  const set = function (id, v) { const el = document.getElementById(id); if (el) el.innerText = v; };
+  set('stat-booked', b);
+  set('stat-arrived', a);
+  set('stat-completed', c);
+}
+
+function renderLedger(rows) {
+  const tbody = document.getElementById('ledger-table-body');
+  rows = rows.filter(function (r) { return r.status !== 'Cancelled'; });
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center label-bright py-5" style="opacity:.6;">' +
+                      '<i class="fa-solid fa-calendar-xmark fa-2x d-block mb-2"></i>' +
+                      'No appointments recorded for this date.</td></tr>';
+    setLedgerStats(0, 0, 0);
+    return;
   }
 
-  function saveAdminBooking() {
-    const pId = document.getElementById('ab-id').value || "DIRECT";
-    const name = document.getElementById('ab-name').value;
-    const date = document.getElementById('ab-date').value;
-    const rawTime = document.getElementById('ab-time').value;
-    
-    if(!name || !rawTime || !date) { alert("Name, Date, and Time are required."); return; }
-    
-    const formattedTime = formatTime12Hour(rawTime);
-    const data = { patientId: pId, patientName: name, date: date, time: formattedTime, purpose: document.getElementById('ab-purpose').value || "Consultation", status: "Booked", fee: document.getElementById('ab-fee').value || 0 };
-    
-    const btn = document.getElementById('btn-admin-save');
-    btn.innerText = "Saving...";
-    
-    google.script.run.withSuccessHandler(res => { 
-      btn.innerText = "Confirm Booking";
-      closeAdminBookModal(); loadAdminLedger(); 
-    }).submitNewAppointment(data);
-  }
+  let booked = 0, arrived = 0, completed = 0;
+  const counters = { A: 1, E: 1 };
+  let html = '';
 
-  // --- TIME PARSING UTILITIES ---
-  function parseTimeForSort(t) {
-     let match = t.match(/(\d+):(\d+)\s*(AM|PM)/i);
-     if(!match) return 99;
-     let h = parseInt(match[1]); let m = parseInt(match[2]); let p = match[3].toUpperCase();
-     if(p === 'PM' && h !== 12) h += 12;
-     if(p === 'AM' && h === 12) h = 0;
-     return h + m/60;
-  }
+  rows.forEach(function (r) {
+    if (r.status === 'Booked') booked++;
+    if (r.status === 'Arrived' || r.status === 'In-Progress') arrived++;
+    if (r.status === 'Completed') completed++;
 
-  function convert12To24(time12) {
-    let match = time12.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if(!match) return "";
-    let h = parseInt(match[1]); let m = match[2]; let p = match[3].toUpperCase();
-    if(p === 'PM' && h !== 12) h += 12;
-    if(p === 'AM' && h === 12) h = 0;
-    return String(h).padStart(2,'0') + ":" + m;
-  }
+    const token = apptToken(r.purpose, counters);
 
-  function formatTime12Hour(time24) {
-    if(!time24) return "";
-    let parts = time24.split(':'); let hours = parseInt(parts[0]);
-    let ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12; hours = hours ? hours : 12; 
-    let hrStr = hours < 10 ? '0'+hours : hours;
-    return `${hrStr}:${parts[1]} ${ampm}`;
-  }
+    let badge = 'badge-booked';
+    if (r.status === 'Arrived')     badge = 'badge-arrived';
+    if (r.status === 'In-Progress') badge = 'badge-progress';
+    if (r.status === 'Completed')   badge = 'badge-completed';
+
+    const statusSel =
+      '<select class="form-select form-select-sm select-badge ' + badge + '" ' +
+      'style="width: 130px; cursor: pointer;" ' +
+      'onchange="changeAppointmentStatus(\'' + window.crescEsc(r.apptId) + '\', this.value)">' +
+      ['Booked', 'Arrived', 'In-Progress', 'Completed'].map(function (s) {
+        const label = (s === 'Arrived') ? 'Arrived / Queue'
+                    : (s === 'In-Progress' ? 'Consultation' : s);
+        return '<option value="' + s + '"' + (r.status === s ? ' selected' : '') +
+               ' style="background:#1a1d21;">' + label + '</option>';
+      }).join('') +
+      '</select>';
+
+    const pidLink =
+      '<span class="text-info fw-bold" style="cursor:pointer; text-decoration:underline; text-underline-offset:2px;" ' +
+      'onclick="routeToEMRTimeline(\'' + window.crescEsc(r.patientId) + '\')" title="View clinical history">' +
+      window.crescEsc(r.patientId) + '</span>';
+
+    html +=
+      '<tr>' +
+        '<td class="text-white-force fw-bold">' + window.crescEsc(r.time12) + '</td>' +
+        '<td><span class="badge-token">' + token + '</span></td>' +
+        '<td>' + pidLink + '</td>' +
+        '<td class="fw-bold text-white">' + window.crescEsc(r.patientName || '-') + '</td>' +
+        '<td class="text-white">' + window.crescEsc(r.age || '-') + ' / ' +
+          window.crescEsc(String(r.sex || '-').charAt(0)) + '</td>' +
+        '<td><span class="doc-chip text-white">' +
+          window.crescEsc(r.doctorName || r.doctorId) + '</span></td>' +
+        '<td class="label-bright small">' + window.crescEsc(r.purpose) + '</td>' +
+        '<td>' + statusSel + '</td>' +
+        '<td class="text-center"><button class="btn btn-sm btn-link text-danger p-0" title="Delete" ' +
+          'onclick="cycleStatus(\'' + window.crescEsc(r.apptId) + '\', \'DELETE\', true)">' +
+          '<i class="fa-solid fa-trash"></i></button></td>' +
+      '</tr>';
+  });
+
+  tbody.innerHTML = html;
+  setLedgerStats(booked, arrived, completed);
+}
+
+function changeAppointmentStatus(apptId, newStatus) {
+  google.script.run
+    .withSuccessHandler(function () { loadAdminLedger(); })
+    .withFailureHandler(function (err) { alert('Could not update status: ' + err.message); })
+    .updateAppointmentStatus(apptId, newStatus);
+}
+
+function cycleStatus(apptId, action, refresh) {
+  if (action !== 'DELETE') return;
+  if (!confirm('Delete this appointment?')) return;
+
+  google.script.run
+    .withSuccessHandler(function () { if (refresh) loadAdminLedger(); })
+    .withFailureHandler(function (err) { alert('Could not delete: ' + err.message); })
+    .updateAppointmentStatus(apptId, 'DELETE');
+}
 </script>

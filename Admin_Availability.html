@@ -1,11 +1,12 @@
 <style>
-  /* Subtle styling for our new features */
   .indicator-dot { width: 10px; height: 10px; transition: all 0.2s ease; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
   .hover-bg-dark:hover { background-color: rgba(255, 255, 255, 0.05); }
+  .slot-booked-tag { font-size: .6rem; color: #f59e0b; }
+  .av-sess-row { border: 1px solid var(--border-color, #334155); border-radius: 10px; }
 </style>
 
 <div id="tab-admin-avail" class="page-section d-none">
-  <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 mt-4 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-2">
       <button class="btn btn-sm btn-outline-secondary label-bright" onclick="switchTab('workspace-appointments')"><i class="fa-solid fa-arrow-left"></i></button>
       <h3 class="fw-bold m-0 text-white">Doctor Availability</h3>
@@ -14,12 +15,21 @@
   </div>
 
   <div class="card p-4 shadow-lg" style="max-width: 1200px;">
+
+    <!-- ===================== CONTROL BAR ===================== -->
     <div class="d-flex flex-wrap align-items-end gap-3 mb-4 p-3 rounded" style="background: var(--bg-main, #0f172a);">
       <div>
-        <label class="label-bright mb-1 fw-bold small">Start Date</label>
-        <input type="date" id="avail-start-date" class="form-control form-control-sm text-white-force border-secondary" style="width: 150px;" onchange="loadAvailabilityCache()">
+        <label class="label-bright mb-1 fw-bold small">Doctor</label>
+        <select id="avail-doctor" class="form-select form-select-sm text-white-force border-secondary" style="width: 220px;" onchange="loadAvailabilityGrid()">
+          <option value="">Select doctor</option>
+        </select>
       </div>
-      
+
+      <div>
+        <label class="label-bright mb-1 fw-bold small">Start Date</label>
+        <input type="date" id="avail-start-date" class="form-control form-control-sm text-white-force border-secondary" style="width: 150px;" onchange="loadAvailabilityGrid()">
+      </div>
+
       <div class="form-check form-switch ms-2 pb-1">
         <input class="form-check-input cursor-pointer" type="checkbox" id="toggle-bulk-date" onchange="toggleEndDate(this)">
         <label class="form-check-label text-warning small fw-bold mt-1">Bulk Date Range</label>
@@ -29,18 +39,42 @@
         <label class="label-bright mb-1 fw-bold small">End Date</label>
         <input type="date" id="avail-end-date" class="form-control form-control-sm text-white-force border-secondary" style="width: 150px;">
       </div>
+
+      <div class="ms-auto">
+        <button id="btn-toggle-hours" class="btn btn-sm btn-outline-warning fw-bold" onclick="toggleHoursPanel()">
+          <i class="fa-solid fa-calendar-week"></i> Weekly Clinic Hours
+        </button>
+      </div>
     </div>
-    
-    <div class="d-flex justify-content-between align-items-center mb-3">
+
+    <!-- ===================== WEEKLY TEMPLATE (collapsible) ===================== -->
+    <div id="hours-panel" class="d-none mb-4 p-3 rounded" style="background: var(--bg-main, #0f172a);">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <h6 class="text-white fw-bold m-0">Recurring weekly hours</h6>
+          <div class="label-bright small" style="opacity:.7;">The slot grid below is generated from these windows. Set this first.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-success fw-bold" onclick="addSessionRow()"><i class="fa-solid fa-plus"></i> Add session</button>
+          <button id="btn-save-hours" class="btn btn-sm btn-success fw-bold" onclick="saveWeeklyHours()"><i class="fa-solid fa-floppy-disk"></i> Save hours</button>
+        </div>
+      </div>
+      <div id="av-sessions" class="d-flex flex-column gap-2">
+        <div class="label-bright small py-3 text-center" style="opacity:.5;">Select a doctor.</div>
+      </div>
+      <div id="av-hours-msg" class="label-bright small mt-2"></div>
+    </div>
+
+    <!-- ===================== SLOT GRID ===================== -->
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
       <h6 class="label-bright m-0">Availability Slots (Green = Available, Red = Blocked)</h6>
       <button id="btn-expand-toggle" class="btn btn-sm btn-outline-info fw-bold" onclick="toggleExpandCollapse()">
         <i class="fa-solid fa-layer-group"></i> Expand All
       </button>
     </div>
 
-    <div id="avail-container" class="row g-3 pb-4">
-      </div>
-    
+    <div id="avail-container" class="row g-3 pb-4"></div>
+
     <div class="text-center mt-2 pt-4 border-top border-secondary">
       <button id="btn-save-avail" class="btn btn-success fw-bold px-5 py-3 shadow-lg" style="border-radius: 12px; font-size: 1.1rem; width: 100%; max-width: 400px;" onclick="saveAvailabilitySettings(false)">
         <i class="fa-solid fa-floppy-disk me-2"></i> Update Availability
@@ -49,6 +83,7 @@
   </div>
 </div>
 
+<!-- ===================== CONFLICT MODAL ===================== -->
 <div class="modal fade" id="conflictModal" tabindex="-1" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content bg-dark border-danger" style="border-width: 2px;">
@@ -59,7 +94,7 @@
       <div class="modal-body text-white">
         <p>You are trying to block time slots where patients are already scheduled:</p>
         <ul id="conflict-list" class="text-warning small mb-3"></ul>
-        <p class="mb-0 text-muted small">Do you want to force this block anyway? (Reception must manually reschedule these patients later).</p>
+        <p class="mb-0 text-muted small">Force this block anyway? Reception must reschedule these patients manually.</p>
       </div>
       <div class="modal-footer border-top-0">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -68,237 +103,448 @@
     </div>
   </div>
 </div>
+
 <script>
-  // 🚀 UPGRADE: Segregated Period Data Structure
-  const SCHEDULE_PERIODS = {
-    "☀️ Morning": [
-      { id: "hr1", label: "10:00 AM to 11:00 AM", slots: ["10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM"] },
-      { id: "hr2", label: "11:00 AM to 12:00 PM", slots: ["11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM"] }
-    ],
-    "🌤️ Afternoon": [
-      { id: "hr3", label: "12:00 PM to 01:00 PM", slots: ["12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM"] },
-      { id: "hr4", label: "05:00 PM to 06:00 PM", slots: ["05:00 PM", "05:15 PM", "05:30 PM", "05:45 PM"] }
-    ],
-    "🌙 Evening": [
-      { id: "hr5", label: "06:00 PM to 07:00 PM", slots: ["06:00 PM", "06:15 PM", "06:30 PM", "06:45 PM"] },
-      { id: "hr6", label: "07:00 PM to 08:00 PM", slots: ["07:00 PM", "07:15 PM", "07:30 PM", "07:45 PM"] },
-      { id: "hr7", label: "08:00 PM to 09:00 PM", slots: ["08:00 PM", "08:15 PM", "08:30 PM", "08:45 PM"] }
-    ]
+// ============================================================================
+// DOCTOR AVAILABILITY — classic slot-toggle grid on the per-doctor engine
+// Backend: getDoctorAvailabilityGrid / setDoctorDayBlocks /
+//          getDoctorSchedule / saveDoctorSchedule
+// Shared helpers (loadDoctorContext, crescDoctorOptions, crescEsc) from Auth.html.
+// ----------------------------------------------------------------------------
+// Slot times are GENERATED from each doctor's weekly template, not hardcoded.
+// Toggling a slot off writes a BLOCK exception for the selected date range.
+// ============================================================================
+
+const AV_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+let conflictModalInstance = null;
+let isGridExpanded = false;
+let avSlotMinutes = 15;
+let avSessionRows = [];
+let avRowSeq = 0;
+
+// ---------------------------------------------------------------- INIT ----
+function initAvailability() {
+  document.getElementById('avail-start-date').value = new Date().toISOString().split('T')[0];
+
+  const modalEl = document.getElementById('conflictModal');
+  if (modalEl && typeof bootstrap !== 'undefined') {
+    conflictModalInstance = new bootstrap.Modal(modalEl);
+  }
+
+  window.loadDoctorContext(function (ctx) {
+    const sel = document.getElementById('avail-doctor');
+    sel.innerHTML = window.crescDoctorOptions('Select doctor');
+
+    if (ctx.selfDoctorId) sel.value = ctx.selfDoctorId;
+    else if (ctx.doctors.length === 1) sel.value = ctx.doctors[0].doctorId;
+    sel.disabled = (ctx.locked && ctx.doctors.length <= 1);
+
+    loadAvailabilityGrid();
+    loadWeeklyHours();
+  });
+}
+
+function toggleEndDate(checkbox) {
+  const container = document.getElementById('end-date-container');
+  if (checkbox.checked) {
+    container.classList.remove('d-none');
+    document.getElementById('avail-end-date').value =
+      document.getElementById('avail-start-date').value;
+  } else {
+    container.classList.add('d-none');
+    document.getElementById('avail-end-date').value = "";
+  }
+}
+
+// ------------------------------------------------------------ SLOT GRID ----
+function loadAvailabilityGrid() {
+  const doctorId = document.getElementById('avail-doctor').value;
+  const dateVal  = document.getElementById('avail-start-date').value;
+  const container = document.getElementById('avail-container');
+
+  if (!doctorId || !dateVal) {
+    container.innerHTML = '<div class="col-12 label-bright text-center py-5" style="opacity:.5;">' +
+                          'Select a doctor and date.</div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="col-12 text-center text-info py-4">' +
+                        '<i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i><br>Fetching schedule...</div>';
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        container.innerHTML = '<div class="col-12 text-danger text-center py-4">' +
+                              window.crescEsc((res && res.message) || 'Could not load availability.') +
+                              '</div>';
+        return;
+      }
+      avSlotMinutes = res.slotMinutes || 15;
+      renderMicroSlotGrid(res);
+    })
+    .withFailureHandler(function (err) {
+      container.innerHTML = '<div class="col-12 text-danger text-center py-4">Network error: ' +
+                            window.crescEsc(err.message) + '</div>';
+    })
+    .getDoctorAvailabilityGrid(doctorId, dateVal, window.sessionToken);
+}
+
+function renderMicroSlotGrid(res) {
+  const container = document.getElementById('avail-container');
+  isGridExpanded = false;
+  document.getElementById('btn-expand-toggle').innerHTML =
+    '<i class="fa-solid fa-layer-group"></i> Expand All';
+
+  if (!res.periods || res.periods.length === 0) {
+    container.innerHTML = '<div class="col-12 label-bright text-center py-5" style="opacity:.7;">' +
+                          '<i class="fa-solid fa-calendar-xmark fa-2x d-block mb-2"></i>' +
+                          window.crescEsc(res.message || 'No clinic hours on this day.') +
+                          '</div>';
+    return;
+  }
+
+  const periodIcon = { Morning: '&#9728;&#65039;', Afternoon: '&#127780;&#65039;', Evening: '&#127769;' };
+  let html = '';
+
+  res.periods.forEach(function (period) {
+    html +=
+      '<div class="col-12 mt-4 mb-1 d-flex align-items-center gap-3">' +
+        '<h5 class="fw-bold m-0 text-white opacity-75" style="letter-spacing:1px;">' +
+          (periodIcon[period.title] || '') + ' ' + window.crescEsc(period.title) +
+        '</h5>' +
+        '<div class="flex-grow-1 border-bottom border-secondary opacity-50"></div>' +
+      '</div>';
+
+    period.blocks.forEach(function (block) {
+      let childHtml = '';
+      let heatmap = '';
+      let activeCount = 0;
+      const total = block.slots.length;
+
+      block.slots.forEach(function (slot, index) {
+        if (slot.available) activeCount++;
+
+        heatmap += '<div id="dot-' + block.blockId + '-' + index + '" class="' +
+                   (slot.available ? 'bg-success' : 'bg-danger') +
+                   ' rounded-circle indicator-dot" title="' + window.crescEsc(slot.time12) + '"></div>';
+
+        // A booked slot must never be silently toggled off — label it.
+        const bookedTag = slot.booked
+          ? '<div class="slot-booked-tag">Booked: ' + window.crescEsc(slot.bookedBy) + '</div>'
+          : '';
+
+        childHtml +=
+          '<div class="d-flex justify-content-between align-items-center py-2 px-3 border-top border-secondary hover-bg-dark">' +
+            '<div><span class="text-white fw-medium small opacity-75">' +
+              window.crescEsc(slot.time12) + '</span>' + bookedTag + '</div>' +
+            '<div class="form-check form-switch m-0">' +
+              '<input class="form-check-input micro-checkbox cursor-pointer" type="checkbox" ' +
+                'data-time="' + window.crescEsc(slot.time24) + '" ' +
+                'data-parent="' + block.blockId + '" ' +
+                (slot.available ? 'checked' : '') + ' ' +
+                'onchange="updateParentVisual(\'' + block.blockId + '\')">' +
+            '</div>' +
+          '</div>';
+      });
+
+      const masterChecked = (activeCount === total) ? 'checked' : '';
+      const cardBorder = (activeCount === 0)
+        ? 'border-color:#ef4444; opacity:0.7;'
+        : (activeCount < total ? 'border-color:#f59e0b;' : 'border-color:#22c55e;');
+
+      html +=
+        '<div class="col-md-6 col-lg-4">' +
+          '<div class="card shadow-sm p-0 overflow-hidden parent-card" id="card-' + block.blockId + '" ' +
+            'data-total="' + total + '" ' +
+            'style="background: var(--bg-base, #121418); ' + cardBorder + ' border-width:2px; transition: all .3s ease;">' +
+            '<div class="p-3 d-flex flex-column gap-2">' +
+              '<div class="d-flex align-items-center justify-content-between">' +
+                '<div class="d-flex align-items-center gap-2">' +
+                  '<button class="btn btn-sm btn-dark border border-secondary text-white p-1" ' +
+                    'data-bs-toggle="collapse" data-bs-target="#collapse-' + block.blockId + '" style="line-height:1;">' +
+                    '<i class="fa-solid fa-chevron-down"></i>' +
+                  '</button>' +
+                  '<span class="text-white fw-bold small m-0">' + window.crescEsc(block.label) + '</span>' +
+                '</div>' +
+                '<div class="form-check form-switch m-0" style="transform: scale(1.2);">' +
+                  '<input class="form-check-input master-checkbox cursor-pointer" type="checkbox" ' +
+                    'id="master-' + block.blockId + '" ' + masterChecked + ' ' +
+                    'onchange="toggleMaster(this, \'' + block.blockId + '\')">' +
+                '</div>' +
+              '</div>' +
+              '<div class="d-flex gap-2 ms-5 ps-1">' + heatmap + '</div>' +
+            '</div>' +
+            '<div class="collapse bg-dark" id="collapse-' + block.blockId + '">' + childHtml + '</div>' +
+          '</div>' +
+        '</div>';
+    });
+  });
+
+  // Bookings sitting outside the current template are surfaced, never hidden.
+  if (res.offSchedule && res.offSchedule.length > 0) {
+    html += '<div class="col-12 mt-4"><div class="small text-warning fw-bold mb-1">' +
+            '<i class="fa-solid fa-triangle-exclamation me-1"></i>Bookings outside the weekly template</div>' +
+            res.offSchedule.map(function (o) {
+              return '<div class="small label-bright">' + window.crescEsc(o.time12) + ' &mdash; ' +
+                     window.crescEsc(o.booking.patientName || o.booking.patientId) +
+                     ' [' + window.crescEsc(o.booking.status) + ']</div>';
+            }).join('') + '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleExpandCollapse() {
+  const btn = document.getElementById('btn-expand-toggle');
+  const elements = document.querySelectorAll('#avail-container .collapse');
+
+  if (!isGridExpanded) {
+    elements.forEach(function (el) { new bootstrap.Collapse(el, { toggle: false }).show(); });
+    btn.innerHTML = '<i class="fa-solid fa-compress"></i> Collapse All';
+    btn.classList.replace('btn-outline-info', 'btn-outline-warning');
+    isGridExpanded = true;
+  } else {
+    elements.forEach(function (el) { new bootstrap.Collapse(el, { toggle: false }).hide(); });
+    btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Expand All';
+    btn.classList.replace('btn-outline-warning', 'btn-outline-info');
+    isGridExpanded = false;
+  }
+}
+
+function toggleMaster(masterCheckbox, blockId) {
+  document.querySelectorAll('.micro-checkbox[data-parent="' + blockId + '"]')
+    .forEach(function (child) { child.checked = masterCheckbox.checked; });
+  updateParentVisual(blockId);
+}
+
+function updateParentVisual(blockId) {
+  const card = document.getElementById('card-' + blockId);
+  const master = document.getElementById('master-' + blockId);
+  const children = document.querySelectorAll('.micro-checkbox[data-parent="' + blockId + '"]');
+  const total = parseInt(card.getAttribute('data-total'), 10) || children.length;
+
+  let checkedCount = 0;
+
+  children.forEach(function (c, index) {
+    const dot = document.getElementById('dot-' + blockId + '-' + index);
+    if (c.checked) {
+      checkedCount++;
+      if (dot) dot.className = 'bg-success rounded-circle indicator-dot';
+    } else {
+      if (dot) dot.className = 'bg-danger rounded-circle indicator-dot';
+    }
+  });
+
+  if (checkedCount === total) {
+    master.checked = true;
+    card.style.borderColor = '#22c55e'; card.style.opacity = '1';
+  } else if (checkedCount === 0) {
+    master.checked = false;
+    card.style.borderColor = '#ef4444'; card.style.opacity = '0.7';
+  } else {
+    master.checked = false;
+    card.style.borderColor = '#f59e0b'; card.style.opacity = '1';
+  }
+}
+
+// ---------------------------------------------------------------- SAVE ----
+function saveAvailabilitySettings(overrideConflicts) {
+  const doctorId  = document.getElementById('avail-doctor').value;
+  const startDate = document.getElementById('avail-start-date').value;
+  const isBulk    = document.getElementById('toggle-bulk-date').checked;
+  const endDate   = isBulk ? document.getElementById('avail-end-date').value : startDate;
+
+  if (!doctorId)  return alert("Select a doctor.");
+  if (!startDate) return alert("Please select a date.");
+  if (isBulk && startDate > endDate) return alert("End date cannot be before start date.");
+
+  const blockedTimes = [];
+  document.querySelectorAll('#avail-container .micro-checkbox:not(:checked)')
+    .forEach(function (chk) { blockedTimes.push(chk.getAttribute('data-time')); });
+
+  const payload = {
+    doctorId: doctorId,
+    startDate: startDate,
+    endDate: endDate,
+    slotMinutes: avSlotMinutes,
+    blockedTimes: blockedTimes,
+    overrideConflicts: overrideConflicts === true
   };
 
-  let conflictModalInstance;
-  let isGridExpanded = false;
+  const btn = document.getElementById('btn-save-avail');
+  const ogHtml = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-2"></i> Processing...';
+  btn.disabled = true;
 
-  function initAvailability() {
-    document.getElementById('avail-start-date').value = new Date().toISOString().split('T')[0];
-    conflictModalInstance = new bootstrap.Modal(document.getElementById('conflictModal'));
-    loadAvailabilityCache();
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.innerHTML = ogHtml;
+      btn.disabled = false;
+
+      if (res && res.isConflict) {
+        document.getElementById('conflict-list').innerHTML =
+          res.conflicts.map(function (c) {
+            return '<li>' + window.crescEsc(c.date) + ' @ ' + window.crescEsc(c.time) +
+                   ' &mdash; ' + window.crescEsc(c.patient) + '</li>';
+          }).join('');
+        if (conflictModalInstance) conflictModalInstance.show();
+
+      } else if (res && res.success) {
+        if (overrideConflicts && conflictModalInstance) conflictModalInstance.hide();
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('last-audit-log').innerText = 'Last updated today at ' + timeStr;
+        alert(res.message);
+        loadAvailabilityGrid();
+
+      } else {
+        alert("Action failed: " + ((res && res.message) || 'Unknown error.'));
+      }
+    })
+    .withFailureHandler(function (err) {
+      btn.innerHTML = ogHtml;
+      btn.disabled = false;
+      alert("Network error: " + err.message);
+    })
+    .setDoctorDayBlocks(payload, window.sessionToken);
+}
+
+// ------------------------------------------------- WEEKLY HOURS PANEL ----
+function toggleHoursPanel() {
+  const panel = document.getElementById('hours-panel');
+  const hidden = panel.classList.contains('d-none');
+  panel.classList.toggle('d-none', !hidden);
+  if (hidden) loadWeeklyHours();
+}
+
+function loadWeeklyHours() {
+  const doctorId = document.getElementById('avail-doctor').value;
+  const wrap = document.getElementById('av-sessions');
+  document.getElementById('av-hours-msg').innerText = '';
+
+  if (!doctorId) {
+    avSessionRows = [];
+    wrap.innerHTML = '<div class="label-bright small py-3 text-center" style="opacity:.5;">Select a doctor.</div>';
+    return;
   }
 
-  function toggleEndDate(checkbox) {
-    const container = document.getElementById('end-date-container');
-    if(checkbox.checked) {
-      container.classList.remove('d-none');
-      document.getElementById('avail-end-date').value = document.getElementById('avail-start-date').value;
-    } else {
-      container.classList.add('d-none');
-      document.getElementById('avail-end-date').value = "";
-    }
-  }
+  wrap.innerHTML = '<div class="text-center text-info py-3"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>';
 
-  function loadAvailabilityCache() {
-    const dateVal = document.getElementById('avail-start-date').value;
-    if(!dateVal) return;
-    const cacheKey = `clinic_avail_${dateVal}`;
-    const cachedData = sessionStorage.getItem(cacheKey);
-
-    if (cachedData) {
-      renderMicroSlotGrid(JSON.parse(cachedData));
-    } else {
-      fetchAvailabilityFromDB(dateVal, cacheKey);
-    }
-  }
-
-  function fetchAvailabilityFromDB(dateVal, cacheKey) {
-    const container = document.getElementById('avail-container');
-    container.innerHTML = '<div class="col-12 text-center text-info py-4"><i class="fa-solid fa-spinner fa-spin fa-2x mb-2"></i><br>Fetching Schedule...</div>';
-
-    google.script.run.withSuccessHandler(appts => {
-      const blockedTimes = appts.filter(a => a.status === 'Blocked').map(a => a.time);
-      sessionStorage.setItem(cacheKey, JSON.stringify(blockedTimes)); 
-      renderMicroSlotGrid(blockedTimes);
-    }).getAppointmentsByDate(dateVal);
-  }
-
-  // 🚀 UPGRADED: Renders Segregated Periods with Dividers
-  function renderMicroSlotGrid(blockedTimes) {
-    const container = document.getElementById('avail-container');
-    let html = '';
-    isGridExpanded = false; 
-    document.getElementById('btn-expand-toggle').innerHTML = '<i class="fa-solid fa-layer-group"></i> Expand All';
-
-    for (const [periodTitle, blocks] of Object.entries(SCHEDULE_PERIODS)) {
-      // Add the Period Header & Divider
-      html += `
-        <div class="col-12 mt-4 mb-1 d-flex align-items-center gap-3">
-          <h5 class="fw-bold m-0 text-white opacity-75" style="letter-spacing: 1px;">${periodTitle}</h5>
-          <div class="flex-grow-1 border-bottom border-secondary opacity-50"></div>
-        </div>
-      `;
-
-      // Loop through the hour blocks for this specific period
-      blocks.forEach(block => {
-        let childHtml = '';
-        let miniHeatmapHtml = '';
-        let activeChildrenCount = 0;
-
-        block.slots.forEach((slot, index) => {
-          const isBlocked = blockedTimes.includes(slot);
-          const isChecked = !isBlocked ? 'checked' : '';
-          if(!isBlocked) activeChildrenCount++;
-          
-          const dotColor = isBlocked ? 'bg-danger' : 'bg-success';
-          miniHeatmapHtml += `<div id="dot-${block.id}-${index}" class="${dotColor} rounded-circle indicator-dot" title="${slot}"></div>`;
-          
-          childHtml += `
-            <div class="d-flex justify-content-between align-items-center py-2 px-3 border-top border-secondary hover-bg-dark">
-              <span class="text-white fw-medium small opacity-75">${slot}</span>
-              <div class="form-check form-switch m-0">
-                <input class="form-check-input micro-checkbox cursor-pointer" type="checkbox" data-time="${slot}" data-parent="${block.id}" ${isChecked} onchange="updateParentVisual('${block.id}')">
-              </div>
-            </div>
-          `;
-        });
-
-        const masterChecked = (activeChildrenCount === 4) ? 'checked' : '';
-        const cardBorder = (activeChildrenCount === 0) ? 'border-color: #ef4444; opacity: 0.7;' : (activeChildrenCount < 4 ? 'border-color: #f59e0b;' : 'border-color: #22c55e;');
-
-        html += `
-          <div class="col-md-6 col-lg-4">
-            <div class="card shadow-sm p-0 overflow-hidden parent-card" id="card-${block.id}" style="background: var(--bg-base, #121418); ${cardBorder} border-width: 2px; transition: all 0.3s ease;">
-              <div class="p-3 d-flex flex-column gap-2">
-                <div class="d-flex align-items-center justify-content-between">
-                  <div class="d-flex align-items-center gap-2">
-                    <button class="btn btn-sm btn-dark border border-secondary text-white p-1" data-bs-toggle="collapse" data-bs-target="#collapse-${block.id}" style="line-height: 1;">
-                      <i class="fa-solid fa-chevron-down"></i>
-                    </button>
-                    <span class="text-white fw-bold small m-0">${block.label}</span>
-                  </div>
-                  <div class="form-check form-switch m-0" style="transform: scale(1.2);">
-                    <input class="form-check-input master-checkbox cursor-pointer" type="checkbox" id="master-${block.id}" ${masterChecked} onchange="toggleMaster(this, '${block.id}')">
-                  </div>
-                </div>
-                <div class="d-flex gap-2 ms-5 ps-1">
-                  ${miniHeatmapHtml}
-                </div>
-              </div>
-              <div class="collapse bg-dark" id="collapse-${block.id}">
-                ${childHtml}
-              </div>
-            </div>
-          </div>
-        `;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        wrap.innerHTML = '<div class="text-danger small py-3 text-center">' +
+                         window.crescEsc((res && res.message) || 'Could not load hours.') + '</div>';
+        return;
+      }
+      avSessionRows = (res.rows || []).map(function (r) {
+        return {
+          uid: 'r' + (avRowSeq++), weekday: r.weekday, sessionLabel: r.sessionLabel,
+          startTime: r.startTime, endTime: r.endTime,
+          slotMinutes: r.slotMinutes, maxPerSlot: r.maxPerSlot, location: r.location
+        };
       });
-    }
-    container.innerHTML = html;
+      renderSessionRows();
+      if (res.message) document.getElementById('av-hours-msg').innerText = res.message;
+    })
+    .withFailureHandler(function (err) {
+      wrap.innerHTML = '<div class="text-danger small py-3 text-center">Network error: ' +
+                       window.crescEsc(err.message) + '</div>';
+    })
+    .getDoctorSchedule(doctorId, window.sessionToken);
+}
+
+function renderSessionRows() {
+  const wrap = document.getElementById('av-sessions');
+
+  if (avSessionRows.length === 0) {
+    wrap.innerHTML = '<div class="label-bright small py-3 text-center" style="opacity:.6;">' +
+                     'No clinic hours set. Add a session to start.</div>';
+    return;
   }
 
-  function toggleExpandCollapse() {
-    const btn = document.getElementById('btn-expand-toggle');
-    const elements = document.querySelectorAll('.collapse');
-    
-    if (!isGridExpanded) {
-      elements.forEach(el => new bootstrap.Collapse(el, {toggle: false}).show());
-      btn.innerHTML = '<i class="fa-solid fa-compress"></i> Collapse All';
-      btn.classList.replace('btn-outline-info', 'btn-outline-warning');
-      isGridExpanded = true;
+  avSessionRows.sort(function (a, b) {
+    return (a.weekday - b.weekday) || (a.startTime < b.startTime ? -1 : 1);
+  });
+
+  wrap.innerHTML = avSessionRows.map(function (r) {
+    const days = AV_WEEKDAYS.map(function (d, i) {
+      return '<option value="' + i + '"' + (r.weekday === i ? ' selected' : '') + '>' + d + '</option>';
+    }).join('');
+
+    return '<div class="av-sess-row p-2 d-flex flex-wrap gap-2 align-items-end">' +
+      '<div style="width:130px;"><label class="label-bright" style="font-size:.65rem;">Day</label>' +
+        '<select class="form-select form-select-sm text-white-force" onchange="editSession(\'' + r.uid + '\',\'weekday\',this.value)">' + days + '</select></div>' +
+      '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">Label</label>' +
+        '<input class="form-control form-control-sm text-white-force" value="' + window.crescEsc(r.sessionLabel) + '" onchange="editSession(\'' + r.uid + '\',\'sessionLabel\',this.value)"></div>' +
+      '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">Start</label>' +
+        '<input type="time" class="form-control form-control-sm text-white-force" value="' + window.crescEsc(r.startTime) + '" onchange="editSession(\'' + r.uid + '\',\'startTime\',this.value)"></div>' +
+      '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">End</label>' +
+        '<input type="time" class="form-control form-control-sm text-white-force" value="' + window.crescEsc(r.endTime) + '" onchange="editSession(\'' + r.uid + '\',\'endTime\',this.value)"></div>' +
+      '<div style="width:95px;"><label class="label-bright" style="font-size:.65rem;">Slot (min)</label>' +
+        '<input type="number" min="5" max="120" class="form-control form-control-sm text-white-force" value="' + r.slotMinutes + '" onchange="editSession(\'' + r.uid + '\',\'slotMinutes\',this.value)"></div>' +
+      '<div style="width:95px;"><label class="label-bright" style="font-size:.65rem;">Per slot</label>' +
+        '<input type="number" min="1" max="10" class="form-control form-control-sm text-white-force" value="' + r.maxPerSlot + '" onchange="editSession(\'' + r.uid + '\',\'maxPerSlot\',this.value)"></div>' +
+      '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">Location</label>' +
+        '<input class="form-control form-control-sm text-white-force" value="' + window.crescEsc(r.location) + '" onchange="editSession(\'' + r.uid + '\',\'location\',this.value)"></div>' +
+      '<button class="btn btn-sm btn-link text-danger" title="Remove" onclick="removeSessionRow(\'' + r.uid + '\')"><i class="fa-solid fa-trash"></i></button>' +
+    '</div>';
+  }).join('');
+}
+
+function addSessionRow() {
+  if (!document.getElementById('avail-doctor').value) return alert('Select a doctor first.');
+  avSessionRows.push({
+    uid: 'r' + (avRowSeq++), weekday: 1, sessionLabel: 'CLINIC',
+    startTime: '10:00', endTime: '13:00',
+    slotMinutes: 15, maxPerSlot: 1, location: 'OPD'
+  });
+  renderSessionRows();
+}
+
+function removeSessionRow(uid) {
+  avSessionRows = avSessionRows.filter(function (r) { return r.uid !== uid; });
+  renderSessionRows();
+}
+
+function editSession(uid, field, value) {
+  avSessionRows.forEach(function (r) {
+    if (r.uid !== uid) return;
+    if (field === 'weekday' || field === 'slotMinutes' || field === 'maxPerSlot') {
+      r[field] = parseInt(value, 10);
     } else {
-      elements.forEach(el => new bootstrap.Collapse(el, {toggle: false}).hide());
-      btn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Expand All';
-      btn.classList.replace('btn-outline-warning', 'btn-outline-info');
-      isGridExpanded = false;
+      r[field] = value;
     }
-  }
+  });
+}
 
-  function toggleMaster(masterCheckbox, blockId) {
-    const children = document.querySelectorAll(`.micro-checkbox[data-parent="${blockId}"]`);
-    children.forEach(child => {
-      child.checked = masterCheckbox.checked;
-    });
-    updateParentVisual(blockId);
-  }
+function saveWeeklyHours() {
+  const doctorId = document.getElementById('avail-doctor').value;
+  if (!doctorId) return alert('Select a doctor.');
 
-  function updateParentVisual(blockId) {
-    const card = document.getElementById(`card-${blockId}`);
-    const master = document.getElementById(`master-${blockId}`);
-    const children = document.querySelectorAll(`.micro-checkbox[data-parent="${blockId}"]`);
-    
-    let checkedCount = 0;
-    
-    children.forEach((c, index) => {
-      const dot = document.getElementById(`dot-${blockId}-${index}`);
-      if(c.checked) {
-        checkedCount++;
-        dot.className = 'bg-success rounded-circle indicator-dot';
+  const btn = document.getElementById('btn-save-hours');
+  const og = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+  btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.innerHTML = og;
+      btn.disabled = false;
+      if (res && res.success) {
+        document.getElementById('av-hours-msg').innerHTML =
+          '<span class="text-success">' + window.crescEsc(res.message) + '</span>';
+        loadWeeklyHours();
+        loadAvailabilityGrid();
       } else {
-        dot.className = 'bg-danger rounded-circle indicator-dot';
+        alert((res && res.message) || 'Could not save clinic hours.');
       }
-    });
-
-    if(checkedCount === 4) {
-      master.checked = true;
-      card.style.borderColor = '#22c55e'; card.style.opacity = '1';
-    } else if (checkedCount === 0) {
-      master.checked = false;
-      card.style.borderColor = '#ef4444'; card.style.opacity = '0.7';
-    } else {
-      master.checked = false; 
-      card.style.borderColor = '#f59e0b'; card.style.opacity = '1';
-    }
-  }
-
-  function saveAvailabilitySettings(overrideConflicts) {
-    const startDate = document.getElementById('avail-start-date').value;
-    const isBulk = document.getElementById('toggle-bulk-date').checked;
-    let endDate = isBulk ? document.getElementById('avail-end-date').value : startDate;
-
-    if(!startDate) return alert("Please select a date.");
-    if(isBulk && startDate > endDate) return alert("End date cannot be before start date.");
-
-    let blockedSlots = [];
-    document.querySelectorAll('.micro-checkbox:not(:checked)').forEach(chk => {
-      blockedSlots.push(chk.getAttribute('data-time'));
-    });
-
-    const payload = { startDate: startDate, endDate: endDate, blockedSlots: blockedSlots, overrideConflicts: overrideConflicts };
-
-    const btn = document.getElementById('btn-save-avail');
-    const ogHtml = btn.innerHTML;
-    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-2"></i> Processing...`;
-    btn.disabled = true;
-
-    google.script.run.withSuccessHandler(res => {
-      btn.innerHTML = ogHtml; btn.disabled = false;
-      
-      // 🚀 UPGRADED: Strict error checking prevents infinite hanging
-      if (res.isConflict) {
-        document.getElementById('conflict-list').innerHTML = res.conflicts.map(c => `<li>${c.date} @ ${c.time} - ${c.patient}</li>`).join('');
-        conflictModalInstance.show();
-      } else if (res.success) {
-        if(overrideConflicts) conflictModalInstance.hide();
-        sessionStorage.removeItem(`clinic_avail_${startDate}`);
-        const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        document.getElementById('last-audit-log').innerText = `Last updated today at ${timeStr}`;
-        alert("Availability saved successfully!");
-        loadAvailabilityCache();
-      } else {
-        // Backend caught an error, returned it safely
-        alert("Action Failed: " + res.message);
-      }
-    }).withFailureHandler(err => {
-      // Network/Google timeout error
-      btn.innerHTML = ogHtml; btn.disabled = false; 
-      alert("Network Error: " + err.message);
-    }).saveEnterpriseAvailability(payload);
-  }
+    })
+    .withFailureHandler(function (err) {
+      btn.innerHTML = og;
+      btn.disabled = false;
+      alert('Network error: ' + err.message);
+    })
+    .saveDoctorSchedule({ doctorId: doctorId, rows: avSessionRows }, window.sessionToken);
+}
 </script>

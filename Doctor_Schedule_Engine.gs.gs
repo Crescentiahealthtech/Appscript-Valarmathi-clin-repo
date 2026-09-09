@@ -308,7 +308,7 @@ function deleteScheduleException(exceptionId, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var sess = validateSession_(sessionToken);
+    var sess = dc_validateSession_(sessionToken);
     if (!sess) return { success: false, message: "Your session has expired." };
 
     var sh = ds_exceptionSheet_();
@@ -412,11 +412,14 @@ function ds_bookingsByTime_(doctorId, dateKey) {
   var docU = dc_upper_(doctorId);
 
   for (var i = 1; i < data.length; i++) {
-    if (dc_dateKey_(data[i][3]) !== dateKey) continue;
+    // Cheap string checks FIRST. The legacy 'Blocked' rows are the bulk of this
+    // sheet; parsing their dates before discarding them is what made this slow.
+    var status = data[i][6];
+    if (status === "Cancelled" || status === "DELETE" || status === "Blocked") continue;
+    if (data[i][1] === "ADMIN") continue;
 
-    var status = dc_str_(data[i][6]);
-    if (status === "Cancelled" || status === "DELETE") continue;
-    if (status === "Blocked") continue;          // legacy pseudo-rows ignored
+    if (dc_dateKey_(data[i][3]) !== dateKey) continue;
+    status = dc_str_(status);
 
     // Legacy rows with no Doctor_ID belong to the original single doctor.
     var rowDoc = (docCol === -1) ? DC_DEFAULT_DOCTOR
@@ -549,7 +552,7 @@ function bookAppointmentScoped(payload, sessionToken) {
   try {
     lock.waitLock(10000);
 
-    var sess = validateSession_(sessionToken);
+    var sess = dc_validateSession_(sessionToken);
     if (!sess) return { success: false, message: "Your session has expired. Please sign in again." };
 
     var doc = dc_getDoctorById_(dc_str_(payload && payload.doctorId));

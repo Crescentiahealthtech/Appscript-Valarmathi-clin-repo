@@ -1,77 +1,454 @@
+<style>
+  .slot-pill { cursor: pointer; border: 1px solid #334155; border-radius: 8px; padding: 6px 4px;
+               text-align: center; font-size: 0.72rem; transition: all .15s ease; }
+  .slot-pill.free   { border-color: #22c55e; color: #22c55e; }
+  .slot-pill.free:hover { background: rgba(34,197,94,.18); }
+  .slot-pill.taken  { border-color: #475569; color: #64748b; cursor: not-allowed; opacity: .55; }
+  .slot-pill.chosen { background: #22c55e; color: #0f172a; font-weight: 700; }
+  .wh-day-row { border-bottom: 1px solid var(--border-color, #334155); }
+</style>
 
+<!-- ==========================================================================
+     MANUAL BOOKING MODAL  (doctor-aware)
+     Slots are generated per doctor per date by getDoctorSlotsForDate().
+     Free text time entry is only permitted via the off-schedule switch.
+========================================================================== -->
 <div id="admin-book-modal" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1050; display: flex; align-items: center; justify-content: center;">
-  <div class="card p-4 border-secondary shadow-lg" style="width: 90%; max-width: 500px; background-color: var(--bg-card); max-height: 90vh; overflow-y: auto;">
+  <div class="card p-4 border-secondary shadow-lg" style="width: 92%; max-width: 640px; background-color: var(--bg-card); max-height: 92vh; overflow-y: auto;">
+
     <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
       <h5 class="fw-bold text-white m-0"><i class="fa-solid fa-calendar-plus text-success me-2"></i> Manual Booking</h5>
       <button class="btn-close btn-close-white" onclick="closeAdminBookModal()"></button>
     </div>
-    
+
     <div class="mb-3">
-      <label class="label-bright small mb-1">Patient ID (Leave blank for Walk-in)</label>
+      <label class="label-bright small mb-1">Patient ID (leave blank for walk-in)</label>
       <div class="input-group">
         <input type="text" id="ab-id" class="form-control text-white-force border-secondary" placeholder="e.g. LMTVS0001">
         <button class="btn btn-outline-info" onclick="autoFetchPatient()">Fetch Details</button>
       </div>
     </div>
-    
+
     <div class="mb-3">
       <label class="label-bright small mb-1">Patient Name *</label>
       <input type="text" id="ab-name" class="form-control text-white-force border-secondary">
     </div>
-    
+
     <div class="row g-2 mb-3">
       <div class="col-6"><label class="label-bright small mb-1">Age</label><input type="text" id="ab-age" class="form-control text-white-force border-secondary"></div>
       <div class="col-6"><label class="label-bright small mb-1">Gender</label><input type="text" id="ab-sex" class="form-control text-white-force border-secondary"></div>
     </div>
-    
+
     <div class="row g-2 mb-3">
-      <div class="col-6"><label class="label-bright small mb-1">Date *</label><input type="date" id="ab-date" class="form-control text-white-force border-secondary"></div>
-      <div class="col-6"><label class="label-bright small mb-1">Time *</label><input type="time" id="ab-time" class="form-control text-white-force border-secondary"></div>
+      <div class="col-12">
+        <label class="label-bright small mb-1">Doctor *</label>
+        <select id="ab-doctor" class="form-select text-white-force border-secondary" onchange="loadBookingSlots()">
+          <option value="">Select doctor</option>
+        </select>
+      </div>
     </div>
-    
-    <div class="row g-2 mb-4">
+
+    <div class="row g-2 mb-3">
+      <div class="col-6">
+        <label class="label-bright small mb-1">Date *</label>
+        <input type="date" id="ab-date" class="form-control text-white-force border-secondary" onchange="loadBookingSlots()">
+      </div>
       <div class="col-6">
         <label class="label-bright small mb-1">Purpose</label>
         <select id="ab-purpose" class="form-select text-white-force border-secondary">
           <option>Consultation</option>
           <option>Follow-up</option>
           <option>Emergency</option>
+          <option>Procedure</option>
         </select>
       </div>
-      <div class="col-6"><label class="label-bright small mb-1">Fee (₹)</label><input type="number" id="ab-fee" class="form-control text-white-force border-secondary" value="500"></div>
     </div>
-    
+
+    <div class="mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <label class="label-bright small m-0">Available Slots *</label>
+        <div class="form-check form-switch m-0">
+          <input class="form-check-input cursor-pointer" type="checkbox" id="ab-force-off" onchange="toggleOffSchedule()">
+          <label class="form-check-label text-warning small fw-bold">Off-schedule (emergency)</label>
+        </div>
+      </div>
+
+      <div id="ab-slot-grid" class="row g-2">
+        <div class="col-12 label-bright small" style="opacity:.5;">Select a doctor and date.</div>
+      </div>
+
+      <div id="ab-manual-time-wrap" class="d-none mt-3">
+        <label class="label-bright small mb-1">Manual time</label>
+        <input type="time" id="ab-time" class="form-control text-white-force border-secondary" style="max-width: 200px;">
+        <div class="small text-warning mt-1" style="opacity:.85;">
+          This books outside the doctor's declared hours and is recorded as such.
+        </div>
+      </div>
+
+      <div id="ab-selected-label" class="label-bright small mt-2">No slot selected</div>
+    </div>
+
+    <div class="row g-2 mb-4">
+      <div class="col-6">
+        <label class="label-bright small mb-1">Fee (&#8377;)</label>
+        <input type="number" id="ab-fee" class="form-control text-white-force border-secondary" value="0">
+      </div>
+    </div>
+
     <button id="btn-admin-save" class="btn btn-success w-100 fw-bold py-2" onclick="saveAdminBooking()">Confirm Booking</button>
   </div>
 </div>
 
+<!-- ==========================================================================
+     CLINIC WORKING HOURS MODAL
+     Now reads the real Doctor_Schedules template instead of hardcoded text.
+========================================================================== -->
 <div id="workingHoursModal" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1050; display: flex; align-items: center; justify-content: center;">
-  <div class="card p-4 border-secondary shadow-lg" style="width: 90%; max-width: 500px; background-color: #1a1d21; max-height: 90vh; overflow-y: auto;">
-    
+  <div class="card p-4 border-secondary shadow-lg" style="width: 92%; max-width: 560px; background-color: #1a1d21; max-height: 90vh; overflow-y: auto;">
+
     <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-3">
       <h5 class="fw-bold text-white m-0"><i class="fa-solid fa-clock text-warning me-2"></i> Clinic Working Hours</h5>
       <button class="btn-close btn-close-white" onclick="closeWorkingHours()"></button>
     </div>
-    
-    <div class="mb-4">
-      <p class="text-muted small mb-3">Standard operational timings for Valarmathi Clinic.</p>
-      
-      <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-3">
-        <span class="text-white fw-bold"><i class="fa-regular fa-sun text-warning me-2"></i> Morning Session</span>
-        <span class="badge" style="background-color: rgba(56, 189, 248, 0.2); color: #38bdf8; font-size: 0.9rem;">10:00 AM - 01:00 PM</span>
-      </div>
-      
-      <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-3">
-        <span class="text-white fw-bold"><i class="fa-regular fa-moon text-info me-2"></i> Evening Session</span>
-        <span class="badge" style="background-color: rgba(168, 85, 247, 0.2); color: #a855f7; font-size: 0.9rem;">05:00 PM - 09:00 PM</span>
-      </div>
 
-      <div class="d-flex justify-content-between align-items-center py-3">
-        <span class="text-white fw-bold"><i class="fa-solid fa-calendar-xmark text-danger me-2"></i> Sunday</span>
-        <span class="badge" style="background-color: rgba(239, 68, 68, 0.2); color: #ef4444; font-size: 0.9rem;">Emergencies Only</span>
-      </div>
+    <div id="wh-body" class="mb-4">
+      <div class="text-center text-info py-4"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
     </div>
-    
+
     <button class="btn btn-outline-secondary w-100 fw-bold text-white py-2" onclick="closeWorkingHours()">Close</button>
   </div>
 </div>
+
+<script>
+// ============================================================================
+// BOOKING MODAL CONTROLLER  (Phase 3)
+// Backend: getDoctorSlotsForDate / bookAppointmentScoped / getPatientDemographics
+// Shared helpers come from Auth.html: loadDoctorContext, crescDoctorOptions, crescEsc
+// ============================================================================
+
+let abSelectedTime = "";   // "HH:mm" chosen from the slot grid
+let abSlotCache    = [];
+
+function openAdminBookingModal(preFillDate, preFillDoctorId) {
+  ['ab-id', 'ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('ab-purpose').value = 'Consultation';
+  document.getElementById('ab-fee').value = '0';
+  document.getElementById('ab-force-off').checked = false;
+  document.getElementById('ab-manual-time-wrap').classList.add('d-none');
+  document.getElementById('ab-time').value = '';
+  abSelectedTime = '';
+  abSlotCache = [];
+  document.getElementById('ab-selected-label').innerText = 'No slot selected';
+
+  const ledgerDate = document.getElementById('admin-ledger-date');
+  document.getElementById('ab-date').value =
+    preFillDate || (ledgerDate ? ledgerDate.value : new Date().toISOString().split('T')[0]);
+
+  window.loadDoctorContext(function (ctx) {
+    const sel = document.getElementById('ab-doctor');
+    sel.innerHTML = window.crescDoctorOptions('Select doctor');
+
+    const ledgerFilter = document.getElementById('ledger-doctor-filter');
+    sel.value = preFillDoctorId ||
+                (ledgerFilter ? ledgerFilter.value : '') ||
+                ctx.selfDoctorId || '';
+
+    // A doctor without cross-clinic rights books only under themselves.
+    sel.disabled = (ctx.locked && ctx.doctors.length <= 1);
+
+    document.getElementById('admin-book-modal').classList.remove('d-none');
+    loadBookingSlots();
+  });
+}
+
+function closeAdminBookModal() {
+  document.getElementById('admin-book-modal').classList.add('d-none');
+}
+
+function toggleOffSchedule() {
+  const on = document.getElementById('ab-force-off').checked;
+  document.getElementById('ab-manual-time-wrap').classList.toggle('d-none', !on);
+
+  if (on) {
+    abSelectedTime = '';
+    document.querySelectorAll('#ab-slot-grid .slot-pill').forEach(function (el) {
+      el.classList.remove('chosen');
+    });
+    document.getElementById('ab-selected-label').innerHTML =
+      '<span class="text-warning">Off-schedule booking &mdash; enter a manual time below.</span>';
+  } else {
+    document.getElementById('ab-time').value = '';
+    document.getElementById('ab-selected-label').innerText = 'No slot selected';
+  }
+}
+
+function loadBookingSlots() {
+  const doctorId = document.getElementById('ab-doctor').value;
+  const dateVal  = document.getElementById('ab-date').value;
+  const grid     = document.getElementById('ab-slot-grid');
+
+  abSelectedTime = '';
+  abSlotCache = [];
+  if (!document.getElementById('ab-force-off').checked) {
+    document.getElementById('ab-selected-label').innerText = 'No slot selected';
+  }
+
+  if (!doctorId || !dateVal) {
+    grid.innerHTML = '<div class="col-12 label-bright small" style="opacity:.5;">Select a doctor and date.</div>';
+    return;
+  }
+
+  grid.innerHTML = '<div class="col-12 text-center text-info py-3"><i class="fa-solid fa-spinner fa-spin"></i> Loading slots...</div>';
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        grid.innerHTML = '<div class="col-12 text-danger small py-2">' +
+                         window.crescEsc((res && res.message) || 'Could not load slots.') + '</div>';
+        return;
+      }
+      abSlotCache = res.slots || [];
+      renderBookingSlots(res);
+    })
+    .withFailureHandler(function (err) {
+      grid.innerHTML = '<div class="col-12 text-danger small py-2">Network error: ' +
+                       window.crescEsc(err.message) + '</div>';
+    })
+    .getDoctorSlotsForDate(doctorId, dateVal, window.sessionToken);
+}
+
+function renderBookingSlots(res) {
+  const grid = document.getElementById('ab-slot-grid');
+
+  if (!res.slots || res.slots.length === 0) {
+    grid.innerHTML = '<div class="col-12 label-bright small py-2" style="opacity:.7;">' +
+                     window.crescEsc(res.message || 'No clinic hours on this day.') +
+                     ' Use the off-schedule switch for an emergency.</div>';
+    return;
+  }
+
+  let html = res.slots.map(function (s) {
+    const cls = s.available ? 'free' : 'taken';
+    const title = s.available
+      ? 'Available'
+      : s.bookings.map(function (b) { return b.patientName || b.patientId; }).join(', ');
+    return '<div class="col-3"><div class="slot-pill ' + cls + '" ' +
+           'id="slot-' + s.time24.replace(':', '') + '" ' +
+           'title="' + window.crescEsc(title) + '"' +
+           (s.available ? ' onclick="pickSlot(\'' + s.time24 + '\')"' : '') + '>' +
+           window.crescEsc(s.time12) + '</div></div>';
+  }).join('');
+
+  // Bookings that no longer fall inside the template are surfaced, never hidden.
+  if (res.offSchedule && res.offSchedule.length > 0) {
+    html += '<div class="col-12 mt-2"><div class="small text-warning fw-bold mb-1">' +
+            '<i class="fa-solid fa-triangle-exclamation me-1"></i>Off-schedule bookings on this day</div>' +
+            res.offSchedule.map(function (o) {
+              return '<div class="small label-bright">' + window.crescEsc(o.time12) + ' &mdash; ' +
+                     window.crescEsc(o.booking.patientName || o.booking.patientId) +
+                     ' [' + window.crescEsc(o.booking.status) + ']</div>';
+            }).join('') + '</div>';
+  }
+
+  grid.innerHTML = html;
+}
+
+function pickSlot(time24) {
+  if (document.getElementById('ab-force-off').checked) return;
+
+  abSelectedTime = time24;
+  document.querySelectorAll('#ab-slot-grid .slot-pill').forEach(function (el) {
+    el.classList.remove('chosen');
+  });
+  const el = document.getElementById('slot-' + time24.replace(':', ''));
+  if (el) el.classList.add('chosen');
+
+  const match = abSlotCache.filter(function (s) { return s.time24 === time24; })[0];
+  document.getElementById('ab-selected-label').innerHTML =
+    '<span class="text-success fw-bold">Selected: ' +
+    window.crescEsc(match ? match.time12 : time24) + '</span>';
+}
+
+function autoFetchPatient() {
+  const pId = document.getElementById('ab-id').value.trim();
+  if (!pId) return;
+
+  ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
+    document.getElementById(id).value = '...';
+  });
+
+  google.script.run
+    .withSuccessHandler(function (data) {
+      if (data && data.name) {
+        document.getElementById('ab-name').value = data.name;
+        document.getElementById('ab-age').value  = data.age || '';
+        document.getElementById('ab-sex').value  = data.gender || data.sex || '';
+      } else {
+        ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
+          document.getElementById(id).value = '';
+        });
+        alert('Patient ID not found.');
+      }
+    })
+    .withFailureHandler(function (err) {
+      ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
+        document.getElementById(id).value = '';
+      });
+      alert('Could not fetch patient: ' + err.message);
+    })
+    .getPatientDemographics(pId);
+}
+
+function saveAdminBooking() {
+  const doctorId = document.getElementById('ab-doctor').value;
+  const name     = document.getElementById('ab-name').value.trim();
+  const date     = document.getElementById('ab-date').value;
+  const forceOff = document.getElementById('ab-force-off').checked;
+  const time     = forceOff ? document.getElementById('ab-time').value : abSelectedTime;
+
+  if (!doctorId) return alert('Select a doctor.');
+  if (!name)     return alert('Patient name is required.');
+  if (!date)     return alert('Select a date.');
+  if (!time)     return alert(forceOff ? 'Enter a manual time.' : 'Select an available slot.');
+
+  const payload = {
+    doctorId:    doctorId,
+    patientId:   document.getElementById('ab-id').value.trim() || 'DIRECT',
+    patientName: name,
+    date:        date,
+    time:        time,
+    purpose:     document.getElementById('ab-purpose').value || 'Consultation',
+    status:      'Booked',
+    fee:         document.getElementById('ab-fee').value || 0,
+    forceOffSchedule: forceOff
+  };
+
+  const btn = document.getElementById('btn-admin-save');
+  const og  = btn.innerHTML;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Saving...';
+  btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.innerHTML = og;
+      btn.disabled = false;
+      if (res && res.success) {
+        closeAdminBookModal();
+        if (typeof loadAdminLedger === 'function') loadAdminLedger();
+        alert(res.message);
+      } else {
+        alert((res && res.message) || 'Booking failed.');
+        loadBookingSlots();   // the slot may have been taken while the form was open
+      }
+    })
+    .withFailureHandler(function (err) {
+      btn.innerHTML = og;
+      btn.disabled = false;
+      alert('Network error: ' + err.message);
+    })
+    .bookAppointmentScoped(payload, window.sessionToken);
+}
+
+// ============================================================================
+// WORKING HOURS MODAL — reads the live Doctor_Schedules template
+// ============================================================================
+
+const WH_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function openWorkingHours() {
+  document.getElementById('workingHoursModal').classList.remove('d-none');
+  const body = document.getElementById('wh-body');
+  body.innerHTML = '<div class="text-center text-info py-4"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>';
+
+  window.loadDoctorContext(function (ctx) {
+    if (!ctx.doctors || ctx.doctors.length === 0) {
+      body.innerHTML = '<div class="label-bright small text-center py-4" style="opacity:.7;">' +
+                       'No active doctors configured.</div>';
+      return;
+    }
+
+    const collected = [];
+    let pending = ctx.doctors.length;
+
+    ctx.doctors.forEach(function (d) {
+      google.script.run
+        .withSuccessHandler(function (res) {
+          collected.push({ doctor: d, rows: (res && res.success) ? (res.rows || []) : [] });
+          if (--pending === 0) renderWorkingHours(collected);
+        })
+        .withFailureHandler(function () {
+          collected.push({ doctor: d, rows: [] });
+          if (--pending === 0) renderWorkingHours(collected);
+        })
+        .getDoctorSchedule(d.doctorId, window.sessionToken);
+    });
+  });
+}
+
+function renderWorkingHours(collected) {
+  const body = document.getElementById('wh-body');
+
+  collected.sort(function (a, b) {
+    return a.doctor.name < b.doctor.name ? -1 : 1;
+  });
+
+  body.innerHTML = collected.map(function (entry) {
+    let inner;
+
+    if (entry.rows.length === 0) {
+      inner = '<div class="label-bright small py-2" style="opacity:.6;">' +
+              'No recurring hours set.</div>';
+    } else {
+      // Group sessions by weekday so each day prints on one line.
+      const byDay = {};
+      entry.rows.forEach(function (r) {
+        if (!byDay[r.weekday]) byDay[r.weekday] = [];
+        byDay[r.weekday].push(r.startTime + ' - ' + r.endTime);
+      });
+
+      inner = Object.keys(byDay).sort(function (a, b) { return a - b; }).map(function (wd) {
+        return '<div class="d-flex justify-content-between align-items-center wh-day-row py-2">' +
+                 '<span class="text-white small fw-bold">' + WH_WEEKDAYS[wd] + '</span>' +
+                 '<span class="badge" style="background-color: rgba(56,189,248,.18); color:#38bdf8; font-size:.78rem;">' +
+                   window.crescEsc(byDay[wd].join('  |  ')) +
+                 '</span>' +
+               '</div>';
+      }).join('');
+
+      const offDays = WH_WEEKDAYS.map(function (n, i) { return i; })
+        .filter(function (i) { return !byDay[i]; })
+        .map(function (i) { return WH_WEEKDAYS[i].substring(0, 3); });
+
+      if (offDays.length > 0) {
+        inner += '<div class="d-flex justify-content-between align-items-center py-2">' +
+                   '<span class="text-white small fw-bold"><i class="fa-solid fa-calendar-xmark text-danger me-2"></i>No clinic</span>' +
+                   '<span class="badge" style="background-color: rgba(239,68,68,.18); color:#ef4444; font-size:.78rem;">' +
+                     window.crescEsc(offDays.join(', ')) +
+                   '</span>' +
+                 '</div>';
+      }
+    }
+
+    return '<div class="mb-4">' +
+             '<div class="text-white fw-bold mb-1">' +
+               '<i class="fa-solid fa-user-doctor text-info me-2"></i>' +
+               window.crescEsc(entry.doctor.name) +
+               (entry.doctor.specialty
+                 ? '<span class="label-bright small ms-2" style="opacity:.7;">' +
+                   window.crescEsc(entry.doctor.specialty) + '</span>'
+                 : '') +
+             '</div>' +
+             inner +
+           '</div>';
+  }).join('') +
+  '<div class="label-bright small pt-2 border-top border-secondary" style="opacity:.6;">' +
+    'Leave and one-off blocks are managed under Doctor Availability.' +
+  '</div>';
+}
+
+function closeWorkingHours() {
+  document.getElementById('workingHoursModal').classList.add('d-none');
+}
+</script>

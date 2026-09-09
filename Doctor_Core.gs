@@ -116,17 +116,43 @@ function dc_fromMinutes_(mins) {
   return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m;
 }
 
-/** Any date cell -> "yyyy-MM-dd". Kills the GMT+0530 drift bug. */
+/** Local yyyy-MM-dd from a Date, WITHOUT Utilities.formatDate (service call). */
+function dc_fmtDate_(d) {
+  var y = d.getFullYear(), m = d.getMonth() + 1, dd = d.getDate();
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (dd < 10 ? '0' : '') + dd;
+}
+
+/**
+ * Any date cell -> "yyyy-MM-dd".
+ * PERFORMANCE-CRITICAL: this runs once per sheet row on every scan. It must
+ * never call Utilities.formatDate — that is a service round trip, and at tens
+ * of thousands of rows it blows the 6-minute execution ceiling, which the HTML
+ * service reports as a request that simply never returns.
+ */
 function dc_dateKey_(v) {
-  if (!v) return "";
-  if (v instanceof Date) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  if (!v && v !== 0) return "";
+
+  if (typeof v === 'string') {
+    var s = v.trim();
+    // Fast path: already ISO (charCode 45 is '-')
+    if (s.length >= 10 && s.charCodeAt(4) === 45 && s.charCodeAt(7) === 45) {
+      return s.substring(0, 10);
+    }
+    // Sheets display format for en-IN is dd/MM/yyyy
+    var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) {
+      return m[3] + '-' +
+             (m[2].length < 2 ? '0' : '') + m[2] + '-' +
+             (m[1].length < 2 ? '0' : '') + m[1];
+    }
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? s.substring(0, 10) : dc_fmtDate_(d);
   }
-  var s = dc_str_(v);
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
-  var d = new Date(s);
-  if (isNaN(d.getTime())) return s.substring(0, 10);
-  return Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+  if (v instanceof Date) return dc_fmtDate_(v);
+
+  var d2 = new Date(String(v));
+  return isNaN(d2.getTime()) ? String(v).substring(0, 10) : dc_fmtDate_(d2);
 }
 
 // ============================================================================
@@ -366,7 +392,7 @@ function getDoctorPickerContext(sessionToken) {
  * Never returns ALL on an invalid session.
  */
 function resolveScope_(sessionToken, requestedDoctorId) {
-  var sess = validateSession_(sessionToken);
+  var sess = dc_validateSession_(sessionToken);
   if (!sess) {
     return { ok: false, mode: "SET", doctorIds: [], selfDoctorId: "",
              role: "", username: "",
@@ -439,7 +465,7 @@ function dc_inScope_(scope, doctorId) {
  * @return {{ok, doctorId, signature, name, sess, message}}
  */
 function resolveWriteDoctor_(sessionToken, targetDoctorId) {
-  var sess = validateSession_(sessionToken);
+  var sess = dc_validateSession_(sessionToken);
   if (!sess) {
     return { ok: false, message: "Your session has expired. Please sign in again." };
   }
@@ -571,7 +597,7 @@ function removeIPCareTeamMember(entryId, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var sess = validateSession_(sessionToken);
+    var sess = dc_validateSession_(sessionToken);
     if (!sess) return { success: false, message: "Your session has expired." };
 
     var sh = dc_careTeamSheet_();

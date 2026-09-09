@@ -4,7 +4,7 @@
   /* ========================================= */
   .hd-workspace { background-color: var(--bg-main, #121418) !important; color: var(--text-main, #f8fafc); }
   .hd-panel { background-color: var(--bg-card, #1e293b) !important; border: 1px solid var(--border-color, #334155) !important; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-  
+
   .hd-panel-title { color: var(--medical-purple, #635bff); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color, #334155); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
   .hd-panel-title:hover { color: var(--accent-purple, #7b74ff); }
   .hd-label { font-size: 0.7rem; color: var(--text-label, #94a3b8); margin-bottom: 4px; font-weight: 600; display: block; }
@@ -24,7 +24,7 @@
   .dial-btn { font-size: 0.75rem; font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color, #334155); color: var(--text-main, #f8fafc); background: var(--bg-input, #0f172a);}
   .dial-btn:active { transform: scale(0.95); }
 
-  .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); width: 100%; max-height: 200px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); width: 100%; max-height: 220px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
   .autocomplete-items div { padding: 8px; cursor: pointer; font-size: 0.75rem; color: var(--text-main, #f8fafc); border-bottom: 1px solid var(--border-color, #334155); display: flex; justify-content: space-between; align-items: center;}
   .autocomplete-items div strong { color: var(--medical-purple, #635bff); }
   .autocomplete-items div:hover { background-color: var(--border-hover, #334155); }
@@ -35,49 +35,168 @@
   .btn-check:checked + .wnl-btn-danger { background-color: var(--danger, #ef4444); color: #fff; }
   .wnl-group button.wnl-btn:hover { background-color: rgba(255,255,255,0.05); color: #fff; }
 
-  .scrollable-pane { height: calc(100vh - 140px); overflow-y: auto; overflow-x: hidden; padding-right: 5px; }
+  .scrollable-pane { height: calc(100vh - 190px); overflow-y: auto; overflow-x: hidden; padding-right: 5px; }
   .scrollable-pane::-webkit-scrollbar { width: 4px; }
   .scrollable-pane::-webkit-scrollbar-thumb { background: var(--border-color, #334155); border-radius: 10px; }
 
   /* ========================================= */
-  /* BULLETPROOF NATIVE PRINT ENGINE           */
+  /* SAFETY BAR — always visible               */
   /* ========================================= */
-  
-  
+  .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
+  .op-safety-danger { background: rgba(239,68,68,0.12); border: 1px solid #ef4444; color: #fca5a5; }
+  .op-safety-warn   { background: rgba(245,158,11,0.10); border: 1px solid #f59e0b; color: #fcd34d; }
+  .op-safety-info   { background: rgba(148,163,184,0.08); border: 1px solid var(--border-color,#334155); color: #94a3b8; }
+  .op-safety-line { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
+
+  /* ========================================= */
+  /* ASSIST PANEL — collapsed by default       */
+  /* ========================================= */
+  .op-assist { background: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; }
+  .op-assist-sec + .op-assist-sec { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border-color, #334155); }
+  .op-assist-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label, #94a3b8); font-weight: 700; margin-bottom: 0.5rem; }
+
+  .op-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input, #0f172a); border: 1px solid var(--border-color, #334155); color: var(--text-main, #f8fafc); border-radius: 999px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; transition: 0.15s; }
+  .op-chip:hover { border-color: var(--medical-purple, #635bff); }
+  .op-chip .op-chip-add { color: #10b981; font-weight: 700; }
+  .op-chip-muted { color: var(--text-muted, #64748b); }
+
+  .op-scope-tag { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.4px; padding: 1px 5px; border-radius: 3px; }
+  .op-scope-PERSONAL { background: rgba(99,91,255,0.18); color: #a5b4fc; }
+  .op-scope-CLINIC   { background: rgba(14,165,233,0.18); color: #7dd3fc; }
+  .op-scope-SEED     { background: rgba(148,163,184,0.14); color: #94a3b8; }
+  .op-scope-PRESET   { background: rgba(14,165,233,0.18); color: #7dd3fc; }
+
+  .op-recall-card { background: var(--bg-input, #0f172a); border: 1px solid var(--border-color, #334155); border-left: 3px solid #10b981; border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.73rem; }
+  .op-suggest-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+  .op-evidence { font-size: 0.6rem; color: var(--text-muted, #64748b); }
+  .op-allergy-chip { background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color: #fca5a5; border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
+  .op-allergy-none { background: rgba(148,163,184,0.12); border: 1px dashed var(--border-color,#334155); color: #94a3b8; border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
+  .op-taper-tag { font-size: 0.55rem; background: rgba(245,158,11,0.18); color: #fcd34d; border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+  .op-peds-hint { font-size: 0.6rem; color: #38bdf8; cursor: pointer; margin-top: 2px; display: inline-block; }
 </style>
 
 <div id="emr-workspace-op-consult" class="d-none hd-workspace mt-3 app-view h-100 flex-column px-2">
 
-  <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-secondary no-print">
-    <div class="d-flex align-items-center">
-      <button class="btn btn-outline-secondary btn-sm py-1 px-2 me-2" onclick="closeOPConsultationWorkspace()"><i class="fa-solid fa-arrow-left"></i> Back</button>
-      
-      <button class="btn btn-outline-info btn-sm py-1 px-2 me-4" onclick="if(typeof switchTab === 'function') switchTab('tab-admin-appt');"><i class="fa-solid fa-calendar-day"></i> Appts</button>
+    <!-- ============================ HEADER ============================ -->
+    <div class="mb-3 pb-2 border-bottom border-secondary no-print">
 
-      <div class="input-group input-group-sm me-4" style="width: 260px;">
-        <input type="text" class="form-control hd-input m-0 border-secondary" id="op-search-pat-id" placeholder="Enter Patient ID...">
+    <!-- Row 1: patient identity -->
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+      <button class="btn btn-outline-secondary btn-sm py-1 px-2" onclick="closeOPConsultationWorkspace()"><i class="fa-solid fa-arrow-left"></i></button>
+      <button class="btn btn-outline-info btn-sm py-1 px-2" onclick="if(typeof switchTab === 'function') switchTab('tab-admin-appt');"><i class="fa-solid fa-calendar-day"></i></button>
+
+      <div class="input-group input-group-sm" style="width: 220px;">
+        <input type="text" class="form-control hd-input m-0 border-secondary" id="op-search-pat-id" placeholder="Patient ID..." onkeydown="if(event.key==='Enter') searchEMRPatient()">
         <button class="btn btn-outline-warning" type="button" onclick="searchEMRPatient()"><i class="fa-solid fa-magnifying-glass"></i></button>
       </div>
 
-      <div class="border-start border-secondary ps-4">
-        <span class="fs-6 fw-bold me-2" id="hd-pat-name" style="color: var(--text-main);">Search Patient</span>
-        <span class="badge bg-dark border border-secondary text-light me-2 px-2 py-1" id="hd-pat-id">ID: --</span>
-        <span class="text-warning fw-bold small" id="hd-pat-demo">-- Y | -</span>
-      </div>
+      <div class="vr mx-1" style="opacity:.3;"></div>
+
+      <span class="fs-6 fw-bold" id="hd-pat-name" style="color: var(--text-main);">Search Patient</span>
+      <span class="badge bg-dark border border-secondary text-light px-2 py-1" id="hd-pat-id">ID: --</span>
+      <span class="text-warning fw-bold small" id="hd-pat-demo">-- Y | -</span>
+      <span id="hd-allergy-chip" class="op-allergy-none" onclick="openAllergyEditor()">Allergies: not recorded</span>
+
+      <span class="ms-auto text-muted small">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></span>
     </div>
 
-    <div class="d-flex gap-2 align-items-center">
-      <div class="text-muted small me-2">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></div>
-      <button class="btn btn-sm btn-outline-success py-1 px-2 shadow-sm" onclick="dispatchOPWhatsApp()" id="btn-wa-op" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i> WA</button>
-      <button class="btn btn-sm btn-outline-info py-1 px-2 shadow-sm me-3" onclick="dispatchOPEmail()" id="btn-email-op" title="Send via Email"><i class="fa-solid fa-envelope"></i> Email</button>
-      <button class="btn btn-sm btn-outline-warning py-1 px-2 shadow-sm" onclick="printOPPrescription()"><i class="fa-solid fa-print"></i> Print</button>
-      <button class="btn btn-sm text-white fw-bold py-1 px-2 shadow-sm" style="background-color: var(--medical-purple, #0ea5e9);" onclick="submitOPEncounter()" id="btn-submit-op">Save Consult</button>
+    <!-- Row 2: attribution + actions -->
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="hd-label m-0" style="font-size:.68rem;">Consulting doctor</span>
+      <select id="op-doctor-select" class="form-select form-select-sm text-white-force" style="width: 210px;" onchange="onConsultDoctorChanged()">
+        <option value="">Select doctor</option>
+      </select>
+
+      <button class="btn btn-sm btn-outline-warning py-1 px-2" onclick="openReferModal()" title="Refer this patient to a colleague">
+        <i class="fa-solid fa-user-doctor"></i> Refer
+      </button>
+
+      <div class="modal fade" id="opReferModal" tabindex="-1">
+       <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #f59e0b;">
+         <div class="modal-header py-2 border-secondary">
+            <h6 class="m-0 text-warning"><i class="fa-solid fa-user-doctor"></i> Refer to a colleague</h6>
+           <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+         </div>
+          <div class="modal-body p-3">
+           <label class="hd-label">Refer to</label>
+            <select class="hd-input mb-2" id="ref-to-doctor"><option value="">Select doctor</option></select>
+            <label class="hd-label">Reason for referral <span class="text-danger">*</span></label>
+            <textarea class="hd-input" id="ref-reason" rows="3" placeholder="What do you want their opinion on?"></textarea>
+            <div class="small mt-2" style="color:#94a3b8;">The patient appears in their queue as a referral. The  reason becomes part of the record.</div>
+         </div>
+         <div class="modal-footer py-1 border-secondary">
+           <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+           <button class="btn btn-sm btn-warning fw-bold" id="btn-send-referral" onclick="sendReferral()">Send referral</button>
+          </div>
+         </div>
+          </div>
+        </div>
+
+      <div class="ms-auto d-flex gap-2 align-items-center">
+        <button class="btn btn-sm btn-outline-light py-1 px-2" id="btn-assist-toggle" onclick="toggleAssistPanel()">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Assist
+        </button>
+        <button class="btn btn-sm btn-outline-success py-1 px-2" onclick="dispatchOPWhatsApp()" id="btn-wa-op" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
+        <button class="btn btn-sm btn-outline-info py-1 px-2" onclick="dispatchOPEmail()" id="btn-email-op" title="Email"><i class="fa-solid fa-envelope"></i></button>
+        <button class="btn btn-sm btn-outline-warning py-1 px-2" onclick="printOPPrescription()" title="Print"><i class="fa-solid fa-print"></i></button>
+        <button class="btn btn-sm text-white fw-bold py-1 px-3" style="background-color: var(--medical-purple, #0ea5e9);" onclick="submitOPEncounter()" id="btn-submit-op">Save Consult</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SAFETY BAR (always visible) ==================== -->
+  <div id="op-safety-bar" class="no-print"></div>
+
+  <!-- ==================== ASSIST PANEL (collapsed) ==================== -->
+  <div id="op-assist-panel" class="op-assist d-none no-print">
+
+    <div class="op-assist-sec">
+      <div class="op-assist-head">Previous visit</div>
+      <div id="op-recall-slot" class="label-bright small" style="opacity:.6;">Fetch a patient to see their last consultation.</div>
+    </div>
+
+    <div class="op-assist-sec">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="op-assist-head m-0">Consultation templates</div>
+        <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveTemplateModal()"><i class="fa-solid fa-plus"></i> Save current as template</button>
+      </div>
+      <div id="op-template-strip" class="op-suggest-strip"><span class="label-bright small" style="opacity:.5;">Loading...</span></div>
+    </div>
+
+    <div class="op-assist-sec">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="op-assist-head m-0">Medicine bundles &mdash; click <span class="text-success">+</span> to add</div>
+        <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveBundleModal()"><i class="fa-solid fa-plus"></i> Save current Rx as bundle</button>
+      </div>
+      <div id="op-bundle-strip" class="op-suggest-strip"><span class="label-bright small" style="opacity:.5;">Loading...</span></div>
+    </div>
+
+    <div class="op-assist-sec">
+      <div class="op-assist-head">Based on your past prescribing for this diagnosis</div>
+          <div class="op-assist-sec" id="op-assist-dx-section">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="op-assist-head m-0" id="op-assist-dx-head">Treatment assist</div>
+        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:0.7rem;" id="btn-add-selected" onclick="addSelectedAssist()">Add selected</button>
+      </div>
+      <div id="op-assist-body">
+        <span class="label-bright small" style="opacity:.5;">Enter a diagnosis to see suggestions.</span>
+      </div>
+    </div>
+    </div>
+
+    <div class="op-assist-sec">
+      <div class="op-assist-head">Tip</div>
+      <div class="label-bright small" style="opacity:.7;">
+        Type <code style="color:#7dd3fc;">/</code> in a complaint, history or advice field to search templates by keyword &mdash; including alternative wordings.
+      </div>
     </div>
   </div>
 
   <div class="row g-3">
     <div class="col-xl-9 col-lg-8 scrollable-pane">
 
+      <!-- ===== COMPLAINTS & HISTORY ===== -->
       <div class="hd-panel mb-3 py-3">
         <div class="mb-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
@@ -85,6 +204,7 @@
             <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="addOPDynamicRow('op-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive"><table class="table table-borderless table-tight m-0"><tbody id="op-cc-tbody"></tbody></table></div>
+          <div id="op-workup-hint" class="mt-2"></div>
         </div>
         <div class="border-top border-secondary pt-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
@@ -95,6 +215,7 @@
         </div>
       </div>
 
+      <!-- ===== GENERAL EXAM ===== -->
       <div class="hd-panel mb-3 py-2">
         <div class="hd-panel-title d-flex justify-content-between align-items-center m-0 border-0 collapsed" data-bs-toggle="collapse" data-bs-target="#opGeCollapse">
            <span>General Examination</span>
@@ -111,6 +232,7 @@
         </div>
       </div>
 
+      <!-- ===== SYSTEMIC EXAM ===== -->
       <div class="hd-panel mb-3 py-2">
         <div class="hd-panel-title d-flex justify-content-between align-items-center m-0 border-0 collapsed" data-bs-toggle="collapse" data-bs-target="#opSeCollapse">
            <span>Systemic Examination</span>
@@ -118,11 +240,12 @@
                <div class="wnl-group me-3" onclick="event.stopPropagation();">
                    <button type="button" class="wnl-btn" onclick="markOPAllWNL(); document.querySelectorAll('.btn-check[id$=-wnl]').forEach(r => r.checked=true);">ALL WNL</button>
                    <button type="button" class="wnl-btn" style="border-left:1px solid var(--border-color, #334155);" onclick="['cvs','rs','pa','cns'].forEach(s => setOPSysExam(s, 'abn')); document.querySelectorAll('.btn-check[id$=-abn]').forEach(r => r.checked=true);">ALL ABN</button>
+                   <button type="button" class="wnl-btn" style="border-left:1px solid var(--border-color, #334155); color:#7dd3fc;" onclick="event.stopPropagation(); saveMyExamDefaults();" title="Save the current normals as your defaults">SAVE AS MINE</button>
                </div>
                <i class="fa-solid fa-chevron-down text-secondary"></i>
            </div>
         </div>
-        
+
         <div id="opSeCollapse" class="collapse mt-3 pt-3 border-top border-secondary">
            <div class="row g-4">
               <div class="col-md-6 col-xl-3">
@@ -138,7 +261,7 @@
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-cvs-dd">
                   <option value="">-- Add Abnormality --</option><option value="S3 Gallop">S3 Gallop</option><option value="Murmur">Murmur</option><option value="Tachycardia">Tachycardia</option>
                 </select>
-                <textarea class="hd-input text-success op-sys-text" id="op-se-cvs-text" rows="2" data-sys="CVS">S1S2+, No Murmur</textarea>
+                <textarea class="hd-input text-success op-sys-text" id="op-se-cvs-text" rows="2" data-sys="CVS"></textarea>
               </div>
 
               <div class="col-md-6 col-xl-3">
@@ -154,7 +277,7 @@
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-rs-dd">
                   <option value="">-- Add Abnormality --</option><option value="Crepitations">Crepitations</option><option value="Wheeze">Wheeze</option><option value="Decr. Air Entry">Decr. Air Entry</option>
                 </select>
-                <textarea class="hd-input text-success op-sys-text" id="op-se-rs-text" rows="2" data-sys="RS">B/L NVBS, No added sounds</textarea>
+                <textarea class="hd-input text-success op-sys-text" id="op-se-rs-text" rows="2" data-sys="RS"></textarea>
               </div>
 
               <div class="col-md-6 col-xl-3">
@@ -170,7 +293,7 @@
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-pa-dd">
                   <option value="">-- Add Abnormality --</option><option value="Tender">Tender</option><option value="Organomegaly">Organomegaly</option><option value="Guarding">Guarding</option>
                 </select>
-                <textarea class="hd-input text-success op-sys-text" id="op-se-pa-text" rows="2" data-sys="PA">Soft, Non-tender, No organomegaly</textarea>
+                <textarea class="hd-input text-success op-sys-text" id="op-se-pa-text" rows="2" data-sys="PA"></textarea>
               </div>
 
               <div class="col-md-6 col-xl-3">
@@ -186,23 +309,25 @@
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-cns-dd">
                   <option value="">-- Add Abnormality --</option><option value="Altered Sensorium">Altered Sensorium</option><option value="Focal Deficit">Focal Deficit</option><option value="Slurred Speech">Slurred Speech</option>
                 </select>
-                <textarea class="hd-input text-success op-sys-text" id="op-se-cns-text" rows="2" data-sys="CNS">Conscious, Oriented, NFND</textarea>
+                <textarea class="hd-input text-success op-sys-text" id="op-se-cns-text" rows="2" data-sys="CNS"></textarea>
               </div>
            </div>
         </div>
       </div>
 
+      <!-- ===== DIAGNOSIS ===== -->
       <div class="hd-panel mb-3 py-3" style="border-color: var(--info) !important;">
         <label class="hd-label text-info fw-bold text-uppercase mb-2">Diagnosis</label>
         <div class="d-flex gap-3">
-            <select class="hd-input text-info border-info" style="width: 180px; padding: 0.5rem;">
-              <option>Prov. Diagnosis</option>
-              <option>Final Diagnosis</option>
+            <select class="hd-input text-info border-info" style="width: 180px; padding: 0.5rem;" id="clin-diagnosis-type">
+              <option value="Provisional">Prov. Diagnosis</option>
+              <option value="Final">Final Diagnosis</option>
             </select>
-            <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="clin-diagnosis">
+            <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="clin-diagnosis" onchange="onDiagnosisChanged()">
         </div>
       </div>
 
+      <!-- ===== TREATMENT ===== -->
       <div class="hd-panel mb-3">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <div class="hd-panel-title border-0 m-0 fs-6">Treatment (Rx)</div>
@@ -212,11 +337,11 @@
           <table class="table table-borderless table-tight m-0" style="background-color: transparent;">
             <thead>
               <tr>
-                <th style="width: 12%;">Type</th>
-                <th style="width: 34%;">Medicine Name</th>
-                <th style="width: 20%; text-align:center;">Dosage / Sig</th>
+                <th style="width: 11%;">Type</th>
+                <th style="width: 33%;">Medicine Name</th>
+                <th style="width: 21%; text-align:center;">Dosage / Sig</th>
                 <th style="width: 10%; text-align:center;">Days</th>
-                <th style="width: 20%;">Notes / Timing</th>
+                <th style="width: 21%;">Notes / Timing</th>
                 <th style="width: 4%;"></th>
               </tr>
             </thead>
@@ -225,19 +350,17 @@
         </div>
       </div>
 
+      <!-- ===== ADVICE ===== -->
       <div class="hd-panel mb-4 py-3" style="border-top: 3px solid var(--medical-purple, #0ea5e9) !important;">
-           <div class="hd-panel-title border-0 m-0 mb-3 fs-6">Advice & Follow Up Plan</div>
+           <div class="hd-panel-title border-0 m-0 mb-3 fs-6">Advice &amp; Follow Up Plan</div>
            <div class="row g-4 align-items-start">
                <div class="col-md-8">
                    <label class="hd-label m-0 text-uppercase mb-2">Special Advices / Diet / Care Instructions</label>
                    <div class="position-relative">
                        <button id="btn-advice" class="hd-input text-start d-flex justify-content-between align-items-center" style="padding: 0.5rem;" type="button" onclick="toggleCustomDropdown('advice-dropdown')">Select standard advice... <i class="fa-solid fa-chevron-down ms-2"></i></button>
-                       <div id="advice-dropdown" class="custom-dropdown-menu p-2 w-100 d-none" style="background-color: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); position: absolute; z-index: 1000; border-radius: 4px;">
-                           <label class="d-block text-white p-2 cursor-pointer mb-1"><input type="checkbox" class="me-2" value="Diet 1500 K.cal" onchange="updateDropdownText('advice-dropdown', 'btn-advice', 'Select standard advice...')"> Diet 1500 K.cal</label>
-                           <label class="d-block text-white p-2 cursor-pointer mb-1"><input type="checkbox" class="me-2" value="Drink plenty of fluids" onchange="updateDropdownText('advice-dropdown', 'btn-advice', 'Select standard advice...')"> Drink plenty of fluids</label>
-                           <label class="d-block text-white p-2 cursor-pointer mb-1"><input type="checkbox" class="me-2" value="Review with reports" onchange="updateDropdownText('advice-dropdown', 'btn-advice', 'Select standard advice...')"> Review with reports</label>
-                       </div>
+                       <div id="advice-dropdown" class="custom-dropdown-menu p-2 w-100 d-none" style="background-color: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); position: absolute; z-index: 1000; border-radius: 4px; max-height: 260px; overflow-y: auto;"></div>
                    </div>
+                   <input type="text" class="hd-input mt-2" id="op-advice-free" placeholder="Additional advice in your own words (type / to search)..." oninput="onSlashSearch(this, 'ADVICE')" autocomplete="off">
                </div>
                <div class="col-md-4">
                    <label class="hd-label m-0 text-uppercase mb-2 text-warning">Next Review Date</label>
@@ -248,6 +371,7 @@
 
     </div>
 
+    <!-- ===================== RIGHT COLUMN ===================== -->
     <div class="col-xl-3 col-lg-4 scrollable-pane border-start border-secondary ps-3">
 
       <div class="hd-panel mb-3 py-2">
@@ -277,7 +401,6 @@
           <div class="hd-panel-title border-0 m-0 mb-3">Pathology / Lab Orders</div>
           <div class="d-flex flex-column gap-2 mb-3">
               <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:0.75rem;" data-bs-toggle="modal" data-bs-target="#opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
-              <button class="btn btn-outline-secondary w-100 py-1" style="font-size:0.75rem;" onclick="alert('Lab Report Viewer opens here.')"><i class="fa-solid fa-file-medical"></i> View Lab Reports</button>
           </div>
           <label class="hd-label m-0">Advise Future Labs</label>
           <input type="text" class="hd-input" id="op-future-labs" placeholder="e.g., Fasting Sugar...">
@@ -285,15 +408,14 @@
       </div>
 
       <div class="hd-panel mb-3 py-2">
-          <div class="hd-panel-title border-0 m-0 mb-3 text-warning">Radiology & Scans</div>
+          <div class="hd-panel-title border-0 m-0 mb-3 text-warning">Radiology &amp; Scans</div>
           <label class="hd-label m-0">Advise Imaging</label>
           <input type="text" class="hd-input mb-3 border-warning" id="op-rad-orders" placeholder="e.g., USG Abdomen, Chest X-Ray">
-          
           <label class="hd-label m-0">Record Radiological Findings</label>
           <textarea class="hd-input" id="op-rad-findings" rows="2" placeholder="Record scan findings..."></textarea>
       </div>
 
-      <div class="hd-panel mb-3 py-2" style="border-color: var(--info) !important;"> 
+      <div class="hd-panel mb-3 py-2" style="border-color: var(--info) !important;">
         <div class="hd-panel-title d-flex justify-content-between align-items-center m-0 border-0">
             <span class="text-info">External Lab Results</span>
             <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.7rem;" onclick="addOPLabResultRow()"><i class="fa-solid fa-plus"></i></button>
@@ -309,6 +431,7 @@
   </div>
 </div>
 
+<!-- ===================== DIAL PAD ===================== -->
 <div class="modal fade" id="opDialPadModal" tabindex="-1">
   <div class="modal-dialog modal-sm modal-dialog-centered" style="max-width: 270px;">
     <div class="modal-content text-white shadow-lg" style="background-color: #1e293b; border: 1px solid #334155;">
@@ -323,20 +446,20 @@
           <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('1/2')">1/2</button></div>
           <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('1')">1</button></div>
           <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('2')">2</button></div>
-
           <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('OD')">OD</button></div>
           <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('BD')">BD</button></div>
           <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('TDS')">TDS</button></div>
           <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('QID')">QID</button></div>
-
           <div class="col-3"><button class="btn btn-outline-warning dial-btn w-100 text-warning" onclick="appendOPDial('STAT')">STAT</button></div>
           <div class="col-3"><button class="btn btn-outline-warning dial-btn w-100 text-warning" onclick="appendOPDial('SOS')">SOS</button></div>
           <div class="col-3"><button class="btn btn-outline-success dial-btn w-100 text-success" onclick="appendOPDial('BF')">BF</button></div>
           <div class="col-3"><button class="btn btn-outline-success dial-btn w-100 text-success" onclick="appendOPDial('AF')">AF</button></div>
-
           <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="appendOPDial('ml')">ml</button></div>
           <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="appendOPDial('Drops')">Drops</button></div>
           <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="appendOPDial('Oint')">Oint</button></div>
+          <div class="col-12 mt-2 border-top border-secondary pt-2">
+            <button class="btn btn-outline-warning w-100 py-1 fw-bold" style="font-size:0.7rem;" onclick="openTaperFromDial()"><i class="fa-solid fa-stairs"></i> Taper Mode</button>
+          </div>
         </div>
 
         <div id="op-dial-dur-grid" class="row g-1 mb-2 d-none">
@@ -362,6 +485,47 @@
   </div>
 </div>
 
+<!-- ===================== TAPER BUILDER ===================== -->
+<div class="modal fade" id="opTaperModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #f59e0b;">
+      <div class="modal-header py-2 border-secondary">
+        <h6 class="m-0 text-warning"><i class="fa-solid fa-stairs"></i> Taper Mode <span class="small text-muted ms-2" id="tp-drug-label"></span></h6>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="row g-2">
+          <div class="col-6"><label class="hd-label">Pattern</label>
+            <select class="hd-input" id="tp-pattern" onchange="recalcTaper()">
+              <option value="LINEAR">Reduce by fixed amount</option>
+              <option value="HALVING">Halve each step</option>
+            </select>
+          </div>
+          <div class="col-6"><label class="hd-label">Tablet strength (mg)</label><input type="number" class="hd-input" id="tp-unit" placeholder="e.g. 10" oninput="recalcTaper()"></div>
+          <div class="col-4"><label class="hd-label">Start dose (mg)</label><input type="number" class="hd-input" id="tp-start" placeholder="40" oninput="recalcTaper()"></div>
+          <div class="col-4"><label class="hd-label">Reduce by (mg)</label><input type="number" class="hd-input" id="tp-step" placeholder="10" oninput="recalcTaper()"></div>
+          <div class="col-4"><label class="hd-label">Stop below (mg)</label><input type="number" class="hd-input" id="tp-min" placeholder="5" oninput="recalcTaper()"></div>
+          <div class="col-6"><label class="hd-label">Days per step</label><input type="number" class="hd-input" id="tp-days" placeholder="5" oninput="recalcTaper()"></div>
+          <div class="col-6"><label class="hd-label">Doses per day</label>
+            <select class="hd-input" id="tp-freq" onchange="recalcTaper()">
+              <option value="1">OD</option><option value="2">BD</option><option value="3">TDS</option>
+            </select>
+          </div>
+        </div>
+        <div class="mt-3 p-2 rounded" style="background:#0f172a; border:1px solid #334155; min-height:90px;">
+          <div id="tp-preview" class="small" style="white-space:pre-line; color:#e2e8f0;">Fill the fields to preview the schedule.</div>
+          <div id="tp-summary" class="mt-2 fw-bold text-warning small"></div>
+        </div>
+      </div>
+      <div class="modal-footer py-1 border-secondary">
+        <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-warning fw-bold" onclick="applyTaperToRow()">Apply to prescription</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== LAB REQUEST ===================== -->
 <div class="modal fade" id="opLabRequestModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content text-white" style="background-color: #1e293b; border: 1px solid #0ea5e9;">
@@ -370,10 +534,10 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-3">
-        <div class="mb-2 text-info fw-bold small"><i class="fa-solid fa-flask"></i> Our lab — routed for processing</div>
+        <div class="mb-2 text-info fw-bold small"><i class="fa-solid fa-flask"></i> Our lab &mdash; routed for processing</div>
         <div class="row g-2" id="op-lab-internal-list"></div>
         <hr class="border-secondary my-3">
-        <div class="mb-2 text-secondary fw-bold small">External lab — printed only, not routed</div>
+        <div class="mb-2 text-secondary fw-bold small">External lab &mdash; printed only, not routed</div>
         <div class="row g-2" id="op-lab-external-list"></div>
         <div class="col-12 mt-2"><input type="text" class="hd-input" id="op-lab-other" placeholder="Other external investigation..."></div>
       </div>
@@ -384,6 +548,7 @@
   </div>
 </div>
 
+<!-- ===================== DOSE CALCULATOR ===================== -->
 <div class="modal fade" id="opDoseCalcModal" tabindex="-1">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content text-white" style="background-color: #1e293b; border: 1px solid #0ea5e9;">
@@ -406,9 +571,9 @@
           <option value="1">OD (1)</option><option value="2" selected>BD (2)</option>
           <option value="3">TDS (3)</option><option value="4">QID (4)</option>
         </select>
-        <label class="hd-label">Strength available (mg per tab / 5 ml) — optional</label>
+        <label class="hd-label">Strength available (mg per tab / 5 ml) &mdash; optional</label>
         <input type="number" class="hd-input mb-2" id="dc-strength" placeholder="e.g. 250">
-        <div class="bg-black rounded p-2 mt-2 small" id="dc-output" style="white-space:pre-line; min-height:60px; border: 1px solid #334155;">—</div>
+        <div class="bg-black rounded p-2 mt-2 small" id="dc-output" style="white-space:pre-line; min-height:60px; border: 1px solid #334155;">&mdash;</div>
       </div>
       <div class="modal-footer py-1 border-secondary">
         <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Close</button>
@@ -418,30 +583,104 @@
   </div>
 </div>
 
+<!-- ===================== SAVE TEMPLATE ===================== -->
+<div class="modal fade" id="opSaveTemplateModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #635bff;">
+      <div class="modal-header py-2 border-secondary">
+        <h6 class="m-0" style="color:#a5b4fc;">Save consultation template</h6>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <label class="hd-label">Template name</label>
+        <input class="hd-input mb-2" id="tpl-name" placeholder="e.g. T2DM routine review">
+        <label class="hd-label">Specialty / department</label>
+        <input class="hd-input mb-2" id="tpl-dept" placeholder="optional">
+        <div class="small" style="color:#94a3b8;">Saves complaints, history, examination, diagnosis, lab orders, advice and review interval. <strong>Medicines are not included</strong> &mdash; save those as a bundle instead.</div>
+      </div>
+      <div class="modal-footer py-1 border-secondary">
+        <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-primary fw-bold" id="btn-save-tpl" onclick="saveCurrentAsTemplate()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SAVE BUNDLE ===================== -->
+<div class="modal fade" id="opSaveBundleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #10b981;">
+      <div class="modal-header py-2 border-secondary">
+        <h6 class="m-0 text-success">Save medicine bundle</h6>
+        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-3">
+        <label class="hd-label">Bundle name</label>
+        <input class="hd-input mb-2" id="bnd-name" placeholder="e.g. URI combo">
+        <label class="hd-label">Indication</label>
+        <input class="hd-input mb-2" id="bnd-indication" placeholder="e.g. Viral URI, adult">
+        <div id="bnd-preview" class="small" style="color:#94a3b8;"></div>
+      </div>
+      <div class="modal-footer py-1 border-secondary">
+        <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm btn-success fw-bold" id="btn-save-bnd" onclick="saveCurrentAsBundle()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
-// ========================================================
-// OP ISOLATED SCRIPT ENGINE (GLOBAL SCOPE)
-// ========================================================
+// ============================================================================
+// OP CONSULTATION ENGINE
+// Backend: getComposerContext / saveOPEncounterScoped / checkRxSafety /
+//          getLastVisitRecall / buildTaperPlan / suggestPaediatricDose /
+//          getDiagnosisDrugSuggestions / listConsultTemplates / applyConsultTemplate
+//
+// INTERACTION RULE: nothing suggested writes itself into the prescription.
+// Bundles, learned suggestions, last-visit meds and paediatric doses all
+// render with an explicit "+". The doctor's click is the act of prescribing.
+// ============================================================================
 
-let opCachedDrugsRich = [];        // {brand, generic, type, stock, status, source}
-let opCachedUniversalDrugs = [];   // external fallback drugs
+let opCachedDrugsRich = [];
+let opCachedUniversalDrugs = [];
 let opLabMaster = { internal: [], external: [] };
-let opTemplates = { CC: [], HX: [], ADVICE: [] };
+let opComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
+let opConsultTemplates = [];
+let opPatientAllergies = { recorded: false, raw: "", list: [] };
 let currentOPDialTarget = null;
 let activeOpEncounterId = "";
 let opDoseTargetRow = null;
+let opTaperTargetRow = null;
 let _opDoseSig = '';
-
-const opSysDefaults = {
-    'cvs': 'S1S2+, No Murmur',
-    'rs': 'B/L NVBS, No added sounds',
-    'pa': 'Soft, Non-tender, No organomegaly',
-    'cns': 'Conscious, Oriented, NFND'
+let _opTaperPlan = null;
+let _safetyTimer = null;
+let opSysDefaults = {
+    cvs: 'S1S2+, No Murmur',
+    rs: 'B/L NVBS, No added sounds',
+    pa: 'Soft, Non-tender, No organomegaly',
+    cns: 'Conscious, Oriented, NFND'
 };
 
+function opEsc(s) {
+    return String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function opCurrentPatientId() {
+    return (document.getElementById('hd-pat-id')?.innerText || '').replace('ID:', '').trim();
+}
+
+// ============================================================================
+// INIT
+// ============================================================================
 function initializeOPWorkspaceState() {
     document.getElementById('hd-current-date').innerText = new Date().toLocaleDateString('en-GB');
+
+    const badge = document.getElementById('hd-doctor-badge');
+    if (badge) badge.innerText = window.currentDoctorName || window.loggedInUser || '--';
+
+    applyExamDefaults(opSysDefaults);
 
     if (document.getElementById('op-cc-tbody').innerHTML.trim() === '') addOPDynamicRow('op-cc-tbody', 'CC');
     if (document.getElementById('op-hx-tbody').innerHTML.trim() === '') addOPDynamicRow('op-hx-tbody', 'HX');
@@ -449,6 +688,8 @@ function initializeOPWorkspaceState() {
     if (document.getElementById('op-lab-results-tbody').innerHTML.trim() === '') addOPLabResultRow();
 
     opLoadIntegrationData();
+    loadComposerContext();
+    loadConsultTemplates();
 
     document.querySelectorAll('select[id^="op-se-"]').forEach(dd => {
         dd.addEventListener('change', function () {
@@ -466,137 +707,749 @@ function initializeOPWorkspaceState() {
         document.getElementById('hd-pat-name').innerText = "Search Patient";
         document.getElementById('hd-pat-demo').innerText = "-- Y | -";
     }
+    renderSafetyBar([]);
 }
 
-// Normalizes any drug-master row into the shape the UI expects
-function normalizeOPDrugs(list) {
-    return (list || []).map(d => {
-        const stock = parseInt(d.stock, 10) || 0;
-        const reorder = parseInt(d.reorder, 10) || 5;
-        const status = d.status || (stock <= 0 ? 'out' : (stock <= reorder ? 'low' : 'ok'));
-        return {
-            brand: d.brand || '', generic: d.generic || '', type: d.type || 'Tab',
-            stock: stock, unit: d.unit || '', refDose: d.refDose || '', adultDose: d.adultDose || '',
-            status: status, source: 'INTERNAL'
-        };
-    });
+function toggleAssistPanel() {
+    const p = document.getElementById('op-assist-panel');
+    const b = document.getElementById('btn-assist-toggle');
+    const hidden = p.classList.contains('d-none');
+    p.classList.toggle('d-none', !hidden);
+    b.classList.toggle('btn-outline-light', !hidden);
+    b.classList.toggle('btn-light', hidden);
+    if (hidden) { renderBundleStrip(); renderTemplateStrip(); }
 }
 
-// Loads drugs, universal list, lab catalog and templates once
-function opLoadIntegrationData() {
+// ============================================================================
+// COMPOSER CONTEXT — phrases (seed + clinic + personal), bundles, exam defaults
+// ============================================================================
+function loadComposerContext() {
     google.script.run
-        .withSuccessHandler(list => { opCachedDrugsRich = normalizeOPDrugs(list); })
-        .withFailureHandler(e => {
-            console.error('fetchOPDrugMaster failed, using IP master:', e && e.message);
-            google.script.run
-                .withSuccessHandler(l2 => { opCachedDrugsRich = normalizeOPDrugs(l2); })
-                .withFailureHandler(e2 => console.error('drug master load failed:', e2 && e2.message))
-                .fetchPharmacyMasterForIP();
+        .withSuccessHandler(function (res) {
+            if (!res || !res.success) return;
+            opComposer = res;
+            if (res.examDefaults) {
+                opSysDefaults = res.examDefaults;
+                applyExamDefaults(opSysDefaults);
+            }
+            renderAdviceChecklist();
+            renderBundleStrip();
         })
-        .fetchOPDrugMaster();
-
-    if (opCachedUniversalDrugs.length === 0)
-        google.script.run.withSuccessHandler(d => opCachedUniversalDrugs = d || []).fetchUniversalDrugs();
-
-    loadOPLabCatalog();
-    ensureOPLabsDatalist();
-    google.script.run.withSuccessHandler(t => { opTemplates = t || { CC: [], HX: [], ADVICE: [] }; renderOPAdviceTemplates(); }).fetchClinicalTemplates();
+        .withFailureHandler(function (e) { console.error('composer context:', e && e.message); })
+        .getComposerContext(window.currentDoctorId || '', window.sessionToken);
 }
 
-function loadOPLabCatalog() {
-    const candidates = ['getOrderableTests', 'getLabCatalog', 'fetchLabTestMaster'];
-    (function tryNext(i) {
-        if (i >= candidates.length) { opLabMaster = { internal: [], external: [] }; renderOPLabModal(); return; }
-        
-        google.script.run
-            .withSuccessHandler(res => {
-                const norm = normalizeOPCatalog(res);
-                if (norm.internal.length || norm.external.length) { 
-                    opLabMaster = norm; 
-                    renderOPLabModal(); 
-                }
-                else tryNext(i + 1);
-            })
-            .withFailureHandler(() => tryNext(i + 1))
-            [candidates[i]]();
-    })(0);
-}
-
-function normalizeOPCatalog(res) {
-    const out = { internal: [], external: [] };
-    if (!res) return out;
-    
-    let items = [];
-    if (Array.isArray(res)) items = res;
-    else if (Array.isArray(res.data)) items = res.data;
-    else {
-        if (res.internal) return res; 
-        ['tests', 'panels', 'individuals', 'packages'].forEach(k => { 
-            if (Array.isArray(res[k])) items = items.concat(res[k]); 
-        });
-    }
-    
-    items.forEach(it => {
-        const name = it.testName || it.name || it.title || it.test || '';
-        if (!name) return;
-        
-        const activeRaw = (it.isActive !== undefined) ? it.isActive : (it.active !== undefined ? it.active : true);
-        const isActive = (activeRaw === true) || String(activeRaw).toUpperCase() === 'ACTIVE' || String(activeRaw).toUpperCase() === 'Y' || String(activeRaw) === '1';
-        
-        if (!isActive) return;
-        
-        out.internal.push({ 
-            testName: name, 
-            department: it.department || it.dept || '', 
-            price: it.price || 0, 
-            source: 'INTERNAL' 
-        });
+function applyExamDefaults(d) {
+    [['cvs', d.cvs], ['rs', d.rs], ['pa', d.pa], ['cns', d.cns]].forEach(function (pair) {
+        const el = document.getElementById('op-se-' + pair[0] + '-text');
+        if (el && (!el.value.trim() || el.classList.contains('text-success'))) el.value = pair[1] || '';
     });
-    
-    out.internal.sort((a, b) => a.testName.localeCompare(b.testName));
-    return out;
 }
 
-function closeOPConsultationWorkspace() {
-    activeOpEncounterId = "";
-    if (typeof returnToEMRMenu === 'function') {
-        returnToEMRMenu();
-    } else if (typeof switchTab === 'function') {
-        switchTab('tab-admin-emr');
+function saveMyExamDefaults() {
+    const payload = {
+        doctorId: window.currentDoctorId || '',
+        cvs: document.getElementById('op-se-cvs-text').value,
+        rs:  document.getElementById('op-se-rs-text').value,
+        pa:  document.getElementById('op-se-pa-text').value,
+        cns: document.getElementById('op-se-cns-text').value
+    };
+    google.script.run
+        .withSuccessHandler(function (r) {
+            if (r && r.success) { opSysDefaults = { cvs: payload.cvs, rs: payload.rs, pa: payload.pa, cns: payload.cns }; alert(r.message); }
+            else alert((r && r.message) || 'Could not save defaults.');
+        })
+        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .saveExamDefaults(payload, window.sessionToken);
+}
+
+function renderAdviceChecklist() {
+    const dd = document.getElementById('advice-dropdown');
+    if (!dd) return;
+    const list = (opComposer.phrases && opComposer.phrases.ADVICE) || [];
+    if (!list.length) { dd.innerHTML = '<div class="label-bright small p-2" style="opacity:.6;">No advice templates yet.</div>'; return; }
+    dd.innerHTML = list.slice(0, 40).map(function (a) {
+        return '<label class="d-block text-white p-2 mb-1" style="cursor:pointer;">' +
+               '<input type="checkbox" class="me-2" value="' + opEsc(a.text) + '" ' +
+               'onchange="updateDropdownText(\'advice-dropdown\',\'btn-advice\',\'Select standard advice...\')"> ' +
+               opEsc(a.text) +
+               ' <span class="op-scope-tag op-scope-' + opEsc(a.scope || 'SEED') + '">' + opEsc(a.scope || 'SEED') + '</span></label>';
+    }).join('');
+}
+
+// ============================================================================
+// PHRASE SEARCH — aliases + slash shortcuts
+// ============================================================================
+function opPhraseMatch(list, query) {
+    const q = String(query || '').toLowerCase().trim();
+    if (!q) return [];
+    const starts = [], contains = [], viaAlias = [];
+    list.forEach(function (p) {
+        const t = p.text.toLowerCase();
+        if (t.indexOf(q) === 0) { starts.push(p); return; }
+        if (t.indexOf(q) !== -1) { contains.push(p); return; }
+        if (p.aliases && p.aliases.toLowerCase().indexOf(q) !== -1) viaAlias.push(p);
+    });
+    return starts.concat(contains, viaAlias).slice(0, 10);
+}
+
+function onOPTemplateType(inputEl, cat) {
+    let dd = inputEl.parentElement.querySelector('.autocomplete-items');
+    if (!dd) { dd = document.createElement('div'); dd.className = 'autocomplete-items d-none'; inputEl.parentElement.appendChild(dd); }
+
+    let val = inputEl.value.trim();
+    const isSlash = val.charAt(0) === '/';
+    if (isSlash) val = val.substring(1);
+
+    dd.innerHTML = '';
+    if (!val) { dd.classList.add('d-none'); return; }
+
+    const list = opPhraseMatch((opComposer.phrases && opComposer.phrases[cat]) || [], val);
+    if (!list.length) { dd.classList.add('d-none'); return; }
+
+    dd.classList.remove('d-none');
+    list.forEach(function (x) {
+        const it = document.createElement('div');
+        const meta = x.count ? (x.count + '\u00d7') : (x.department || '');
+        it.innerHTML = '<span>' + opEsc(x.text) + '</span>' +
+                       '<small><span class="op-scope-tag op-scope-' + opEsc(x.scope) + '">' + opEsc(x.scope) + '</span> ' +
+                       '<span class="op-evidence">' + opEsc(meta) + '</span></small>';
+        it.onclick = function () {
+            inputEl.value = x.text;
+            dd.classList.add('d-none');
+            if (cat === 'CC') showWorkupHint(x.text);
+        };
+        dd.appendChild(it);
+    });
+}
+
+function onSlashSearch(inputEl, cat) {
+    if (!inputEl.parentElement.style.position) inputEl.parentElement.style.position = 'relative';
+    onOPTemplateType(inputEl, cat);
+}
+
+// --- complaint-driven workup -------------------------------------------------
+function showWorkupHint(complaintText) {
+    const box = document.getElementById('op-workup-hint');
+    if (!box) return;
+    const w = (opComposer.workup || {})[String(complaintText).toLowerCase()];
+    if (!w || (!w.labs.length && !w.dx)) { box.innerHTML = ''; return; }
+
+    let html = '<div class="op-suggest-strip align-items-center">';
+    html += '<span class="op-evidence me-1">Usually worked up with:</span>';
+    w.labs.forEach(function (l) {
+        html += '<span class="op-chip" onclick="addWorkupLab(\'' + opEsc(l).replace(/'/g, "\\'") + '\')">' +
+                '<span class="op-chip-add">+</span>' + opEsc(l) + '</span>';
+    });
+    if (w.dx) {
+        html += '<span class="op-chip" onclick="setDiagnosisFromHint(\'' + opEsc(w.dx).replace(/'/g, "\\'") + '\')">' +
+                '<span class="op-chip-add">+</span>Dx: ' + opEsc(w.dx) + '</span>';
     }
+    html += '</div>';
+    box.innerHTML = html;
 }
 
+function addWorkupLab(name) {
+    const el = document.getElementById('op-future-labs');
+    const cur = el.value.trim();
+    if (cur.toLowerCase().indexOf(name.toLowerCase()) !== -1) return;
+    el.value = cur ? cur + ', ' + name : name;
+}
+
+function setDiagnosisFromHint(dx) {
+    const el = document.getElementById('clin-diagnosis');
+    if (!el.value.trim()) { el.value = dx; onDiagnosisChanged(); }
+}
+
+// ============================================================================
+// PATIENT SEARCH + ALLERGIES + LAST VISIT
+// ============================================================================
 function searchEMRPatient() {
-    const searchInput = document.getElementById('op-search-pat-id');
-    const pId = searchInput.value.trim();
+    const pId = document.getElementById('op-search-pat-id').value.trim();
     if (!pId) { alert("Please enter a Patient ID."); return; }
 
     document.getElementById('hd-pat-name').innerText = "Fetching...";
 
     google.script.run.withSuccessHandler(function (data) {
-        try {
-            if (data) {
-                // 1. Save Patient Details to memory for WA/Email routing
-                window.currentPatientId = pId;
-                window.currentPatientMobile = data.whatsapp || data.mobile || "";
-                window.currentPatientEmail = data.email || "";
+        if (!data) {
+            document.getElementById('hd-pat-name').innerText = "Patient Not Found";
+            alert("Patient ID not found in database.");
+            return;
+        }
+        window.currentPatientId = pId;
+        window.currentPatientMobile = data.whatsapp || data.mobile || "";
+        window.currentPatientEmail = data.email || "";
 
-                // 2. Update the UI
-                document.getElementById('hd-pat-id').innerText = pId;
-                document.getElementById('hd-pat-name').innerText = data.name || "Unknown Patient";
-                document.getElementById('hd-pat-demo').innerText = (data.age || "-") + " Y | " + (data.gender || "-");
-            } else {
-                document.getElementById('hd-pat-name').innerText = "Patient Not Found";
-                alert("Patient ID not found in database.");
-            }
-        } catch (e) { alert("Error displaying patient data on UI."); }
+        document.getElementById('hd-pat-id').innerText = pId;
+        document.getElementById('hd-pat-name').innerText = data.name || "Unknown Patient";
+        document.getElementById('hd-pat-demo').innerText = (data.age || "-") + " Y | " + (data.gender || "-");
+
+        loadAllergies(pId);
+        loadLastVisit(pId);
+        runSafetyCheck();
     }).withFailureHandler(function (err) {
         document.getElementById('hd-pat-name').innerText = "Search Failed";
         alert("Backend Network Error: " + err.message);
-    }).getUserProfile(pId); // Ensure your backend function 'getUserProfile' is returning the email and whatsapp columns!
+    }).getUserProfile(pId);
 }
 
-// --- Vitals, Labs & BMI ---
+function loadAllergies(pId) {
+    google.script.run
+        .withSuccessHandler(function (res) {
+            opPatientAllergies = {
+                recorded: !!(res && res.recorded),
+                raw: (res && res.raw) || '',
+                list: (res && res.allergies) || []
+            };
+            renderAllergyChip();
+        })
+        .withFailureHandler(function () { renderAllergyChip(); })
+        .getPatientAllergies(pId, window.sessionToken);
+}
+
+function renderAllergyChip() {
+    const chip = document.getElementById('hd-allergy-chip');
+    if (!chip) return;
+    if (opPatientAllergies.recorded && opPatientAllergies.list.length) {
+        chip.className = 'op-allergy-chip';
+        chip.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + opEsc(opPatientAllergies.list.join(', '));
+    } else {
+        chip.className = 'op-allergy-none';
+        chip.innerText = 'Allergies: not recorded';
+    }
+}
+
+function openAllergyEditor() {
+    const pId = opCurrentPatientId();
+    if (!pId || pId === '--') { alert('Fetch a patient first.'); return; }
+    const val = prompt('Known drug allergies (comma separated). Leave blank if none known:', opPatientAllergies.raw || '');
+    if (val === null) return;
+    google.script.run
+        .withSuccessHandler(function (r) {
+            if (r && r.success) { loadAllergies(pId); runSafetyCheck(); }
+            else alert((r && r.message) || 'Could not save.');
+        })
+        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .savePatientAllergies(pId, val, window.sessionToken);
+}
+
+function loadLastVisit(pId) {
+    const slot = document.getElementById('op-recall-slot');
+    slot.innerHTML = '<span class="label-bright small">Checking previous visits...</span>';
+
+    google.script.run
+        .withSuccessHandler(function (res) {
+            if (!res || !res.success || !res.found) {
+                slot.innerHTML = '<span class="label-bright small" style="opacity:.6;">' +
+                                 opEsc((res && res.message) || 'No previous visit on record.') + '</span>';
+                window._opLastVisit = null;
+                return;
+            }
+            window._opLastVisit = res;
+            slot.innerHTML =
+              '<div class="op-recall-card d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+                '<div>' +
+                  '<div class="text-white fw-bold">' + opEsc(res.date) + ' &mdash; ' + opEsc(res.doctorName) + '</div>' +
+                  '<div class="op-evidence">' + opEsc(res.diagnosis || 'No diagnosis recorded') +
+                  ' &middot; ' + res.meds.length + ' medicine(s)</div>' +
+                '</div>' +
+                '<div class="d-flex gap-2">' +
+                  '<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.68rem;" onclick="recallLastVisit(false)">Copy notes</button>' +
+                  '<button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.68rem;" onclick="recallLastVisit(true)">Same as last visit</button>' +
+                '</div>' +
+              '</div>';
+        })
+        .withFailureHandler(function () {
+            slot.innerHTML = '<span class="text-danger small">Could not load previous visit.</span>';
+        })
+        .getLastVisitRecall(pId, window.sessionToken);
+}
+
+function recallLastVisit(includeMeds) {
+    const v = window._opLastVisit;
+    if (!v) return;
+    if (!confirm('Copy the ' + (includeMeds ? 'notes and medicines' : 'notes') +
+                 ' from the visit on ' + v.date + '? Existing entries will be replaced.')) return;
+
+    // Notes
+    document.getElementById('op-cc-tbody').innerHTML = '';
+    (v.complaints || '').split('|').forEach(function (c) {
+        if (!c.trim()) return;
+        addOPDynamicRow('op-cc-tbody', 'CC');
+        const rows = document.querySelectorAll('#op-cc-tbody tr');
+        rows[rows.length - 1].querySelector('.op-array-text').value = c.trim().replace(/\s*\(\s*\)$/, '');
+    });
+    if (!document.getElementById('op-cc-tbody').children.length) addOPDynamicRow('op-cc-tbody', 'CC');
+
+    document.getElementById('op-hx-tbody').innerHTML = '';
+    (v.history || '').split('|').forEach(function (h) {
+        if (!h.trim()) return;
+        addOPDynamicRow('op-hx-tbody', 'HX');
+        const rows = document.querySelectorAll('#op-hx-tbody tr');
+        rows[rows.length - 1].querySelector('.op-array-text').value = h.trim().replace(/\s*\(\s*\)$/, '');
+    });
+    if (!document.getElementById('op-hx-tbody').children.length) addOPDynamicRow('op-hx-tbody', 'HX');
+
+    if (v.exam) {
+        ['cvs', 'rs', 'pa', 'cns'].forEach(function (s) {
+            const el = document.getElementById('op-se-' + s + '-text');
+            if (el && v.exam[s]) el.value = v.exam[s];
+        });
+    }
+    if (v.diagnosis) document.getElementById('clin-diagnosis').value = v.diagnosis;
+    if (v.radiology) document.getElementById('op-rad-orders').value = v.radiology;
+
+    if (includeMeds && v.meds && v.meds.length) {
+        document.getElementById('op-rx-tbody').innerHTML = '';
+        v.meds.forEach(function (m) { addOPRxRow(m); });
+    }
+
+    onDiagnosisChanged();
+    runSafetyCheck();
+    alert('Copied. Review every line before saving.');
+}
+
+// ============================================================================
+// SAFETY BAR — always visible
+// ============================================================================
+function queueSafetyCheck() {
+    clearTimeout(_safetyTimer);
+    _safetyTimer = setTimeout(runSafetyCheck, 700);
+}
+
+function runSafetyCheck() {
+    const pId = opCurrentPatientId();
+    if (!pId || pId === '--') { renderSafetyBar([]); return; }
+
+    const meds = collectRxRows();
+    google.script.run
+        .withSuccessHandler(function (res) {
+            if (!res || !res.success) { renderSafetyBar([]); return; }
+            renderSafetyBar(res.alerts || [], res.coverage);
+        })
+        .withFailureHandler(function () { renderSafetyBar([]); })
+        .checkRxSafety(pId, meds, window.sessionToken);
+}
+
+function renderSafetyBar(alerts, coverage) {
+    const bar = document.getElementById('op-safety-bar');
+    if (!bar) return;
+    if (!alerts || !alerts.length) { bar.innerHTML = ''; return; }
+
+    const danger = alerts.filter(a => a.level === 'DANGER');
+    const warn   = alerts.filter(a => a.level === 'WARN');
+    const info   = alerts.filter(a => a.level === 'INFO');
+
+    let html = '';
+    const block = function (list, cls, icon) {
+        if (!list.length) return '';
+        return '<div class="op-safety-bar ' + cls + '">' +
+            list.map(function (a) {
+                return '<div class="op-safety-line"><i class="fa-solid ' + icon + ' mt-1"></i><span>' +
+                       opEsc(a.message) + '</span></div>';
+            }).join('') + '</div>';
+    };
+    html += block(danger, 'op-safety-danger', 'fa-triangle-exclamation');
+    html += block(warn, 'op-safety-warn', 'fa-circle-exclamation');
+    html += block(info, 'op-safety-info', 'fa-circle-info');
+
+    if (coverage && coverage.note) {
+        html += '<div class="op-safety-bar op-safety-info"><div class="op-safety-line">' +
+                '<i class="fa-solid fa-flask-vial mt-1"></i><span>' + opEsc(coverage.note) + '</span></div></div>';
+    }
+    bar.innerHTML = html;
+}
+
+// ============================================================================
+// CONSULT TEMPLATES
+// ============================================================================
+function loadConsultTemplates() {
+    google.script.run
+        .withSuccessHandler(function (res) {
+            opConsultTemplates = (res && res.success) ? res.templates : [];
+            renderTemplateStrip();
+        })
+        .withFailureHandler(function () { renderTemplateStrip(); })
+        .listConsultTemplates(window.currentDoctorId || '', window.sessionToken);
+}
+
+function renderTemplateStrip() {
+    const strip = document.getElementById('op-template-strip');
+    if (!strip) return;
+    if (!opConsultTemplates.length) {
+        strip.innerHTML = '<span class="label-bright small" style="opacity:.5;">No templates yet. Fill a consult and save it as one.</span>';
+        return;
+    }
+    strip.innerHTML = opConsultTemplates.map(function (t) {
+        return '<span class="op-chip" onclick="useConsultTemplate(\'' + opEsc(t.templateId) + '\')">' +
+               '<span class="op-chip-add">+</span>' + opEsc(t.name) +
+               '<span class="op-scope-tag op-scope-' + opEsc(t.scope) + '">' + opEsc(t.scope) + '</span></span>';
+    }).join('');
+}
+
+function useConsultTemplate(id) {
+    google.script.run
+        .withSuccessHandler(function (res) {
+            if (!res || !res.success) { alert((res && res.message) || 'Could not apply template.'); return; }
+            const t = res.template;
+
+            if (t.complaints) {
+                document.getElementById('op-cc-tbody').innerHTML = '';
+                t.complaints.split('|').forEach(function (c) {
+                    if (!c.trim()) return;
+                    addOPDynamicRow('op-cc-tbody', 'CC');
+                    const rows = document.querySelectorAll('#op-cc-tbody tr');
+                    rows[rows.length - 1].querySelector('.op-array-text').value = c.trim();
+                });
+            }
+            if (t.history) {
+                document.getElementById('op-hx-tbody').innerHTML = '';
+                t.history.split('|').forEach(function (h) {
+                    if (!h.trim()) return;
+                    addOPDynamicRow('op-hx-tbody', 'HX');
+                    const rows = document.querySelectorAll('#op-hx-tbody tr');
+                    rows[rows.length - 1].querySelector('.op-array-text').value = h.trim();
+                });
+            }
+            if (t.exam) ['cvs', 'rs', 'pa', 'cns'].forEach(function (s) {
+                if (t.exam[s]) document.getElementById('op-se-' + s + '-text').value = t.exam[s];
+            });
+            if (t.diagnosis) document.getElementById('clin-diagnosis').value = t.diagnosis;
+            if (t.diagnosisType) document.getElementById('clin-diagnosis-type').value = t.diagnosisType;
+            if (t.advice) document.getElementById('op-advice-free').value = t.advice;
+            if (t.reviewDays) {
+                const d = new Date(); d.setDate(d.getDate() + t.reviewDays);
+                document.getElementById('clin-review-date').value = d.toISOString().split('T')[0];
+            }
+            if (t.labs && t.labs.length) {
+                document.getElementById('op-future-labs').value =
+                    t.labs.map(function (l) { return l.testName || l; }).join(', ');
+            }
+            onDiagnosisChanged();
+        })
+        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .applyConsultTemplate(id, window.sessionToken);
+}
+
+function openSaveTemplateModal() {
+    document.getElementById('tpl-name').value = '';
+    document.getElementById('tpl-dept').value = '';
+    new bootstrap.Modal(document.getElementById('opSaveTemplateModal')).show();
+}
+
+function saveCurrentAsTemplate() {
+    const p = buildOPFlatPayload();
+    const btn = document.getElementById('btn-save-tpl');
+    btn.disabled = true;
+
+    google.script.run
+        .withSuccessHandler(function (r) {
+            btn.disabled = false;
+            if (r && r.success) {
+                bootstrap.Modal.getInstance(document.getElementById('opSaveTemplateModal'))?.hide();
+                loadConsultTemplates();
+                alert(r.message);
+            } else alert((r && r.message) || 'Could not save template.');
+        })
+        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .saveConsultTemplate({
+            doctorId: window.currentDoctorId || '',
+            scope: 'PERSONAL',
+            name: document.getElementById('tpl-name').value,
+            specialty: document.getElementById('tpl-dept').value,
+            complaints: p.complaints,
+            history: p.history,
+            exam: { cvs: p.cvs, rs: p.rs, pa: p.pa, cns: p.cns },
+            diagnosis: p.diagnosis,
+            diagnosisType: p.diagnosisType,
+            labs: (p.labs || []).filter(function (l) { return l.type === 'Order'; }),
+            advice: p.advice,
+            reviewDays: 0
+        }, window.sessionToken);
+}
+
+// ============================================================================
+// Rx BUNDLES — suggested, added by explicit click
+// ============================================================================
+function renderBundleStrip() {
+    const strip = document.getElementById('op-bundle-strip');
+    if (!strip) return;
+    const list = opComposer.bundles || [];
+    if (!list.length) {
+        strip.innerHTML = '<span class="label-bright small" style="opacity:.5;">No bundles yet. Write an Rx and save it as one.</span>';
+        return;
+    }
+    strip.innerHTML = list.map(function (b, i) {
+        return '<span class="op-chip" onclick="previewBundle(' + i + ')">' +
+               opEsc(b.name) + ' <span class="op-evidence">' + b.itemCount + ' med</span>' +
+               '<span class="op-scope-tag op-scope-' + opEsc(b.scope) + '">' + opEsc(b.scope) + '</span></span>';
+    }).join('') + '<div id="op-bundle-detail" class="w-100 mt-2"></div>';
+}
+
+function previewBundle(idx) {
+    const b = (opComposer.bundles || [])[idx];
+    const box = document.getElementById('op-bundle-detail');
+    if (!b || !box) return;
+
+    box.innerHTML = '<div class="op-recall-card">' +
+        '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
+        (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
+        b.items.map(function (it, j) {
+            return '<div class="d-flex justify-content-between align-items-center py-1">' +
+                   '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
+                   ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
+                   '<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.65rem;" ' +
+                   'onclick="addBundleItem(' + idx + ',' + j + ')">+ Add</button></div>';
+        }).join('') +
+        '<div class="mt-2 text-end"><button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
+        'onclick="addWholeBundle(' + idx + ')">+ Add all ' + b.items.length + '</button></div>' +
+        '</div>';
+}
+
+function addBundleItem(bi, ii) {
+    const b = (opComposer.bundles || [])[bi];
+    if (!b) return;
+    addOPRxRow(b.items[ii]);
+    google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    queueSafetyCheck();
+}
+
+function addWholeBundle(bi) {
+    const b = (opComposer.bundles || [])[bi];
+    if (!b) return;
+    b.items.forEach(function (it) { addOPRxRow(it); });
+    google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    queueSafetyCheck();
+}
+
+function openSaveBundleModal() {
+    const meds = collectRxRows();
+    if (!meds.length) { alert('Add at least one medicine before saving a bundle.'); return; }
+    document.getElementById('bnd-name').value = '';
+    document.getElementById('bnd-indication').value = document.getElementById('clin-diagnosis').value || '';
+    document.getElementById('bnd-preview').innerHTML =
+        meds.map(function (m) { return '&bull; ' + opEsc(m.type + ' ' + m.drugName + ' ' + (m.sig || '')); }).join('<br>');
+    new bootstrap.Modal(document.getElementById('opSaveBundleModal')).show();
+}
+
+function saveCurrentAsBundle() {
+    const btn = document.getElementById('btn-save-bnd');
+    btn.disabled = true;
+    google.script.run
+        .withSuccessHandler(function (r) {
+            btn.disabled = false;
+            if (r && r.success) {
+                bootstrap.Modal.getInstance(document.getElementById('opSaveBundleModal'))?.hide();
+                loadComposerContext();
+                alert(r.message);
+            } else alert((r && r.message) || 'Could not save bundle.');
+        })
+        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .saveRxBundle({
+            doctorId: window.currentDoctorId || '',
+            scope: 'PERSONAL',
+            name: document.getElementById('bnd-name').value,
+            indication: document.getElementById('bnd-indication').value,
+            items: collectRxRows()
+        }, window.sessionToken);
+}
+
+// ============================================================================
+// DIAGNOSIS → learned drug suggestions
+// ============================================================================
+// ============================================================================
+// CONSULTING DOCTOR — required for attribution. An admin must name one.
+// ============================================================================
+let opDoctorList = [];
+
+function loadConsultDoctors() {
+    google.script.run
+        .withSuccessHandler(function (res) {
+            if (!res || !res.success) return;
+            opDoctorList = res.doctors || [];
+            const sel = document.getElementById('op-doctor-select');
+            const ref = document.getElementById('ref-to-doctor');
+            const opts = opDoctorList.map(function (d) {
+                return '<option value="' + opEsc(d.doctorId) + '">' + opEsc(d.name) + '</option>';
+            }).join('');
+
+            sel.innerHTML = '<option value="">Select doctor</option>' + opts;
+            if (ref) ref.innerHTML = '<option value="">Select doctor</option>' + opts;
+
+            // A doctor logs in as themselves; reception/admin must choose.
+            if (res.selfDoctorId) { sel.value = res.selfDoctorId; sel.disabled = res.locked; }
+            else if (opDoctorList.length === 1) sel.value = opDoctorList[0].doctorId;
+            onConsultDoctorChanged();
+        })
+        .withFailureHandler(function () {})
+        .getDoctorsForPicker(window.sessionToken);
+}
+
+function onConsultDoctorChanged() {
+    const sel = document.getElementById('op-doctor-select');
+    window.currentDoctorId = sel.value || '';
+    sel.style.borderColor = sel.value ? 'var(--border-color,#334155)' : '#ef4444';
+    if (sel.value) { loadComposerContext(); loadConsultTemplates(); }
+}
+
+// ============================================================================
+// ASSIST — diagnosis driven, tick and add. Never auto-prescribes.
+// ============================================================================
+function onDiagnosisChanged() {
+    const dx = document.getElementById('clin-diagnosis').value.trim();
+    const body = document.getElementById('op-assist-body');
+    const head = document.getElementById('op-assist-dx-head');
+    const addBtn = document.getElementById('btn-add-selected');
+    if (!body) return;
+
+    addBtn.classList.add('d-none');
+    if (!dx) {
+        head.innerText = 'Treatment assist';
+        body.innerHTML = '<span class="label-bright small" style="opacity:.5;">Enter a diagnosis to see suggestions.</span>';
+        return;
+    }
+
+    body.innerHTML = '<span class="label-bright small"><i class="fa-solid fa-spinner fa-spin"></i> Looking up ' + opEsc(dx) + '...</span>';
+
+    google.script.run
+        .withSuccessHandler(function (res) {
+            if (!res || !res.success) { body.innerHTML = '<span class="text-danger small">' + opEsc((res && res.message) || 'Assist unavailable.') + '</span>'; return; }
+            window._opAssist = res;
+            renderAssist(res);
+        })
+        .withFailureHandler(function () { body.innerHTML = '<span class="text-danger small">Assist unavailable.</span>'; })
+        .getAssistForDiagnosis(dx, window.currentDoctorId || '', window.sessionToken);
+}
+
+function renderAssist(res) {
+    const body = document.getElementById('op-assist-body');
+    const head = document.getElementById('op-assist-dx-head');
+    const addBtn = document.getElementById('btn-add-selected');
+    let html = '';
+
+    head.innerText = res.matched ? ('Treatment assist \u2014 ' + res.matched) : 'Treatment assist';
+
+    if (res.yours && res.yours.length) {
+        html += '<div class="mb-3"><div class="op-assist-head text-success mb-2">Commonly used by you</div>';
+        html += res.yours.map(function (s, i) {
+            const stock = !s.inPharmacy ? ' <span class="op-chip-muted">not stocked</span>'
+                        : (s.stockStatus === 'out' ? ' <span class="text-danger">out of stock</span>'
+                        : (s.stockStatus === 'low' ? ' <span class="text-warning">low</span>' : ''));
+            return '<label class="d-flex align-items-center gap-2 py-1" style="cursor:pointer;">' +
+                   '<input type="checkbox" class="ax-your" data-idx="' + i + '">' +
+                   '<span class="text-white">' + opEsc(s.drugName) + '</span>' +
+                   '<span class="op-evidence">' + opEsc(s.sig || '') + ' \u00b7 ' + opEsc(s.evidence) + stock + '</span></label>';
+        }).join('');
+        html += '</div>';
+    }
+
+    if (res.classes && res.classes.length) {
+        html += '<div class="mb-3"><div class="op-assist-head mb-2" style="color:#7dd3fc;">Usual approach for this diagnosis</div>' +
+                '<div class="op-evidence mb-2">Drug classes only &mdash; you choose the product.</div>';
+        html += res.classes.map(function (c, i) {
+            return '<label class="d-flex align-items-center gap-2 py-1" style="cursor:pointer;">' +
+                   '<input type="checkbox" class="ax-class" data-idx="' + i + '">' +
+                   '<span class="text-white">' + opEsc(c.label) + '</span></label>';
+        }).join('');
+        html += '</div>';
+    }
+
+    if (res.labs && res.labs.length) {
+        html += '<div class="mb-2"><div class="op-assist-head mb-2" style="color:#c4b5fd;">Usual investigations</div>' +
+                '<div class="op-suggest-strip">' +
+                res.labs.map(function (l) {
+                    return '<span class="op-chip" onclick="addWorkupLab(\'' + opEsc(l).replace(/'/g, "\\'") + '\')">' +
+                           '<span class="op-chip-add">+</span>' + opEsc(l) + '</span>';
+                }).join('') + '</div></div>';
+    }
+
+    if (res.advice) {
+        html += '<div class="mb-1"><div class="op-assist-head mb-1" style="color:#fcd34d;">Standard advice</div>' +
+                '<span class="op-chip" onclick="applyAssistAdvice()"><span class="op-chip-add">+</span>' +
+                opEsc(res.advice) + '</span></div>';
+    }
+
+    if (!html) html = '<span class="label-bright small" style="opacity:.6;">' + opEsc(res.message || 'Nothing on file for this diagnosis yet.') + '</span>';
+    body.innerHTML = html;
+
+    const hasTickable = (res.yours && res.yours.length) || (res.classes && res.classes.length);
+    addBtn.classList.toggle('d-none', !hasTickable);
+}
+
+function addSelectedAssist() {
+    const res = window._opAssist;
+    if (!res) return;
+    let added = 0;
+
+    document.querySelectorAll('.ax-your:checked').forEach(function (c) {
+        const s = res.yours[parseInt(c.dataset.idx, 10)];
+        if (!s) return;
+        addOPRxRow({ type: s.strength || 'Tab', drugName: s.drugName, sig: s.sig, duration: s.duration });
+        added++;
+    });
+
+    document.querySelectorAll('.ax-class:checked').forEach(function (c) {
+        const cl = res.classes[parseInt(c.dataset.idx, 10)];
+        if (!cl) return;
+        // A class is NOT a drug. An empty row is added with the class as a
+        // prompt; the doctor must pick the actual product.
+        addOPRxRow({ type: 'Tab', drugName: '', sig: '', comments: cl.label });
+        added++;
+    });
+
+    if (!added) { alert('Tick something first.'); return; }
+    document.querySelectorAll('.ax-your, .ax-class').forEach(function (c) { c.checked = false; });
+    queueSafetyCheck();
+}
+
+function applyAssistAdvice() {
+    const res = window._opAssist;
+    if (!res || !res.advice) return;
+    const el = document.getElementById('op-advice-free');
+    el.value = el.value ? el.value + '. ' + res.advice : res.advice;
+    if (res.reviewDays) {
+        const d = new Date(); d.setDate(d.getDate() + res.reviewDays);
+        document.getElementById('clin-review-date').value = d.toISOString().split('T')[0];
+    }
+}
+
+// ============================================================================
+// INTERNAL REFERRAL
+// ============================================================================
+function openReferModal() {
+    const pId = opCurrentPatientId();
+    if (!pId || pId === '--') { alert('Fetch a patient first.'); return; }
+    document.getElementById('ref-reason').value = '';
+    document.getElementById('ref-to-doctor').value = '';
+    new bootstrap.Modal(document.getElementById('opReferModal')).show();
+}
+
+function sendReferral() {
+    const btn = document.getElementById('btn-send-referral');
+    btn.disabled = true;
+    google.script.run
+        .withSuccessHandler(function (r) {
+            btn.disabled = false;
+            if (r && r.success) {
+                bootstrap.Modal.getInstance(document.getElementById('opReferModal'))?.hide();
+                alert(r.message);
+            } else alert((r && r.message) || 'Could not create the referral.');
+        })
+        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .createOPReferral({
+            fromDoctorId: window.currentDoctorId || '',
+            patientId: opCurrentPatientId(),
+            patientName: document.getElementById('hd-pat-name').innerText,
+            toDoctorId: document.getElementById('ref-to-doctor').value,
+            reason: document.getElementById('ref-reason').value,
+            sourceEncounterId: activeOpEncounterId,
+            date: new Date().toISOString().split('T')[0]
+        }, window.sessionToken);
+}
+
+// ============================================================================
+// VITALS / LABS / BMI
+// ============================================================================
 function checkOPVitals(el, type) {
     el.classList.remove('bg-abnormal-high', 'bg-abnormal-low');
     let val = parseFloat(el.value);
@@ -614,12 +1467,12 @@ function calcOPBMI() {
     if (htCm > 0 && wtKg > 0) {
         const bmi = (wtKg / ((htCm / 100) * (htCm / 100))).toFixed(1);
         bmiDisplay.innerText = bmi;
-        if (bmi < 18.5) bmiDisplay.className = "hd-input text-center fw-bold text-info d-inline-block";
-        else if (bmi <= 24.9) bmiDisplay.className = "hd-input text-center fw-bold text-success d-inline-block";
-        else bmiDisplay.className = "hd-input text-center fw-bold text-danger d-inline-block";
-    } else { 
-        bmiDisplay.innerText = "--"; 
-        bmiDisplay.className = "hd-input text-center fw-bold text-white d-inline-block";
+        if (bmi < 18.5) bmiDisplay.className = "hd-input text-center fw-bold text-info d-block w-100 py-1";
+        else if (bmi <= 24.9) bmiDisplay.className = "hd-input text-center fw-bold text-success d-block w-100 py-1";
+        else bmiDisplay.className = "hd-input text-center fw-bold text-danger d-block w-100 py-1";
+    } else {
+        bmiDisplay.innerText = "--";
+        bmiDisplay.className = "hd-input text-center fw-bold text-white d-block w-100 py-1";
     }
 }
 
@@ -635,9 +1488,9 @@ function ensureOPLabsDatalist() {
     if (document.getElementById('op-common-labs-list')) return;
     const dl = document.createElement('datalist');
     dl.id = 'op-common-labs-list';
-    ['Hemoglobin (Hb)', 'RBS', 'FBS', 'PPBS', 'Creatinine', 'Urea', 'Sodium (Na+)', 'Potassium (K+)',
-     'WBC Count', 'Platelets', 'TSH', 'HbA1c', 'Total Cholesterol', 'Bilirubin', 'SGPT/ALT', 'SGOT/AST']
-        .forEach(t => { const o = document.createElement('option'); o.value = t; dl.appendChild(o); });
+    Object.keys(opLabUnitsMap).forEach(function (t) {
+        const o = document.createElement('option'); o.value = t; dl.appendChild(o);
+    });
     document.body.appendChild(dl);
 }
 
@@ -651,12 +1504,11 @@ function addOPLabResultRow() {
     ensureOPLabsDatalist();
     const tbody = document.getElementById('op-lab-results-tbody');
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-        <td style="width:52%" class="px-1"><input type="text" class="hd-input op-lab-res-name" list="op-common-labs-list" placeholder="Test (e.g. Hb)" oninput="updateOPLabUnit(this)"></td>
-        <td style="width:30%" class="px-1"><input type="text" class="hd-input op-lab-res-val text-warning fw-bold text-center" placeholder="Result"></td>
-        <td style="width:13%" class="px-1"><span class="op-lab-res-unit text-secondary" style="font-size:0.65rem;">-</span></td>
-        <td class="text-end px-1 no-print"><button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:0.6rem;" onclick="this.closest('tr').remove()"><i class="fa-solid fa-xmark"></i></button></td>
-    `;
+    tr.innerHTML =
+        '<td style="width:52%" class="px-1"><input type="text" class="hd-input op-lab-res-name" list="op-common-labs-list" placeholder="Test (e.g. Hb)" oninput="updateOPLabUnit(this)"></td>' +
+        '<td style="width:30%" class="px-1"><input type="text" class="hd-input op-lab-res-val text-warning fw-bold text-center" placeholder="Result"></td>' +
+        '<td style="width:13%" class="px-1"><span class="op-lab-res-unit text-secondary" style="font-size:0.65rem;">-</span></td>' +
+        '<td class="text-end px-1 no-print"><button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:0.6rem;" onclick="this.closest(\'tr\').remove()"><i class="fa-solid fa-xmark"></i></button></td>';
     tbody.appendChild(tr);
 }
 
@@ -666,63 +1518,85 @@ function toggleCustomDropdown(id) {
 }
 
 function updateDropdownText(dropdownId, btnId, defaultText) {
-    const checkedBoxes = document.querySelectorAll(`#${dropdownId} input[type="checkbox"]:checked`);
+    const checked = document.querySelectorAll('#' + dropdownId + ' input[type="checkbox"]:checked');
     const btn = document.getElementById(btnId);
-    if (checkedBoxes.length > 0) {
-        btn.innerHTML = checkedBoxes.length + " selected <i class='fa-solid fa-chevron-down ms-2'></i>";
-    } else {
-        btn.innerHTML = defaultText + " <i class='fa-solid fa-chevron-down ms-2'></i>";
-    }
+    btn.innerHTML = checked.length
+        ? checked.length + " selected <i class='fa-solid fa-chevron-down ms-2'></i>"
+        : defaultText + " <i class='fa-solid fa-chevron-down ms-2'></i>";
 }
 
-// --- Dynamic Tables ---
+// ============================================================================
+// DYNAMIC ROWS
+// ============================================================================
 function addOPDynamicRow(tbodyId, type) {
     const tbody = document.getElementById(tbodyId);
     const tr = document.createElement('tr');
-    let prefixHtml = type === 'HX' ? `<select class="hd-input op-array-prefix" style="width: 70px;"><option>K/C/O</option><option>H/o</option><option>S/p</option></select>` : '';
+    const prefixHtml = type === 'HX'
+        ? '<select class="hd-input op-array-prefix" style="width: 70px;"><option>K/C/O</option><option>H/o</option><option>S/p</option></select>' : '';
 
-    tr.innerHTML = `
-        <td style="width: ${type === 'HX' ? 'auto' : '0'}; display: ${type === 'HX' ? 'table-cell' : 'none'};">${prefixHtml}</td>
-        <td class="w-100" style="position:relative;">
-            <input type="text" class="hd-input op-array-text" placeholder="${type === 'CC' ? 'Symptom...' : 'Condition...'}"
-                   autocomplete="off" oninput="onOPTemplateType(this, '${type}')">
-        </td>
-        <td><input type="text" class="hd-input dial-trigger op-array-dur text-center" style="width: 55px;" placeholder="Dur" onclick="openOPDialPad(this, 'dur')"></td>
-        <td class="text-end no-print"><button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.6rem;" onclick="this.closest('tr').remove()"><i class="fa-solid fa-xmark"></i></button></td>
-    `;
+    tr.innerHTML =
+        '<td style="width: ' + (type === 'HX' ? 'auto' : '0') + '; display: ' + (type === 'HX' ? 'table-cell' : 'none') + ';">' + prefixHtml + '</td>' +
+        '<td class="w-100" style="position:relative;">' +
+            '<input type="text" class="hd-input op-array-text" placeholder="' + (type === 'CC' ? 'Symptom... (type / to search)' : 'Condition...') + '" ' +
+            'autocomplete="off" oninput="onOPTemplateType(this, \'' + type + '\')"></td>' +
+        '<td><input type="text" class="hd-input dial-trigger op-array-dur text-center" style="width: 55px;" placeholder="Dur" onclick="openOPDialPad(this, \'dur\')"></td>' +
+        '<td class="text-end no-print"><button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.6rem;" onclick="this.closest(\'tr\').remove()"><i class="fa-solid fa-xmark"></i></button></td>';
     tbody.appendChild(tr);
 }
 
-function addOPRxRow() {
+/** @param {object} [pre] optional {type,drugName,sig,duration,comments} to prefill */
+function addOPRxRow(pre) {
     const tbody = document.getElementById('op-rx-tbody');
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-        <td>
-            <select class="hd-input op-rx-type" style="padding:0.1rem;">
-                <option value="Tab">Tab</option><option value="Cap">Cap</option><option value="Syp">Syp</option>
-                <option value="Inj">Inj</option><option value="Oint">Oint</option><option value="Drops">Drops</option>
-            </select>
-        </td>
-        <td style="position:relative;">
-          <input type="text" class="hd-input op-rx-name" placeholder="Search drug / brand..." autocomplete="off"
-                 data-source="EXTERNAL" style="border-left:3px solid #64748b;"
-                 oninput="onOPDrugType(this)" onfocus="onOPDrugType(this)">
-          <div class="autocomplete-items d-none"></div>
-        </td>
-        <td>
-          <div class="d-flex align-items-center gap-1">
-            <input type="text" class="hd-input dial-trigger op-rx-sig text-warning fw-bold text-center" placeholder="Dosage" onclick="openOPDialPad(this, 'rx')">
-            <button class="btn btn-sm btn-outline-info py-0 px-1 no-print" style="font-size:0.6rem;" title="Dose calculator" onclick="openOPDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>
-          </div>
-        </td>
-        <td><input type="text" class="hd-input dial-trigger op-rx-days text-info text-center" placeholder="Days" onclick="openOPDialPad(this, 'dur')"></td>
-        <td><input type="text" class="hd-input op-rx-comment" placeholder="Note"></td>
-        <td class="text-end no-print"><button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:0.6rem;" onclick="this.closest('tr').remove()"><i class="fa-solid fa-xmark"></i></button></td>
-    `;
+    tr.innerHTML =
+        '<td>' +
+            '<select class="hd-input op-rx-type" style="padding:0.1rem;">' +
+                '<option value="Tab">Tab</option><option value="Cap">Cap</option><option value="Syp">Syp</option>' +
+                '<option value="Inj">Inj</option><option value="Oint">Oint</option><option value="Drops">Drops</option>' +
+            '</select>' +
+        '</td>' +
+        '<td style="position:relative;">' +
+          '<input type="text" class="hd-input op-rx-name" placeholder="Search drug / brand..." autocomplete="off" ' +
+                 'data-source="EXTERNAL" style="border-left:3px solid #64748b;" ' +
+                 'oninput="onOPDrugType(this)" onfocus="onOPDrugType(this)" onchange="queueSafetyCheck()">' +
+          '<div class="autocomplete-items d-none"></div>' +
+          '<div class="op-peds-slot"></div>' +
+        '</td>' +
+        '<td>' +
+          '<div class="d-flex align-items-center gap-1">' +
+            '<input type="text" class="hd-input dial-trigger op-rx-sig text-warning fw-bold text-center" placeholder="Dosage" onclick="openOPDialPad(this, \'rx\')">' +
+            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print" style="font-size:0.6rem;" title="Dose calculator" onclick="openOPDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>' +
+          '</div>' +
+        '</td>' +
+        '<td><input type="text" class="hd-input dial-trigger op-rx-days text-info text-center" placeholder="Days" onclick="openOPDialPad(this, \'dur\')"></td>' +
+        '<td><input type="text" class="hd-input op-rx-comment" placeholder="Note"></td>' +
+        '<td class="text-end no-print"><button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:0.6rem;" onclick="this.closest(\'tr\').remove(); queueSafetyCheck();"><i class="fa-solid fa-xmark"></i></button></td>';
     tbody.appendChild(tr);
+
+    if (pre) {
+        const typeSel = tr.querySelector('.op-rx-type');
+        if (pre.type) Array.from(typeSel.options).forEach(function (o) {
+            if (o.value.toLowerCase() === String(pre.type).toLowerCase()) typeSel.value = o.value;
+        });
+        tr.querySelector('.op-rx-name').value = pre.drugName || '';
+        tr.querySelector('.op-rx-sig').value = pre.sig || '';
+        tr.querySelector('.op-rx-days').value = pre.duration || '';
+        tr.querySelector('.op-rx-comment').value = pre.comments || '';
+        const hit = opCachedDrugsRich.find(function (d) {
+            return d.brand.toLowerCase() === String(pre.drugName || '').toLowerCase();
+        });
+        updateOPRxSource(tr.querySelector('.op-rx-name'), hit ? 'INTERNAL' : 'EXTERNAL', hit || null);
+        if (pre.taper) {
+            tr.querySelector('.op-rx-name').dataset.taper = JSON.stringify(pre.taper);
+            tr.querySelector('.op-rx-name').dataset.qty = pre.computedQty || '';
+        }
+    }
+    return tr;
 }
 
-// --- Drug search: internal pharmacy stock + universal fallback ---
+// ============================================================================
+// DRUG SEARCH
+// ============================================================================
 function onOPDrugType(inputEl) {
     const td = inputEl.parentElement;
     let dropdown = td.querySelector('.autocomplete-items');
@@ -741,7 +1615,7 @@ function onOPDrugType(inputEl) {
     dropdown.classList.remove('d-none');
 
     if (internal.length)  { dropdown.appendChild(opDropdownHeader('In our pharmacy')); internal.forEach(m => dropdown.appendChild(opDrugOption(inputEl, m))); }
-    if (universal.length) { dropdown.appendChild(opDropdownHeader('Universal · external (not billed)')); universal.forEach(m => dropdown.appendChild(opDrugOption(inputEl, m))); }
+    if (universal.length) { dropdown.appendChild(opDropdownHeader('Universal \u00b7 external (not billed)')); universal.forEach(m => dropdown.appendChild(opDrugOption(inputEl, m))); }
 }
 
 function opDropdownHeader(label) {
@@ -752,18 +1626,18 @@ function opDropdownHeader(label) {
 }
 
 function opStockColor(status) {
-    if (status === 'out') return '#ef4444'; 
-    if (status === 'low') return '#f59e0b'; 
-    if (status === 'ok')  return '#10b981'; 
-    return '#64748b'; 
+    if (status === 'out') return '#ef4444';
+    if (status === 'low') return '#f59e0b';
+    if (status === 'ok')  return '#10b981';
+    return '#64748b';
 }
 
 function opDrugOption(inputEl, m) {
     const item = document.createElement('div');
     const right = (m.source === 'INTERNAL')
-        ? `<div class="text-end" style="font-size:0.6rem;">Stock<br><b style="color:${opStockColor(m.status)};">${m.stock}</b></div>`
-        : `<div class="text-end"><span class="badge bg-secondary" style="font-size:0.55rem;">EXT</span></div>`;
-    item.innerHTML = `<div><strong>${m.brand}</strong><br><small>${m.generic || ''}</small></div>${right}`;
+        ? '<div class="text-end" style="font-size:0.6rem;">Stock<br><b style="color:' + opStockColor(m.status) + ';">' + m.stock + '</b></div>'
+        : '<div class="text-end"><span class="badge bg-secondary" style="font-size:0.55rem;">EXT</span></div>';
+    item.innerHTML = '<div><strong>' + opEsc(m.brand) + '</strong><br><small>' + opEsc(m.generic || '') + '</small></div>' + right;
     item.onclick = function () {
         inputEl.value = m.brand;
         inputEl.dataset.locked = '1';
@@ -774,80 +1648,69 @@ function opDrugOption(inputEl, m) {
         const typeSel = inputEl.closest('tr').querySelector('.op-rx-type');
         if (typeSel && m.type) Array.from(typeSel.options).forEach(o => { if (o.value.toLowerCase() === m.type.toLowerCase()) typeSel.value = o.value; });
         updateOPRxSource(inputEl, m.source, m);
-        const dd = inputEl.parentElement.querySelector('.autocomplete-items');
-        if (dd) dd.classList.add('d-none');
+        inputEl.parentElement.querySelector('.autocomplete-items')?.classList.add('d-none');
+        offerPaediatricDose(inputEl);
+        queueSafetyCheck();
     };
     return item;
 }
 
 function updateOPRxSource(inputEl, source, m) {
-    let color = '#64748b', title = 'External / manual — printed only, not sent to pharmacy';
+    let color = '#64748b', title = 'External / manual \u2014 printed only, not sent to pharmacy';
     if (source === 'INTERNAL') {
         if (m && m.status === 'out')      { color = '#ef4444'; title = 'In pharmacy but OUT of stock'; }
-        else if (m && m.status === 'low') { color = '#f59e0b'; title = 'In pharmacy — LOW stock'; }
-        else                              { color = '#10b981'; title = 'In pharmacy, in stock — will be billed'; }
+        else if (m && m.status === 'low') { color = '#f59e0b'; title = 'In pharmacy \u2014 LOW stock'; }
+        else                              { color = '#10b981'; title = 'In pharmacy, in stock \u2014 will be billed'; }
     }
     inputEl.style.borderLeft = '3px solid ' + color;
     inputEl.title = title;
     inputEl.dataset.source = source;
 }
 
-// --- Templates: complaints / history type-ahead + advice render ---
-function onOPTemplateType(inputEl, cat) {
-    let dd = inputEl.parentElement.querySelector('.autocomplete-items');
-    if (!dd) { dd = document.createElement('div'); dd.className = 'autocomplete-items d-none'; inputEl.parentElement.appendChild(dd); }
-    const val = inputEl.value.trim().toLowerCase();
-    dd.innerHTML = '';
-    if (!val) { dd.classList.add('d-none'); return; }
-    const list = (opTemplates[cat] || []).filter(x => x.text.toLowerCase().includes(val)).slice(0, 8);
-    if (!list.length) { dd.classList.add('d-none'); return; }
-    dd.classList.remove('d-none');
-    list.forEach(x => {
-        const it = document.createElement('div');
-        it.innerHTML = `<span>${x.text}</span><small class="text-muted">${x.count}×</small>`;
-        it.onclick = () => { inputEl.value = x.text; dd.classList.add('d-none'); };
-        dd.appendChild(it);
-    });
+// --- paediatric dose: suggested, never applied -------------------------------
+function offerPaediatricDose(inputEl) {
+    const slot = inputEl.closest('td').querySelector('.op-peds-slot');
+    if (!slot) return;
+    slot.innerHTML = '';
+
+    const wt = parseFloat(document.getElementById('op-vit-wt').value);
+    const demo = document.getElementById('hd-pat-demo')?.innerText || '';
+    const am = demo.match(/(\d+)\s*Y/i);
+    const age = am ? parseInt(am[1], 10) : null;
+    if (!wt || age === null || age >= 12) return;
+
+    google.script.run
+        .withSuccessHandler(function (res) {
+            if (!res || !res.applicable) {
+                if (res && res.message) slot.innerHTML = '<span class="op-evidence">' + opEsc(res.message) + '</span>';
+                return;
+            }
+            const row = inputEl.closest('tr');
+            row.dataset.pedsSig = res.sig;
+            slot.innerHTML = '<span class="op-peds-hint" title="' + opEsc(res.note) + '" onclick="applyPedsSig(this)">' +
+                             '<i class="fa-solid fa-child"></i> Suggested: ' + opEsc(res.sig) + ' &mdash; click to insert</span>';
+        })
+        .withFailureHandler(function () {})
+        .suggestPaediatricDose(inputEl.value, wt, age, 2);
 }
 
-function renderOPAdviceTemplates() {
-    const dd = document.getElementById('advice-dropdown');
-    if (!dd) return;
-    (opTemplates.ADVICE || []).forEach(a => {
-        if (dd.querySelector(`input[value="${a.text.replace(/"/g, '\\"')}"]`)) return;
-        const lbl = document.createElement('label');
-        lbl.className = 'd-block text-white p-2 cursor-pointer mb-1 hover-bg-info';
-        lbl.innerHTML = `<input type="checkbox" class="me-2" value="${a.text}" onchange="updateDropdownText('advice-dropdown','btn-advice','Select Advice...')"> ${a.text}`;
-        dd.appendChild(lbl);
-    });
+function applyPedsSig(el) {
+    const row = el.closest('tr');
+    const sig = row.dataset.pedsSig;
+    if (!sig) return;
+    row.querySelector('.op-rx-sig').value = sig;
+    el.parentElement.innerHTML = '<span class="op-evidence">Inserted \u2014 verify before saving.</span>';
 }
 
-// --- Lab modal render (internal vs external from Lab_Test_Master) ---
-function renderOPLabModal() {
-    const intC = document.getElementById('op-lab-internal-list');
-    const extC = document.getElementById('op-lab-external-list');
-    if (!intC || !extC) return;
-    intC.innerHTML = ''; extC.innerHTML = '';
-    const mk = (t, src) => {
-        const col = document.createElement('div'); col.className = 'col-6';
-        col.innerHTML = `<div class="form-check">
-            <input class="form-check-input op-lab-chk" type="checkbox" value="${t.testName}" data-source="${src}">
-            <label class="form-check-label small ${src === 'INTERNAL' ? '' : 'text-secondary'}">${t.testName}</label>
-          </div>`;
-        return col;
-    };
-    (opLabMaster.internal || []).forEach(t => intC.appendChild(mk(t, 'INTERNAL')));
-    (opLabMaster.external || []).forEach(t => extC.appendChild(mk(t, 'EXTERNAL')));
-    if (!opLabMaster.internal.length) intC.innerHTML = '<div class="col-12 text-muted small">No tests loaded from the Test Catalog yet.</div>';
-}
-
-// --- Systemic Exam Toggles ---
+// ============================================================================
+// SYSTEMIC EXAM
+// ============================================================================
 function setOPSysExam(sys, mode) {
-    const dd = document.getElementById(`op-se-${sys}-dd`);
-    const txt = document.getElementById(`op-se-${sys}-text`);
+    const dd = document.getElementById('op-se-' + sys + '-dd');
+    const txt = document.getElementById('op-se-' + sys + '-text');
     if (mode === 'wnl') {
         dd.classList.add('d-none');
-        txt.value = opSysDefaults[sys];
+        txt.value = opSysDefaults[sys] || '';
         txt.classList.remove('text-warning');
         txt.classList.add('text-success');
     } else {
@@ -858,117 +1721,219 @@ function setOPSysExam(sys, mode) {
         txt.focus();
     }
 }
-function markOPAllWNL() { ['cvs', 'rs', 'pa', 'cns'].forEach(sys => setOPSysExam(sys, 'wnl')); }
+function markOPAllWNL() { ['cvs', 'rs', 'pa', 'cns'].forEach(s => setOPSysExam(s, 'wnl')); }
 
-// --- Smart Dial Pad ---
+// ============================================================================
+// DIAL PAD
+// ============================================================================
 function openOPDialPad(inputEl, mode) {
     if (inputEl.disabled) return;
     currentOPDialTarget = inputEl;
     document.getElementById('op-dial-title').innerText = mode === 'rx' ? "Smart Dosage" : "Select Duration";
-    if (mode === 'dur') {
-        document.getElementById('op-dial-rx-grid').classList.add('d-none');
-        document.getElementById('op-dial-dur-grid').classList.remove('d-none');
-    } else {
-        document.getElementById('op-dial-dur-grid').classList.add('d-none');
-        document.getElementById('op-dial-rx-grid').classList.remove('d-none');
-    }
+    document.getElementById('op-dial-rx-grid').classList.toggle('d-none', mode !== 'rx');
+    document.getElementById('op-dial-dur-grid').classList.toggle('d-none', mode === 'rx');
     new bootstrap.Modal(document.getElementById('opDialPadModal')).show();
 }
 
 function appendOPDial(val) {
     if (!currentOPDialTarget) return;
     let cVal = currentOPDialTarget.value.trim();
-    let v = val.trim();
+    const v = val.trim();
     const rxPatterns = { 'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1' };
 
     if (rxPatterns[v]) {
         let base = rxPatterns[v];
-        if (cVal && !isNaN(cVal)) { base = base.replace(/1/g, cVal); }
+        if (cVal && !isNaN(cVal)) base = base.replace(/1/g, cVal);
         currentOPDialTarget.value = base;
-    }
-    else if (v === 'AF' || v === 'BF') {
+    } else if (v === 'AF' || v === 'BF') {
         if (cVal.includes('-')) {
-            let parts = cVal.split('-');
-            let res = parts.map(p => {
-                let clean = p.replace(/\(AF\)|\(BF\)/g, '');
-                return (clean !== '0') ? clean + `(${v})` : '0';
-            });
-            currentOPDialTarget.value = res.join('-');
+            currentOPDialTarget.value = cVal.split('-').map(function (p) {
+                const clean = p.replace(/\(AF\)|\(BF\)/g, '');
+                return (clean !== '0') ? clean + '(' + v + ')' : '0';
+            }).join('-');
         } else {
-            currentOPDialTarget.value = cVal ? cVal + ` (${v})` : `(${v})`;
+            currentOPDialTarget.value = cVal ? cVal + ' (' + v + ')' : '(' + v + ')';
         }
-    }
-    else if (['STAT', 'SOS', 'ml', 'Drops', 'Oint'].includes(v) || v.includes('Days') || v.includes('Wks')) {
+    } else if (['STAT', 'SOS', 'ml', 'Drops', 'Oint'].includes(v) || v.includes('Days') || v.includes('Wks')) {
         currentOPDialTarget.value = cVal ? cVal + ' ' + v : v;
-    }
-    else {
+    } else {
         currentOPDialTarget.value = cVal + val;
     }
 }
 function clearOPDial() { if (currentOPDialTarget) currentOPDialTarget.value = ''; }
 
-// --- Labs handler (status line) ---
+// ============================================================================
+// TAPER MODE
+// ============================================================================
+function openTaperFromDial() {
+    if (!currentOPDialTarget) return;
+    opTaperTargetRow = currentOPDialTarget.closest('tr');
+    bootstrap.Modal.getInstance(document.getElementById('opDialPadModal'))?.hide();
+    openTaperBuilder(opTaperTargetRow);
+}
+
+function openTaperBuilder(row) {
+    opTaperTargetRow = row;
+    const nameEl = row.querySelector('.op-rx-name');
+    document.getElementById('tp-drug-label').innerText = nameEl ? (nameEl.value || '') : '';
+    const unitGuess = nameEl && nameEl.dataset.unit ? (nameEl.dataset.unit.match(/[\d.]+/) || [''])[0] : '';
+    document.getElementById('tp-unit').value = unitGuess;
+    ['tp-start', 'tp-step', 'tp-min', 'tp-days'].forEach(function (id) { document.getElementById(id).value = ''; });
+    document.getElementById('tp-preview').innerText = 'Fill the fields to preview the schedule.';
+    document.getElementById('tp-summary').innerText = '';
+    _opTaperPlan = null;
+    new bootstrap.Modal(document.getElementById('opTaperModal')).show();
+}
+
+function recalcTaper() {
+    const spec = {
+        pattern: document.getElementById('tp-pattern').value,
+        unitStrength: document.getElementById('tp-unit').value,
+        startDose: document.getElementById('tp-start').value,
+        stepSize: document.getElementById('tp-step').value,
+        minDose: document.getElementById('tp-min').value,
+        stepDays: document.getElementById('tp-days').value,
+        frequency: document.getElementById('tp-freq').value
+    };
+    if (!spec.startDose || !spec.stepDays) return;
+
+    google.script.run
+        .withSuccessHandler(function (res) {
+            const pv = document.getElementById('tp-preview');
+            const sm = document.getElementById('tp-summary');
+            if (!res || !res.success) { pv.innerText = (res && res.message) || 'Check the values.'; sm.innerText = ''; _opTaperPlan = null; return; }
+            _opTaperPlan = res;
+            pv.innerText = res.steps.map(function (s) { return s.text; }).join('\n');
+            sm.innerText = res.summary + (res.warning ? '  \u2014 ' + res.warning : '');
+        })
+        .withFailureHandler(function () {})
+        .buildTaperPlan(spec);
+}
+
+function applyTaperToRow() {
+    if (!_opTaperPlan || !opTaperTargetRow) { alert('Build a valid schedule first.'); return; }
+    const nameEl = opTaperTargetRow.querySelector('.op-rx-name');
+    opTaperTargetRow.querySelector('.op-rx-sig').value = _opTaperPlan.sig;
+    opTaperTargetRow.querySelector('.op-rx-days').value = _opTaperPlan.totalDays + ' Days';
+    nameEl.dataset.taper = JSON.stringify(_opTaperPlan.steps);
+    nameEl.dataset.qty = _opTaperPlan.computedQty;
+
+    const cmt = opTaperTargetRow.querySelector('.op-rx-comment');
+    if (!cmt.value) cmt.value = 'Tapering schedule \u2014 see prescription';
+
+    bootstrap.Modal.getInstance(document.getElementById('opTaperModal'))?.hide();
+    queueSafetyCheck();
+}
+
+// ============================================================================
+// LABS
+// ============================================================================
 function compileOPLabs() {
-    let labNames = [];
+    const labNames = [];
     document.querySelectorAll('.op-lab-chk:checked').forEach(c => labNames.push(c.value));
-    let otherLab = document.getElementById('op-lab-other').value;
+    const otherLab = document.getElementById('op-lab-other').value;
     if (otherLab) labNames.push(otherLab + ' (ext)');
-
-    const container = document.getElementById('op-active-labs-container');
-    container.innerHTML = labNames.length ? "Queued for today: " + labNames.join(", ") : "";
+    document.getElementById('op-active-labs-container').innerHTML =
+        labNames.length ? "Queued for today: " + opEsc(labNames.join(", ")) : "";
 }
 
-// --- Dose calculator ---
-function freqWord(f) { return ({ 1: 'OD', 2: 'BD', 3: 'TDS', 4: 'QID' })[f] || (f + 'x/day'); }
-
-function opEnsureDoseExtras() {
-    const body = document.querySelector('#opDoseCalcModal .modal-body');
-    if (!body || document.getElementById('dc-drug')) return;
-    const wrap = document.createElement('div');
-    wrap.innerHTML =
-        '<label class="hd-label">Drug (optional — loads reference dose)</label>' +
-        '<div style="position:relative;">' +
-        '  <input type="text" class="hd-input mb-1" id="dc-drug" autocomplete="off" placeholder="Search drug to load reference...">' +
-        '  <div class="autocomplete-items d-none" id="dc-drug-ac"></div>' +
-        '</div>' +
-        '<div id="dc-ref-line" class="small mb-2" style="color:#0ea5e9; min-height:16px;"></div>';
-    body.insertBefore(wrap, body.firstChild);
-    document.getElementById('dc-drug').addEventListener('input', opDoseDrugSearch);
+function loadOPLabCatalog() {
+    const candidates = ['getOrderableTests', 'getLabCatalog', 'fetchLabTestMaster'];
+    (function tryNext(i) {
+        if (i >= candidates.length) { opLabMaster = { internal: [], external: [] }; renderOPLabModal(); return; }
+        google.script.run
+            .withSuccessHandler(function (res) {
+                const norm = normalizeOPCatalog(res);
+                if (norm.internal.length || norm.external.length) { opLabMaster = norm; renderOPLabModal(); }
+                else tryNext(i + 1);
+            })
+            .withFailureHandler(function () { tryNext(i + 1); })
+            [candidates[i]]();
+    })(0);
 }
 
-function opDoseDrugSearch() {
-    const inp = document.getElementById('dc-drug');
-    const dd = document.getElementById('dc-drug-ac');
-    const val = inp.value.trim().toLowerCase();
-    dd.innerHTML = '';
-    if (!val) { dd.classList.add('d-none'); return; }
-    const matches = opCachedDrugsRich.filter(d => d.brand.toLowerCase().includes(val) || (d.generic || '').toLowerCase().includes(val)).slice(0, 6);
-    if (!matches.length) { dd.classList.add('d-none'); return; }
-    dd.classList.remove('d-none');
-    matches.forEach(m => {
-        const it = document.createElement('div');
-        it.innerHTML = `<div><strong>${m.brand}</strong><br><small>${m.generic || ''}</small></div>` + (m.refDose ? `<small class="text-info">${m.refDose} mg/kg/d</small>` : '');
-        it.onclick = () => { inp.value = m.brand; dd.classList.add('d-none'); opApplyDrugReference(m); };
-        dd.appendChild(it);
+function normalizeOPCatalog(res) {
+    const out = { internal: [], external: [] };
+    if (!res) return out;
+    let items = [];
+    if (Array.isArray(res)) items = res;
+    else if (Array.isArray(res.data)) items = res.data;
+    else {
+        if (res.internal) return res;
+        ['tests', 'panels', 'individuals', 'packages'].forEach(function (k) {
+            if (Array.isArray(res[k])) items = items.concat(res[k]);
+        });
+    }
+    items.forEach(function (it) {
+        const name = it.testName || it.name || it.title || it.test || '';
+        if (!name) return;
+        const activeRaw = (it.isActive !== undefined) ? it.isActive : (it.active !== undefined ? it.active : true);
+        const isActive = (activeRaw === true) || ['ACTIVE', 'Y', '1'].indexOf(String(activeRaw).toUpperCase()) !== -1;
+        if (!isActive) return;
+        out.internal.push({ testName: name, department: it.department || it.dept || '', price: it.price || 0, source: 'INTERNAL' });
+    });
+    out.internal.sort(function (a, b) { return a.testName.localeCompare(b.testName); });
+    return out;
+}
+
+function renderOPLabModal() {
+    const intC = document.getElementById('op-lab-internal-list');
+    const extC = document.getElementById('op-lab-external-list');
+    if (!intC || !extC) return;
+    intC.innerHTML = ''; extC.innerHTML = '';
+    const mk = function (t, src) {
+        const col = document.createElement('div'); col.className = 'col-6';
+        col.innerHTML = '<div class="form-check">' +
+            '<input class="form-check-input op-lab-chk" type="checkbox" value="' + opEsc(t.testName) + '" data-source="' + src + '">' +
+            '<label class="form-check-label small ' + (src === 'INTERNAL' ? '' : 'text-secondary') + '">' + opEsc(t.testName) + '</label></div>';
+        return col;
+    };
+    (opLabMaster.internal || []).forEach(t => intC.appendChild(mk(t, 'INTERNAL')));
+    (opLabMaster.external || []).forEach(t => extC.appendChild(mk(t, 'EXTERNAL')));
+    if (!opLabMaster.internal.length) intC.innerHTML = '<div class="col-12 text-muted small">No tests loaded from the Test Catalog yet.</div>';
+}
+
+// ============================================================================
+// DRUG MASTER LOADING
+// ============================================================================
+function normalizeOPDrugs(list) {
+    return (list || []).map(function (d) {
+        const stock = parseInt(d.stock, 10) || 0;
+        const reorder = parseInt(d.reorder, 10) || 5;
+        return {
+            brand: d.brand || '', generic: d.generic || '', type: d.type || 'Tab',
+            stock: stock, unit: d.unit || '', refDose: d.refDose || '', adultDose: d.adultDose || '',
+            status: d.status || (stock <= 0 ? 'out' : (stock <= reorder ? 'low' : 'ok')),
+            source: 'INTERNAL'
+        };
     });
 }
 
-function opApplyDrugReference(d) {
-    const line = document.getElementById('dc-ref-line');
-    if (!line) return;
-    const parts = [];
-    if (d.generic) parts.push(d.generic);
-    if (d.refDose) parts.push('Ref: ' + d.refDose + ' mg/kg/day');
-    if (d.adultDose) parts.push('Adult: ' + d.adultDose);
-    line.innerText = parts.length ? (parts.join('  ·  ') + '  — verify before prescribing') : 'No reference dose on file for this drug.';
-    const num = (d.refDose || '').match(/[\d.]+/);
-    if (num) document.getElementById('dc-mgkg').value = num[0];
-    calcOPDose();
+function opLoadIntegrationData() {
+    google.script.run
+        .withSuccessHandler(function (list) { opCachedDrugsRich = normalizeOPDrugs(list); })
+        .withFailureHandler(function () {
+            google.script.run
+                .withSuccessHandler(function (l2) { opCachedDrugsRich = normalizeOPDrugs(l2); })
+                .withFailureHandler(function () {})
+                .fetchPharmacyMasterForIP();
+        })
+        .fetchOPDrugMaster();
+
+    if (!opCachedUniversalDrugs.length) {
+        google.script.run.withSuccessHandler(function (d) { opCachedUniversalDrugs = d || []; }).fetchUniversalDrugs();
+    }
+    loadOPLabCatalog();
+    ensureOPLabsDatalist();
 }
+
+// ============================================================================
+// DOSE CALCULATOR
+// ============================================================================
+function freqWord(f) { return ({ 1: 'OD', 2: 'BD', 3: 'TDS', 4: 'QID' })[f] || (f + 'x/day'); }
 
 function openOPDoseCalc(btn) {
     opDoseTargetRow = btn.closest('tr');
-    opEnsureDoseExtras();
     const w = document.getElementById('op-vit-wt')?.value;
     if (w) document.getElementById('dc-weight').value = w;
     const demo = document.getElementById('hd-pat-demo')?.innerText || '';
@@ -976,17 +1941,12 @@ function openOPDoseCalc(btn) {
     if (am) document.getElementById('dc-age').value = am[1];
 
     const nameEl = opDoseTargetRow.querySelector('.op-rx-name');
-    const dcDrug = document.getElementById('dc-drug');
-    if (nameEl && nameEl.value) {
-        dcDrug.value = nameEl.value;
-        opApplyDrugReference({ generic: nameEl.dataset.generic || '', refDose: nameEl.dataset.refdose || '', adultDose: nameEl.dataset.adultdose || '' });
-    } else {
-        dcDrug.value = '';
-        const line = document.getElementById('dc-ref-line'); if (line) line.innerText = '';
+    if (nameEl && nameEl.dataset.refdose) {
+        const num = String(nameEl.dataset.refdose).match(/[\d.]+/);
+        if (num) document.getElementById('dc-mgkg').value = num[0];
     }
-
     calcOPDose();
-    ['dc-weight', 'dc-age', 'dc-mgkg', 'dc-freq', 'dc-strength'].forEach(id => {
+    ['dc-weight', 'dc-age', 'dc-mgkg', 'dc-freq', 'dc-strength'].forEach(function (id) {
         const el = document.getElementById(id); el.oninput = calcOPDose; el.onchange = calcOPDose;
     });
     new bootstrap.Modal(document.getElementById('opDoseCalcModal')).show();
@@ -1001,12 +1961,12 @@ function calcOPDose() {
     if (!w || !mgkg) { out.innerText = 'Enter weight and mg/kg/day.'; _opDoseSig = ''; return; }
     const perDay = w * mgkg;
     const perDose = perDay / freq;
-    let txt = `Total/day: ${perDay.toFixed(1)} mg\nPer dose: ${perDose.toFixed(1)} mg × ${freq}/day`;
-    let sig = `${perDose.toFixed(1)} mg ${freqWord(freq)}`;
-    if (strength && strength > 0) {
+    let txt = 'Total/day: ' + perDay.toFixed(1) + ' mg\nPer dose: ' + perDose.toFixed(1) + ' mg \u00d7 ' + freq + '/day';
+    let sig = perDose.toFixed(1) + ' mg ' + freqWord(freq);
+    if (strength > 0) {
         const units = perDose / strength;
-        txt += `\n≈ ${units.toFixed(2)} unit per dose (of ${strength} mg)`;
-        sig = `${units.toFixed(2)} unit ${freqWord(freq)} (${perDose.toFixed(1)} mg)`;
+        txt += '\n\u2248 ' + units.toFixed(2) + ' unit per dose (of ' + strength + ' mg)';
+        sig = units.toFixed(2) + ' unit ' + freqWord(freq) + ' (' + perDose.toFixed(1) + ' mg)';
     }
     out.innerText = txt;
     _opDoseSig = sig;
@@ -1020,79 +1980,91 @@ function insertOPDose() {
     bootstrap.Modal.getInstance(document.getElementById('opDoseCalcModal'))?.hide();
 }
 
-// --- PAYLOAD BUILDER & SAVING ---
-function buildOPFlatPayload() {
-    const patientId = document.getElementById('hd-pat-id')?.innerText.replace('ID:', '').trim();
+// ============================================================================
+// PAYLOAD
+// ============================================================================
+function collectRxRows() {
+    const meds = [];
+    document.querySelectorAll('#op-rx-tbody tr').forEach(function (row) {
+        const nameEl = row.querySelector('.op-rx-name');
+        const name = nameEl ? nameEl.value.trim() : '';
+        if (!name) return;
 
-    let ccArr = [];
-    document.querySelectorAll('#op-cc-tbody tr').forEach(row => {
-        let text = row.querySelector('.op-array-text')?.value;
-        let dur = row.querySelector('.op-array-dur')?.value;
-        if (text) ccArr.push(`${text} (${dur})`);
-    });
-
-    let hxArr = [];
-    document.querySelectorAll('#op-hx-tbody tr').forEach(row => {
-        let prefix = row.querySelector('.op-array-prefix')?.value;
-        let text = row.querySelector('.op-array-text')?.value;
-        let dur = row.querySelector('.op-array-dur')?.value;
-        if (text) hxArr.push(`${prefix} ${text} (${dur})`);
-    });
-
-    let meds = [];
-    document.querySelectorAll('#op-rx-tbody tr').forEach(row => {
-        let type = row.querySelector('.op-rx-type')?.value;
-        let nameEl = row.querySelector('.op-rx-name');
-        let name = nameEl?.value;
-        if (name) {
-            let src = (nameEl.dataset.source || 'EXTERNAL').toUpperCase();
-            if (src === 'EXTERNAL') {                       
-                const hit = opCachedDrugsRich.find(d => d.brand.toLowerCase() === name.toLowerCase());
-                if (hit) src = 'INTERNAL';
-            }
-            meds.push({
-                strength: type,
-                drugName: name,
-                sig: row.querySelector('.op-rx-sig')?.value || '',
-                duration: row.querySelector('.op-rx-days')?.value || '',
-                comments: row.querySelector('.op-rx-comment')?.value || '',
-                source: src
-            });
+        let src = (nameEl.dataset.source || 'EXTERNAL').toUpperCase();
+        if (src === 'EXTERNAL') {
+            const hit = opCachedDrugsRich.find(d => d.brand.toLowerCase() === name.toLowerCase());
+            if (hit) src = 'INTERNAL';
         }
+
+        const med = {
+            type: row.querySelector('.op-rx-type')?.value || 'Tab',
+            strength: row.querySelector('.op-rx-type')?.value || 'Tab',
+            drugName: name,
+            sig: row.querySelector('.op-rx-sig')?.value || '',
+            duration: row.querySelector('.op-rx-days')?.value || '',
+            comments: row.querySelector('.op-rx-comment')?.value || '',
+            source: src
+        };
+        if (nameEl.dataset.taper) {
+            try { med.taper = JSON.parse(nameEl.dataset.taper); } catch (e) {}
+            med.computedQty = parseInt(nameEl.dataset.qty, 10) || 0;
+        }
+        meds.push(med);
+    });
+    return meds;
+}
+
+function buildOPFlatPayload() {
+    const patientId = opCurrentPatientId();
+
+    const ccArr = [];
+    document.querySelectorAll('#op-cc-tbody tr').forEach(function (row) {
+        const text = row.querySelector('.op-array-text')?.value.trim();
+        const dur = row.querySelector('.op-array-dur')?.value.trim();
+        if (text) ccArr.push(dur ? text + ' (' + dur + ')' : text);
     });
 
-    let labs = [];
-    document.querySelectorAll('.op-lab-chk:checked').forEach(chk => {
+    const hxArr = [];
+    document.querySelectorAll('#op-hx-tbody tr').forEach(function (row) {
+        const prefix = row.querySelector('.op-array-prefix')?.value || '';
+        const text = row.querySelector('.op-array-text')?.value.trim();
+        const dur = row.querySelector('.op-array-dur')?.value.trim();
+        if (text) hxArr.push((prefix + ' ' + text + (dur ? ' (' + dur + ')' : '')).trim());
+    });
+
+    const labs = [];
+    document.querySelectorAll('.op-lab-chk:checked').forEach(function (chk) {
         labs.push({ testName: chk.value, priority: "Routine", type: "Order", source: chk.dataset.source || 'INTERNAL' });
     });
-    let otherLab = document.getElementById('op-lab-other')?.value;
+    const otherLab = document.getElementById('op-lab-other')?.value;
     if (otherLab) labs.push({ testName: otherLab, priority: "Routine", type: "Order", source: "EXTERNAL" });
 
-    document.querySelectorAll('#op-lab-results-tbody tr').forEach(row => {
-        let testName = row.querySelector('.op-lab-res-name').value;
-        let testResult = row.querySelector('.op-lab-res-val').value;
-        if (testName && testResult) labs.push({ testName: testName, result: testResult, type: "Result" });
+    document.querySelectorAll('#op-lab-results-tbody tr').forEach(function (row) {
+        const t = row.querySelector('.op-lab-res-name').value;
+        const r = row.querySelector('.op-lab-res-val').value;
+        if (t && r) labs.push({ testName: t, result: r, type: "Result" });
     });
 
-    let adviceArr = [];
-    document.querySelectorAll('#advice-dropdown input[type="checkbox"]:checked').forEach(chk => {
-        adviceArr.push(chk.value);
-    });
+    const adviceArr = [];
+    document.querySelectorAll('#advice-dropdown input[type="checkbox"]:checked').forEach(c => adviceArr.push(c.value));
+    const freeAdvice = document.getElementById('op-advice-free')?.value.trim();
+    if (freeAdvice) adviceArr.push(freeAdvice.replace(/^\//, ''));
     let adviceStr = adviceArr.join(", ");
 
-    let futureLabs = document.getElementById('op-future-labs')?.value;
-    if (futureLabs) adviceStr += (adviceStr ? " | " : "") + `Future Labs: ${futureLabs}`;
+    const futureLabs = document.getElementById('op-future-labs')?.value;
+    if (futureLabs) adviceStr += (adviceStr ? " | " : "") + "Future Labs: " + futureLabs;
 
-    let templateLearn = [];
+    const templateLearn = [];
     document.querySelectorAll('#op-cc-tbody .op-array-text').forEach(i => { if (i.value.trim()) templateLearn.push({ category: 'CC', text: i.value.trim() }); });
     document.querySelectorAll('#op-hx-tbody .op-array-text').forEach(i => { if (i.value.trim()) templateLearn.push({ category: 'HX', text: i.value.trim() }); });
     adviceArr.forEach(a => templateLearn.push({ category: 'ADVICE', text: a }));
 
-    const getChk = val => document.querySelector(`.op-ge-chk[value="${val}"]`)?.checked ? "Yes" : "No";
+    const getChk = v => document.querySelector('.op-ge-chk[value="' + v + '"]')?.checked ? "Yes" : "No";
 
     return {
         encounterId: activeOpEncounterId,
         patientId: patientId,
+        doctorId: window.currentDoctorId || '',
         sysBp: document.getElementById('op-vit-sys')?.value || '',
         diaBp: document.getElementById('op-vit-dia')?.value || '',
         hr: document.getElementById('op-vit-pr')?.value || '',
@@ -1102,325 +2074,184 @@ function buildOPFlatPayload() {
         bmi: document.getElementById('op-vit-bmi')?.innerText || '--',
         complaints: ccArr.join(" | "),
         history: hxArr.join(" | "),
-        pallor: getChk('Pallor'),
-        icterus: getChk('Icterus'),
-        cyanosis: getChk('Cyanosis'),
-        clubbing: getChk('Clubbing'),
-        edema: getChk('Edema'),
+        pallor: getChk('Pallor'), icterus: getChk('Icterus'), cyanosis: getChk('Cyanosis'),
+        clubbing: getChk('Clubbing'), edema: getChk('Edema'),
         cvs: document.getElementById('op-se-cvs-text')?.value || '',
         rs: document.getElementById('op-se-rs-text')?.value || '',
         pa: document.getElementById('op-se-pa-text')?.value || '',
         cns: document.getElementById('op-se-cns-text')?.value || '',
         diagnosis: document.getElementById('clin-diagnosis')?.value || '',
+        diagnosisType: document.getElementById('clin-diagnosis-type')?.value || 'Provisional',
         reviewDate: document.getElementById('clin-review-date')?.value || '',
-        meds: meds,
+        radiologyOrders: document.getElementById('op-rad-orders')?.value || '',
+        radiologyFindings: document.getElementById('op-rad-findings')?.value || '',
+        meds: collectRxRows(),
         labs: labs,
         advice: adviceStr,
         templateLearn: templateLearn
     };
 }
 
-function saveOPDraftLocal() {
-    const patientId = document.getElementById('hd-pat-id')?.innerText.replace('ID:', '').trim();
-    if (!patientId || patientId === "--") {
-        alert("Please fetch a patient before saving a draft.");
-        return;
-    }
-    
-    const draft = buildOPFlatPayload();
-    localStorage.setItem('op_draft_' + patientId, JSON.stringify(draft));
-    
-    const statusEl = document.getElementById('op-draft-status');
-    if (statusEl) {
-        statusEl.classList.remove('d-none');
-        statusEl.innerHTML = `<i class="fa-solid fa-check text-success"></i> Draft Saved ${new Date().toLocaleTimeString()}`;
-        setTimeout(() => { statusEl.classList.add('d-none'); }, 3000);
-    }
-}
-
+// ============================================================================
+// SAVE
+// ============================================================================
 function submitOPEncounter() {
     const btn = document.getElementById('btn-submit-op');
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
-    btn.disabled = true;
     const payload = buildOPFlatPayload();
 
     if (!payload.patientId || payload.patientId === "--") {
         alert("Please fetch a patient first using the Search button.");
-        btn.innerHTML = 'Save Consult';
-        btn.disabled = false;
         return;
     }
+
+    // Danger-level safety alerts require an explicit override before saving.
+    const dangers = document.querySelectorAll('#op-safety-bar .op-safety-danger');
+    if (dangers.length &&
+        !confirm("There are allergy alerts on this prescription. Save anyway?")) return;
+
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    btn.disabled = true;
 
     google.script.run
         .withSuccessHandler(function (response) {
             btn.innerHTML = 'Save Consult';
             btn.disabled = false;
-            if (response.success) {
+            if (response && response.success) {
                 activeOpEncounterId = response.encounterId;
-                alert("Success: Record saved.\nEncounter ID: " + activeOpEncounterId);
-            } else { alert("Database Error: " + response.message); }
+                loadComposerContext();   // pick up newly learnt phrases
+                alert("Saved.\nEncounter: " + activeOpEncounterId +
+                      (response.doctorName ? "\nRecorded under: " + response.doctorName : "") +
+                      (response.attributionSource === 'SUBSTITUTE'
+                        ? "\n\nNote: this was booked with a different doctor." : ""));
+            } else {
+                alert("Could not save: " + ((response && response.message) || 'Unknown error'));
+            }
         })
-        .saveOPEncounter(payload);
+        .withFailureHandler(function (err) {
+            btn.innerHTML = 'Save Consult';
+            btn.disabled = false;
+            alert("Network error: " + err.message);
+        })
+        .saveOPEncounterScoped(payload, window.sessionToken);
 }
 
+function closeOPConsultationWorkspace() {
+    activeOpEncounterId = "";
+    if (typeof returnToEMRMenu === 'function') returnToEMRMenu();
+    else if (typeof switchTab === 'function') switchTab('tab-admin-emr');
+}
+
+// ============================================================================
+// PRINT / DISPATCH
+// ============================================================================
 function printOPPrescription() {
-  if (!activeOpEncounterId) {
-    alert("Please Save the consultation before printing! Cannot print unsaved records.");
-    return;
-  }
+  if (!activeOpEncounterId) { alert("Save the consultation before printing."); return; }
 
   const printBtn = document.querySelector('button[onclick="printOPPrescription()"]');
   const originalHtml = printBtn ? printBtn.innerHTML : "Print";
-  if (printBtn) {
-     printBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Preparing...';
-     printBtn.disabled = true;
-  }
+  if (printBtn) { printBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; printBtn.disabled = true; }
 
   google.script.run
     .withSuccessHandler(function (res) {
-      if(printBtn) { printBtn.innerHTML = originalHtml; printBtn.disabled = false; }
+      if (printBtn) { printBtn.innerHTML = originalHtml; printBtn.disabled = false; }
+      if (!res || !res.success) { alert("Could not generate prescription: " + (res.message || "Unknown error")); return; }
 
-      if (!res || !res.success) {
-        alert("Could not generate prescription: " + (res.message || "Unknown error"));
-        return;
-      }
-
-      var printWindow = window.open('', '_blank', 'width=900,height=1100');
-      if (!printWindow) {
-        alert('Pop-up blocked. Please allow pop-ups for this site, then retry.');
-        return;
-      }
-      
+      const printWindow = window.open('', '_blank', 'width=900,height=1100');
+      if (!printWindow) { alert('Pop-up blocked. Allow pop-ups for this site, then retry.'); return; }
       printWindow.document.open();
       printWindow.document.write(res.html);
       printWindow.document.close();
       printWindow.focus();
-      
-      setTimeout(function () {
-        try { printWindow.print(); } catch (e) { console.error("Print failed:", e); }
-      }, 500);
+      setTimeout(function () { try { printWindow.print(); } catch (e) {} }, 500);
     })
     .withFailureHandler(function (e) {
-      if(printBtn) { printBtn.innerHTML = originalHtml; printBtn.disabled = false; }
+      if (printBtn) { printBtn.innerHTML = originalHtml; printBtn.disabled = false; }
       alert("Server Error: " + e.message);
     })
     .getOPPrescriptionHtml(activeOpEncounterId);
 }
 
-// ========================================================
-// DIGITAL DISPATCH ROUTINES (WHATSAPP & EMAIL)
-// ========================================================
-
 function dispatchOPWhatsApp() {
-    // 1. Check if encounter is saved
-    if (!activeOpEncounterId) {
-        alert("Please 'Save Consult' before sending the prescription via WhatsApp!");
-        return;
-    }
-
-    // 2. Resolve Contact
-    let mobileNumber = window.currentPatientMobile;
-    if (!mobileNumber || mobileNumber === "undefined" || mobileNumber.trim() === "") {
-        mobileNumber = prompt("No mobile number on file. Enter WhatsApp number (with country code):", "");
-        if (!mobileNumber) return; 
-    }
-    
-    let cleanNum = mobileNumber.replace(/\D/g,'');
-    if (cleanNum.length === 10) cleanNum = "91" + cleanNum;
-
-    // 3. Setup Button Spinner
-    const btn = document.getElementById('btn-wa-op');
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-    btn.disabled = true; 
-    
-    const patientName = document.getElementById('hd-pat-name').innerText || 'Patient';
-
-    // 4. Send to Backend
-    google.script.run.withSuccessHandler(function(res){
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-
-        if(!res || !res.success) {
-            alert("❌ Failed to generate secure link: " + (res ? res.message : 'Unknown Error'));
-            return;
-        }
-
-        // 5. Open WhatsApp Web API
-        const rawMessage = 
-            "Hello " + patientName + ",\n\n" +
-            "Here is your digital prescription from *Valarmathi Clinic*.\n\n" +
-            "📄 *View & Download your secure PDF here:*\n" + 
-            res.link + "\n\n" +
-            "Wishing you a speedy recovery!";
-
-        const waUrl = "https://wa.me/" + cleanNum + "?text=" + encodeURIComponent(rawMessage);
-        window.open(waUrl, '_blank');
-
-    }).withFailureHandler(function(e){
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        alert("❌ Server Error: " + e.message);
-    }).generateAndStoreOPPrescriptionPDF(activeOpEncounterId);
-}
-
-function dispatchOPEmail() {
-    // 1. Check if encounter is saved
-    if (!activeOpEncounterId) {
-        alert("Please 'Save Consult' before emailing the prescription!");
-        return;
-    }
-
-    // 2. Resolve Contact
-    let patientEmail = window.currentPatientEmail;
-    if (!patientEmail || patientEmail === "undefined" || patientEmail.trim() === "") {
-        patientEmail = prompt("No email on file. Please enter patient email address:", "");
-        if (!patientEmail || patientEmail.trim() === "") return;
-    } else {
-        if (!confirm("Send Prescription to " + patientEmail + "?")) return;
-    }
-
-    // 3. Setup Button Spinner
-    const btn = document.getElementById('btn-email-op');
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-    btn.disabled = true;
-
-    // 4. Send to Backend
-    google.script.run.withSuccessHandler(function(res) {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        if (res && res.success) {
-            alert("✅ Prescription emailed successfully to " + patientEmail); 
-        } else {
-            alert('Failed: ' + (res && res.message));
-        }
-    }).withFailureHandler(function(err){
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-        alert("❌ Network Error: " + err.message);
-    }).emailOPPrescriptionPDF(activeOpEncounterId, patientEmail.trim());
-}
-
-// Close any open autocomplete dropdown when clicking elsewhere
-document.addEventListener('click', function (e) {
-    if (!e.target.closest('.op-rx-name') && !e.target.closest('.op-array-text') && !e.target.closest('.autocomplete-items')) {
-        document.querySelectorAll('#emr-workspace-op-consult .autocomplete-items').forEach(d => d.classList.add('d-none'));
-    }
-});
-
-// ========================================================
-// 🚀 UPGRADED DIGITAL DISPATCH ROUTINES (State-Independent)
-// ========================================================
-
-function dispatchOPWhatsApp() {
-  if (!activeOpEncounterId) {
-    alert("Please 'Save Consult' before sending the prescription via WhatsApp!");
-    return;
-  }
+  if (!activeOpEncounterId) { alert("Save the consultation before sending it."); return; }
 
   const btn = document.getElementById('btn-wa-op');
   const originalHtml = btn.innerHTML;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
   btn.disabled = true;
 
-  // Grab the ID directly from the rendered UI as the source of truth
-  const patientId = document.getElementById('hd-pat-id').innerText.replace('ID:', '').trim();
+  const patientId = opCurrentPatientId();
 
-  // 1. Force a micro-fetch to bypass global state amnesia
-  google.script.run.withSuccessHandler(function(profile) {
-    
-    // Purge tainted "undefined" strings from memory
+  google.script.run.withSuccessHandler(function (profile) {
     let mobileNumber = window.currentPatientMobile;
     if (mobileNumber === "undefined") mobileNumber = "";
-    
-    // Fallback to the fresh database profile
-    if (!mobileNumber && profile) {
-        mobileNumber = profile.whatsapp || profile.mobile || "";
-    }
-
+    if (!mobileNumber && profile) mobileNumber = profile.whatsapp || profile.mobile || "";
     if (!mobileNumber || String(mobileNumber).trim() === "") {
         mobileNumber = prompt("No mobile number on file. Enter WhatsApp number (with country code):", "");
         if (!mobileNumber) { btn.innerHTML = originalHtml; btn.disabled = false; return; }
     }
-
     let cleanNum = String(mobileNumber).replace(/\D/g, '');
-    if (cleanNum.length === 10) cleanNum = "91" + cleanNum; // Default to India code
+    if (cleanNum.length === 10) cleanNum = "91" + cleanNum;
 
-    // 2. Generate PDF & Route to WhatsApp
-    google.script.run.withSuccessHandler(function(res) {
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
-
-        if (!res || !res.success) {
-            alert("❌ Failed to generate secure link: " + (res ? res.message : 'Unknown Error'));
-            return;
-        }
-
-        const patientName = document.getElementById('hd-pat-name').innerText || 'Patient';
-        const rawMessage = "Hello " + patientName + ",\n\nHere is your digital prescription from *Valarmathi Clinic*.\n\n📄 *View & Download your secure PDF here:*\n" + res.link + "\n\nWishing you a speedy recovery!";
-
-        window.open("https://wa.me/" + cleanNum + "?text=" + encodeURIComponent(rawMessage), '_blank');
-
-    }).withFailureHandler(function(e) {
+    google.script.run.withSuccessHandler(function (res) {
         btn.innerHTML = originalHtml; btn.disabled = false;
-        alert("❌ Server Error: " + e.message);
+        if (!res || !res.success) { alert("Could not generate the link: " + (res ? res.message : 'Unknown error')); return; }
+        const patientName = document.getElementById('hd-pat-name').innerText || 'Patient';
+        const msg = "Hello " + patientName + ",\n\nHere is your digital prescription from *Valarmathi Clinic*.\n\n" +
+                    "View & download your secure PDF here:\n" + res.link + "\n\nWishing you a speedy recovery!";
+        window.open("https://wa.me/" + cleanNum + "?text=" + encodeURIComponent(msg), '_blank');
+    }).withFailureHandler(function (e) {
+        btn.innerHTML = originalHtml; btn.disabled = false;
+        alert("Server Error: " + e.message);
     }).generateAndStoreOPPrescriptionPDF(activeOpEncounterId);
 
-  }).withFailureHandler(function() {
+  }).withFailureHandler(function () {
     btn.innerHTML = originalHtml; btn.disabled = false;
-    alert("❌ Could not verify patient contact details.");
+    alert("Could not verify patient contact details.");
   }).getUserProfile(patientId);
 }
 
-
 function dispatchOPEmail() {
-  if (!activeOpEncounterId) {
-    alert("Please 'Save Consult' before emailing the prescription!");
-    return;
-  }
+  if (!activeOpEncounterId) { alert("Save the consultation before emailing it."); return; }
 
   const btn = document.getElementById('btn-email-op');
   const originalHtml = btn.innerHTML;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
   btn.disabled = true;
 
-  const patientId = document.getElementById('hd-pat-id').innerText.replace('ID:', '').trim();
+  const patientId = opCurrentPatientId();
 
-  google.script.run.withSuccessHandler(function(profile) {
-    
+  google.script.run.withSuccessHandler(function (profile) {
     let patientEmail = window.currentPatientEmail;
     if (patientEmail === "undefined") patientEmail = "";
-    
-    if (!patientEmail && profile) {
-        patientEmail = profile.email || "";
-    }
+    if (!patientEmail && profile) patientEmail = profile.email || "";
 
     if (!patientEmail || String(patientEmail).trim() === "") {
-        patientEmail = prompt("No email on file. Please enter patient email address:", "");
+        patientEmail = prompt("No email on file. Enter the patient's email address:", "");
         if (!patientEmail) { btn.innerHTML = originalHtml; btn.disabled = false; return; }
-    } else {
-        if (!confirm("Send Prescription to " + patientEmail + "?")) {
-            btn.innerHTML = originalHtml; btn.disabled = false; return;
-        }
+    } else if (!confirm("Send prescription to " + patientEmail + "?")) {
+        btn.innerHTML = originalHtml; btn.disabled = false; return;
     }
 
-    google.script.run.withSuccessHandler(function(res) {
+    google.script.run.withSuccessHandler(function (res) {
         btn.innerHTML = originalHtml; btn.disabled = false;
-        if (res && res.success) {
-            alert("✅ Prescription emailed successfully to " + patientEmail);
-        } else {
-            alert("❌ Failed: " + (res && res.message));
-        }
-    }).withFailureHandler(function(err){
+        alert(res && res.success ? "Prescription emailed to " + patientEmail
+                                 : "Failed: " + (res && res.message));
+    }).withFailureHandler(function (err) {
         btn.innerHTML = originalHtml; btn.disabled = false;
-        alert("❌ Network Error: " + err.message);
+        alert("Network Error: " + err.message);
     }).emailOPPrescriptionPDF(activeOpEncounterId, patientEmail.trim());
 
-  }).withFailureHandler(function() {
+  }).withFailureHandler(function () {
     btn.innerHTML = originalHtml; btn.disabled = false;
-    alert("❌ Could not verify patient contact details.");
+    alert("Could not verify patient contact details.");
   }).getUserProfile(patientId);
 }
 
+// Close open dropdowns on outside click
+document.addEventListener('click', function (e) {
+    if (!e.target.closest('.op-rx-name') && !e.target.closest('.op-array-text') &&
+        !e.target.closest('#op-advice-free') && !e.target.closest('.autocomplete-items')) {
+        document.querySelectorAll('#emr-workspace-op-consult .autocomplete-items').forEach(d => d.classList.add('d-none'));
+    }
+});
 </script>
