@@ -307,10 +307,13 @@
               <option value="Provisional">Prov. Diagnosis</option>
               <option value="Final">Final Diagnosis</option>
             </select>
-            <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="clin-diagnosis" onchange="onDiagnosisChanged()">
+            <!-- Wrapped the input so dropdowns anchor exactly to the text box -->
+            <div class="position-relative w-100">
+                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="clin-diagnosis" onchange="onDiagnosisChanged()">
+            </div>
         </div>
       </div>
-
+      
       <!-- ===== TREATMENT ===== -->
       <div class="hd-panel mb-3">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -681,6 +684,7 @@ function initializeOPWorkspaceState() {
     if (document.getElementById('op-rx-tbody').innerHTML.trim() === '') addOPRxRow();
     if (document.getElementById('op-lab-results-tbody').innerHTML.trim() === '') addOPLabResultRow();
 
+    loadConsultDoctors();
     opLoadIntegrationData();
     loadComposerContext();
     loadConsultTemplates();
@@ -1314,7 +1318,7 @@ function loadConsultDoctors() {
             if (!res || !res.success) {
                 // Never fail silently here — an empty picker blocks every save.
                 sel.innerHTML = '<option value="">Unavailable</option>';
-                console.error('getDoctorsForPicker:', res);
+                console.error('getDoctorPickerContext:', res);
                 alert('Could not load the doctor list: ' +
                       ((res && res.message) || 'no response') +
                       '\n\nsessionToken present: ' + (window.sessionToken ? 'yes' : 'NO'));
@@ -1337,7 +1341,7 @@ function loadConsultDoctors() {
             sel.innerHTML = '<option value="">Unavailable</option>';
             alert('Network error loading doctors: ' + e.message);
         })
-        .getDoctorsForPicker(window.sessionToken);
+        .getDoctorPickerContext(window.sessionToken);
 }
 
 function onConsultDoctorChanged() {
