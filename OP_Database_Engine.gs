@@ -190,6 +190,31 @@ function getEncounterForPrint(encounterId) {
         try { parsedMeds = data[i][22] ? JSON.parse(data[i][22]) : []; } catch (e) {}
         try { parsedLabs = data[i][23] ? JSON.parse(data[i][23]) : []; } catch (e) {}
 
+        // Consulting doctor. Doctor_ID and Doctor_Signature_Snapshot are
+        // APPENDED columns (op_ensureEncounterColumns_), so they must be read
+        // by header name — a fixed index would silently read the wrong cell.
+        const hdr = {};
+        data[0].forEach((h, c) => { hdr[String(h).trim()] = c; });
+        const readCol = (name) => (hdr[name] !== undefined ? String(data[i][hdr[name]] || "").trim() : "");
+
+        const doctorId = readCol("Doctor_ID");
+        const sigSnapshot = readCol("Doctor_Signature_Snapshot");
+
+        let doctorName = "";
+        let doctorRegNo = "";
+        let doctorSpecialty = "";
+        if (doctorId && typeof dc_getDoctorById_ === "function") {
+          const prof = dc_getDoctorById_(doctorId);
+          if (prof) {
+            doctorName = prof.name || "";
+            doctorRegNo = prof.regNo || "";
+            doctorSpecialty = prof.specialty || "";
+          }
+        }
+        // The snapshot is what the doctor signed under at the time of the
+        // consult. It wins over anything the Doctors sheet says today.
+        if (sigSnapshot) doctorName = sigSnapshot;
+
         return {
           success: true,
           data: {
@@ -206,7 +231,11 @@ function getEncounterForPrint(encounterId) {
             meds: parsedMeds,
             labs: parsedLabs,
             advice: data[i][24],
-            reviewDate: data[i][25]
+            reviewDate: data[i][25],
+            doctorId: doctorId,
+            doctorName: doctorName,
+            doctorRegNo: doctorRegNo,
+            doctorSpecialty: doctorSpecialty
           }
         };
       }
@@ -406,6 +435,21 @@ function getOPPrescriptionHtml(encounterId) {
     
     const data = fetchRes.data;
 
+    // 1b. A prescription must name the doctor who signed it. Printing an
+    // anonymous one is not an option, so fail loudly rather than quietly.
+    const doctorName = String(data.doctorName || "").trim();
+    if (!doctorName) {
+      return {
+        success: false,
+        message: "This encounter (" + (data.encounterId || encounterId) +
+                 ") has no consulting doctor recorded, so a prescription cannot " +
+                 "be issued. Run runMultiDoctorMigration() to backfill Doctor_ID on " +
+                 "legacy rows, or re-save the consult with a doctor selected."
+      };
+    }
+    const doctorRegNo = String(data.doctorRegNo || "").trim();      // optional
+    const doctorSpecialty = String(data.doctorSpecialty || "").trim(); // optional
+
     // 2. Format Dates & Nulls
     let printDate = data.date || "--";
     try {
@@ -490,6 +534,7 @@ function getOPPrescriptionHtml(encounterId) {
               <div style="font-size: 16pt; font-weight: 800; letter-spacing: 1px; color: #111827;">OPD PRESCRIPTION</div>
               <div style="font-size: 10pt; color: #4b5563; margin-top: 4px;">Date: <strong>${printDate}</strong></div>
               <div style="font-size: 10pt; color: #4b5563;">Encounter: ${data.encounterId || '--'}</div>
+              <div style="font-size: 10pt; color: #4b5563; margin-top: 2px;">Consulting Doctor: <strong>${doctorName}</strong></div>
             </div>
           </div>
 
@@ -542,8 +587,13 @@ function getOPPrescriptionHtml(encounterId) {
           </div>
 
           <div style="margin-top: 25mm; text-align: right; page-break-inside: avoid;">
-            <div style="border-top: 1px solid #9ca3af; display: inline-block; padding-top: 2mm; width: 50mm; text-align: center; font-size: 10pt; font-weight: bold; color: #4b5563;">
-              Doctor's Signature / Seal
+            <div style="display: inline-block; text-align: center; min-width: 60mm;">
+              <div style="border-top: 1px solid #9ca3af; padding-top: 2mm;">
+                <div style="font-size: 11pt; font-weight: 800; color: #111827;">${doctorName}</div>
+                ${doctorSpecialty ? `<div style="font-size: 9pt; color: #6b7280; margin-top: 1mm;">${doctorSpecialty}</div>` : ``}
+                ${doctorRegNo ? `<div style="font-size: 9pt; color: #4b5563; margin-top: 1mm;">Reg. No: <strong>${doctorRegNo}</strong></div>` : ``}
+                <div style="font-size: 9pt; color: #6b7280; margin-top: 2mm;">Doctor's Signature / Seal</div>
+              </div>
             </div>
             <div style="font-size: 8pt; color: #9ca3af; text-align: center; margin-top: 15mm;">
               This is a computer-generated medical record.
