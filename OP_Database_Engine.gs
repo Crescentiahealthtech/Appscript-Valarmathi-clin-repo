@@ -81,7 +81,24 @@ function saveOPEncounter(payload) {
     if (!isNewEncounter) {
       const data = opSheet.getDataRange().getDisplayValues();
       for (let i = 1; i < data.length; i++) {
-        if (data[i][0] === encounterId) { rowIndex = i + 1; break; }
+        if (data[i][0] !== encounterId) continue;
+
+        // An encounter belongs to exactly one patient. A stale encounterId sent
+        // with a different patient's chart used to overwrite the stored row,
+        // destroying the first patient's consultation. Refuse, and let the
+        // caller save it as a new encounter instead.
+        const owner = String(data[i][1] || "").trim().toUpperCase();
+        const claimed = String(payload.patientId || "").trim().toUpperCase();
+        if (owner && claimed && owner !== claimed) {
+          return {
+            success: false,
+            message: "Encounter " + encounterId + " belongs to patient " + data[i][1] +
+                     ", not " + payload.patientId + ". Nothing was saved. Start a new " +
+                     "consultation for this patient and save again."
+          };
+        }
+        rowIndex = i + 1;
+        break;
       }
     }
 

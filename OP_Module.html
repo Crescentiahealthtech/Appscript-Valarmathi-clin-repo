@@ -165,6 +165,7 @@
         <button class="btn btn-sm btn-outline-success py-1 px-2" onclick="dispatchOPWhatsApp()" id="btn-wa-op" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
         <button class="btn btn-sm btn-outline-info py-1 px-2" onclick="dispatchOPEmail()" id="btn-email-op" title="Email"><i class="fa-solid fa-envelope"></i></button>
         <button class="btn btn-sm btn-outline-warning py-1 px-2" onclick="printOPPrescription()" title="Print"><i class="fa-solid fa-print"></i></button>
+        <button class="btn btn-sm btn-outline-light py-1 px-2" onclick="startNewOPConsult()" title="Clear the form and start a new consultation"><i class="fa-solid fa-file-circle-plus"></i></button>
         <button class="btn btn-sm text-white fw-bold py-1 px-3" style="background-color: var(--medical-purple, #0ea5e9);" onclick="submitOPEncounter()" id="btn-submit-op">Save Consult</button>
       </div>
     </div>
@@ -705,10 +706,17 @@ function initializeOPWorkspaceState() {
 
     applyExamDefaults(opSysDefaults);
 
-    if (document.getElementById('op-cc-tbody').innerHTML.trim() === '') addOPDynamicRow('op-cc-tbody', 'CC');
-    if (document.getElementById('op-hx-tbody').innerHTML.trim() === '') addOPDynamicRow('op-hx-tbody', 'HX');
-    if (document.getElementById('op-rx-tbody').innerHTML.trim() === '') addOPRxRow();
-    if (document.getElementById('op-lab-results-tbody').innerHTML.trim() === '') addOPLabResultRow();
+    // Re-entering the workspace starts a blank chart unless we are being handed
+    // a patient mid-flow. The old "add a row only if the tbody is empty" guard
+    // left the previous consultation fully populated.
+    if (!window.isLedgerHandoff) {
+        resetOPConsultForm();
+    } else {
+        if (document.getElementById('op-cc-tbody').innerHTML.trim() === '') addOPDynamicRow('op-cc-tbody', 'CC');
+        if (document.getElementById('op-hx-tbody').innerHTML.trim() === '') addOPDynamicRow('op-hx-tbody', 'HX');
+        if (document.getElementById('op-rx-tbody').innerHTML.trim() === '') addOPRxRow();
+        if (document.getElementById('op-lab-results-tbody').innerHTML.trim() === '') addOPLabResultRow();
+    }
 
     // Ordered on purpose: loadConsultDoctors() resolves window.currentDoctorId,
     // and only then does onConsultDoctorChanged() pull composer + templates.
@@ -942,13 +950,22 @@ function addWorkupLab(name) {
     // A suggested investigation is an ORDER, not future advice. Tick the real
     // catalog checkbox so the lab request carries a TestID, not a free string.
     const target = String(name).trim().toLowerCase();
-    let hit = null;
-    document.querySelectorAll('.op-lab-chk').forEach(function (c) {
-        if (!hit && String(c.dataset.name || '').trim().toLowerCase() === target) hit = c;
+
+    // Match against the catalog data, not the rendered checkboxes: the modal
+    // may never have been opened, or may currently be filtered by a search.
+    let match = null;
+    ['panels', 'tests', 'packages'].forEach(function (grp) {
+        const list = (typeof opLabCatalog !== 'undefined' && opLabCatalog) ? (opLabCatalog[grp] || []) : [];
+        list.forEach(function (t) {
+            if (!match && String(t.testName || '').trim().toLowerCase() === target) match = t;
+        });
     });
 
-    if (hit) {
-        hit.checked = true;
+    if (match) {
+        opLabSelect(match.testId, match.testName);
+        document.querySelectorAll('.op-lab-chk').forEach(function (c) {
+            if (String(c.value) === String(match.testId)) c.checked = true;
+        });
     } else {
         // Not in our catalog - queue it as an external order, still not advice.
         const other = document.getElementById('op-lab-other');
@@ -977,9 +994,178 @@ function setDiagnosisFromHint(dx) {
 // ============================================================================
 // PATIENT SEARCH + ALLERGIES + LAST VISIT
 // ============================================================================
+// ============================================================================
+// SELECTED INVESTIGATIONS — the source of truth for ordered labs.
+// ----------------------------------------------------------------------------
+// The catalog checkboxes CANNOT hold this state: renderOPLabModal() rebuilds
+// #op-lab-catalog on every keystroke of the investigation search, which
+// destroys every tick, and a filtered-out test is not in the DOM at all, so
+// querying ".op-lab-chk:checked" at save time silently drops orders the doctor
+// made before narrowing the search.
+// ============================================================================
+let opSelectedLabs = [];      // [{ testId, testName }]
+
+function opLabIsSelected(testId, testName) {
+    const id = String(testId || '');
+    const nm = String(testName || '').trim().toLowerCase();
+    return opSelectedLabs.some(function (l) {
+        return (id && String(l.testId) === id) || (!id && String(l.testName).trim().toLowerCase() === nm);
+    });
+}
+
+function opLabSelect(testId, testName) {
+    if (!testName) return;
+    if (opLabIsSelected(testId, testName)) return;
+    opSelectedLabs.push({ testId: String(testId || ''), testName: String(testName) });
+}
+
+function opLabDeselect(testId, testName) {
+    const id = String(testId || '');
+    const nm = String(testName || '').trim().toLowerCase();
+    opSelectedLabs = opSelectedLabs.filter(function (l) {
+        return !((id && String(l.testId) === id) ||
+                 (!id && String(l.testName).trim().toLowerCase() === nm));
+    });
+}
+
+/** Wired to every catalog checkbox, so a tick survives search and re-render. */
+function onOPLabToggle(chk) {
+    if (chk.checked) opLabSelect(chk.value, chk.dataset.name);
+    else opLabDeselect(chk.value, chk.dataset.name);
+    compileOPLabs();
+}
+
+// ============================================================================
+// FORM RESET — one patient's chart must never bleed into the next.
+// ============================================================================
+/** True if any clinical field has been filled in. */
+function opFormHasContent() {
+    const anyVal = ['op-vit-sys', 'op-vit-dia', 'op-vit-pr', 'op-vit-spo2', 'op-vit-temp',
+                    'op-vit-wt', 'op-vit-ht', 'clin-diagnosis', 'op-advice-free',
+                    'clin-review-date', 'op-rad-orders', 'op-rad-findings',
+                    'op-future-labs', 'op-lab-other']
+        .some(function (id) { const el = document.getElementById(id); return el && el.value.trim(); });
+    if (anyVal) return true;
+
+    if (opSelectedLabs.length) return true;
+    if (collectRxRows().length) return true;
+
+    let filled = false;
+    document.querySelectorAll('#op-cc-tbody .op-array-text, #op-hx-tbody .op-array-text')
+        .forEach(function (i) { if (i.value.trim()) filled = true; });
+    if (filled) return true;
+
+    return Array.prototype.some.call(document.querySelectorAll('.op-ge-chk'),
+                                     function (c) { return c.checked; });
+}
+
+/**
+ * Clears every clinical field back to a blank consult. Deliberately explicit:
+ * a field added to the form and forgotten here is a field that carries the
+ * previous patient's data onto the next prescription.
+ */
+function resetOPConsultForm() {
+    // The encounter being edited. Leaving this set is what let a save under
+    // patient B overwrite patient A's stored encounter row.
+    activeOpEncounterId = "";
+
+    // --- vitals ------------------------------------------------------------
+    ['op-vit-sys', 'op-vit-dia', 'op-vit-pr', 'op-vit-spo2', 'op-vit-temp',
+     'op-vit-wt', 'op-vit-ht'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = '';
+        el.classList.remove('bg-abnormal-high', 'bg-abnormal-low');
+    });
+    calcOPBMI();
+
+    // --- complaints / history ----------------------------------------------
+    ['op-cc-tbody', 'op-hx-tbody'].forEach(function (id) {
+        const tb = document.getElementById(id);
+        if (tb) tb.innerHTML = '';
+    });
+    addOPDynamicRow('op-cc-tbody', 'CC');
+    addOPDynamicRow('op-hx-tbody', 'HX');
+    const hint = document.getElementById('op-workup-hint');
+    if (hint) hint.innerHTML = '';
+
+    // --- general examination ------------------------------------------------
+    document.querySelectorAll('.op-ge-chk').forEach(function (c) { c.checked = false; });
+
+    // --- systemic examination: back to this doctor's defaults ---------------
+    ['cvs', 'rs', 'pa', 'cns'].forEach(function (sysName) {
+        const el = document.getElementById('op-se-' + sysName + '-text');
+        if (el) el.value = '';
+        const dd = document.getElementById('op-se-' + sysName);
+        if (dd) dd.value = '';
+    });
+    applyExamDefaults(opSysDefaults || {});
+
+    // --- diagnosis / advice / review ---------------------------------------
+    ['clin-diagnosis', 'op-advice-free', 'clin-review-date',
+     'op-rad-orders', 'op-rad-findings', 'op-future-labs', 'op-lab-other']
+        .forEach(function (id) { const el = document.getElementById(id); if (el) el.value = ''; });
+    const dxType = document.getElementById('clin-diagnosis-type');
+    if (dxType) dxType.value = 'Provisional';
+
+    document.querySelectorAll('#advice-dropdown input[type="checkbox"]')
+        .forEach(function (c) { c.checked = false; });
+    if (typeof updateDropdownText === 'function') {
+        updateDropdownText('advice-dropdown', 'btn-advice', 'Select standard advice...');
+    }
+
+    // --- investigations ------------------------------------------------------
+    opSelectedLabs = [];
+    document.querySelectorAll('.op-lab-chk').forEach(function (c) { c.checked = false; });
+    const labSearch = document.getElementById('op-lab-search');
+    if (labSearch) labSearch.value = '';
+    const labResults = document.getElementById('op-lab-results-tbody');
+    if (labResults) labResults.innerHTML = '';
+    addOPLabResultRow();
+    compileOPLabs();
+
+    // --- prescription --------------------------------------------------------
+    const rx = document.getElementById('op-rx-tbody');
+    if (rx) rx.innerHTML = '';
+    addOPRxRow();
+
+    // --- assist panel scratch space -----------------------------------------
+    ['op-bundle-detail', 'op-assist-body', 'op-recall-slot'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+    });
+    const dxSec = document.getElementById('op-assist-dx-section');
+    if (dxSec) dxSec.classList.add('d-none');
+    window._opLastVisit = null;
+
+    renderSafetyBar([]);
+}
+
+/** Toolbar action: abandon the current chart and start a blank one. */
+function startNewOPConsult() {
+    if (opFormHasContent() &&
+        !confirm('Clear this consultation and start a new one? Anything unsaved will be lost.')) return;
+    resetOPConsultForm();
+}
+
 function searchEMRPatient() {
     const pId = document.getElementById('op-search-pat-id').value.trim();
     if (!pId) { alert("Please enter a Patient ID."); return; }
+
+    // Switching patients MUST start a blank chart. Without this the previous
+    // patient's vitals, investigations and prescription stayed on screen and
+    // were saved — and printed — under the new patient's name.
+    // Only a genuine switch clears the chart. If no patient is loaded yet we
+    // leave the form alone: a doctor may legitimately jot down complaints
+    // before pulling up the record.
+    const current = opCurrentPatientId();
+    const isSwitch = !!current && current !== '--' && current.toUpperCase() !== pId.toUpperCase();
+
+    if (isSwitch && opFormHasContent() &&
+        !confirm('Load ' + pId + '? The consultation on screen has not been saved and will be cleared.')) {
+        return;
+    }
+    if (isSwitch) resetOPConsultForm();
 
     document.getElementById('hd-pat-name').innerText = "Fetching...";
 
@@ -2178,6 +2364,8 @@ function renderOPLabModal() {
             '<div class="row g-1">' + items.map(function (t) {
                 return '<div class="col-6"><div class="form-check">' +
                     '<input class="form-check-input op-lab-chk" type="checkbox" ' +
+                    'onchange="onOPLabToggle(this)" ' +
+                    (opLabIsSelected(t.testId, t.testName) ? 'checked ' : '') +
                     'value="' + opEsc(t.testId) + '" data-name="' + opEsc(t.testName) + '">' +
                     '<label class="form-check-label small text-white">' + opEsc(t.testName) +
                     (t.requiresConsent ? ' <span class="text-warning" title="Requires patient consent">&#9888;</span>' : '') +
@@ -2196,14 +2384,13 @@ function renderOPLabModal() {
 }
 
 function compileOPLabs() {
-    const names = [];
-    document.querySelectorAll('.op-lab-chk:checked').forEach(function (c) {
-        names.push(c.dataset.name);
-    });
-    const other = document.getElementById('op-lab-other').value;
+    // Read the registry, never the DOM: a test filtered out by the catalog
+    // search is still ordered, it just is not on screen.
+    const names = opSelectedLabs.map(function (l) { return l.testName; });
+    const other = (document.getElementById('op-lab-other') || {}).value || '';
     if (other) names.push(other + ' (external)');
-    document.getElementById('op-active-labs-container').innerHTML =
-        names.length ? 'Ordered: ' + opEsc(names.join(', ')) : '';
+    const host = document.getElementById('op-active-labs-container');
+    if (host) host.innerHTML = names.length ? 'Ordered: ' + opEsc(names.join(', ')) : '';
 }
 
 // ============================================================================
@@ -2346,8 +2533,8 @@ function buildOPFlatPayload() {
     });
 
     const labs = [];
-    document.querySelectorAll('.op-lab-chk:checked').forEach(function (chk) {
-        labs.push({ testId: chk.value, testName: chk.dataset.name,
+    opSelectedLabs.forEach(function (l) {
+        labs.push({ testId: l.testId, testName: l.testName,
                     priority: "Routine", type: "Order", source: 'INTERNAL' });
     });
     const otherLab = document.getElementById('op-lab-other')?.value;
@@ -2450,7 +2637,23 @@ function submitOPEncounter() {
 }
 
 function closeOPConsultationWorkspace() {
-    activeOpEncounterId = "";
+    // Clearing only the encounter id left the whole chart in the DOM, ready to
+    // be inherited by the next patient opened in this workspace.
+    resetOPConsultForm();
+    window.currentPatientId = "";
+    window.currentPatientMobile = "";
+    window.currentPatientEmail = "";
+    const idEl = document.getElementById('hd-pat-id');
+    if (idEl) idEl.innerText = "ID: --";
+    const nmEl = document.getElementById('hd-pat-name');
+    if (nmEl) nmEl.innerText = "Search Patient";
+    const demoEl = document.getElementById('hd-pat-demo');
+    if (demoEl) demoEl.innerText = "-- Y | -";
+    const srch = document.getElementById('op-search-pat-id');
+    if (srch) srch.value = '';
+    opPatientAllergies = { recorded: false, raw: "", list: [] };
+    renderAllergyChip();
+
     if (typeof returnToEMRMenu === 'function') returnToEMRMenu();
     else if (typeof switchTab === 'function') switchTab('tab-admin-emr');
 }
