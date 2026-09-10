@@ -175,18 +175,53 @@ function di_rules_() {
 function di_aliases_(drugName, genericMap) {
   var typed = dc_str_(drugName).toLowerCase();
   var out = [typed];
-  var entry = genericMap && genericMap.map ? genericMap.map[typed] : null;
-  if (entry && entry.generic) out.push(String(entry.generic).toLowerCase());
-  return out;
+
+  // Strip the dose form and strength a prescription carries but a rule does
+  // not: "Tab Azithral 500" has to match a rule written as "Azithromycin",
+  // and its bare-name form is what the generic map is keyed on.
+  var bare = typed
+    .replace(/\b(tab|tabs|tablet|cap|caps|capsule|syp|syrup|inj|injection|susp|suspension|oint|ointment|cream|gel|drop|drops|soln|solution|sachet|powder|spray|lotion|patch|supp)\b/g, " ")
+    .replace(/\b\d+(\.\d+)?\s*(mg|mcg|g|gm|ml|iu|units?|%)?\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (bare && bare !== typed) out.push(bare);
+
+  var entry = (genericMap && genericMap.map)
+    ? (genericMap.map[typed] || genericMap.map[bare])
+    : null;
+  if (entry && entry.generic) {
+    var g = String(entry.generic).toLowerCase();
+    out.push(g);
+    // A combination product lists several generics; each can interact.
+    g.split(/[+,/]/).forEach(function (part) {
+      var t = part.trim();
+      if (t.length >= 4 && out.indexOf(t) === -1) out.push(t);
+    });
+  }
+  return out.filter(function (x, i) { return x && out.indexOf(x) === i; });
 }
 
-/** True if any alias contains the rule term, or vice versa. */
+/**
+ * True if a rule term matches one of a drug's names.
+ *
+ * Word-boundary anchored, NOT plain substring. "Iron" inside "Ironsucrose" is
+ * a real match; "iron" inside "Environ" is not, and a bare indexOf would
+ * accept both. A false interaction warning that fires on every prescription
+ * gets ignored, which is worse than no warning at all.
+ */
 function di_matches_(aliases, term) {
   if (!term || term.length < 3) return false;
+  var t = String(term).toLowerCase().trim();
+  var re;
+  try {
+    re = new RegExp("(^|[^a-z])" + t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z]|$)", "i");
+  } catch (e) { return false; }
+
   for (var i = 0; i < aliases.length; i++) {
     var a = aliases[i];
     if (!a) continue;
-    if (a.indexOf(term) !== -1 || term.indexOf(a) !== -1) return true;
+    if (a === t) return true;
+    if (re.test(a)) return true;
   }
   return false;
 }
@@ -245,4 +280,135 @@ function checkDrugInteractions(meds, genericMap) {
     Logger.log("Interaction check failed: " + e.message);
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// DIAGNOSTICS — answer "is my interaction data actually being used?"
+// ---------------------------------------------------------------------------
+
+/**
+ * Run from the editor. Takes two drug names as they would be TYPED on a
+ * prescription and explains, step by step, whether a rule fires and why.
+ *
+ *   testDrugInteraction("Tab Azithral 500", "Tab Amiodarone 100")
+ *
+ * Use it after curating the sheet: it shows the names each drug resolves to,
+ * so a rule written in generic terms can be checked against the brand the
+ * clinic actually stocks.
+ */
+function testDrugInteraction(drugA, drugB) {
+  var out = [];
+  var gm = rx_genericMap_();
+  var rules = di_rules_();
+
+  out.push("Rules loaded from " + DI_SHEET + ": " + rules.length);
+  if (!rules.length) {
+    out.push("");
+    out.push("NOTHING IS BEING CHECKED. Either the sheet is empty, every row is");
+    out.push("marked INACTIVE, or Drug_A / Drug_B is blank on every row.");
+    Logger.log(out.join("\n"));
+    return out.join("\n");
+  }
+
+  var aliasA = di_aliases_(drugA, gm);
+  var aliasB = di_aliases_(drugB, gm);
+  out.push("");
+  out.push("\"" + drugA + "\" resolves to: " + aliasA.join(" | "));
+  out.push("\"" + drugB + "\" resolves to: " + aliasB.join(" | "));
+
+  if (aliasA.length < 2) {
+    out.push("  NOTE: no generic found for A. Add its Generic name in the");
+    out.push("        Pharmacy_Inventory sheet, or write the rule against the brand.");
+  }
+  if (aliasB.length < 2) {
+    out.push("  NOTE: no generic found for B. Same fix.");
+  }
+
+  var res = checkDrugInteractions([{ drugName: drugA }, { drugName: drugB }], gm);
+  out.push("");
+  if (res.alerts.length) {
+    out.push("MATCHED " + res.alerts.length + " rule(s):");
+    res.alerts.forEach(function (a) { out.push("  [" + a.severity + "] " + a.message); });
+  } else {
+    out.push("NO RULE MATCHED.");
+    out.push("");
+    out.push("Rules mentioning either drug, for comparison:");
+    var near = 0;
+    rules.forEach(function (r) {
+      if (di_matches_(aliasA, r.a) || di_matches_(aliasA, r.b) ||
+          di_matches_(aliasB, r.a) || di_matches_(aliasB, r.b)) {
+        out.push("  " + r.a + "  +  " + r.b + "   (" + r.severity + ")");
+        near++;
+      }
+    });
+    if (!near) {
+      out.push("  none — no rule names either drug under any of the forms above.");
+      out.push("");
+      out.push("Write Drug_A and Drug_B using the names shown in the 'resolves to'");
+      out.push("lines. Generic names work only when the brand carries that Generic");
+      out.push("in Pharmacy_Inventory.");
+    }
+  }
+
+  Logger.log(out.join("\n"));
+  return out.join("\n");
+}
+
+/**
+ * Audits the whole interaction sheet against the live formulary and reports
+ * which rules can never fire, because neither side matches any stocked drug
+ * or its generic. A rule that cannot fire is worse than a missing one: it
+ * looks like coverage.
+ */
+function auditDrugInteractionCoverage() {
+  var gm = rx_genericMap_();
+  var rules = di_rules_();
+  if (!rules.length) return "No interaction rules loaded. Run setupDrugInteractions() first.";
+
+  // Every name the formulary can present, brand and generic.
+  var stocked = [];
+  try {
+    var inv = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Pharmacy_Inventory");
+    var data = dc_sheetValues_(inv);
+    for (var i = 1; i < data.length; i++) {
+      var brand = dc_str_(data[i][1]);
+      if (brand) stocked.push(di_aliases_(brand, gm));
+    }
+  } catch (e) { return "Could not read Pharmacy_Inventory: " + e.message; }
+
+  var termHits = function (term) {
+    for (var i = 0; i < stocked.length; i++) {
+      if (di_matches_(stocked[i], term)) return true;
+    }
+    return false;
+  };
+
+  var dead = [], live = 0;
+  rules.forEach(function (r) {
+    var a = termHits(r.a), b = termHits(r.b);
+    if (a && b) { live++; return; }
+    dead.push("  " + r.a + " + " + r.b +
+              "   (" + (!a ? "'" + r.a + "' not stocked" : "") +
+              (!a && !b ? "; " : "") +
+              (!b ? "'" + r.b + "' not stocked" : "") + ")");
+  });
+
+  var out = [
+    "Interaction rules: " + rules.length,
+    "Can fire against the current formulary: " + live,
+    "Cannot fire: " + dead.length
+  ];
+  if (dead.length) {
+    out.push("");
+    out.push("These rules will never trigger — neither the brand nor its Generic");
+    out.push("in Pharmacy_Inventory matches the term written in the rule:");
+    dead.forEach(function (d) { out.push(d); });
+    out.push("");
+    out.push("Either stock the drug, or rewrite the rule using a name the");
+    out.push("formulary actually carries. Check a specific pair with");
+    out.push("testDrugInteraction(\"brand A\", \"brand B\").");
+  }
+  var report = out.join("\n");
+  Logger.log(report);
+  return report;
 }

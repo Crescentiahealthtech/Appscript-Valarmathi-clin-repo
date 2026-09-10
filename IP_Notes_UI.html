@@ -650,7 +650,14 @@
             <span class="diag-chip">Loading...</span>
           </div>
 
-          <div class="ip-section-title">Allergies</div>
+          <div class="ip-section-title">
+            Allergies
+            <button type="button" id="ipn-edit-allergy-btn"
+                    class="btn btn-outline-info btn-sm py-0 px-2 float-end"
+                    style="font-size:0.65rem;" onclick="ipnOpenAllergyEditor()">
+              <i class="fas fa-pen"></i> Edit
+            </button>
+          </div>
           <div id="ip-allergy-container">
             <span style="color:#475569; font-size:0.8rem;">None on record</span>
           </div>
@@ -1612,14 +1619,8 @@ function ipn_prompt(message, value, done, opts) {
     _refreshDiagnosisButton_();
 
     // Allergies
-    const allergyCont = document.getElementById('ip-allergy-container');
-    if (ctx.allergies && ctx.allergies.length > 0) {
-      allergyCont.innerHTML = ctx.allergies.map(function(a) {
-        return '<span class="allergy-chip"><i class="fas fa-exclamation-triangle me-1"></i>' + _esc(a) + '</span>';
-      }).join('');
-    } else {
-      allergyCont.innerHTML = '<span style="color:#475569; font-size:0.8rem;">None on record</span>';
-    }
+    IPNotesModule.allergiesRaw = ctx.allergiesRaw || '';
+    _renderAllergies_(ctx.allergies, ctx.allergiesRecorded);
 
     // Vitals
     const v = ctx.latestVitals;
@@ -2894,6 +2895,50 @@ function ipn_prompt(message, value, done, opts) {
   function _hideErr_(id) {
     const el = document.getElementById(id);
     if (el) el.classList.add('d-none');
+  }
+
+  // ── 13d2. ALLERGIES ─────────────────────────────────────
+  /**
+   * "None on record" and "never asked" are different clinical states and must
+   * not look the same. An unrecorded history is a prompt, not a reassurance.
+   */
+  function _renderAllergies_(list, recorded) {
+    const cont = document.getElementById('ip-allergy-container');
+    if (!cont) return;
+    if (list && list.length) {
+      cont.innerHTML = list.map(function (a) {
+        return '<span class="allergy-chip"><i class="fas fa-exclamation-triangle me-1"></i>' +
+               _esc(a) + '</span>';
+      }).join('');
+    } else if (recorded) {
+      cont.innerHTML = '<span style="color:#34d399; font-size:0.8rem;">' +
+                       '<i class="fas fa-check me-1"></i>None known (asked and recorded)</span>';
+    } else {
+      cont.innerHTML = '<span style="color:#fbbf24; font-size:0.8rem;">' +
+                       '<i class="fas fa-circle-question me-1"></i>Not recorded — ask and enter it</span>';
+    }
+  }
+
+  function ipnOpenAllergyEditor() {
+    const ctx = IPNotesModule.context;
+    if (!ctx.patientId) { ipnToast('Open a patient first.', 'warn'); return; }
+    ipn_prompt('Known drug allergies, comma separated. Leave blank to record ' +
+               'that none are known — that is different from never having asked.',
+      IPNotesModule.allergiesRaw || '',
+      function (val) {
+        if (val === null) return;
+        google.script.run
+          .withSuccessHandler(function (r) {
+            if (!r || !r.success) { ipnToast((r && r.message) || 'Could not save.', 'err'); return; }
+            IPNotesModule.allergiesRaw = val;
+            const list = val.split(',').map(function (a) { return a.trim(); }).filter(Boolean);
+            _renderAllergies_(list, true);
+            ipnToast('Allergies recorded.', 'ok');
+            ipnRunSafetyCheck();
+          })
+          .withFailureHandler(function (e) { ipnToast('Could not save: ' + e.message, 'err'); })
+          .savePatientAllergies(ctx.patientId, val, window.sessionToken);
+      }, { title: 'Drug allergies' });
   }
 
   // ── 13e. PRESCRIBING SAFETY ─────────────────────────────

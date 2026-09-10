@@ -302,6 +302,19 @@ function getClinicalContext(ipNumber, sessionToken) {
       }
     }
 
+    // ── Allergies ──
+    // result.allergies was initialised and then never filled, so the panel
+    // always read "None on record" however much had been entered elsewhere.
+    try {
+      const alg = getPatientAllergies(result.demographics.patientId, sessionToken);
+      result.allergies = (alg && alg.allergies) || [];
+      result.allergiesRecorded = !!(alg && alg.recorded);
+      result.allergiesRaw = (alg && alg.raw) || "";
+    } catch (e) {
+      result.allergies = [];
+      result.allergiesRecorded = false;
+    }
+
     // ── Care team (Phase 5) ──
     try {
       ipc_ensurePrimaryOnCareTeam_(ipNumber);
