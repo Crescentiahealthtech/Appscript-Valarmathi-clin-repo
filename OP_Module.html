@@ -108,7 +108,8 @@
     <!-- Row 1: patient identity -->
     <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
       <button class="btn btn-outline-secondary btn-sm py-1 px-2" onclick="closeOPConsultationWorkspace()"><i class="fa-solid fa-arrow-left"></i></button>
-      <button class="btn btn-outline-info btn-sm py-1 px-2" onclick="if(typeof switchTab === 'function') switchTab('tab-admin-appt');"><i class="fa-solid fa-calendar-day"></i></button>
+      <button class="btn btn-outline-info btn-sm py-1 px-2" title="Appointments"
+              onclick="opGoToAppointments()"><i class="fa-solid fa-calendar-day"></i></button>
 
       <div class="input-group input-group-sm" style="width: 220px;">
         <input type="text" class="form-control hd-input m-0 border-secondary" id="op-search-pat-id" placeholder="Patient ID..." onkeydown="if(event.key==='Enter') searchEMRPatient()">
@@ -875,6 +876,19 @@ let opSysDefaults = {
     cns: 'Conscious, Oriented, NFND'
 };
 
+/**
+ * switchTab only reveals a page section — it never loads anything. Everywhere
+ * else in the app the ledger is opened as
+ *   switchTab('tab-admin-appt'); initAdminLedger();
+ * This button did the first half only, which is why the screen appeared but
+ * kept whatever it had last rendered, or nothing at all.
+ */
+function opGoToAppointments() {
+    if (typeof switchTab !== 'function') return;
+    switchTab('tab-admin-appt');
+    if (typeof initAdminLedger === 'function') initAdminLedger();
+}
+
 function opEsc(s) {
     return String(s === null || s === undefined ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -1357,16 +1371,23 @@ function searchEMRPatient() {
     const current = opCurrentPatientId();
     const isSwitch = !!current && current !== '--' && current.toUpperCase() !== pId.toUpperCase();
 
-    if (opFormHasContent() && pId !== opCurrentPatientId()) {
+    if (opFormHasContent() && isSwitch) {
         op_confirm('Load ' + pId + '? The consultation on screen has not been saved and will be cleared.',
-            function (ok) { if (ok) { resetOPConsultForm(); doSearchEMRPatient(pId); } },
+            function (ok) { if (ok) doSearchEMRPatient(pId, true); },
             { okLabel: 'Load patient' });
         return;
     }
-    doSearchEMRPatient(pId);
+    doSearchEMRPatient(pId, isSwitch);
 }
 
-function doSearchEMRPatient(pId) {
+/**
+ * @param {boolean} isSwitch  true when this replaces a different patient.
+ * Taken as a parameter, not read from the caller's scope: making the confirm
+ * asynchronous moved this body into its own function, where the outer const
+ * was no longer in scope. The resulting ReferenceError threw before the fetch
+ * ever ran, which is why the search button appeared to do nothing at all.
+ */
+function doSearchEMRPatient(pId, isSwitch) {
     if (isSwitch) resetOPConsultForm();
 
     document.getElementById('hd-pat-name').innerText = "Fetching...";
