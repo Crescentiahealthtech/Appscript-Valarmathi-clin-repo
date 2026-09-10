@@ -60,6 +60,31 @@
   .op-chip .op-chip-add { color: #10b981; font-weight: 700; }
   .op-chip-muted { color: var(--text-muted, #64748b); }
 
+  /* Assist results sit IN FLOW inside the panel. The absolutely-positioned
+     .autocomplete-items overlay depends on the wrapper being the nearest
+     positioned ancestor and on nothing above it in the stacking order; inside
+     the assist panel that was never reliable, and a dropdown you cannot see is
+     indistinguishable from a search that found nothing. */
+  .op-assist-results { margin-top: 0.4rem; border: 1px solid var(--border-color, #334155); border-radius: 6px; overflow: hidden; max-height: 260px; overflow-y: auto; background: var(--bg-input, #0f172a); }
+  .op-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.75rem; color: var(--text-main, #f8fafc); border-bottom: 1px solid var(--border-color, #334155); border-left: 3px solid transparent; }
+  .op-assist-hit:last-child { border-bottom: none; }
+  .op-assist-hit:hover { background: var(--border-hover, #334155); }
+  .op-assist-empty { padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted, #94a3b8); }
+
+  /* Kind colours — the same hue identifies a kind in the result list, in the
+     "most used" chips and on the preview card. */
+  .op-kind-TPL { border-left-color: #6366f1; }
+  .op-kind-BND { border-left-color: #10b981; }
+  .op-kind-LAB { border-left-color: #f59e0b; }
+  .op-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .op-tag-TPL { background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid #6366f1; }
+  .op-tag-BND { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid #10b981; }
+  .op-tag-LAB { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid #f59e0b; }
+  .op-chip-TPL { border-color: #6366f1; }
+  .op-chip-TPL .op-chip-add { color: #a5b4fc; }
+  .op-chip-BND { border-color: #10b981; }
+  .op-chip-BND .op-chip-add { color: #6ee7b7; }
+
   .op-scope-tag { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.4px; padding: 1px 5px; border-radius: 3px; }
   .op-scope-PERSONAL { background: rgba(99,91,255,0.18); color: #a5b4fc; }
   .op-scope-CLINIC   { background: rgba(14,165,233,0.18); color: #7dd3fc; }
@@ -152,11 +177,11 @@
     <div id="op-assist-panel" class="op-assist d-none no-print">
 
     <!-- One search box replaces three always-open lists -->
-    <div class="position-relative mb-2">
+    <div class="mb-2">
       <input type="text" id="op-assist-search" class="hd-input" autocomplete="off"
              placeholder="Search templates, bundles and investigations..."
-             oninput="renderAssistSearch()">
-      <div id="op-assist-results" class="autocomplete-items d-none"></div>
+             oninput="renderAssistSearch()" onfocus="renderAssistSearch()">
+      <div id="op-assist-results" class="op-assist-results d-none"></div>
     </div>
 
     <div class="d-flex flex-wrap gap-2 align-items-center" id="op-assist-recent"></div>
@@ -1325,7 +1350,8 @@ function previewBundle(key) {
     const id = opEsc(b.bundleId);
     const items = b.items || [];
 
-    box.innerHTML = '<div class="op-recall-card">' +
+    box.innerHTML = '<div class="op-recall-card" style="border-left:3px solid #10b981;">' +
+        '<div class="mb-1"><span class="op-tag op-tag-BND">Rx bundle</span></div>' +
         '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
         (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
         (items.length
@@ -1413,7 +1439,8 @@ function renderAssistRecent() {
     const items = tpl.concat(bnd).filter(function (it) { return it.id; });
     host.innerHTML = items.length
         ? '<span class="op-evidence me-1">Most used:</span>' + items.map(function (it) {
-              return '<span class="op-chip" onclick="assistPick(\'' + it.kind + '\',\'' + opAttr(it.id) + '\')">' +
+              return '<span class="op-chip op-chip-' + it.kind +
+                     '" onclick="assistPick(\'' + it.kind + '\',\'' + opAttr(it.id) + '\')">' +
                      '<span class="op-chip-add">+</span>' + opEsc(it.label) + '</span>';
           }).join('')
         : '<span class="op-evidence">Search above, or save a template from a completed consult.</span>';
@@ -1424,59 +1451,82 @@ function opAttr(s) {
     return opEsc(String(s === null || s === undefined ? '' : s)).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-function renderAssistSearch() {
-    const input = document.getElementById('op-assist-search');
-    const box = document.getElementById('op-assist-results');
-    if (!input || !box) return;
-
-    const q = (input.value || '').toLowerCase().trim();
-    if (!q) { box.classList.add('d-none'); box.innerHTML = ''; return; }
-
+/** Collects everything the assist can offer for a query. Pure — no DOM. */
+function collectAssistHits(q) {
     const hits = [];
+    if (!q) return hits;
 
     (opConsultTemplates || []).forEach(function (t) {
         if (!t || !t.templateId) return;
         const hay = (t.name + ' ' + (t.diagnosis || '') + ' ' + (t.specialty || '')).toLowerCase();
         if (hay.indexOf(q) === -1) return;
         hits.push({ kind: 'TPL', id: t.templateId, label: t.name,
-                    meta: 'Template' + (t.scope === 'PERSONAL' ? ' \u00b7 mine' : '') });
+                    tag: 'Template',
+                    meta: t.diagnosis || (t.scope === 'PERSONAL' ? 'Mine' : 'Clinic') });
     });
 
     ((opComposer && opComposer.bundles) || []).forEach(function (b) {
         if (!b || !b.bundleId) return;
-        const hay = (b.name + ' ' + (b.indication || '') + ' ' +
-                     (b.items || []).map(function (it) { return it.drugName || ''; }).join(' ')).toLowerCase();
+        const drugs = (b.items || []).map(function (it) { return it.drugName || ''; });
+        const hay = (b.name + ' ' + (b.indication || '') + ' ' + drugs.join(' ')).toLowerCase();
         if (hay.indexOf(q) === -1) return;
         hits.push({ kind: 'BND', id: b.bundleId, label: b.name,
-                    meta: (b.itemCount || (b.items || []).length) + ' medicines' });
+                    tag: 'Rx bundle',
+                    meta: (b.itemCount || drugs.length) + ' med(s) \u00b7 ' +
+                          drugs.slice(0, 3).join(', ') + (drugs.length > 3 ? '...' : '') });
     });
 
     // The placeholder promises investigations, so search them too.
     ['panels', 'tests', 'packages'].forEach(function (grp) {
-        ((opLabCatalog && opLabCatalog[grp]) || []).forEach(function (t) {
+        const list = (typeof opLabCatalog !== 'undefined' && opLabCatalog) ? (opLabCatalog[grp] || []) : [];
+        list.forEach(function (t) {
             if (!t || !t.testName) return;
             if ((t.testName + ' ' + (t.testCode || '')).toLowerCase().indexOf(q) === -1) return;
-            hits.push({ kind: 'LAB', id: t.testName, label: t.testName, meta: 'Investigation' });
+            hits.push({ kind: 'LAB', id: t.testName, label: t.testName,
+                        tag: 'Lab', meta: t.testCode || '' });
         });
     });
 
-    if (!hits.length) {
-        const loading = !(opConsultTemplates || []).length &&
-                        !((opComposer && opComposer.bundles) || []).length;
-        box.classList.remove('d-none');
-        box.innerHTML = '<div class="label-bright small" style="opacity:.6;">' +
-            (loading ? 'No templates or bundles are loaded yet - pick a consulting doctor, or reload.'
-                     : 'Nothing matches "' + opEsc(q) + '".') + '</div>';
-        return;
-    }
+    return hits;
+}
 
-    box.classList.remove('d-none');
-    box.innerHTML = hits.slice(0, 10).map(function (h) {
-        // mousedown, not click: the input's blur must not tear the row away first.
-        return '<div onmousedown="event.preventDefault(); assistPick(\'' + h.kind + '\',\'' + opAttr(h.id) + '\')">' +
-               '<span>' + opEsc(h.label) + '</span>' +
-               '<small class="op-evidence">' + opEsc(h.meta) + '</small></div>';
-    }).join('');
+function renderAssistSearch() {
+    const input = document.getElementById('op-assist-search');
+    const box = document.getElementById('op-assist-results');
+    if (!input || !box) { console.warn('assist search: input or results box missing.'); return; }
+
+    try {
+        const q = (input.value || '').toLowerCase().trim();
+        if (!q) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+
+        const hits = collectAssistHits(q);
+        box.classList.remove('d-none');
+
+        if (!hits.length) {
+            const nothingLoaded = !(opConsultTemplates || []).length &&
+                                  !((opComposer && opComposer.bundles) || []).length;
+            box.innerHTML = '<div class="op-assist-empty">' +
+                (nothingLoaded
+                    ? 'No templates or bundles are loaded. Pick a consulting doctor above, then try again.'
+                    : 'Nothing matches "' + opEsc(q) + '".') + '</div>';
+            return;
+        }
+
+        box.innerHTML = hits.slice(0, 12).map(function (h) {
+            // mousedown, not click: blur must not tear the row away first.
+            return '<div class="op-assist-hit op-kind-' + h.kind + '" ' +
+                   'onmousedown="event.preventDefault(); assistPick(\'' + h.kind + '\',\'' + opAttr(h.id) + '\')">' +
+                   '<span class="text-truncate"><strong>' + opEsc(h.label) + '</strong>' +
+                   (h.meta ? ' <span class="op-evidence">\u00b7 ' + opEsc(h.meta) + '</span>' : '') + '</span>' +
+                   '<span class="op-tag op-tag-' + h.kind + '">' + opEsc(h.tag) + '</span></div>';
+        }).join('');
+    } catch (err) {
+        // A thrown handler used to leave the box untouched, which looked exactly
+        // like "the search finds nothing". Say what actually happened.
+        console.error('renderAssistSearch:', err);
+        box.classList.remove('d-none');
+        box.innerHTML = '<div class="op-assist-empty text-danger">Search error: ' + opEsc(err.message) + '</div>';
+    }
 }
 
 function assistPick(kind, id) {
