@@ -2,9 +2,16 @@
 // 🏥 IP NOTES & TIMELINE MODULE — BACKEND
 // Crescentia HealthTech | Valarmathi Clinic
 // ==========================================
-// DB Schema (IP_Timeline_DB):
+// DB Schema (IP_Timeline_DB) — Phase 6 authorship columns appended:
 // [0] Timestamp | [1] IP_Number | [2] Patient_ID | [3] Role_Type
 // [4] Note_Data_JSON | [5] Author | [6] Shift | [7] Flags
+// [8] Note_ID | [9] Author_Doctor_ID | [10] Author_Signature_Snapshot
+// [11] Author_Username
+//
+// AUTHORSHIP RULE (Phase 6): payload.author from the client is IGNORED.
+// Every write resolves its author from the session token through
+// resolveIPWrite_() in IP_Clinical_Access.gs, which also strips any note
+// section the caller's role may not author.
 //
 // DB Schema (IP_Pharmacy_Queue):
 // [0] Queue_ID | [1] IP_Number | [2] Patient_ID | [3] Drug_Name
@@ -16,16 +23,10 @@
 // ── HELPERS ──────────────────────────────────────────────
 
 function _ensureIPTimelineSheet_(ss) {
-  let sheet = ss.getSheetByName('IP_Timeline_DB');
-  if (!sheet) {
-    sheet = ss.insertSheet('IP_Timeline_DB');
-    sheet.appendRow([
-      "Timestamp", "IP_Number", "Patient_ID", "Role_Type",
-      "Note_Data_JSON", "Author", "Shift", "Flags"
-    ]);
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
+  // Delegates to the Phase 6 schema owner so the authorship columns are
+  // guaranteed present on every write path, including legacy sheets that
+  // were created with only the original eight columns.
+  return ipc_timelineSheet_();
 }
 
 function _ensureIPPharmacyQueueSheet_(ss) {
@@ -78,14 +79,21 @@ function _generateNoteId_(prefix) {
  * [0]IP_Number [1]Patient_ID [2]Name [3]Age/Sex [4]DOA [5]TOA
  * [6]Type [7]Ward [8]Bed [9]Consultant [10]Diagnosis [11]Status [12]DOD
  */
-function getActiveIPAdmissionsForNotes() {
+function getActiveIPAdmissionsForNotes(sessionToken) {
   try {
+    var gate = resolveIPRead_(sessionToken, null);
+    if (!gate.ok) return { success: false, message: gate.message, data: [] };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('IP_Admissions');
-    if (!sheet) return { success: false, message: "IP_Admissions sheet not found." };
+    if (!sheet) return { success: false, message: "IP_Admissions sheet not found.", data: [] };
 
     const data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return { success: true, data: [] };
+    if (data.length <= 1) return { success: true, data: [], scopeMode: gate.scope.mode };
+
+    // One pre-computed visibility lookup for the whole ward. Calling
+    // ipc_mayReadAdmission_ per row would rescan IP_Care_Team per bed.
+    const canSee = ipc_wardVisibilityFilter_(gate.scope);
 
     const activeAdmissions = [];
     for (let i = 1; i < data.length; i++) {
@@ -93,6 +101,7 @@ function getActiveIPAdmissionsForNotes() {
       if (!row[0]) continue;
       const status = row[11] ? row[11].toString().trim().toUpperCase() : "";
       if (status !== 'ACTIVE') continue;
+      if (!canSee(row[0])) continue;
 
       let doaFormatted = "--";
       try {
@@ -115,9 +124,14 @@ function getActiveIPAdmissionsForNotes() {
       });
     }
 
-    return { success: true, data: activeAdmissions.reverse() };
+    return {
+      success: true,
+      data: activeAdmissions.reverse(),
+      scopeMode: gate.scope.mode,
+      scopedTo: gate.scope.mode === 'ALL' ? '' : gate.scope.doctorIds.join(', ')
+    };
   } catch (error) {
-    return { success: false, message: "Error fetching roster: " + error.toString() };
+    return { success: false, message: "Error fetching roster: " + error.toString(), data: [] };
   }
 }
 
@@ -132,8 +146,11 @@ function getActiveIPAdmissionsForNotes() {
  * - Running infusions (from IP_Pharmacy_Queue, Route = IV, Action_Flag = ACTIVE)
  * - Allergies (from IP_CaseSheets_DB)
  */
-function getClinicalContext(ipNumber) {
+function getClinicalContext(ipNumber, sessionToken) {
   try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const result = {
       success: true,
@@ -168,15 +185,25 @@ function getClinicalContext(ipNumber) {
     // ── Baseline from IP_CaseSheets_DB ──
     const csSheet = ss.getSheetByName('IP_CaseSheets_DB');
     if (csSheet) {
+      // Header-driven: the casesheet gained attribution columns in Phase 5,
+      // and a positional read would silently drift the day one more is added.
+      const csMap  = dc_headerMap_(csSheet);
       const csData = csSheet.getDataRange().getValues();
+      const iDx    = csMap["Primary Diagnosis"];
+      const iAdv   = csMap["Advice"];
+      const iDoc   = csMap["Doctor's Name"];
+
       for (let i = csData.length - 1; i > 0; i--) {
-        if (String(csData[i][1]).trim() === String(ipNumber).trim()) {
-          const dx = csData[i][28] ? String(csData[i][28]).trim() : "";
-          if (dx) result.diagnosis = dx.split(',').map(d => d.trim()).filter(Boolean);
-          const rxJson = csData[i][29] ? csData[i][29].toString() : "[]";
-          try { const rxArr = JSON.parse(rxJson); } catch(e) {}
-          break;
-        }
+        if (String(csData[i][1]).trim() !== String(ipNumber).trim()) continue;
+
+        const dx = (iDx !== undefined && csData[i][iDx]) ? String(csData[i][iDx]).trim() : "";
+        if (dx) result.diagnosis = dx.split(',').map(d => d.trim()).filter(Boolean);
+
+        result.baseline = {
+          admittingDoctor: (iDoc !== undefined) ? String(csData[i][iDoc] || "") : "",
+          admissionAdvice: (iAdv !== undefined) ? String(csData[i][iAdv] || "") : ""
+        };
+        break;
       }
     }
 
@@ -251,6 +278,17 @@ function getClinicalContext(ipNumber) {
       }
     }
 
+    // ── Care team (Phase 5) ──
+    try {
+      ipc_ensurePrimaryOnCareTeam_(ipNumber);
+      const teamRes = getIPCareTeam(ipNumber, sessionToken);
+      result.careTeam = teamRes.success ? teamRes.team : [];
+      result.primaryDoctorId = ipc_primaryDoctorId_(ipNumber);
+    } catch (e) {
+      result.careTeam = [];
+      result.primaryDoctorId = "";
+    }
+
     return result;
   } catch (error) {
     return { success: false, message: "Error fetching clinical context: " + error.toString() };
@@ -262,14 +300,20 @@ function getClinicalContext(ipNumber) {
 /**
  * Fetches all timeline notes for a specific IP admission, newest first.
  */
-function getIPTimeline(ipNumber) {
+function getIPTimeline(ipNumber, sessionToken) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('IP_Timeline_DB');
-    if (!sheet) return { success: true, data: [] };
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message, data: [] };
 
+    const sheet = ipc_timelineSheet_();
+    const m = dc_headerMap_(sheet);
     const data = sheet.getDataRange().getValues();
     const timeline = [];
+
+    const at = function (row, header, fallbackIndex) {
+      const idx = (m[header] === undefined) ? fallbackIndex : m[header];
+      return (idx === undefined || idx < 0) ? "" : row[idx];
+    };
 
     for (let i = data.length - 1; i > 0; i--) {
       if (String(data[i][1]).trim() !== String(ipNumber).trim()) continue;
@@ -287,7 +331,8 @@ function getIPTimeline(ipNumber) {
       } catch(e) {}
 
       timeline.push({
-        noteId:    data[i][0] ? String(data[i][0].getTime ? data[i][0].getTime() : data[i][0]) : "--",
+        noteId:    String(at(data[i], "Note_ID", 8) || "") ||
+                   (data[i][0] ? String(data[i][0].getTime ? data[i][0].getTime() : data[i][0]) : "--"),
         timestamp: tsFormatted,
         rawTs:     data[i][0] ? new Date(data[i][0]).toISOString() : null,
         ipNumber:  String(data[i][1] || ""),
@@ -296,13 +341,18 @@ function getIPTimeline(ipNumber) {
         noteData:  noteData,
         author:    String(data[i][5] || ""),
         shift:     String(data[i][6] || ""),
-        flags:     String(data[i][7] || "")
+        flags:     String(data[i][7] || ""),
+        authorDoctorId: String(at(data[i], "Author_Doctor_ID", 9) || ""),
+        // The signature stored at the moment of writing — never re-derived,
+        // so a doctor's later rename cannot silently rewrite old notes.
+        signature:      String(at(data[i], "Author_Signature_Snapshot", 10) || ""),
+        authorUsername: String(at(data[i], "Author_Username", 11) || "")
       });
     }
 
     return { success: true, data: timeline };
   } catch (error) {
-    return { success: false, message: "Error fetching timeline: " + error.toString() };
+    return { success: false, message: "Error fetching timeline: " + error.toString(), data: [] };
   }
 }
 
@@ -312,53 +362,102 @@ function getIPTimeline(ipNumber) {
  * Universal note saver. Accepts any roleType:
  * DOCTOR | NURSE | CONSULTANT | PROCEDURE | QUICK | INVESTIGATION
  */
-function saveIPNote(payload) {
+function saveIPNote(payload, sessionToken) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    payload = payload || {};
+
+    // ---- Phase 6 gate: identity, care team, section-level RBAC ----------
+    // Everything the client claimed about who is writing is discarded here.
+    const w = resolveIPWrite_(sessionToken, payload.ipNumber,
+                              payload.roleType, payload.noteData);
+    if (!w.ok) return { success: false, message: w.message };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = _ensureIPTimelineSheet_(ss);
+    const sheet = ipc_timelineSheet_();
 
+    const roleType  = String(payload.roleType || "QUICK").trim().toUpperCase();
     const timestamp = new Date();
-    const shift = _getCurrentShift_();
-    const flags = String(payload.flags || "");
-    const noteDataString = JSON.stringify(payload.noteData || {});
+    const shift     = _getCurrentShift_();
+    const flags     = String(payload.flags || "");
+    const noteId    = _generateNoteId_("IPN");
+    const noteData  = w.noteData;                    // filtered, not raw
+    const noteDataString = JSON.stringify(noteData);
 
-    sheet.appendRow([
-      timestamp,
-      String(payload.ipNumber).trim(),
-      String(payload.patientId).trim(),
-      String(payload.roleType).trim().toUpperCase(),
-      noteDataString,
-      String(payload.author || "Staff").trim(),
-      shift,
-      flags
-    ]);
+    // Header-driven write: the authorship columns were appended by the
+    // migration and must never be addressed by a hard-coded index.
+    const m = dc_headerMap_(sheet);
+    const row = new Array(sheet.getLastColumn()).fill("");
+    const put = function (header, value) {
+      if (m[header] !== undefined) row[m[header]] = value;
+    };
+    put("Timestamp", timestamp);
+    put("IP_Number", String(payload.ipNumber).trim().toUpperCase());
+    put("Patient_ID", String(payload.patientId || "").trim().toUpperCase());
+    put("Role_Type", roleType);
+    put("Note_Data_JSON", noteDataString);
+    put("Author", w.authorLabel);
+    put("Shift", shift);
+    put("Flags", flags);
+    put("Note_ID", noteId);
+    put("Author_Doctor_ID", w.doctorId);
+    put("Author_Signature_Snapshot", w.signature);
+    put("Author_Username", w.username);
+    sheet.appendRow(row);
 
     // ── Side Effects by Note Type ──────────────────────
+    // Gated on w.mayPrescribe, not on roleType alone: a nurse cannot reach
+    // the pharmacy queue even if she posts a note labelled DOCTOR, because
+    // resolveIPWrite_ would have rejected the note type outright, and a
+    // doctor's nursing-style note has had its medOrders stripped already.
 
-    // A) Doctor note: sync med orders to IP_Pharmacy_Queue
-    if (payload.roleType === 'DOCTOR' && payload.noteData && payload.noteData.medOrders) {
+    // A) Prescribing note: sync med orders to IP_Pharmacy_Queue
+    if (w.mayPrescribe && noteData.medOrders && noteData.medOrders.length) {
       _syncMedOrdersToPharmacyQueue_(
         ss, payload.ipNumber, payload.patientId,
-        payload.noteData.medOrders, payload.author, timestamp
+        noteData.medOrders, w.authorLabel, timestamp, noteId, w.doctorId
       );
     }
 
-    // B) Doctor note: route investigation orders to Lab (new engine)
-    if (payload.roleType === 'DOCTOR' && payload.noteData && payload.noteData.investigationOrders) {
+    // B) Prescribing note: route investigation orders to Lab
+    if (w.mayPrescribe && noteData.investigationOrders && noteData.investigationOrders.length) {
       _routeInvestigationOrders_(
         ss, payload.ipNumber, payload.patientId,
-        payload.noteData.investigationOrders, payload.author, timestamp
+        noteData.investigationOrders, w.authorLabel, timestamp, w.doctorId
       );
     }
 
-    // C) Nurse note: update IP_Pharmacy_Queue for administered meds
-    if (payload.roleType === 'NURSE' && payload.noteData && payload.noteData.markedMeds) {
-      _markMedsAdministered_(ss, payload.noteData.markedMeds, payload.author, timestamp);
+    // C) Nurse note: mark administered meds. Scoped to THIS admission so a
+    //    guessed queue id cannot touch another patient's chart.
+    if (roleType === 'NURSE' && w.role === 'nurse' &&
+        noteData.markedMeds && noteData.markedMeds.length) {
+      _markMedsAdministered_(ss, noteData.markedMeds, w.authorLabel, timestamp,
+                             payload.ipNumber);
     }
 
-    return { success: true, message: "Note saved to clinical timeline." };
+    try {
+      logAudit_(w.sess, "IP_NOTE_SAVE", "IP_Timeline", noteId, {
+        ipNumber: payload.ipNumber, roleType: roleType,
+        doctorId: w.doctorId, stripped: w.stripped
+      });
+    } catch (e) { /* auditing must never fail a clinical save */ }
+
+    SpreadsheetApp.flush();
+
+    var msg = "Note saved to clinical timeline.";
+    if (w.stripped.length) {
+      msg += " The following were not recorded because your role cannot author them: " +
+             w.stripped.join(", ") + ".";
+    }
+    return {
+      success: true,
+      message: msg,
+      noteId: noteId,
+      author: w.authorLabel,
+      signature: w.signature,
+      stripped: w.stripped
+    };
   } catch (error) {
     return { success: false, message: "Failed to save note: " + error.toString() };
   } finally {
@@ -373,68 +472,68 @@ function saveIPNote(payload) {
  * action = 'NEW' → append | 'CONT' → no-op | 'STOP'/'HOLD' → flag
  * 'MODIFY' → mark old MODIFIED, append new ACTIVE
  */
-function _syncMedOrdersToPharmacyQueue_(ss, ipNumber, patientId, medOrders, author, timestamp) {
+function _syncMedOrdersToPharmacyQueue_(ss, ipNumber, patientId, medOrders, author, timestamp, noteId, doctorId) {
   const sheet = _ensureIPPharmacyQueueSheet_(ss);
-  const data = sheet.getDataRange().getValues();
+  const ip = String(ipNumber).trim().toUpperCase();
+
+  // Row-level edits below change Action_Flag, so the snapshot has to be
+  // re-read rather than reused: two STOP orders for the same drug in one
+  // note would otherwise both land on the same row.
+  const readRows = function () { return sheet.getDataRange().getValues(); };
+
+  const appendOrder = function (order) {
+    sheet.appendRow([
+      _generateNoteId_("IPQ"),
+      ip,
+      String(patientId || "").trim().toUpperCase(),
+      String(order.drugName || "").trim(),
+      String(order.dose || "").trim(),
+      String(order.freq || "").trim(),
+      String(order.route || "Oral").trim(),
+      String(order.instructions || "").trim(),
+      "Pending_Dispense",
+      String(author).trim(),
+      timestamp,
+      "ACTIVE",
+      "", "",
+      // Encounter_Note_ID ties the queue row back to the note that ordered
+      // it, so pharmacy can always show who signed for a drug.
+      String(noteId || "")
+    ]);
+  };
+
+  /** Newest ACTIVE row for this drug on THIS admission, or -1. */
+  const findActive = function (drugName) {
+    const data = readRows();
+    const needle = String(drugName || "").toLowerCase().trim();
+    if (!needle) return -1;
+    for (let i = data.length - 1; i > 0; i--) {
+      if (String(data[i][1]).trim().toUpperCase() !== ip) continue;
+      if (String(data[i][3]).toLowerCase().trim() !== needle) continue;
+      if (String(data[i][11]).toUpperCase() !== 'ACTIVE') continue;
+      return i + 1;
+    }
+    return -1;
+  };
+
+  const stamp = function (rowNumber, flag) {
+    sheet.getRange(rowNumber, 12).setValue(flag);
+    sheet.getRange(rowNumber, 13).setValue(timestamp);
+    sheet.getRange(rowNumber, 14).setValue(String(author));
+  };
 
   medOrders.forEach(function(order) {
     const action = String(order.action || "NEW").toUpperCase();
 
     if (action === 'NEW') {
-      const queueId = _generateNoteId_("IPQ");
-      sheet.appendRow([
-        queueId,
-        String(ipNumber).trim(),
-        String(patientId).trim(),
-        String(order.drugName || "").trim(),
-        String(order.dose || "").trim(),
-        String(order.freq || "").trim(),
-        String(order.route || "Oral").trim(),
-        String(order.instructions || "").trim(),
-        "Pending_Dispense",
-        String(author).trim(),
-        timestamp,
-        "ACTIVE",
-        "", "", ""
-      ]);
+      appendOrder(order);
     } else if (action === 'STOP' || action === 'HOLD') {
-      for (let i = data.length - 1; i > 0; i--) {
-        if (String(data[i][1]).trim() === String(ipNumber).trim() &&
-            String(data[i][3]).toLowerCase().trim() === String(order.drugName).toLowerCase().trim() &&
-            String(data[i][11]).toUpperCase() === 'ACTIVE') {
-          sheet.getRange(i + 1, 12).setValue(action === 'STOP' ? 'STOPPED' : 'HOLD');
-          sheet.getRange(i + 1, 13).setValue(timestamp);
-          sheet.getRange(i + 1, 14).setValue(String(author));
-          break;
-        }
-      }
+      const r = findActive(order.drugName);
+      if (r > 0) stamp(r, action === 'STOP' ? 'STOPPED' : 'HOLD');
     } else if (action === 'MODIFY') {
-      for (let i = data.length - 1; i > 0; i--) {
-        if (String(data[i][1]).trim() === String(ipNumber).trim() &&
-            String(data[i][3]).toLowerCase().trim() === String(order.drugName).toLowerCase().trim() &&
-            String(data[i][11]).toUpperCase() === 'ACTIVE') {
-          sheet.getRange(i + 1, 12).setValue('MODIFIED');
-          sheet.getRange(i + 1, 13).setValue(timestamp);
-          sheet.getRange(i + 1, 14).setValue(String(author));
-          break;
-        }
-      }
-      const queueId = _generateNoteId_("IPQ");
-      sheet.appendRow([
-        queueId,
-        String(ipNumber).trim(),
-        String(patientId).trim(),
-        String(order.drugName || "").trim(),
-        String(order.dose || "").trim(),
-        String(order.freq || "").trim(),
-        String(order.route || "Oral").trim(),
-        String(order.instructions || "").trim(),
-        "Pending_Dispense",
-        String(author).trim(),
-        timestamp,
-        "ACTIVE",
-        "", "", ""
-      ]);
+      const r = findActive(order.drugName);
+      if (r > 0) stamp(r, 'MODIFIED');
+      appendOrder(order);
     }
     // CONT → no write needed
   });
@@ -442,7 +541,7 @@ function _syncMedOrdersToPharmacyQueue_(ss, ipNumber, patientId, medOrders, auth
 
 // ── 6. ROUTE INVESTIGATION ORDERS TO LAB ──────────────────
 
-function _routeInvestigationOrders_(ss, ipNumber, patientId, orders, author, timestamp) {
+function _routeInvestigationOrders_(ss, ipNumber, patientId, orders, author, timestamp, doctorId) {
   // Bridge to new Lab Integration Engine — routes via LAB_ORDERS schema
   if (!orders || !orders.length) return;
   try {
@@ -455,7 +554,8 @@ function _routeInvestigationOrders_(ss, ipNumber, patientId, orders, author, tim
       sourceModule:       'IP_NOTES',
       testNames:          testNames,
       priority:           hasStat ? 'STAT' : 'ROUTINE',
-      orderingDoctorName: String(author || '')
+      orderingDoctorName: String(author || ''),
+      orderingDoctorId:   String(doctorId || '')
     });
   } catch (e) {
     Logger.log('IP Notes → Lab bridge failed: ' + e.message);
@@ -475,20 +575,23 @@ function _routeInvestigationOrders_(ss, ipNumber, patientId, orders, author, tim
 
 // ── 7. MARK MEDS ADMINISTERED (NURSE NOTE) ──────────────
 
-function _markMedsAdministered_(ss, markedMeds, nurse, timestamp) {
+function _markMedsAdministered_(ss, markedMeds, nurse, timestamp, ipNumber) {
   const sheet = ss.getSheetByName('IP_Pharmacy_Queue');
   if (!sheet) return;
   const data = sheet.getDataRange().getValues();
+  const ip = String(ipNumber || "").trim().toUpperCase();
 
   markedMeds.forEach(function(med) {
     if (!med.given) return;
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === String(med.queueId).trim()) {
-        sheet.getRange(i + 1, 9).setValue("Dispensed_IP");
-        sheet.getRange(i + 1, 13).setValue(timestamp);
-        sheet.getRange(i + 1, 14).setValue(String(nurse));
-        break;
-      }
+      if (String(data[i][0]).trim() !== String(med.queueId).trim()) continue;
+      // A queue id alone is not authority: the row must belong to the
+      // admission the nurse is charting on.
+      if (ip && String(data[i][1]).trim().toUpperCase() !== ip) break;
+      sheet.getRange(i + 1, 9).setValue("Dispensed_IP");
+      sheet.getRange(i + 1, 13).setValue(timestamp);
+      sheet.getRange(i + 1, 14).setValue(String(nurse));
+      break;
     }
   });
 }
@@ -498,10 +601,11 @@ function _markMedsAdministered_(ss, markedMeds, nurse, timestamp) {
 /**
  * Allows a doctor to change a single med's action flag directly.
  */
-function updateIPMedAction(payload) {
+function updateIPMedAction(payload, sessionToken) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    payload = payload || {};
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('IP_Pharmacy_Queue');
     if (!sheet) return { success: false, message: "IP_Pharmacy_Queue not found." };
@@ -511,12 +615,26 @@ function updateIPMedAction(payload) {
     const timestamp = new Date();
     let found = false;
 
+    // Locate the row first so the admission it belongs to — not the client —
+    // decides which care team must authorise the change.
+    let targetRow = -1;
+    for (let k = 1; k < data.length; k++) {
+      if (String(data[k][0]).trim() === String(payload.queueId).trim()) { targetRow = k; break; }
+    }
+    if (targetRow === -1) return { success: false, message: "Queue entry not found." };
+
+    // Changing a drug order is a prescribing act: it goes through the same
+    // gate as writing the note that would have ordered it.
+    const w = resolveIPWrite_(sessionToken, data[targetRow][1], "DOCTOR", {});
+    if (!w.ok) return { success: false, message: w.message };
+    const actor = w.authorLabel;
+
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]).trim() === String(payload.queueId).trim()) {
         if (newAction === 'MODIFY') {
           sheet.getRange(i + 1, 12).setValue('MODIFIED');
           sheet.getRange(i + 1, 13).setValue(timestamp);
-          sheet.getRange(i + 1, 14).setValue(String(payload.modifiedBy || ""));
+          sheet.getRange(i + 1, 14).setValue(actor);
           const newId = _generateNoteId_("IPQ");
           sheet.appendRow([
             newId, data[i][1], data[i][2],
@@ -526,13 +644,13 @@ function updateIPMedAction(payload) {
             String(payload.newRoute        || data[i][6]),
             String(payload.newInstructions || data[i][7]),
             "Pending_Dispense",
-            String(payload.modifiedBy || data[i][9]),
-            timestamp, "ACTIVE", "", "", ""
+            actor,
+            timestamp, "ACTIVE", "", "", String(data[i][14] || "")
           ]);
         } else {
           sheet.getRange(i + 1, 12).setValue(newAction);
           sheet.getRange(i + 1, 13).setValue(timestamp);
-          sheet.getRange(i + 1, 14).setValue(String(payload.modifiedBy || ""));
+          sheet.getRange(i + 1, 14).setValue(actor);
         }
         found = true;
         break;
@@ -540,6 +658,11 @@ function updateIPMedAction(payload) {
     }
 
     if (!found) return { success: false, message: "Queue entry not found." };
+    try {
+      logAudit_(w.sess, "IP_MED_ACTION", "IP_Pharmacy_Queue",
+                String(payload.queueId), { newAction: newAction, doctorId: w.doctorId });
+    } catch (e) { /* never fail the order on audit */ }
+    SpreadsheetApp.flush();
     return { success: true, message: `Medication status updated to ${newAction}.` };
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -553,10 +676,15 @@ function updateIPMedAction(payload) {
 /**
  * Generates a structured shift handover summary note.
  */
-function generateIPHandoverSummary(payload) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+function generateIPHandoverSummary(payload, sessionToken) {
+  // No lock here: this function only reads, then delegates the single write
+  // to saveIPNote(), which takes the script lock itself. Taking it twice in
+  // one execution would deadlock.
   try {
+    payload = payload || {};
+    const w = resolveIPWrite_(sessionToken, payload.ipNumber, "HANDOVER", {});
+    if (!w.ok) return { success: false, message: w.message };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const tlSheet = ss.getSheetByName('IP_Timeline_DB');
     const pqSheet = ss.getSheetByName('IP_Pharmacy_Queue');
@@ -610,7 +738,7 @@ function generateIPHandoverSummary(payload) {
     const summaryLines = [
       `=== ${payload.shift || _getCurrentShift_()} SHIFT HANDOVER SUMMARY ===`,
       `Generated: ${Utilities.formatDate(now, Session.getScriptTimeZone(), "dd-MMM-yyyy hh:mm a")}`,
-      `Generated by: ${payload.author}`,
+      `Generated by: ${w.authorLabel}`,
       "",
       "VITALS TREND (Last 12h):",
       vitalsList.length ? vitalsList.join("\n") : "No vitals recorded.",
@@ -629,23 +757,21 @@ function generateIPHandoverSummary(payload) {
     ];
     const handoverText = summaryLines.join("\n");
 
-    const tlSheetSave = _ensureIPTimelineSheet_(ss);
-    tlSheetSave.appendRow([
-      now,
-      String(payload.ipNumber).trim(),
-      String(payload.patientId).trim(),
-      "HANDOVER",
-      JSON.stringify({ handoverText: handoverText }),
-      String(payload.author).trim(),
-      _getCurrentShift_(),
-      "HANDOVER"
-    ]);
+    // Route the handover through the same authored-write path as any other
+    // note so it carries a Note_ID and a real signature.
+    const saved = saveIPNote({
+      ipNumber:  payload.ipNumber,
+      patientId: payload.patientId,
+      roleType:  "HANDOVER",
+      flags:     "HANDOVER",
+      noteData:  { handoverText: handoverText }
+    }, sessionToken);
+    if (!saved.success) return { success: false, message: saved.message };
 
-    return { success: true, summary: handoverText };
+    return { success: true, summary: handoverText,
+             noteId: saved.noteId, author: w.authorLabel };
   } catch (error) {
     return { success: false, message: "Handover generation failed: " + error.toString() };
-  } finally {
-    lock.releaseLock();
   }
 }
 
@@ -654,8 +780,11 @@ function generateIPHandoverSummary(payload) {
 /**
  * For the Pharmacy module: fetches all ACTIVE/Pending_Dispense IP orders.
  */
-function getIPPharmacyQueue(ipNumber) {
+function getIPPharmacyQueue(ipNumber, sessionToken) {
   try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message, data: [] };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('IP_Pharmacy_Queue');
     if (!sheet) return { success: true, data: [] };
@@ -706,8 +835,13 @@ function getIPPharmacyQueue(ipNumber) {
 /**
  * Returns all active staff from Users sheet, grouped by role.
  */
-function getStaffRoster() {
+function getStaffRoster(sessionToken) {
   try {
+    // The staff list is directory data, not public data — it names every
+    // clinician and their registration number.
+    var gate = resolveIPRead_(sessionToken, null);
+    if (!gate.ok) return { success: false, message: gate.message, data: [] };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('Users');
     if (!sheet) return { success: false, data: [] };
@@ -770,8 +904,11 @@ function fetchPharmacyMasterForIP() {
 
 // ── 13. FETCH LAB RESULTS FOR PATIENT (IP context) ───────
 
-function getIPLabResults(ipNumber, patientId) {
+function getIPLabResults(ipNumber, patientId, sessionToken) {
   try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message, data: [] };
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('Lab_Queue_DB');
     if (!sheet) return { success: true, data: [] };
