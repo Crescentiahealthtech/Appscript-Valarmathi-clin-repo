@@ -750,17 +750,57 @@ document.addEventListener('focusin', function (e) {
 function loadComposerContext() {
     google.script.run
         .withSuccessHandler(function (res) {
-            if (!res || !res.success) return;
-            opComposer = res;
+            // Never swallow a failed context. A silent failure here is exactly
+            // what makes the assist search look "broken": the arrays stay empty
+            // and every query honestly reports no match.
+            if (!res || !res.success) {
+                opComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
+                opAssistNote((res && res.message) || 'Could not load the composer context.');
+                console.error('getComposerContext:', res);
+                renderAdviceChecklist();
+                renderAssistRecent();
+                return;
+            }
+            // Keep the shape guaranteed even if the server omits a key.
+            opComposer = {
+                phrases:      res.phrases || { CC: [], HX: [], ADVICE: [] },
+                bundles:      res.bundles || [],
+                workup:       res.workup || {},
+                examDefaults: res.examDefaults || null,
+                department:   res.department || '',
+                doctorId:     res.doctorId || ''
+            };
+            opAssistNote('');
             if (res.examDefaults) {
                 opSysDefaults = res.examDefaults;
                 applyExamDefaults(opSysDefaults);
             }
             renderAdviceChecklist();
             renderAssistRecent();
+            // A reload re-orders the bundle list, so anything already drawn from
+            // the old ordering must be redrawn before it can be clicked again.
+            if (document.getElementById('op-assist-search')) renderAssistSearch();
         })
-        .withFailureHandler(function (e) { console.error('composer context:', e && e.message); })
+        .withFailureHandler(function (e) {
+            opAssistNote('Network error loading templates: ' + (e && e.message ? e.message : e));
+            console.error('composer context:', e && e.message);
+        })
         .getComposerContext(window.currentDoctorId || '', window.sessionToken);
+}
+
+// One place to tell the doctor why the assist is empty. Silence is the bug.
+function opAssistNote(msg) {
+    const host = document.getElementById('op-assist-recent');
+    if (!host) return;
+    let note = document.getElementById('op-assist-note');
+    if (!msg) { if (note) note.remove(); return; }
+    if (!note) {
+        note = document.createElement('div');
+        note.id = 'op-assist-note';
+        note.className = 'w-100 small text-warning';
+        host.parentElement.insertBefore(note, host);
+    }
+    note.textContent = msg;
 }
 
 function applyExamDefaults(d) {
@@ -1114,65 +1154,105 @@ function renderSafetyBar(alerts, coverage) {
 function loadConsultTemplates() {
     google.script.run
         .withSuccessHandler(function (res) {
-            opConsultTemplates = (res && res.success) ? res.templates : [];
+            opConsultTemplates = (res && res.success && res.templates) ? res.templates : [];
+            if (!res || !res.success) {
+                opAssistNote((res && res.message) || 'Could not load consultation templates.');
+                console.error('listConsultTemplates:', res);
+            }
+            renderAssistRecent();
+            if (document.getElementById('op-assist-search')) renderAssistSearch();
+        })
+        .withFailureHandler(function (e) {
+            opConsultTemplates = [];
+            opAssistNote('Network error loading templates: ' + (e && e.message ? e.message : e));
             renderAssistRecent();
         })
-        .withFailureHandler(function () { renderAssistRecent(); })
         .listConsultTemplates(window.currentDoctorId || '', window.sessionToken);
 }
 
-
-
 function useConsultTemplate(id) {
-    const _tplBusy = document.getElementById('op-assist-recent');
-    if (_tplBusy) _tplBusy.insertAdjacentHTML('afterbegin', '<span class="op-chip" id="tpl-busy"><i class="fa-solid fa-spinner fa-spin"></i> Applying...</span>');
+    if (!id) { alert('That template has no id - reload the module.'); return; }
+
+    const host = document.getElementById('op-assist-recent');
+    if (host) host.insertAdjacentHTML('afterbegin',
+        '<span class="op-chip" id="tpl-busy"><i class="fa-solid fa-spinner fa-spin"></i> Applying...</span>');
 
     google.script.run
         .withSuccessHandler(function (res) {
-            document.getElementById('tpl-busy')?.remove();
-            
-            if (!res || !res.success) { alert((res && res.message) || 'Could not apply template.'); return; }
-            const t = res.template;
+            const busy = document.getElementById('tpl-busy');
+            if (busy) busy.remove();
 
-            if (t.complaints) {
-                document.getElementById('op-cc-tbody').innerHTML = '';
-                t.complaints.split('|').forEach(function (c) {
-                    if (!c.trim()) return;
-                    addOPDynamicRow('op-cc-tbody', 'CC');
-                    const rows = document.querySelectorAll('#op-cc-tbody tr');
-                    rows[rows.length - 1].querySelector('.op-array-text').value = c.trim();
+            if (!res || !res.success) { alert((res && res.message) || 'Could not apply template.'); return; }
+            const t = res.template || {};
+
+            // Each field is applied independently. One missing element used to
+            // throw and abandon every field after it, which read as "the click
+            // does nothing".
+            try {
+                if (t.complaints) opFillRows('op-cc-tbody', 'CC', t.complaints);
+                if (t.history)    opFillRows('op-hx-tbody', 'HX', t.history);
+
+                if (t.exam) ['cvs', 'rs', 'pa', 'cns'].forEach(function (s) {
+                    if (t.exam[s]) opSetVal('op-se-' + s + '-text', t.exam[s]);
                 });
+
+                if (t.diagnosis)     opSetVal('clin-diagnosis', t.diagnosis);
+                if (t.diagnosisType) opSetVal('clin-diagnosis-type', t.diagnosisType);
+                if (t.advice)        opSetVal('op-advice-free', t.advice);
+
+                if (t.reviewDays) {
+                    const d = new Date();
+                    d.setDate(d.getDate() + t.reviewDays);
+                    opSetVal('clin-review-date', d.toISOString().split('T')[0]);
+                }
+
+                // A template's investigations are ORDERS. Tick the real catalog
+                // checkbox so the request carries a TestID; only fall back to the
+                // free-text field for anything not in the catalog.
+                if (t.labs && t.labs.length) {
+                    t.labs.forEach(function (l) {
+                        const name = (l && l.testName) ? l.testName : l;
+                        if (name) addWorkupLab(name);
+                    });
+                }
+            } catch (err) {
+                console.error('applying template:', err);
+                alert('Template applied partially: ' + err.message);
             }
-            if (t.history) {
-                document.getElementById('op-hx-tbody').innerHTML = '';
-                t.history.split('|').forEach(function (h) {
-                    if (!h.trim()) return;
-                    addOPDynamicRow('op-hx-tbody', 'HX');
-                    const rows = document.querySelectorAll('#op-hx-tbody tr');
-                    rows[rows.length - 1].querySelector('.op-array-text').value = h.trim();
-                });
-            }
-            if (t.exam) ['cvs', 'rs', 'pa', 'cns'].forEach(function (s) {
-                if (t.exam[s]) document.getElementById('op-se-' + s + '-text').value = t.exam[s];
-            });
-            if (t.diagnosis) document.getElementById('clin-diagnosis').value = t.diagnosis;
-            if (t.diagnosisType) document.getElementById('clin-diagnosis-type').value = t.diagnosisType;
-            if (t.advice) document.getElementById('op-advice-free').value = t.advice;
-            if (t.reviewDays) {
-                const d = new Date(); d.setDate(d.getDate() + t.reviewDays);
-                document.getElementById('clin-review-date').value = d.toISOString().split('T')[0];
-            }
-            if (t.labs && t.labs.length) {
-                document.getElementById('op-future-labs').value =
-                    t.labs.map(function (l) { return l.testName || l; }).join(', ');
-            }
-            onDiagnosisChanged();
+
+            openAssistPanel();
+            if (typeof onDiagnosisChanged === 'function') onDiagnosisChanged();
+            if (typeof queueSafetyCheck === 'function') queueSafetyCheck();
         })
-        .withFailureHandler(function (e) { 
-            document.getElementById('tpl-busy')?.remove();
-            alert('Network error: ' + e.message); 
+        .withFailureHandler(function (e) {
+            const busy = document.getElementById('tpl-busy');
+            if (busy) busy.remove();
+            alert('Network error: ' + (e && e.message ? e.message : e));
         })
         .applyConsultTemplate(id, window.sessionToken);
+}
+
+/** Sets an input/select/textarea by id, quietly skipping one that is absent. */
+function opSetVal(id, val) {
+    const el = document.getElementById(id);
+    if (!el) { console.warn('opSetVal: #' + id + ' is not in the DOM.'); return false; }
+    el.value = val;
+    return true;
+}
+
+/** Rebuilds a pipe-separated list of rows (complaints / history). */
+function opFillRows(tbodyId, type, pipeText) {
+    const tb = document.getElementById(tbodyId);
+    if (!tb) { console.warn('opFillRows: #' + tbodyId + ' is not in the DOM.'); return; }
+    tb.innerHTML = '';
+    String(pipeText).split('|').forEach(function (v) {
+        if (!v.trim()) return;
+        addOPDynamicRow(tbodyId, type);
+        const rows = tb.querySelectorAll('tr');
+        const input = rows[rows.length - 1] && rows[rows.length - 1].querySelector('.op-array-text');
+        if (input) input.value = v.trim();
+    });
+    if (!tb.querySelectorAll('tr').length) addOPDynamicRow(tbodyId, type);
 }
 
 function openSaveTemplateModal() {
@@ -1217,42 +1297,68 @@ function saveCurrentAsTemplate() {
 // ============================================================================
 
 
-function previewBundle(idx) {
-    const b = (opComposer.bundles || [])[idx];
+function opFindBundle(key) {
+    // Bundles are addressed by bundleId, never by list position. The list is
+    // re-sorted by use count on every reload (and reloads happen after saving a
+    // bundle and after saving a consult), so a position captured in rendered
+    // HTML goes stale and the click either misses or fills the wrong bundle.
+    const list = (opComposer && opComposer.bundles) || [];
+    const k = String(key);
+    for (let i = 0; i < list.length; i++) {
+        if (String(list[i].bundleId) === k) return list[i];
+    }
+    // Tolerate an index for anything still rendered from the old scheme.
+    const n = parseInt(k, 10);
+    return (!isNaN(n) && list[n]) ? list[n] : null;
+}
+
+function previewBundle(key) {
+    const b = opFindBundle(key);
     const box = document.getElementById('op-bundle-detail');
     if (!box) { console.error('op-bundle-detail is missing from the DOM.'); return; }
-    if (!b) { box.innerHTML = '<span class="text-danger small">Bundle not found - reload the module.</span>'; return; }
+    if (!b) {
+        box.innerHTML = '<span class="text-danger small">Bundle not found - reload the module.</span>';
+        return;
+    }
 
     openAssistPanel();
+    const id = opEsc(b.bundleId);
     const items = b.items || [];
+
     box.innerHTML = '<div class="op-recall-card">' +
         '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
         (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
-        items.map(function (it, j) {
-            return '<div class="d-flex justify-content-between align-items-center py-1">' +
-                   '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
-                   ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
-                   '<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.65rem;" ' +
-                   'onclick="addBundleItem(' + idx + ',' + j + ')">+ Add</button></div>';
-        }).join('') +
-        '<div class="mt-2 text-end"><button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
-        'onclick="addWholeBundle(' + idx + ')">+ Add all ' + items.length + '</button></div>' +
+        (items.length
+            ? items.map(function (it, j) {
+                  return '<div class="d-flex justify-content-between align-items-center py-1">' +
+                         '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
+                         ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
+                         '<button type="button" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.65rem;" ' +
+                         'onclick="addBundleItem(\'' + id + '\',' + j + ')">+ Add</button></div>';
+              }).join('')
+            : '<div class="op-evidence">This bundle has no medicines saved in it.</div>') +
+        (items.length
+            ? '<div class="mt-2 text-end"><button type="button" class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
+              'onclick="addWholeBundle(\'' + id + '\')">+ Add all ' + items.length + '</button></div>'
+            : '') +
         '</div>';
+
+    box.scrollIntoView({ block: 'nearest' });
 }
 
-function addBundleItem(bi, ii) {
-    const b = (opComposer.bundles || [])[bi];
-    if (!b) return;
+function addBundleItem(key, ii) {
+    const b = opFindBundle(key);
+    if (!b || !b.items || !b.items[ii]) { alert('That medicine is no longer in the bundle - reload the module.'); return; }
     addOPRxRow(b.items[ii]);
-    google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
     queueSafetyCheck();
 }
 
-function addWholeBundle(bi) {
-    const b = (opComposer.bundles || [])[bi];
-    if (!b) return;
+function addWholeBundle(key) {
+    const b = opFindBundle(key);
+    if (!b || !(b.items || []).length) { alert('That bundle is empty or no longer available.'); return; }
     b.items.forEach(function (it) { addOPRxRow(it); });
-    google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
     queueSafetyCheck();
 }
 
@@ -1300,55 +1406,88 @@ function renderAssistRecent() {
     const tpl = (opConsultTemplates || []).slice(0, 2).map(function (t) {
         return { kind: 'TPL', id: t.templateId, label: t.name };
     });
-    const bnd = (opComposer.bundles || []).slice(0, 2).map(function (b, i) {
-        return { kind: 'BND', id: String(i), label: b.name + ' \u00b7 ' + b.itemCount };
+    const bnd = ((opComposer && opComposer.bundles) || []).slice(0, 2).map(function (b) {
+        return { kind: 'BND', id: b.bundleId, label: b.name + ' \u00b7 ' + b.itemCount };
     });
 
-    const items = tpl.concat(bnd);
+    const items = tpl.concat(bnd).filter(function (it) { return it.id; });
     host.innerHTML = items.length
         ? '<span class="op-evidence me-1">Most used:</span>' + items.map(function (it) {
-              return '<span class="op-chip" onclick="assistPick(\'' + it.kind + '\',\'' + opEsc(it.id) + '\')">' +
+              return '<span class="op-chip" onclick="assistPick(\'' + it.kind + '\',\'' + opAttr(it.id) + '\')">' +
                      '<span class="op-chip-add">+</span>' + opEsc(it.label) + '</span>';
           }).join('')
         : '<span class="op-evidence">Search above, or save a template from a completed consult.</span>';
 }
 
+/** Escapes a value for use inside a single-quoted JS string in an HTML attribute. */
+function opAttr(s) {
+    return opEsc(String(s === null || s === undefined ? '' : s)).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 function renderAssistSearch() {
-    const q = (document.getElementById('op-assist-search').value || '').toLowerCase().trim();
+    const input = document.getElementById('op-assist-search');
     const box = document.getElementById('op-assist-results');
+    if (!input || !box) return;
+
+    const q = (input.value || '').toLowerCase().trim();
     if (!q) { box.classList.add('d-none'); box.innerHTML = ''; return; }
 
     const hits = [];
+
     (opConsultTemplates || []).forEach(function (t) {
-        if ((t.name + ' ' + (t.diagnosis || '')).toLowerCase().indexOf(q) === -1) return;
-        hits.push({ kind: 'TPL', id: t.templateId, label: t.name, meta: 'Template' });
+        if (!t || !t.templateId) return;
+        const hay = (t.name + ' ' + (t.diagnosis || '') + ' ' + (t.specialty || '')).toLowerCase();
+        if (hay.indexOf(q) === -1) return;
+        hits.push({ kind: 'TPL', id: t.templateId, label: t.name,
+                    meta: 'Template' + (t.scope === 'PERSONAL' ? ' \u00b7 mine' : '') });
     });
-    (opComposer.bundles || []).forEach(function (b, i) {
+
+    ((opComposer && opComposer.bundles) || []).forEach(function (b) {
+        if (!b || !b.bundleId) return;
         const hay = (b.name + ' ' + (b.indication || '') + ' ' +
                      (b.items || []).map(function (it) { return it.drugName || ''; }).join(' ')).toLowerCase();
         if (hay.indexOf(q) === -1) return;
-        hits.push({ kind: 'BND', id: String(i), label: b.name, meta: b.itemCount + ' medicines' });
+        hits.push({ kind: 'BND', id: b.bundleId, label: b.name,
+                    meta: (b.itemCount || (b.items || []).length) + ' medicines' });
+    });
+
+    // The placeholder promises investigations, so search them too.
+    ['panels', 'tests', 'packages'].forEach(function (grp) {
+        ((opLabCatalog && opLabCatalog[grp]) || []).forEach(function (t) {
+            if (!t || !t.testName) return;
+            if ((t.testName + ' ' + (t.testCode || '')).toLowerCase().indexOf(q) === -1) return;
+            hits.push({ kind: 'LAB', id: t.testName, label: t.testName, meta: 'Investigation' });
+        });
     });
 
     if (!hits.length) {
+        const loading = !(opConsultTemplates || []).length &&
+                        !((opComposer && opComposer.bundles) || []).length;
         box.classList.remove('d-none');
-        box.innerHTML = '<div class="label-bright small" style="opacity:.6;">Nothing matches "' + opEsc(q) + '".</div>';
+        box.innerHTML = '<div class="label-bright small" style="opacity:.6;">' +
+            (loading ? 'No templates or bundles are loaded yet - pick a consulting doctor, or reload.'
+                     : 'Nothing matches "' + opEsc(q) + '".') + '</div>';
         return;
     }
 
     box.classList.remove('d-none');
-    box.innerHTML = hits.slice(0, 8).map(function (h) {
-        return '<div onmousedown="assistPick(\'' + h.kind + '\',\'' + opEsc(h.id) + '\')">' +
+    box.innerHTML = hits.slice(0, 10).map(function (h) {
+        // mousedown, not click: the input's blur must not tear the row away first.
+        return '<div onmousedown="event.preventDefault(); assistPick(\'' + h.kind + '\',\'' + opAttr(h.id) + '\')">' +
                '<span>' + opEsc(h.label) + '</span>' +
                '<small class="op-evidence">' + opEsc(h.meta) + '</small></div>';
     }).join('');
 }
 
 function assistPick(kind, id) {
-    document.getElementById('op-assist-search').value = '';
-    document.getElementById('op-assist-results').classList.add('d-none');
-    if (kind === 'TPL') useConsultTemplate(id);
-    else previewBundle(parseInt(id, 10));
+    const input = document.getElementById('op-assist-search');
+    const box = document.getElementById('op-assist-results');
+    if (input) input.value = '';
+    if (box) { box.classList.add('d-none'); box.innerHTML = ''; }
+
+    if (kind === 'TPL')      useConsultTemplate(id);
+    else if (kind === 'BND') previewBundle(id);
+    else if (kind === 'LAB') { addWorkupLab(id); openAssistPanel(); }
 }
 
 // ============================================================================
