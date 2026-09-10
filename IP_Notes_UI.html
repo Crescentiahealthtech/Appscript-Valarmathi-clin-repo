@@ -633,7 +633,14 @@
             <span id="ip-handover-alert-text"></span>
           </div>
 
-          <div class="ip-section-title" style="margin-top:0;">Active Diagnosis</div>
+          <div class="ip-section-title" style="margin-top:0;">
+            Active Diagnosis
+            <button type="button" id="ipn-edit-dx-btn"
+                    class="btn btn-outline-info btn-sm py-0 px-2 float-end d-none"
+                    style="font-size:0.65rem;" onclick="ipnOpenDiagnosis()">
+              <i class="fas fa-pen"></i> Edit
+            </button>
+          </div>
           <div id="ip-diag-container">
             <span class="diag-chip">Loading...</span>
           </div>
@@ -1033,6 +1040,81 @@
   </div>
 
   <!-- ── CONSULTANT NOTE MODAL ───────────────────────── -->
+  <!-- ═══ CROSS-CONSULT (replaces the browser prompt, which leaked the
+       script URL into the dialog title) ═══════════════════════════ -->
+  <div class="modal fade" id="modalIPCrossConsult" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+        <div class="ip-modal-header">
+          <div class="ip-modal-title" style="color:#38bdf8;">
+            <i class="fas fa-user-plus me-2"></i> Add to Care Team
+          </div>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="ip-modal-body">
+          <div class="mb-3">
+            <label class="ip-form-label">Admission</label>
+            <input type="text" class="ip-form-input" id="xc-ip-number" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="ip-form-label">Doctor</label>
+            <select class="ip-form-select" id="xc-doctor-select"></select>
+          </div>
+          <div class="mb-2">
+            <label class="ip-form-label">Team Role</label>
+            <select class="ip-form-select" id="xc-role-select"></select>
+          </div>
+          <div id="xc-error" class="d-none" style="color:#f87171; font-size:0.78rem;"></div>
+        </div>
+        <div class="ip-modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="sign-btn" style="width:auto; padding:10px 22px;" id="xc-save-btn"
+                  onclick="ipnSubmitCrossConsult()">
+            <i class="fas fa-user-plus me-2"></i> Add to Team
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DIAGNOSIS EDITOR ═══════════════════════════════════════ -->
+  <div class="modal fade" id="modalIPDiagnosis" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+        <div class="ip-modal-header">
+          <div class="ip-modal-title" style="color:#f472b6;">
+            <i class="fas fa-notes-medical me-2"></i> Working Diagnosis
+          </div>
+          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="ip-modal-body">
+          <label class="ip-form-label">
+            Diagnoses — one per line, or comma separated
+          </label>
+          <textarea class="ip-form-input" id="dx-editor" rows="5"
+                    placeholder="e.g.&#10;Community acquired pneumonia&#10;Type 2 Diabetes Mellitus"></textarea>
+          <div style="color:#64748b; font-size:0.72rem; margin-top:8px;">
+            This updates the admission's working diagnosis and records the change
+            on the timeline. The admission casesheet is not altered.
+          </div>
+          <div class="mb-2 mt-3">
+            <label class="ip-form-label">Reason for change (optional)</label>
+            <input type="text" class="ip-form-input" id="dx-reason"
+                   placeholder="e.g. Culture confirmed organism">
+          </div>
+          <div id="dx-error" class="d-none" style="color:#f87171; font-size:0.78rem;"></div>
+        </div>
+        <div class="ip-modal-footer">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button class="sign-btn" style="width:auto; padding:10px 22px;" id="dx-save-btn"
+                  onclick="ipnSaveDiagnosis()">
+            <i class="fas fa-check me-2"></i> Update Diagnosis
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="modalIPConsultantNote" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
@@ -1389,14 +1471,9 @@
     if (!ctx.success) return;
 
     // Diagnosis
-    const diagCont = document.getElementById('ip-diag-container');
-    if (ctx.diagnosis && ctx.diagnosis.length > 0) {
-      diagCont.innerHTML = ctx.diagnosis.map(function(d) {
-        return '<span class="diag-chip">' + _esc(d) + '</span>';
-      }).join('');
-    } else {
-      diagCont.innerHTML = '<span class="diag-chip">Diagnosis Pending</span>';
-    }
+    IPNotesModule.diagnosis = ctx.diagnosis || [];
+    _renderDiagnosisChips_(IPNotesModule.diagnosis);
+    _refreshDiagnosisButton_();
 
     // Allergies
     const allergyCont = document.getElementById('ip-allergy-container');
@@ -1874,14 +1951,14 @@
     google.script.run
       .withSuccessHandler(function(resp) {
         if (!resp.success || !resp.data || resp.data.length === 0) {
-          alert('No previous notes found for this patient.');
+          ipnToast('No previous notes found for this patient.', 'warn');
           return;
         }
         // Find the most recent DOCTOR note (data is newest-first)
         const prev = resp.data.find(function(n) {
           return n.roleType === 'DOCTOR';
         });
-        if (!prev) { alert('No previous doctor progress note found.'); return; }
+        if (!prev) { ipnToast('No previous doctor progress note found.', 'warn'); return; }
         const nd = prev.noteData || {};
         if (nd.subjectiveObjective) {
           document.getElementById('dr-soap-text').value = nd.subjectiveObjective;
@@ -1895,9 +1972,9 @@
           if (se.cns) { document.getElementById('dr-se-cns').value = se.cns.split(' ')[0] || se.cns; document.getElementById('dr-se-cns-detail').value = se.cns.includes(' ') ? se.cns.substring(se.cns.indexOf(' ')+1) : ''; }
         }
         if (nd.adviceText) document.getElementById('dr-advice-text').value = nd.adviceText;
-        alert('Previous note copied. Review and modify before signing.');
+        ipnToast('Previous note copied. Review and modify before signing.', 'ok');
       })
-      .withFailureHandler(function(e) { alert('Could not fetch previous note: ' + e.message); })
+      .withFailureHandler(function(e) { ipnToast('Could not fetch previous note: ' + e.message, 'err'); })
       .getIPTimeline(ctx.ipNumber, window.sessionToken);
   }
 
@@ -1937,13 +2014,13 @@
       const fluidType = document.getElementById('ip-iv-fluid-type').value;
       const pints     = document.getElementById('ip-iv-pints').value;
       const rate      = document.getElementById('ip-iv-rate').value.trim();
-      if (!fluidType) { alert('Please select an IV Fluid type.'); return; }
+      if (!fluidType) { ipnToast('Select an IV fluid type.', 'warn'); return; }
       drugName     = fluidType + ' — ' + pints;
       dose         = pints;
       instructions = rate ? rate : document.getElementById('ip-new-drug-instructions').value.trim();
     } else {
       drugName = document.getElementById('ip-new-drug-name').value.trim();
-      if (!drugName) { alert('Please enter a drug name.'); return; }
+      if (!drugName) { ipnToast('Enter a drug name.', 'warn'); return; }
       dose         = document.getElementById('ip-new-drug-dose').value.trim();
       instructions = document.getElementById('ip-new-drug-instructions').value.trim();
     }
@@ -2100,12 +2177,12 @@
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-signature me-2"></i> Sign & Push to Timeline';
         if (!resp.success) {
-          alert('Error saving note: ' + resp.message);
+          ipnToast('Error saving note: ' + resp.message, 'err');
           return;
         }
         // The server strips any section this role may not author. Say so —
         // silently dropping a med order would be far worse than an alert.
-        if (resp.stripped && resp.stripped.length) alert(resp.message);
+        if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
         _getModal_('modalIPDoctorNote').hide();
 
         // Inject into timeline optimistically
@@ -2125,7 +2202,7 @@
       .withFailureHandler(function(e) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-signature me-2"></i> Sign & Push to Timeline';
-        alert('Failed to save note: ' + e.message);
+        ipnToast('Failed to save note: ' + e.message, 'err');
       })
       .saveIPNote(payload, window.sessionToken);
   }
@@ -2208,8 +2285,8 @@
 
     google.script.run
       .withSuccessHandler(function(resp) {
-        if (!resp.success) { alert('Error: ' + resp.message); return; }
-        if (resp.stripped && resp.stripped.length) alert(resp.message);
+        if (!resp.success) { ipnToast('Error: ' + resp.message, 'err'); return; }
+        if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
         _getModal_('modalIPNurseNote').hide();
         injectTimelineItem({
           author:    resp.author || nurseAuthor,
@@ -2229,7 +2306,7 @@
           });
         }
       })
-      .withFailureHandler(function(e) { alert('Failed: ' + e.message); })
+      .withFailureHandler(function(e) { ipnToast('Failed: ' + e.message, 'err'); })
       .saveIPNote(payload, window.sessionToken);
   }
 
@@ -2244,17 +2321,17 @@
       findings:        document.getElementById('cons-findings').value.trim(),
       recommendations: document.getElementById('cons-recommendations').value.trim()
     };
-    if (!noteData.consultantName) { alert('Please enter consultant name.'); return; }
+    if (!noteData.consultantName) { ipnToast('Enter the consultant name.', 'warn'); return; }
 
     const payload = { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'CONSULTANT', noteData };
     google.script.run
       .withSuccessHandler(function(resp) {
-        if (!resp.success) { alert(resp.message); return; }
-        if (resp.stripped && resp.stripped.length) alert(resp.message);
+        if (!resp.success) { ipnToast(resp.message, 'err'); return; }
+        if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
         _getModal_('modalIPConsultantNote').hide();
         injectTimelineItem({ author: resp.author || _signingAs(), timestamp: new Date().toLocaleString(), roleType: 'CONSULTANT', shift: _getShift(), noteData });
       })
-      .withFailureHandler(function(e) { alert(e.message); })
+      .withFailureHandler(function(e) { ipnToast(e.message, 'err'); })
       .saveIPNote(payload, window.sessionToken);
   }
 
@@ -2269,16 +2346,16 @@
       findings:       document.getElementById('proc-findings').value.trim(),
       complications:  document.getElementById('proc-complications').value.trim()
     };
-    if (!noteData.procedureName) { alert('Please enter the procedure name.'); return; }
+    if (!noteData.procedureName) { ipnToast('Enter the procedure name.', 'warn'); return; }
 
     const payload = { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'PROCEDURE', noteData };
     google.script.run
       .withSuccessHandler(function(resp) {
-        if (!resp.success) { alert(resp.message); return; }
+        if (!resp.success) { ipnToast(resp.message, 'err'); return; }
         _getModal_('modalIPProcedureNote').hide();
         injectTimelineItem({ author: resp.author || _signingAs(), timestamp: new Date().toLocaleString(), roleType: 'PROCEDURE', shift: _getShift(), noteData });
       })
-      .withFailureHandler(function(e) { alert(e.message); })
+      .withFailureHandler(function(e) { ipnToast(e.message, 'err'); })
       .saveIPNote(payload, window.sessionToken);
   }
 
@@ -2332,7 +2409,7 @@
     const text = document.getElementById('handover-output-box').innerText;
     if (!text || text.startsWith('Click')) return;
     navigator.clipboard.writeText(text).then(function() {
-      alert('Handover summary copied to clipboard.');
+      ipnToast('Handover summary copied to clipboard.', 'ok');
     });
   }
 
@@ -2360,7 +2437,7 @@
   // ── 13. VOICE INPUT (BROWSER WEB SPEECH API) ────────────
   function startVoiceInput() {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice input is not supported in this browser.');
+      ipnToast('Voice input is not supported in this browser.', 'warn');
       return;
     }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -2439,6 +2516,7 @@
         }
         // Re-apply, because this lookup and the permission lookup race.
         _applyNotePermissions_();
+        _refreshDiagnosisButton_();
       })
       .withFailureHandler(function (e) {
         cont.innerHTML = '<div style="color:#f87171; font-size:0.78rem;">' + _esc(e.message) + '</div>';
@@ -2449,33 +2527,69 @@
   function ipnAddCrossConsult() {
     const ct = IPNotesModule.careTeam;
     if (!ct || !ct.addable || !ct.addable.length) {
-      alert('No other active doctors are available to add.');
+      ipnToast('No other active doctors are available to add.', 'warn');
       return;
     }
-    const lines = ct.addable.map(function (d, i) {
-      return (i + 1) + '. ' + d.name + (d.specialty ? ' (' + d.specialty + ')' : '');
-    }).join('\n');
-    const pick = prompt('Add a cross-consult to ' + ct.ipNumber + ':\n\n' + lines + '\n\nEnter the number:');
-    if (!pick) return;
-    const idx = parseInt(pick, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= ct.addable.length) {
-      alert('That is not one of the listed numbers.');
-      return;
-    }
-    const role = prompt('Team role — CROSS_CONSULT, SURGEON or ANAESTHETIST:', 'CROSS_CONSULT');
-    if (!role) return;
+    document.getElementById('xc-ip-number').value = ct.ipNumber;
 
+    const docSel = document.getElementById('xc-doctor-select');
+    docSel.innerHTML = ct.addable.map(function (d) {
+      return '<option value="' + _esc(d.doctorId) + '">' + _esc(d.name) +
+             (d.specialty ? ' — ' + _esc(d.specialty) : '') + '</option>';
+    }).join('');
+
+    // Roles come from the server so the picker can never offer a value the
+    // validator would reject — the "Junior consultant" problem.
+    const roleSel = document.getElementById('xc-role-select');
+    if (IPNotesModule.teamRoles) {
+      _fillRoleSelect_(roleSel, IPNotesModule.teamRoles);
+    } else {
+      roleSel.innerHTML = '<option>Loading...</option>';
+      google.script.run
+        .withSuccessHandler(function (roles) {
+          IPNotesModule.teamRoles = roles || [];
+          _fillRoleSelect_(roleSel, IPNotesModule.teamRoles);
+        })
+        .withFailureHandler(function () {
+          roleSel.innerHTML = '<option value="CROSS_CONSULT">Cross Consult</option>';
+        })
+        .getIPTeamRoles();
+    }
+
+    _hideErr_('xc-error');
+    _getModal_('modalIPCrossConsult').show();
+  }
+
+  function _fillRoleSelect_(sel, roles) {
+    sel.innerHTML = (roles || []).map(function (r) {
+      return '<option value="' + _esc(r.value) + '">' + _esc(r.label) + '</option>';
+    }).join('');
+  }
+
+  function ipnSubmitCrossConsult() {
+    const ct = IPNotesModule.careTeam;
+    if (!ct) return;
+    const btn = document.getElementById('xc-save-btn');
+    const doctorId = document.getElementById('xc-doctor-select').value;
+    const teamRole = document.getElementById('xc-role-select').value;
+    if (!doctorId) { _showErr_('xc-error', 'Select a doctor.'); return; }
+
+    _hideErr_('xc-error');
+    btn.disabled = true;
     google.script.run
       .withSuccessHandler(function (res) {
-        alert(res.message);
-        if (res.success) loadIPCareTeamPanel(ct.ipNumber);
+        btn.disabled = false;
+        if (!res.success) { _showErr_('xc-error', res.message); return; }
+        _getModal_('modalIPCrossConsult').hide();
+        ipnToast(res.message, 'ok');
+        loadIPCareTeamPanel(ct.ipNumber);
       })
-      .withFailureHandler(function (e) { alert('Could not add: ' + e.message); })
-      .addIPCrossConsult({
-        ipNumber: ct.ipNumber,
-        doctorId: ct.addable[idx].doctorId,
-        teamRole: role.trim().toUpperCase()
-      }, window.sessionToken);
+      .withFailureHandler(function (e) {
+        btn.disabled = false;
+        _showErr_('xc-error', e.message);
+      })
+      .addIPCrossConsult({ ipNumber: ct.ipNumber, doctorId: doctorId, teamRole: teamRole },
+                         window.sessionToken);
   }
 
   function ipnRemoveCrossConsult(entryId) {
@@ -2484,11 +2598,110 @@
     if (!confirm('Remove this doctor from the care team?')) return;
     google.script.run
       .withSuccessHandler(function (res) {
-        alert(res.message);
+        ipnToast(res.message, res.success ? 'ok' : 'warn');
         if (res.success) loadIPCareTeamPanel(ct.ipNumber);
       })
-      .withFailureHandler(function (e) { alert('Could not remove: ' + e.message); })
+      .withFailureHandler(function (e) { ipnToast('Could not remove: ' + e.message, 'err'); })
       .removeIPCrossConsult({ ipNumber: ct.ipNumber, entryId: entryId }, window.sessionToken);
+  }
+
+  // ── 13c. WORKING DIAGNOSIS ──────────────────────────────
+  function ipnOpenDiagnosis() {
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) return;
+    const box = document.getElementById('dx-editor');
+    box.value = (IPNotesModule.diagnosis || []).join('\n');
+    document.getElementById('dx-reason').value = '';
+    _hideErr_('dx-error');
+    _getModal_('modalIPDiagnosis').show();
+  }
+
+  function ipnSaveDiagnosis() {
+    const ctx = IPNotesModule.context;
+    const btn = document.getElementById('dx-save-btn');
+    const text = document.getElementById('dx-editor').value.trim();
+    if (!text) { _showErr_('dx-error', 'Enter at least one diagnosis.'); return; }
+
+    _hideErr_('dx-error');
+    btn.disabled = true;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.disabled = false;
+        if (!res.success) { _showErr_('dx-error', res.message); return; }
+        _getModal_('modalIPDiagnosis').hide();
+        ipnToast(res.message, 'ok');
+        IPNotesModule.diagnosis = res.diagnosis || [];
+        _renderDiagnosisChips_(IPNotesModule.diagnosis);
+        loadIPTimeline(ctx.ipNumber);
+      })
+      .withFailureHandler(function (e) {
+        btn.disabled = false;
+        _showErr_('dx-error', e.message);
+      })
+      .updateIPDiagnosis({
+        ipNumber:  ctx.ipNumber,
+        diagnosis: text,
+        reason:    document.getElementById('dx-reason').value.trim()
+      }, window.sessionToken);
+  }
+
+  /** Only a doctor who may write on this admission can revise the diagnosis. */
+  function _refreshDiagnosisButton_() {
+    const btn = document.getElementById('ipn-edit-dx-btn');
+    if (!btn) return;
+    const perm = IPNotesModule.permissions || {};
+    const ct   = IPNotesModule.careTeam;
+    const may  = perm.role === 'doctor' && !IPNotesModule.readOnly &&
+                 (!ct || ct.canWrite !== false);
+    btn.classList.toggle('d-none', !may);
+  }
+
+  function _renderDiagnosisChips_(list) {
+    const cont = document.getElementById('ip-diag-container');
+    if (!cont) return;
+    cont.innerHTML = (list && list.length)
+      ? list.map(function (d) { return '<span class="diag-chip">' + _esc(d) + '</span>'; }).join('')
+      : '<span class="diag-chip">Diagnosis Pending</span>';
+  }
+
+  // ── 13d. INLINE FEEDBACK ────────────────────────────────
+  /**
+   * A toast, not alert(). A browser alert in this app is rendered by the
+   * Apps Script iframe and carries "An embedded page at ...googleusercontent
+   * .com says", which shows clinicians a script URL instead of a message.
+   */
+  function ipnToast(msg, kind) {
+    let host = document.getElementById('ipn-toast-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'ipn-toast-host';
+      host.style.cssText = 'position:fixed; right:18px; bottom:18px; z-index:20000;' +
+                           'display:flex; flex-direction:column; gap:8px; max-width:380px;';
+      document.body.appendChild(host);
+    }
+    const colour = kind === 'err'  ? '#f87171'
+                 : kind === 'warn' ? '#fbbf24'
+                 : '#34d399';
+    const el = document.createElement('div');
+    el.style.cssText = 'background:#181c22; border:1px solid ' + colour +
+      '; border-left-width:4px; color:#e2e8f0; padding:12px 16px; border-radius:10px;' +
+      'font-size:0.82rem; box-shadow:0 8px 24px rgba(0,0,0,.5); cursor:pointer;';
+    el.textContent = msg;
+    el.onclick = function () { el.remove(); };
+    host.appendChild(el);
+    setTimeout(function () { el.remove(); }, kind === 'ok' ? 4000 : 8000);
+  }
+
+  function _showErr_(id, msg) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.remove('d-none');
+  }
+
+  function _hideErr_(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('d-none');
   }
 
   // ── 14. HELPERS ─────────────────────────────────────────

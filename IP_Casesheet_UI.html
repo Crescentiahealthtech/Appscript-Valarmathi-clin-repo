@@ -644,14 +644,9 @@
         chips.innerHTML = (res.team || []).map(function (t) {
           var cls = roleStyle[t.teamRole] || 'bg-secondary';
           var mine = (t.doctorId === res.selfDoctorId) ? ' border border-warning' : '';
-          var canDrop = res.canManageTeam && t.teamRole !== 'PRIMARY';
           return '<span class="badge ' + cls + mine + ' px-2 py-1" style="font-size:0.68rem;">' +
                  ipEsc(t.name) +
                  ' <span style="opacity:.75;">' + ipEsc(t.teamRole.replace('_', ' ')) + '</span>' +
-                 (canDrop
-                   ? ' <i class="fa-solid fa-xmark ms-1" style="cursor:pointer;" title="Remove from care team" ' +
-                     'onclick="ipRemoveCrossConsult(\'' + ipEsc(t.entryId) + '\')"></i>'
-                   : '') +
                  '</span>';
         }).join('') || '<span class="text-secondary small fst-italic">No team recorded</span>';
 
@@ -671,49 +666,33 @@
       .getIPCareTeamPanel(ipNumber, window.sessionToken);
   }
 
+  /**
+   * Cross-consults are managed from the IP Notes module, which has the full
+   * care-team panel. The casesheet shows the team read-only rather than
+   * carrying a second, divergent editor for the same data.
+   */
   function ipOpenCrossConsult() {
-    if (!ipCareTeamCtx || !ipCareTeamCtx.addable || !ipCareTeamCtx.addable.length) {
-      alert('No other active doctors are available to add.');
-      return;
-    }
-    var lines = ipCareTeamCtx.addable.map(function (d, i) {
-      return (i + 1) + '. ' + d.name + (d.specialty ? ' (' + d.specialty + ')' : '');
-    }).join('\n');
-    var pick = prompt('Add a cross-consult to ' + ipCareTeamCtx.ipNumber + ':\n\n' + lines +
-                      '\n\nEnter the number:');
-    if (!pick) return;
-    var idx = parseInt(pick, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= ipCareTeamCtx.addable.length) {
-      alert('That is not one of the listed numbers.');
-      return;
-    }
-    var role = prompt('Team role — CROSS_CONSULT, SURGEON or ANAESTHETIST:', 'CROSS_CONSULT');
-    if (!role) return;
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        alert(res.message);
-        if (res.success) ipLoadCareTeam(ipCareTeamCtx.ipNumber);
-      })
-      .withFailureHandler(function (e) { alert('Could not add: ' + e.message); })
-      .addIPCrossConsult({
-        ipNumber: ipCareTeamCtx.ipNumber,
-        doctorId: ipCareTeamCtx.addable[idx].doctorId,
-        teamRole: role.trim().toUpperCase()
-      }, window.sessionToken);
+    ipToast('Add or remove cross-consults from the IP Notes module for this patient.', 'warn');
   }
 
-  function ipRemoveCrossConsult(entryId) {
-    if (!ipCareTeamCtx) return;
-    if (!confirm('Remove this doctor from the care team?')) return;
-    google.script.run
-      .withSuccessHandler(function (res) {
-        alert(res.message);
-        if (res.success) ipLoadCareTeam(ipCareTeamCtx.ipNumber);
-      })
-      .withFailureHandler(function (e) { alert('Could not remove: ' + e.message); })
-      .removeIPCrossConsult({ ipNumber: ipCareTeamCtx.ipNumber, entryId: entryId },
-                            window.sessionToken);
+  function ipToast(msg, kind) {
+    let host = document.getElementById('ipcs-toast-host');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'ipcs-toast-host';
+      host.style.cssText = 'position:fixed; right:18px; bottom:18px; z-index:20000;' +
+                           'display:flex; flex-direction:column; gap:8px; max-width:380px;';
+      document.body.appendChild(host);
+    }
+    const colour = kind === 'err' ? '#f87171' : kind === 'warn' ? '#fbbf24' : '#34d399';
+    const el = document.createElement('div');
+    el.style.cssText = 'background:#181c22; border:1px solid ' + colour +
+      '; border-left-width:4px; color:#e2e8f0; padding:12px 16px; border-radius:10px;' +
+      'font-size:0.82rem; box-shadow:0 8px 24px rgba(0,0,0,.5); cursor:pointer;';
+    el.textContent = msg;
+    el.onclick = function () { el.remove(); };
+    host.appendChild(el);
+    setTimeout(function () { el.remove(); }, kind === 'ok' ? 4000 : 8000);
   }
 
   // --- UI & MINITOOLS ---

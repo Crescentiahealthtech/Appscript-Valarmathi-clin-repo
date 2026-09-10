@@ -116,6 +116,16 @@ var IPC_SECTION_RBAC = {
 /** Note types whose med/lab orders are allowed to reach downstream queues. */
 var IPC_PRESCRIBING_TYPES = ["DOCTOR", "CONSULTANT"];
 
+/** How a role's name is rendered on a signed note. */
+function ipc_authorLabel_(role, name) {
+  var n = dc_str_(name);
+  var r = dc_str_(role).toLowerCase();
+  if (!n) return "";
+  if (r === "doctor") return "Dr. " + n.replace(/^Dr\.?\s+/i, "");
+  if (r === "nurse")  return /^(staff\s+)?nurse\b/i.test(n) ? n : ("Staff Nurse " + n);
+  return n;
+}
+
 /** True if this role may author this note type. */
 function ipc_roleMayAuthor_(role, roleType) {
   var allowed = IPC_ROLE_NOTE_TYPES[dc_str_(role).toLowerCase()];
@@ -356,7 +366,7 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData) {
   if (!ipc_admissionRow_(ip)) return fail("Admission " + ip + " was not found.");
 
   // ---- doctor identity + care-team gate ---------------------------------
-  var doctorId = "", signature = "", displayName = dc_str_(sess.displayName) || dc_str_(sess.username);
+  var doctorId = "", signature = "", displayName = dc_sessionName_(sess);
 
   if (role === "doctor") {
     doctorId = dc_str_(sess.doctorId);
@@ -377,9 +387,7 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData) {
     displayName = prof.name;
   }
 
-  var authorLabel = (role === "doctor")   ? ("Dr. " + displayName.replace(/^Dr\.?\s+/i, ""))
-                  : (role === "nurse")    ? ("Staff Nurse " + displayName)
-                  : displayName;
+  var authorLabel = ipc_authorLabel_(role, displayName);
 
   var filtered = ipc_filterSections_(type, role, noteData);
 
@@ -482,7 +490,7 @@ function addIPCrossConsult(payload, sessionToken) {
       ipNumber:  ip,
       patientId: adm ? adm.row[1] : "",
       doctorId:  dc_str_(payload.doctorId),
-      teamRole:  dc_upper_(payload.teamRole) || "CROSS_CONSULT"
+      teamRole:  dc_str_(payload.teamRole) || "CROSS_CONSULT"
     }, sessionToken);
   } catch (e) {
     return { success: false, message: "Could not add cross-consult: " + e.message };
@@ -514,11 +522,25 @@ function getIPNotePermissions(sessionToken) {
     var sess = dc_validateSession_(sessionToken);
     if (!sess) return { success: false, message: "Your session has expired.", noteTypes: [] };
     var role = dc_str_(sess.role).toLowerCase();
+    var doctorId = dc_str_(sess.doctorId);
+
+    // Display_Name from the Doctors sheet is the authority for a doctor's
+    // name. The session carries the login username, which is what was being
+    // shown as "Dr. doctor1".
+    var name = dc_sessionName_(sess);
+    var signature = "";
+    if (role === "doctor" && doctorId) {
+      var prof = dc_getDoctorById_(doctorId);
+      if (prof) { name = prof.name || name; signature = prof.signature; }
+    }
+
     return {
       success: true,
       role: role,
-      doctorId: dc_str_(sess.doctorId),
-      displayName: dc_str_(sess.displayName) || dc_str_(sess.username),
+      doctorId: doctorId,
+      displayName: name,
+      signature: signature,
+      authorLabel: ipc_authorLabel_(role, name),
       noteTypes: (IPC_ROLE_NOTE_TYPES[role] || []).slice(),
       canPrescribe: (role === "doctor")
     };
@@ -631,4 +653,88 @@ function verifyIPCareTeamCoverage() {
 
   Logger.log(report);
   return report;
+}
+
+// ---------------------------------------------------------------------------
+// SECTION G — WORKING DIAGNOSIS
+// The admission carries the working diagnosis; the casesheet carries the
+// diagnosis AT ADMISSION and is never rewritten. A diagnosis that evolves
+// during the stay belongs on the admission plus a timeline entry, so the
+// change is both current and auditable.
+// ---------------------------------------------------------------------------
+
+/** Current working diagnosis for an admission. */
+function getIPDiagnosis(ipNumber, sessionToken) {
+  try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message, diagnosis: [] };
+
+    var adm = ipc_admissionRow_(ipNumber);
+    if (!adm) return { success: false, message: "Admission not found.", diagnosis: [] };
+
+    var raw = dc_str_(adm.row[10]);   // [10] Diagnosis
+    return {
+      success: true,
+      raw: raw,
+      diagnosis: raw ? raw.split(/[,\n]/).map(function (d) { return d.trim(); })
+                          .filter(Boolean) : []
+    };
+  } catch (e) {
+    return { success: false, message: "Diagnosis unavailable: " + e.message, diagnosis: [] };
+  }
+}
+
+/**
+ * Updates the working diagnosis. Doctors on the care team only — a diagnosis
+ * is a clinical judgement, not a demographic field.
+ */
+function updateIPDiagnosis(payload, sessionToken) {
+  // No lock: the only sheet write here is a single cell, and the timeline
+  // entry goes through saveIPNote(), which takes the script lock itself.
+  // Holding it across that call would deadlock the execution.
+  try {
+    payload = payload || {};
+
+    var w = resolveIPWrite_(sessionToken, payload.ipNumber, "DOCTOR", {});
+    if (!w.ok) return { success: false, message: w.message };
+
+    var list = String(payload.diagnosis || "")
+      .split(/[,\n]/).map(function (d) { return d.trim(); }).filter(Boolean);
+    if (!list.length) {
+      return { success: false, message: "Enter at least one diagnosis." };
+    }
+
+    var adm = ipc_admissionRow_(payload.ipNumber);
+    if (!adm) return { success: false, message: "Admission not found." };
+
+    var previous = dc_str_(adm.row[10]);
+    var next = list.join(", ");
+    if (previous === next) {
+      return { success: true, message: "Diagnosis unchanged.", diagnosis: list };
+    }
+
+    adm.sheet.getRange(adm.rowNumber, 11).setValue(next);   // [10] -> col 11
+    SpreadsheetApp.flush();
+
+    // The timeline entry is what makes the change auditable: who revised the
+    // diagnosis, when, from what, and why.
+    saveIPNote({
+      ipNumber:  payload.ipNumber,
+      patientId: adm.row[1],
+      roleType:  "DOCTOR",
+      flags:     "DIAGNOSIS",
+      noteData:  {
+        assessment: "Working diagnosis revised: " + next,
+        diagnosis:  next,
+        plan:       previous
+          ? ("Previous: " + previous +
+             (payload.reason ? "\nReason: " + dc_str_(payload.reason) : ""))
+          : (payload.reason ? "Reason: " + dc_str_(payload.reason) : "")
+      }
+    }, sessionToken);
+
+    return { success: true, message: "Working diagnosis updated.", diagnosis: list };
+  } catch (e) {
+    return { success: false, message: "Could not update diagnosis: " + e.message };
+  }
 }
