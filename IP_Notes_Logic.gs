@@ -405,6 +405,7 @@ function saveIPNote(payload, sessionToken) {
     put("Author_Signature_Snapshot", w.signature);
     put("Author_Username", w.username);
     sheet.appendRow(row);
+    dc_invalidate_("IP_Timeline_DB");
 
     // ── Side Effects by Note Type ──────────────────────
     // Gated on w.mayPrescribe, not on roleType alone: a nurse cannot reach

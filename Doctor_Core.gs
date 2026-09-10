@@ -20,16 +20,57 @@ var DC_ROLES_VIEW_ALL   = ["admin", "receptionist", "reception", "nurse",
 // Never hard-code an index for a column added by this migration.
 // ============================================================================
 
-/** Returns { headerName : zeroBasedIndex } for a sheet's row 1. */
+// ---------------------------------------------------------------------------
+// PER-EXECUTION MEMO CACHE
+//
+// Every helper below used to hit the Spreadsheet service on each call. A
+// single casesheet save called dc_ensureColumn_ once per header — 37 separate
+// getRange().getValues() round trips just to confirm columns that were already
+// there — and read the Doctors sheet three or four more times on top. Service
+// round trips, not computation, are what made saving and loading slow.
+//
+// An Apps Script execution is short-lived and single-threaded, so a plain
+// object is a safe cache for its lifetime: nothing else can mutate the sheet
+// mid-execution except this code, which invalidates on write.
+// ---------------------------------------------------------------------------
+var DC_CACHE = { headers: {}, sheets: {} };
+
+/** Drops cached state for a sheet after this execution changes it. */
+function dc_invalidate_(sheetName) {
+  var k = String(sheetName || "");
+  delete DC_CACHE.headers[k];
+  delete DC_CACHE.sheets[k];
+}
+
+/** Clears everything. Call at the top of a long entry point that writes. */
+function dc_resetCache_() { DC_CACHE = { headers: {}, sheets: {} }; }
+
+/** Returns { headerName : zeroBasedIndex } for a sheet's row 1. Memoized. */
 function dc_headerMap_(sheet) {
-  if (!sheet || sheet.getLastColumn() === 0) return {};
-  var hdr = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!sheet) return {};
+  var key = sheet.getName();
+  if (DC_CACHE.headers[key]) return DC_CACHE.headers[key];
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return {};
+  var hdr = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   var map = {};
   for (var i = 0; i < hdr.length; i++) {
-    var key = String(hdr[i] || "").trim();
-    if (key && map[key] === undefined) map[key] = i;
+    var k = String(hdr[i] || "").trim();
+    if (k && map[k] === undefined) map[k] = i;
   }
+  DC_CACHE.headers[key] = map;
   return map;
+}
+
+/** Whole sheet as display values, memoized for this execution. */
+function dc_sheetValues_(sheet) {
+  if (!sheet) return [];
+  var key = sheet.getName();
+  if (DC_CACHE.sheets[key]) return DC_CACHE.sheets[key];
+  var v = (sheet.getLastRow() < 1) ? [] : sheet.getDataRange().getDisplayValues();
+  DC_CACHE.sheets[key] = v;
+  return v;
 }
 
 /** Zero-based index of a header, or -1. */
@@ -47,10 +88,15 @@ function dc_ensureColumn_(sheet, headerName) {
        .setValue(headerName)
        .setFontWeight("bold")
        .setBackground("#d9ead3");
+  dc_invalidate_(sheet.getName());
   return newCol - 1;
 }
 
-/** Creates a sheet with headers if absent. Idempotent. */
+/**
+ * Creates a sheet with headers if absent, or appends any that are missing.
+ * Idempotent, and — the point of the rewrite — ONE read and at most one write
+ * regardless of how many headers are passed.
+ */
 function dc_ensureSheet_(ss, name, headers) {
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
@@ -60,8 +106,25 @@ function dc_ensureSheet_(ss, name, headers) {
          .setFontWeight("bold")
          .setBackground("#d9ead3");
     sheet.setFrozenRows(1);
-  } else {
-    headers.forEach(function (h) { dc_ensureColumn_(sheet, h); });
+    dc_invalidate_(name);
+    return sheet;
+  }
+
+  // One header read, then a single batched append of whatever is absent.
+  var map = dc_headerMap_(sheet);
+  var missing = [];
+  for (var i = 0; i < headers.length; i++) {
+    if (map[headers[i]] === undefined && missing.indexOf(headers[i]) === -1) {
+      missing.push(headers[i]);
+    }
+  }
+  if (missing.length) {
+    var startCol = sheet.getLastColumn() + 1;
+    sheet.getRange(1, startCol, 1, missing.length)
+         .setValues([missing])
+         .setFontWeight("bold")
+         .setBackground("#d9ead3");
+    dc_invalidate_(name);
   }
   return sheet;
 }
@@ -313,7 +376,7 @@ function dc_getDoctorById_(doctorId) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Doctors");
     if (!sh) return null;
-    var data = sh.getDataRange().getDisplayValues();
+    var data = dc_sheetValues_(sh);
     var m = dc_headerMap_(sh);
     var id = dc_upper_(doctorId);
     if (!id) return null;
@@ -568,12 +631,19 @@ function getIPCareTeam(ipNumber, sessionToken) {
     if (!scope.ok) return { success: false, message: scope.message, team: [] };
 
     var sh = dc_careTeamSheet_();
-    var data = sh.getDataRange().getDisplayValues();
+    var data = dc_sheetValues_(sh);
     var ip = dc_upper_(ipNumber);
     var team = [];
+    var seen = {};
     for (var i = 1; i < data.length; i++) {
       if (dc_upper_(data[i][2]) !== ip) continue;
       if (dc_upper_(data[i][6]) !== "TRUE") continue;
+      // Concurrent requests could each seed the primary consultant before
+      // either had written, so an admission could carry the same doctor
+      // twice. Rows are never deleted, so de-duplicate on read as well.
+      var dedupe = dc_upper_(data[i][4]) + "|" + dc_upper_(data[i][5]);
+      if (seen[dedupe]) continue;
+      seen[dedupe] = true;
       var d = dc_getDoctorById_(data[i][4]);
       team.push({
         entryId:  dc_str_(data[i][0]),
@@ -608,7 +678,7 @@ function addIPCareTeamMember(payload, sessionToken) {
     }
 
     var sh = dc_careTeamSheet_();
-    var data = sh.getDataRange().getDisplayValues();
+    var data = dc_sheetValues_(sh);
     for (var i = 1; i < data.length; i++) {
       if (dc_upper_(data[i][2]) === ip &&
           dc_upper_(data[i][4]) === dc_upper_(w.doctorId) &&
@@ -630,6 +700,7 @@ function addIPCareTeamMember(payload, sessionToken) {
       ""
     ]);
 
+    dc_invalidate_("IP_Care_Team");
     SpreadsheetApp.flush();
     logAudit_(w.sess, "CARE_TEAM_ADD", "IP_Admission", ip,
               { doctorId: w.doctorId, teamRole: teamRole });
@@ -652,7 +723,7 @@ function removeIPCareTeamMember(entryId, sessionToken) {
 
     var sh = dc_careTeamSheet_();
     var m = dc_headerMap_(sh);
-    var data = sh.getDataRange().getDisplayValues();
+    var data = dc_sheetValues_(sh);
     var target = dc_upper_(entryId);
 
     for (var i = 1; i < data.length; i++) {
@@ -662,6 +733,7 @@ function removeIPCareTeamMember(entryId, sessionToken) {
       }
       sh.getRange(i + 1, m["Active"] + 1).setValue("FALSE");
       sh.getRange(i + 1, m["Removed_At"] + 1).setValue(new Date());
+      dc_invalidate_("IP_Care_Team");
       SpreadsheetApp.flush();
       logAudit_(sess, "CARE_TEAM_REMOVE", "IP_Admission", dc_str_(data[i][2]),
                 { entryId: entryId });
@@ -679,7 +751,7 @@ function removeIPCareTeamMember(entryId, sessionToken) {
 function dc_isOnCareTeam_(ipNumber, doctorId) {
   try {
     var sh = dc_careTeamSheet_();
-    var data = sh.getDataRange().getDisplayValues();
+    var data = dc_sheetValues_(sh);
     var ip = dc_upper_(ipNumber), d = dc_upper_(doctorId);
     for (var i = 1; i < data.length; i++) {
       if (dc_upper_(data[i][2]) === ip &&
