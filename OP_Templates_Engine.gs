@@ -818,12 +818,26 @@ function getDiagnosisDrugSuggestions(diagnosis, doctorId, sessionToken) {
   }
 }
 
+
 // ============================================================================
-// SECTION F — FRONTEND ADAPTER: single assist call for the diagnosis box
-// Wraps getDiagnosisDrugSuggestions and adds this doctor's own lab + advice
-// habits for the same diagnosis. Returns drug CLASSES as [] by design —
-// there is no class table, and inventing one is not safe.
+// SECTION F — FRONTEND ADAPTER: one assist call for the diagnosis box
+// ----------------------------------------------------------------------------
+// OP_Module.html calls getAssistForDiagnosis(). It did not exist, which is why
+// every diagnosis keystroke fell into withFailureHandler.
+//
+// This wraps getDiagnosisDrugSuggestions() and adds the same doctor's own lab
+// and advice habits for a matching diagnosis.
+//
+// `classes` is returned EMPTY on purpose. There is no drug-class table in this
+// codebase, and hardcoding one inside a template engine would put unsourced
+// therapeutic guidance in front of a prescriber with no audit trail.
+// Column indices below (21 Diagnosis, 23 Labs JSON, 24 Advice) come from the
+// rowData block in OP_Database_Engine.gs — they are not assumed.
 // ============================================================================
+
+var OPT_ASSIST_SCAN_LIMIT = 60;   // recent history is what reflects habit
+var OPT_ASSIST_MAX_LABS   = 6;
+
 function getAssistForDiagnosis(diagnosis, doctorId, sessionToken) {
   var blank = { success: true, matched: "", yours: [], classes: [],
                 labs: [], advice: "", reviewDays: 0, message: "" };
@@ -833,7 +847,8 @@ function getAssistForDiagnosis(diagnosis, doctorId, sessionToken) {
 
     var drugs = getDiagnosisDrugSuggestions(dx, doctorId, sessionToken);
     if (!drugs || !drugs.success) {
-      return { success: false, message: (drugs && drugs.message) || "Assist unavailable.",
+      return { success: false,
+               message: (drugs && drugs.message) || "Assist unavailable.",
                yours: [], classes: [], labs: [], advice: "", reviewDays: 0 };
     }
 
@@ -849,37 +864,39 @@ function getAssistForDiagnosis(diagnosis, doctorId, sessionToken) {
       var tokens = opt_dxTokens_(dx);
       var labTally = {}, adviceTally = {}, scanned = 0;
 
-      for (var i = data.length - 1; i >= 1 && scanned < 60; i--) {
+      for (var i = data.length - 1; i >= 1 && scanned < OPT_ASSIST_SCAN_LIMIT; i--) {
         if (me && docCol !== -1) {
           var rowDoc = dc_str_(data[i][docCol]) || DC_DEFAULT_DOCTOR;
           if (dc_upper_(rowDoc) !== me) continue;
         }
-        var rowDx = data[i][21];              // V — Diagnosis
+
+        var rowDx = data[i][21];                 // V — Diagnosis
         if (!rowDx) continue;
 
-        var rowTokens = opt_dxTokens_(rowDx), hit = false;
-        for (var t = 0; t < tokens.length && !hit; t++) {
-          if (rowTokens.indexOf(tokens[t]) !== -1) hit = true;
+        var rowTokens = opt_dxTokens_(rowDx), overlap = false;
+        for (var t = 0; t < tokens.length && !overlap; t++) {
+          if (rowTokens.indexOf(tokens[t]) !== -1) overlap = true;
         }
-        if (!hit) continue;
+        if (!overlap) continue;
         scanned++;
 
-        try {                                 // X — Labs JSON
-          (JSON.parse(data[i][23] || "[]") || []).forEach(function (l) {
+        try {                                    // X — Labs JSON
+          var rowLabs = JSON.parse(data[i][23] || "[]") || [];
+          rowLabs.forEach(function (l) {
             if (dc_upper_(l.type) !== "ORDER") return;
             var n = dc_str_(l.testName);
             if (n) labTally[n] = (labTally[n] || 0) + 1;
           });
-        } catch (e) { /* malformed row — skip, never fail the call */ }
+        } catch (e) { /* malformed row — skip it, never fail the whole call */ }
 
-        // Y — Advice. saveOPEncounter appends "| Future Labs: ..." — drop that.
+        // Y — Advice. saveOPEncounter appends "| Future Labs: ..." — strip that.
         var adv = dc_str_(data[i][24]).split("|")[0].trim();
         if (adv) adviceTally[adv] = (adviceTally[adv] || 0) + 1;
       }
 
       labs = Object.keys(labTally)
         .sort(function (a, b) { return labTally[b] - labTally[a]; })
-        .slice(0, 6);
+        .slice(0, OPT_ASSIST_MAX_LABS);
 
       var advKeys = Object.keys(adviceTally)
         .sort(function (a, b) { return adviceTally[b] - adviceTally[a]; });

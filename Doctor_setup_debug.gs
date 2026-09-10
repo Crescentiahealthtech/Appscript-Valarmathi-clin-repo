@@ -125,4 +125,8 @@ function debugDoctorSetup() {
   return out.join("\n");
 }
 
-
+// getOPDOrderableTests() was REMOVED from this file.
+// It duplicated the canonical version in Lab_OPD_Bridge.gs and returned a
+// different shape ({groups:[]} instead of {panels,tests,packages}). Apps
+// Script silently lets the last-loaded definition win, which was emptying
+// the OPD investigation catalog. Lab_OPD_Bridge.gs is now the only one.

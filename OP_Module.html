@@ -685,6 +685,9 @@ function initializeOPWorkspaceState() {
     if (document.getElementById('op-rx-tbody').innerHTML.trim() === '') addOPRxRow();
     if (document.getElementById('op-lab-results-tbody').innerHTML.trim() === '') addOPLabResultRow();
 
+    // Ordered on purpose: loadConsultDoctors() resolves window.currentDoctorId,
+    // and only then does onConsultDoctorChanged() pull composer + templates.
+    // Firing them in parallel used to send a blank doctorId and starve the caches.
     opLoadIntegrationData();
     loadConsultDoctors();
 
@@ -707,14 +710,12 @@ function initializeOPWorkspaceState() {
     renderSafetyBar([]);
 }
 
-// FIND: function toggleAssistPanel() { ... }
-// REPLACE WITH:
 function openAssistPanel() {
     const p = document.getElementById('op-assist-panel');
     const b = document.getElementById('btn-assist-toggle');
     if (!p || !p.classList.contains('d-none')) return;
     p.classList.remove('d-none');
-    b.classList.remove('btn-outline-light'); b.classList.add('btn-light');
+    if (b) { b.classList.remove('btn-outline-light'); b.classList.add('btn-light'); }
     renderAssistRecent();
 }
 
@@ -723,16 +724,17 @@ function closeAssistPanel() {
     const b = document.getElementById('btn-assist-toggle');
     if (!p || p.classList.contains('d-none')) return;
     p.classList.add('d-none');
-    b.classList.add('btn-outline-light'); b.classList.remove('btn-light');
+    if (b) { b.classList.add('btn-outline-light'); b.classList.remove('btn-light'); }
 }
 
 function toggleAssistPanel() {
     const p = document.getElementById('op-assist-panel');
-    p.classList.contains('d-none') ? openAssistPanel() : closeAssistPanel();
+    if (!p) return;
+    if (p.classList.contains('d-none')) openAssistPanel(); else closeAssistPanel();
 }
 
-// Auto-collapse: the assist is a lookup, not a permanent column. The moment
-// the doctor moves into another section it gets out of the way.
+// Auto-collapse. The assist is a lookup, not a permanent column: the moment
+// the doctor moves into another section of the form it gets out of the way.
 document.addEventListener('focusin', function (e) {
     const p = document.getElementById('op-assist-panel');
     if (!p || p.classList.contains('d-none')) return;
@@ -872,7 +874,7 @@ function showWorkupHint(complaintText) {
 }
 
 function addWorkupLab(name) {
-    // Suggested investigations are ORDERS, not future advice. Tick the real
+    // A suggested investigation is an ORDER, not future advice. Tick the real
     // catalog checkbox so the lab request carries a TestID, not a free string.
     const target = String(name).trim().toLowerCase();
     let hit = null;
@@ -882,19 +884,21 @@ function addWorkupLab(name) {
 
     if (hit) {
         hit.checked = true;
-        compileOPLabs();
     } else {
-        // Not in the catalog — queue it as an external order, still not advice.
+        // Not in our catalog - queue it as an external order, still not advice.
         const other = document.getElementById('op-lab-other');
-        const cur = (other.value || '').trim();
-        if (cur.toLowerCase().indexOf(target) === -1) {
-            other.value = cur ? cur + ', ' + name : name;
+        if (other) {
+            const cur = (other.value || '').trim();
+            if (cur.toLowerCase().indexOf(target) === -1) {
+                other.value = cur ? cur + ', ' + name : name;
+            }
         }
-        compileOPLabs();
     }
+    compileOPLabs();
 
+    // Grey the chip so the doctor can see it has been taken.
     document.querySelectorAll('.op-chip').forEach(function (chip) {
-        if (chip.innerText.trim().replace(/^\+/, '').trim().toLowerCase() === target) {
+        if (chip.innerText.replace(/^\s*\+\s*/, '').trim().toLowerCase() === target) {
             chip.style.opacity = '0.45';
         }
     });
@@ -1216,14 +1220,15 @@ function saveCurrentAsTemplate() {
 function previewBundle(idx) {
     const b = (opComposer.bundles || [])[idx];
     const box = document.getElementById('op-bundle-detail');
-    if (!box) { console.error('op-bundle-detail missing'); return; }
-    if (!b) { box.innerHTML = '<span class="text-danger small">Bundle not found — reload the module.</span>'; return; }
+    if (!box) { console.error('op-bundle-detail is missing from the DOM.'); return; }
+    if (!b) { box.innerHTML = '<span class="text-danger small">Bundle not found - reload the module.</span>'; return; }
 
     openAssistPanel();
+    const items = b.items || [];
     box.innerHTML = '<div class="op-recall-card">' +
         '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
         (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
-        (b.items || []).map(function (it, j) {
+        items.map(function (it, j) {
             return '<div class="d-flex justify-content-between align-items-center py-1">' +
                    '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
                    ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
@@ -1231,7 +1236,7 @@ function previewBundle(idx) {
                    'onclick="addBundleItem(' + idx + ',' + j + ')">+ Add</button></div>';
         }).join('') +
         '<div class="mt-2 text-end"><button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
-        'onclick="addWholeBundle(' + idx + ')">+ Add all ' + (b.items || []).length + '</button></div>' +
+        'onclick="addWholeBundle(' + idx + ')">+ Add all ' + items.length + '</button></div>' +
         '</div>';
 }
 
@@ -1322,7 +1327,9 @@ function renderAssistSearch() {
         const hay = (b.name + ' ' + (b.indication || '') + ' ' +
                      (b.items || []).map(function (it) { return it.drugName || ''; }).join(' ')).toLowerCase();
         if (hay.indexOf(q) === -1) return;
-        
+        hits.push({ kind: 'BND', id: String(i), label: b.name, meta: b.itemCount + ' medicines' });
+    });
+
     if (!hits.length) {
         box.classList.remove('d-none');
         box.innerHTML = '<div class="label-bright small" style="opacity:.6;">Nothing matches "' + opEsc(q) + '".</div>';
@@ -1391,8 +1398,8 @@ function onConsultDoctorChanged() {
     const sel = document.getElementById('op-doctor-select');
     window.currentDoctorId = sel.value || '';
     sel.style.borderColor = sel.value ? 'var(--border-color,#334155)' : '#ef4444';
-    // Always reload. An admin with no linked doctor still needs the clinic
-    // and seed phrase tiers — the old `if (sel.value)` guard starved them.
+    // Always reload. An admin with no linked doctor profile still needs the
+    // clinic and seed phrase tiers - the old `if (sel.value)` guard starved them.
     loadComposerContext();
     loadConsultTemplates();
 }
@@ -1407,14 +1414,16 @@ function queueDiagnosisAssist() {
 }
 
 function onDiagnosisChanged() {
-    const dx = document.getElementById('clin-diagnosis').value.trim();
+    clearTimeout(_dxAssistTimer);
+    const dxEl = document.getElementById('clin-diagnosis');
     const body = document.getElementById('op-assist-body');
     const head = document.getElementById('op-assist-dx-head');
     const sect = document.getElementById('op-assist-dx-section');
     const addBtn = document.getElementById('btn-add-selected');
-    if (!body || !sect) return;
+    if (!dxEl || !body || !sect) return;
+    const dx = dxEl.value.trim();
 
-    addBtn.classList.add('d-none');
+    if (addBtn) addBtn.classList.add('d-none');
     if (!dx) {
         sect.classList.add('d-none');
         head.innerText = 'Treatment assist';
@@ -1429,14 +1438,16 @@ function onDiagnosisChanged() {
     google.script.run
         .withSuccessHandler(function (res) {
             if (!res || !res.success) {
-                body.innerHTML = '<span class="text-danger small">' + opEsc((res && res.message) || 'Assist unavailable.') + '</span>';
+                body.innerHTML = '<span class="text-danger small">' +
+                                 opEsc((res && res.message) || 'Assist unavailable.') + '</span>';
                 return;
             }
             window._opAssist = res;
             renderAssist(res);
         })
         .withFailureHandler(function (e) {
-            body.innerHTML = '<span class="text-danger small">Assist unavailable: ' + opEsc(e && e.message) + '</span>';
+            body.innerHTML = '<span class="text-danger small">Assist unavailable: ' +
+                             opEsc(e && e.message) + '</span>';
         })
         .getAssistForDiagnosis(dx, window.currentDoctorId || '', window.sessionToken);
 }
@@ -1504,7 +1515,8 @@ function addSelectedAssist() {
     document.querySelectorAll('.ax-your:checked').forEach(function (c) {
         const s = res.yours[parseInt(c.dataset.idx, 10)];
         if (!s) return;
-        addOPRxRow({ type: 'Tab', drugName: s.drugName, sig: s.sig, duration: s.duration, comments: s.strength || '' });        added++;
+        addOPRxRow({ type: 'Tab', drugName: s.drugName, sig: s.sig, duration: s.duration, comments: s.strength || '' });
+        added++;
     });
 
     document.querySelectorAll('.ax-class:checked').forEach(function (c) {
