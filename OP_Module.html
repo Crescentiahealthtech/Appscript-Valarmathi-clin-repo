@@ -162,6 +162,7 @@
     <div class="d-flex flex-wrap gap-2 align-items-center" id="op-assist-recent"></div>
 
     <div id="op-recall-slot" class="mt-2"></div>
+    <div id="op-bundle-detail" class="mt-2"></div>
 
     <div id="op-assist-dx-section" class="op-assist-sec d-none">
       <div class="d-flex justify-content-between align-items-center mb-2">
@@ -309,7 +310,7 @@
             </select>
             <!-- Wrapped the input so dropdowns anchor exactly to the text box -->
             <div class="position-relative w-100">
-                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="clin-diagnosis" onchange="onDiagnosisChanged()">
+                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="clin-diagnosis" oninput="queueDiagnosisAssist()" onchange="onDiagnosisChanged()">
             </div>
         </div>
       </div>
@@ -684,10 +685,8 @@ function initializeOPWorkspaceState() {
     if (document.getElementById('op-rx-tbody').innerHTML.trim() === '') addOPRxRow();
     if (document.getElementById('op-lab-results-tbody').innerHTML.trim() === '') addOPLabResultRow();
 
-    loadConsultDoctors();
     opLoadIntegrationData();
-    loadComposerContext();
-    loadConsultTemplates();
+    loadConsultDoctors();
 
     document.querySelectorAll('select[id^="op-se-"]').forEach(dd => {
         dd.addEventListener('change', function () {
@@ -708,15 +707,40 @@ function initializeOPWorkspaceState() {
     renderSafetyBar([]);
 }
 
-function toggleAssistPanel() {
+// FIND: function toggleAssistPanel() { ... }
+// REPLACE WITH:
+function openAssistPanel() {
     const p = document.getElementById('op-assist-panel');
     const b = document.getElementById('btn-assist-toggle');
-    const hidden = p.classList.contains('d-none');
-    p.classList.toggle('d-none', !hidden);
-    b.classList.toggle('btn-outline-light', !hidden);
-    b.classList.toggle('btn-light', hidden);
-    if (hidden) { renderAssistRecent(); }
+    if (!p || !p.classList.contains('d-none')) return;
+    p.classList.remove('d-none');
+    b.classList.remove('btn-outline-light'); b.classList.add('btn-light');
+    renderAssistRecent();
 }
+
+function closeAssistPanel() {
+    const p = document.getElementById('op-assist-panel');
+    const b = document.getElementById('btn-assist-toggle');
+    if (!p || p.classList.contains('d-none')) return;
+    p.classList.add('d-none');
+    b.classList.add('btn-outline-light'); b.classList.remove('btn-light');
+}
+
+function toggleAssistPanel() {
+    const p = document.getElementById('op-assist-panel');
+    p.classList.contains('d-none') ? openAssistPanel() : closeAssistPanel();
+}
+
+// Auto-collapse: the assist is a lookup, not a permanent column. The moment
+// the doctor moves into another section it gets out of the way.
+document.addEventListener('focusin', function (e) {
+    const p = document.getElementById('op-assist-panel');
+    if (!p || p.classList.contains('d-none')) return;
+    if (p.contains(e.target)) return;
+    if (e.target.closest('#btn-assist-toggle')) return;
+    if (e.target.closest('#clin-diagnosis')) return;   // typing a Dx keeps it open
+    closeAssistPanel();
+});
 
 // ============================================================================
 // COMPOSER CONTEXT — phrases (seed + clinic + personal), bundles, exam defaults
@@ -848,10 +872,32 @@ function showWorkupHint(complaintText) {
 }
 
 function addWorkupLab(name) {
-    const el = document.getElementById('op-future-labs');
-    const cur = el.value.trim();
-    if (cur.toLowerCase().indexOf(name.toLowerCase()) !== -1) return;
-    el.value = cur ? cur + ', ' + name : name;
+    // Suggested investigations are ORDERS, not future advice. Tick the real
+    // catalog checkbox so the lab request carries a TestID, not a free string.
+    const target = String(name).trim().toLowerCase();
+    let hit = null;
+    document.querySelectorAll('.op-lab-chk').forEach(function (c) {
+        if (!hit && String(c.dataset.name || '').trim().toLowerCase() === target) hit = c;
+    });
+
+    if (hit) {
+        hit.checked = true;
+        compileOPLabs();
+    } else {
+        // Not in the catalog — queue it as an external order, still not advice.
+        const other = document.getElementById('op-lab-other');
+        const cur = (other.value || '').trim();
+        if (cur.toLowerCase().indexOf(target) === -1) {
+            other.value = cur ? cur + ', ' + name : name;
+        }
+        compileOPLabs();
+    }
+
+    document.querySelectorAll('.op-chip').forEach(function (chip) {
+        if (chip.innerText.trim().replace(/^\+/, '').trim().toLowerCase() === target) {
+            chip.style.opacity = '0.45';
+        }
+    });
 }
 
 function setDiagnosisFromHint(dx) {
@@ -1170,26 +1216,23 @@ function saveCurrentAsTemplate() {
 function previewBundle(idx) {
     const b = (opComposer.bundles || [])[idx];
     const box = document.getElementById('op-bundle-detail');
-    if (!b || !box) return;
+    if (!box) { console.error('op-bundle-detail missing'); return; }
+    if (!b) { box.innerHTML = '<span class="text-danger small">Bundle not found — reload the module.</span>'; return; }
 
-    box.insertAdjacentHTML('afterbegin', '<span class="op-chip" id="tpl-busy"><i class="fa-solid fa-spinner fa-spin"></i> Previewing...</span>');
-
-    setTimeout(() => {
-        document.getElementById('tpl-busy')?.remove();
-        box.innerHTML = '<div class="op-recall-card">' +
-            '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
-            (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
-            b.items.map(function (it, j) {
-                return '<div class="d-flex justify-content-between align-items-center py-1">' +
-                       '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
-                       ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
-                       '<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.65rem;" ' +
-                       'onclick="addBundleItem(' + idx + ',' + j + ')">+ Add</button></div>';
-            }).join('') +
-            '<div class="mt-2 text-end"><button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
-            'onclick="addWholeBundle(' + idx + ')">+ Add all ' + b.items.length + '</button></div>' +
-            '</div>';
-    }, 100);
+    openAssistPanel();
+    box.innerHTML = '<div class="op-recall-card">' +
+        '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
+        (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
+        (b.items || []).map(function (it, j) {
+            return '<div class="d-flex justify-content-between align-items-center py-1">' +
+                   '<span>' + opEsc(it.type) + ' ' + opEsc(it.drugName) +
+                   ' <span class="op-evidence">' + opEsc(it.sig || '') + ' ' + opEsc(it.duration || '') + '</span></span>' +
+                   '<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:0.65rem;" ' +
+                   'onclick="addBundleItem(' + idx + ',' + j + ')">+ Add</button></div>';
+        }).join('') +
+        '<div class="mt-2 text-end"><button class="btn btn-sm btn-success py-0 px-2" style="font-size:0.65rem;" ' +
+        'onclick="addWholeBundle(' + idx + ')">+ Add all ' + (b.items || []).length + '</button></div>' +
+        '</div>';
 }
 
 function addBundleItem(bi, ii) {
@@ -1276,10 +1319,10 @@ function renderAssistSearch() {
         hits.push({ kind: 'TPL', id: t.templateId, label: t.name, meta: 'Template' });
     });
     (opComposer.bundles || []).forEach(function (b, i) {
-        if ((b.name + ' ' + (b.indication || '')).toLowerCase().indexOf(q) === -1) return;
-        hits.push({ kind: 'BND', id: String(i), label: b.name, meta: b.itemCount + ' medicines' });
-    });
-
+        const hay = (b.name + ' ' + (b.indication || '') + ' ' +
+                     (b.items || []).map(function (it) { return it.drugName || ''; }).join(' ')).toLowerCase();
+        if (hay.indexOf(q) === -1) return;
+        
     if (!hits.length) {
         box.classList.remove('d-none');
         box.innerHTML = '<div class="label-bright small" style="opacity:.6;">Nothing matches "' + opEsc(q) + '".</div>';
@@ -1348,35 +1391,53 @@ function onConsultDoctorChanged() {
     const sel = document.getElementById('op-doctor-select');
     window.currentDoctorId = sel.value || '';
     sel.style.borderColor = sel.value ? 'var(--border-color,#334155)' : '#ef4444';
-    if (sel.value) { loadComposerContext(); loadConsultTemplates(); }
+    // Always reload. An admin with no linked doctor still needs the clinic
+    // and seed phrase tiers — the old `if (sel.value)` guard starved them.
+    loadComposerContext();
+    loadConsultTemplates();
 }
 
 // ============================================================================
 // ASSIST — diagnosis driven, tick and add. Never auto-prescribes.
 // ============================================================================
+let _dxAssistTimer = null;
+function queueDiagnosisAssist() {
+    clearTimeout(_dxAssistTimer);
+    _dxAssistTimer = setTimeout(onDiagnosisChanged, 600);
+}
+
 function onDiagnosisChanged() {
     const dx = document.getElementById('clin-diagnosis').value.trim();
     const body = document.getElementById('op-assist-body');
     const head = document.getElementById('op-assist-dx-head');
+    const sect = document.getElementById('op-assist-dx-section');
     const addBtn = document.getElementById('btn-add-selected');
-    if (!body) return;
+    if (!body || !sect) return;
 
     addBtn.classList.add('d-none');
     if (!dx) {
+        sect.classList.add('d-none');
         head.innerText = 'Treatment assist';
-        body.innerHTML = '<span class="label-bright small" style="opacity:.5;">Enter a diagnosis to see suggestions.</span>';
+        body.innerHTML = '';
         return;
     }
 
+    sect.classList.remove('d-none');
+    openAssistPanel();
     body.innerHTML = '<span class="label-bright small"><i class="fa-solid fa-spinner fa-spin"></i> Looking up ' + opEsc(dx) + '...</span>';
 
     google.script.run
         .withSuccessHandler(function (res) {
-            if (!res || !res.success) { body.innerHTML = '<span class="text-danger small">' + opEsc((res && res.message) || 'Assist unavailable.') + '</span>'; return; }
+            if (!res || !res.success) {
+                body.innerHTML = '<span class="text-danger small">' + opEsc((res && res.message) || 'Assist unavailable.') + '</span>';
+                return;
+            }
             window._opAssist = res;
             renderAssist(res);
         })
-        .withFailureHandler(function () { body.innerHTML = '<span class="text-danger small">Assist unavailable.</span>'; })
+        .withFailureHandler(function (e) {
+            body.innerHTML = '<span class="text-danger small">Assist unavailable: ' + opEsc(e && e.message) + '</span>';
+        })
         .getAssistForDiagnosis(dx, window.currentDoctorId || '', window.sessionToken);
 }
 
@@ -1443,8 +1504,7 @@ function addSelectedAssist() {
     document.querySelectorAll('.ax-your:checked').forEach(function (c) {
         const s = res.yours[parseInt(c.dataset.idx, 10)];
         if (!s) return;
-        addOPRxRow({ type: s.strength || 'Tab', drugName: s.drugName, sig: s.sig, duration: s.duration });
-        added++;
+        addOPRxRow({ type: 'Tab', drugName: s.drugName, sig: s.sig, duration: s.duration, comments: s.strength || '' });        added++;
     });
 
     document.querySelectorAll('.ax-class:checked').forEach(function (c) {

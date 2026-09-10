@@ -125,46 +125,4 @@ function debugDoctorSetup() {
   return out.join("\n");
 }
 
-/**
- * FRONTEND ENTRY. Proper lab catalog for the OPD order modal.
- * Returns real catalog IDs so the OPD order routes by TestID rather than by
- * name-matching, which is what currently forces createLabRequest into its
- * 'MANUAL_MAP' fallback and loses the test identity.
- */
-function getOPDOrderableTests() {
-  try {
-    var res = getOrderableTests();
-    if (!res || !res.success) {
-      return { success: false, message: (res && res.message) || 'Catalog unavailable.',
-               groups: [] };
-    }
 
-    var byDept = {};
-    (res.tests || []).forEach(function (t) {
-      var d = String(t.department || 'OTHER');
-      if (!byDept[d]) byDept[d] = [];
-      byDept[d].push({
-        testId: t.testId,
-        testCode: t.testCode,
-        testName: t.testName,
-        testType: t.testType,
-        sampleType: t.sampleType,
-        price: t.price,
-        tatMinutes: t.tatMinutes,
-        requiresConsent: t.requiresConsent
-      });
-    });
-
-    var groups = Object.keys(byDept).sort().map(function (d) {
-      return {
-        department: d,
-        label: d.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); }),
-        tests: byDept[d]
-      };
-    });
-
-    return { success: true, groups: groups, total: (res.tests || []).length };
-  } catch (e) {
-    return { success: false, message: 'getOPDOrderableTests: ' + e.message, groups: [] };
-  }
-}

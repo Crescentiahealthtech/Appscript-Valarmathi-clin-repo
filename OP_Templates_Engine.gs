@@ -817,3 +817,91 @@ function getDiagnosisDrugSuggestions(diagnosis, doctorId, sessionToken) {
              suggestions: [] };
   }
 }
+
+// ============================================================================
+// SECTION F — FRONTEND ADAPTER: single assist call for the diagnosis box
+// Wraps getDiagnosisDrugSuggestions and adds this doctor's own lab + advice
+// habits for the same diagnosis. Returns drug CLASSES as [] by design —
+// there is no class table, and inventing one is not safe.
+// ============================================================================
+function getAssistForDiagnosis(diagnosis, doctorId, sessionToken) {
+  var blank = { success: true, matched: "", yours: [], classes: [],
+                labs: [], advice: "", reviewDays: 0, message: "" };
+  try {
+    var dx = dc_str_(diagnosis);
+    if (!dx) return blank;
+
+    var drugs = getDiagnosisDrugSuggestions(dx, doctorId, sessionToken);
+    if (!drugs || !drugs.success) {
+      return { success: false, message: (drugs && drugs.message) || "Assist unavailable.",
+               yours: [], classes: [], labs: [], advice: "", reviewDays: 0 };
+    }
+
+    var labs = [], advice = "";
+    var scope = resolveScope_(sessionToken, doctorId);
+    var me = dc_upper_(dc_str_(doctorId) || (scope.ok ? scope.selfDoctorId : ""));
+
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("OP_Encounters");
+    if (sh && sh.getLastRow() > 1) {
+      var m = dc_headerMap_(sh);
+      var docCol = (m["Doctor_ID"] === undefined) ? -1 : m["Doctor_ID"];
+      var data = sh.getDataRange().getDisplayValues();
+      var tokens = opt_dxTokens_(dx);
+      var labTally = {}, adviceTally = {}, scanned = 0;
+
+      for (var i = data.length - 1; i >= 1 && scanned < 60; i--) {
+        if (me && docCol !== -1) {
+          var rowDoc = dc_str_(data[i][docCol]) || DC_DEFAULT_DOCTOR;
+          if (dc_upper_(rowDoc) !== me) continue;
+        }
+        var rowDx = data[i][21];              // V — Diagnosis
+        if (!rowDx) continue;
+
+        var rowTokens = opt_dxTokens_(rowDx), hit = false;
+        for (var t = 0; t < tokens.length && !hit; t++) {
+          if (rowTokens.indexOf(tokens[t]) !== -1) hit = true;
+        }
+        if (!hit) continue;
+        scanned++;
+
+        try {                                 // X — Labs JSON
+          (JSON.parse(data[i][23] || "[]") || []).forEach(function (l) {
+            if (dc_upper_(l.type) !== "ORDER") return;
+            var n = dc_str_(l.testName);
+            if (n) labTally[n] = (labTally[n] || 0) + 1;
+          });
+        } catch (e) { /* malformed row — skip, never fail the call */ }
+
+        // Y — Advice. saveOPEncounter appends "| Future Labs: ..." — drop that.
+        var adv = dc_str_(data[i][24]).split("|")[0].trim();
+        if (adv) adviceTally[adv] = (adviceTally[adv] || 0) + 1;
+      }
+
+      labs = Object.keys(labTally)
+        .sort(function (a, b) { return labTally[b] - labTally[a]; })
+        .slice(0, 6);
+
+      var advKeys = Object.keys(adviceTally)
+        .sort(function (a, b) { return adviceTally[b] - adviceTally[a]; });
+      // One prior use is a coincidence. Two is a habit worth surfacing.
+      if (advKeys.length && adviceTally[advKeys[0]] >= 2) advice = advKeys[0];
+    }
+
+    var n = drugs.matchedEncounters || 0;
+    var sugg = drugs.suggestions || [];
+    return {
+      success: true,
+      matched: n ? (n + " similar consult" + (n === 1 ? "" : "s")) : "",
+      yours: sugg,
+      classes: [],
+      labs: labs,
+      advice: advice,
+      reviewDays: 0,
+      message: (sugg.length || labs.length || advice) ? "" :
+               "Nothing on file for this diagnosis yet."
+    };
+  } catch (e) {
+    return { success: false, message: "Assist unavailable: " + e.message,
+             yours: [], classes: [], labs: [], advice: "", reviewDays: 0 };
+  }
+}
