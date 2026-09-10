@@ -2,31 +2,42 @@
 // IP_Casesheet_Logic.gs (Upgraded OP-Parity Engine)
 // ==========================================
 
-function getIPAdmissions() {
+/**
+ * Ward list for the casesheet patient picker.
+ * Doctor-scoped: a consultant sees the beds they are responsible for or
+ * consulting on; operational roles see the whole ward.
+ * Returns a JSON string for backwards compatibility with the existing UI.
+ */
+function getIPAdmissions(sessionToken) {
   try {
+    var gate = resolveIPRead_(sessionToken, null);
+    if (!gate.ok) return JSON.stringify({ error: gate.message });
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("IP_Admissions"); 
-    
+    const sheet = ss.getSheetByName("IP_Admissions");
+
     if (!sheet) return JSON.stringify([]); // clean empty state — never fabricate patients
 
     const data = sheet.getDataRange().getValues();
     if (data.length <= 1) return JSON.stringify([]);
 
+    const canSee = ipc_wardVisibilityFilter_(gate.scope);
     const result = [];
     for (let i = 1; i < data.length; i++) {
-      if (data[i][11] === "ACTIVE") { 
-        result.push({
-          ipNumber: data[i][0],
-          id: data[i][1],
-          name: data[i][2],
-          age: data[i][3] || "--",
-          sex: data[i][4] || "--",
-          doa: data[i][5] ? Utilities.formatDate(new Date(data[i][5]), Session.getScriptTimeZone(), "yyyy-MM-dd") : "--",
-          ward: data[i][7] || "Ward",
-          bed: data[i][8],
-          triage: data[i][13] || "Stable" 
-        });
-      }
+      if (data[i][11] !== "ACTIVE") continue;
+      if (!canSee(data[i][0])) continue;
+      result.push({
+        ipNumber: data[i][0],
+        id: data[i][1],
+        name: data[i][2],
+        age: data[i][3] || "--",
+        sex: data[i][4] || "--",
+        doa: data[i][5] ? Utilities.formatDate(new Date(data[i][5]), Session.getScriptTimeZone(), "yyyy-MM-dd") : "--",
+        ward: data[i][7] || "Ward",
+        bed: data[i][8],
+        triage: data[i][13] || "Stable",
+        consultant: data[i][9] || ""
+      });
     }
     return JSON.stringify(result);
   } catch (e) {
@@ -34,87 +45,103 @@ function getIPAdmissions() {
   }
 }
 
-function saveIPRecord(payload) {
+/**
+ * Writes the admission casesheet.
+ *
+ * Phase 5: the author must be an active doctor ON THE CARE TEAM for this
+ * admission — the primary consultant, a cross-consult, or a covering doctor
+ * flagged Can_View_All. The signature is snapshotted into the row so a later
+ * rename in the Doctors sheet cannot rewrite a signed record.
+ *
+ * @param {Object} payload
+ * @param {string} sessionToken  preferred; payload.sessionToken still accepted
+ *                               so an older cached client keeps working.
+ */
+function saveIPRecord(payload, sessionToken) {
   const lock = LockService.getScriptLock();
-  lock.waitLock(10000); 
+  lock.waitLock(10000);
 
-  // --- Server-side identity & authorization (ABDM attribution) ---
-    const sess = validateSession_(payload.sessionToken);
-    if (!sess)                  return { success: false, message: "Session expired. Please log in again." };
-    if (sess.role !== 'doctor') return { success: false, message: "Only a logged-in doctor can author a casesheet." };
-    if (!sess.doctorId)         return { success: false, message: "Your account is not linked to a doctor profile. Contact admin." };
-  
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetName = 'IP_CaseSheets_DB';
-    let sheet = ss.getSheetByName(sheetName);
-    const rxSheet = ss.getSheetByName("IP_Pharmacy_Queue"); // Route IP meds here
-    
-    if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
-      sheet.appendRow([
-        "Encounter_ID", "IP_Number", "Ward", "Bed", "Patient_ID", "Timestamp", "Patient Name", "Age", "Sex", 
-        "Sys_BP", "Dia_BP", "PR", "SpO2", "Temp", "Height", "Weight", 
-        "Chief_Complaints", "History", "Pallor", "Icterus", "Cyanosis", "Clubbing", "Edema", "Other GE findings", 
-        "CVS", "RS", "PA", "CNS", "Primary Diagnosis", "Prescription_JSON", "Lab_Orders_JSON", 
-        "Outside Lab Records", "Radiological records", "Advice", "Doctor's Name", "Doctor_ID"
-      ]);
-      sheet.getRange("A1:AI1").setFontWeight("bold").setBackground("#d9ead3");
+    payload = payload || {};
+    const token = sessionToken || payload.sessionToken;
+
+    // --- Server-side identity, care-team gate & attribution -------------
+    const w = resolveIPWrite_(token, payload.ipNumber, "DOCTOR", {});
+    if (!w.ok) return { success: false, message: w.message };
+    if (w.role !== 'doctor') {
+      return { success: false, message: "Only a logged-in doctor can author a casesheet." };
     }
+    const sess = w.sess;
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Owns the schema, including the Phase 5 attribution columns. Creating
+    // the sheet inline here is what let the header drift out of step with
+    // the row being written.
+    const sheet = ipc_casesheetSheet_();
+    const rxSheet = ss.getSheetByName("IP_Pharmacy_Queue"); // Route IP meds here
 
     const timestamp = new Date();
     const dateStr = Utilities.formatDate(timestamp, ss.getSpreadsheetTimeZone(), "MM/dd/yyyy hh:mm a");
     const uniqueHash = timestamp.getTime().toString().slice(-6);
     const encounterId = "IP-ENC-" + payload.patientId + "-" + uniqueHash;
 
-    const hasGE = (flag) => payload.genExam.flags.includes(flag) ? "Yes" : "No";
+    const vitals  = payload.vitals  || {};
+    const genExam = payload.genExam || {};
+    const sysExam = payload.sysExam || {};
+    const geFlags = Array.isArray(genExam.flags) ? genExam.flags : [];
+    const hasGE = (flag) => geFlags.indexOf(flag) !== -1 ? "Yes" : "No";
 
     const medsJSON = JSON.stringify(payload.meds || []);
     const labsJSON = JSON.stringify(payload.labs || []);
 
-    const rowData = [
-      encounterId,
-      payload.ipNumber,
-      payload.ward,
-      payload.bed,
-      payload.patientId,
-      dateStr,
-      payload.patientName,
-      payload.age,
-      payload.sex,
-      payload.vitals.sys,
-      payload.vitals.dia,
-      payload.vitals.hr,
-      payload.vitals.spo2,
-      payload.vitals.temp,
-      payload.vitals.height,
-      payload.vitals.weight,
-      JSON.stringify(payload.complaints),
-      JSON.stringify(payload.history),
-      hasGE('Pallor'),
-      hasGE('Icterus'),
-      hasGE('Cyanosis'),
-      hasGE('Clubbing'),
-      hasGE('Edema'),
-      payload.genExam.notes,
-      payload.sysExam.cvs,
-      payload.sysExam.rs,
-      payload.sysExam.pa,
-      payload.sysExam.cns,
-      payload.provDiagnosis,
-      medsJSON,
-      labsJSON,
-      JSON.stringify(payload.outsideLabs), 
-      payload.radiology,
-      payload.advice,
-      sess.name
-    ];
+    // Header-driven write. Column order in IP_CaseSheets_DB is no longer
+    // implied by the position of a value in an array literal.
+    const m = dc_headerMap_(sheet);
+    const row = new Array(sheet.getLastColumn()).fill("");
+    const put = function (header, value) {
+      if (m[header] !== undefined) row[m[header]] = (value === undefined || value === null) ? "" : value;
+    };
 
-    ensureColumn_(sheet, "Doctor_ID");
-    rowData.push(sess.doctorId);
-    sheet.appendRow(rowData);
+    put("Encounter_ID", encounterId);
+    put("IP_Number", payload.ipNumber);
+    put("Ward", payload.ward);
+    put("Bed", payload.bed);
+    put("Patient_ID", payload.patientId);
+    put("Timestamp", dateStr);
+    put("Patient Name", payload.patientName);
+    put("Age", payload.age);
+    put("Sex", payload.sex);
+    put("Sys_BP", vitals.sys);
+    put("Dia_BP", vitals.dia);
+    put("PR", vitals.hr);
+    put("SpO2", vitals.spo2);
+    put("Temp", vitals.temp);
+    put("Height", vitals.height);
+    put("Weight", vitals.weight);
+    put("Chief_Complaints", JSON.stringify(payload.complaints || []));
+    put("History", JSON.stringify(payload.history || []));
+    put("Pallor", hasGE('Pallor'));
+    put("Icterus", hasGE('Icterus'));
+    put("Cyanosis", hasGE('Cyanosis'));
+    put("Clubbing", hasGE('Clubbing'));
+    put("Edema", hasGE('Edema'));
+    put("Other GE findings", genExam.notes);
+    put("CVS", sysExam.cvs);
+    put("RS", sysExam.rs);
+    put("PA", sysExam.pa);
+    put("CNS", sysExam.cns);
+    put("Primary Diagnosis", payload.provDiagnosis);
+    put("Prescription_JSON", medsJSON);
+    put("Lab_Orders_JSON", labsJSON);
+    put("Outside Lab Records", JSON.stringify(payload.outsideLabs || []));
+    put("Radiological records", payload.radiology);
+    put("Advice", payload.advice);
+    put("Doctor's Name", w.displayName);
+    put("Doctor_ID", w.doctorId);
+    put("Author_Signature_Snapshot", w.signature);
+    put("Author_Username", w.username);
 
-    sheet.appendRow(rowData);
+    sheet.appendRow(row);
 
     // 1. PHARMACY ROUTING (Internal Drugs Only)
     if (rxSheet && payload.meds && payload.meds.length > 0) {
@@ -122,14 +149,14 @@ function saveIPRecord(payload) {
         if ((med.source || "INTERNAL").toUpperCase() === "EXTERNAL") return;
         // Schema: OrderID | IP_Number | Patient_ID | Timestamp | Item | Sig | Doctor | Status | Duration
         rxSheet.appendRow([
-          `IP-RX-${uniqueHash}-${index}`, 
-          payload.ipNumber, 
-          payload.patientId, 
-          dateStr, 
+          `IP-RX-${uniqueHash}-${index}`,
+          payload.ipNumber,
+          payload.patientId,
+          dateStr,
           `${med.strength || ""} ${med.drugName || ""}`.trim(),
-          med.sig || "", 
-          sess.name || "Doctor", 
-          "Pending", 
+          med.sig || "",
+          w.authorLabel,
+          "Pending",
           med.duration || ""
         ]);
       });
@@ -149,7 +176,8 @@ function saveIPRecord(payload) {
           admissionId:        payload.ipNumber || encounterId,
           sourceModule:       'IP_CASESHEET',
           visitId:            encounterId,
-          orderingDoctorName: sess.name || '',
+          orderingDoctorName: w.displayName,
+          orderingDoctorId:   w.doctorId,
           testNames:          testNameList,
           priority:           hasStat ? 'STAT' : 'ROUTINE',
           clinicalNote:       payload.provDiagnosis || ''
@@ -160,15 +188,24 @@ function saveIPRecord(payload) {
     }
 
     // 3. TEMPLATE LEARNING
-    try { if (payload.templateLearn) learnTemplates(payload.templateLearn); } 
+    try { if (payload.templateLearn) learnTemplates(payload.templateLearn); }
     catch (tErr) { Logger.log("template learn skipped: " + tErr.message); }
 
-    logAudit_(sess, "CASESHEET_SAVE", "IP_CaseSheet", encounterId, {
-      patientId: payload.patientId, ipNumber: payload.ipNumber, diagnosis: payload.provDiagnosis
-    });
+    try {
+      logAudit_(sess, "CASESHEET_SAVE", "IP_CaseSheet", encounterId, {
+        patientId: payload.patientId, ipNumber: payload.ipNumber,
+        diagnosis: payload.provDiagnosis, doctorId: w.doctorId
+      });
+    } catch (e) { /* auditing must never fail a clinical save */ }
 
     SpreadsheetApp.flush();
-    return { success: true, message: "IP Casesheet Locked & Saved to DB Successfully!", encounterId: encounterId };
+    return {
+      success: true,
+      message: "IP Casesheet Locked & Saved to DB Successfully!",
+      encounterId: encounterId,
+      doctorName: w.displayName,
+      signature: w.signature
+    };
 
   } catch (error) {
     return { success: false, message: "Database Error: " + error.toString() };
@@ -260,43 +297,68 @@ function fetchIPClinicalTemplates() {
 // ==========================================
 // IP PRINT HTML GENERATOR
 // ==========================================
-function getIPCasesheetHtml(encounterId) {
+function getIPCasesheetHtml(encounterId, sessionToken) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("IP_CaseSheets_DB");
-    if (!sheet) return { success: false, message: "IP_CaseSheets_DB not found." };
-
+    const sheet = ipc_casesheetSheet_();
+    const m = dc_headerMap_(sheet);
     const data = sheet.getDataRange().getDisplayValues();
+
     let record = null;
-    
-    // Find the record
     for (let i = data.length - 1; i >= 1; i--) {
-      if (data[i][0] === encounterId) {
-        record = data[i];
-        break;
-      }
+      if (data[i][0] === encounterId) { record = data[i]; break; }
     }
-    
     if (!record) return { success: false, message: "Casesheet record not found." };
 
-    // Extract JSON Arrays
+    // Read by header, never by position: the attribution columns are appended
+    // by the migration and their index differs between deployments.
+    const f = function (header) {
+      const idx = m[header];
+      return (idx === undefined) ? "" : String(record[idx] || "");
+    };
+
+    // A signed casesheet is only printable by someone entitled to the
+    // admission it belongs to.
+    const gate = resolveIPRead_(sessionToken, f("IP_Number"));
+    if (!gate.ok) return { success: false, message: gate.message };
+
+    // Every value below is interpolated into markup — escape it. Free-text
+    // fields such as Advice and the diagnosis are typed by clinicians and
+    // routinely contain "<" and "&".
+    const e = function (v) {
+      return String(v === null || v === undefined ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
+    const fe = function (header) { return e(f(header)); };
+
     let complaints = [], history = [], meds = [], labs = [], outsideLabs = [];
-    try { complaints = JSON.parse(record[16]); } catch(e){}
-    try { history = JSON.parse(record[17]); } catch(e){}
-    try { meds = JSON.parse(record[29]); } catch(e){}
-    try { labs = JSON.parse(record[30]); } catch(e){}
-    try { outsideLabs = JSON.parse(record[31]); } catch(e){}
+    try { complaints  = JSON.parse(f("Chief_Complaints")    || "[]"); } catch(err){}
+    try { history     = JSON.parse(f("History")             || "[]"); } catch(err){}
+    try { meds        = JSON.parse(f("Prescription_JSON")   || "[]"); } catch(err){}
+    try { labs        = JSON.parse(f("Lab_Orders_JSON")     || "[]"); } catch(err){}
+    try { outsideLabs = JSON.parse(f("Outside Lab Records") || "[]"); } catch(err){}
 
-    // Format Lists
-    let ccStr = complaints.map(c => `${c.condition} (${c.duration})`).join(" | ");
-    let hxStr = history.map(h => `${h.prefix} ${h.condition} (${h.duration})`).join(" | ");
+    const ccStr = complaints.map(c => `${e(c.condition)} (${e(c.duration)})`).join(" | ");
+    const hxStr = history.map(h => `${e(h.prefix)} ${e(h.condition)} (${e(h.duration)})`).join(" | ");
 
-    let medsHtml = meds.length ? `<ol style="margin:0; padding-left: 20px;">` + meds.map(m => `<li style="margin-bottom:6px;"><strong>${m.type} ${m.drugName}</strong><br><span style="color:#555; font-size:0.85em;">${m.sig} | ${m.duration} | ${m.comments}</span></li>`).join('') + `</ol>` : `<span style="color:#777;">No admission medication ordered.</span>`;
+    const medsHtml = meds.length
+      ? `<ol style="margin:0; padding-left: 20px;">` + meds.map(md =>
+          `<li style="margin-bottom:6px;"><strong>${e(md.type)} ${e(md.drugName)}</strong><br>` +
+          `<span style="color:#555; font-size:0.85em;">${e(md.sig)} | ${e(md.duration)} | ${e(md.comments)}</span></li>`
+        ).join('') + `</ol>`
+      : `<span style="color:#777;">No admission medication ordered.</span>`;
 
-    let internalLabs = labs.filter(l => l.source === 'INTERNAL' || l.type === 'Order').map(l => l.testName).join(", ");
-    let extLabsHtml = outsideLabs.length ? outsideLabs.map(l => `${l.test}: ${l.val}`).join(" | ") : "None";
+    const internalLabs = labs.filter(l => l.source === 'INTERNAL' || l.type === 'Order')
+                             .map(l => e(l.testName)).join(", ");
+    const extLabsHtml = outsideLabs.length
+      ? outsideLabs.map(l => `${e(l.test)}: ${e(l.val)}`).join(" | ")
+      : "None";
 
-    let html = `
+    // The signature snapshotted at save time, falling back to the recorded
+    // name for rows written before the Phase 5 migration.
+    const signature = f("Author_Signature_Snapshot") || f("Doctor's Name") || "Doctor's Signature";
+
+    const html = `
     <div style="font-family: Arial, sans-serif; color: #000; padding: 20px; max-width: 800px; margin: auto;">
         <div style="border-bottom: 2px solid #0369a1; padding-bottom: 10px; margin-bottom: 20px; text-align: center;">
             <h2 style="margin:0; text-transform:uppercase; font-weight:bold; color: #0369a1;">Valarmathi Clinic</h2>
@@ -306,29 +368,30 @@ function getIPCasesheetHtml(encounterId) {
 
         <div style="display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 0.95rem; background: #f9fafb; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
             <div>
-                <strong>Patient:</strong> ${record[6]}<br>
-                <strong>PID:</strong> ${record[4]} | <strong>IP No:</strong> ${record[1]}<br>
-                <strong>Age/Sex:</strong> ${record[7]} Y / ${record[8]}<br>
-                <strong>Ward/Bed:</strong> ${record[2]} - ${record[3]}
+                <strong>Patient:</strong> ${fe("Patient Name")}<br>
+                <strong>PID:</strong> ${fe("Patient_ID")} | <strong>IP No:</strong> ${fe("IP_Number")}<br>
+                <strong>Age/Sex:</strong> ${fe("Age")} Y / ${fe("Sex")}<br>
+                <strong>Ward/Bed:</strong> ${fe("Ward")} - ${fe("Bed")}
             </div>
             <div style="text-align: right;">
-                <strong>Date:</strong> ${record[5]}<br>
-                <strong>Doctor:</strong> ${record[34] || '--'}
+                <strong>Date:</strong> ${fe("Timestamp")}<br>
+                <strong>Doctor:</strong> ${fe("Doctor's Name") || '--'}<br>
+                <span style="font-size:0.8em; color:#555;">${fe("Doctor_ID")}</span>
             </div>
         </div>
 
         <div style="margin-bottom: 20px; font-size: 0.9rem;">
             <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 5px; color: #0369a1;">Vitals on Admission</h5>
-            <p style="margin: 5px 0;"><strong>BP:</strong> ${record[9]}/${record[10]} mmHg &nbsp;|&nbsp; <strong>Pulse:</strong> ${record[11]} bpm &nbsp;|&nbsp; <strong>SpO2:</strong> ${record[12]}% &nbsp;|&nbsp; <strong>Temp:</strong> ${record[13]} °F &nbsp;|&nbsp; <strong>Wt:</strong> ${record[15]} kg</p>
+            <p style="margin: 5px 0;"><strong>BP:</strong> ${fe("Sys_BP")}/${fe("Dia_BP")} mmHg &nbsp;|&nbsp; <strong>Pulse:</strong> ${fe("PR")} bpm &nbsp;|&nbsp; <strong>SpO2:</strong> ${fe("SpO2")}% &nbsp;|&nbsp; <strong>Temp:</strong> ${fe("Temp")} °F &nbsp;|&nbsp; <strong>Wt:</strong> ${fe("Weight")} kg</p>
         </div>
 
         <div style="margin-bottom: 20px; font-size: 0.9rem;">
-            <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 5px; color: #0369a1;">Clinical History & Examination</h5>
+            <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 5px; color: #0369a1;">Clinical History &amp; Examination</h5>
             <p style="margin: 5px 0;"><strong>Chief Complaints:</strong> ${ccStr || '--'}</p>
             <p style="margin: 5px 0;"><strong>History:</strong> ${hxStr || '--'}</p>
-            <p style="margin: 5px 0;"><strong>General Exam:</strong> Pallor: ${record[18]}, Icterus: ${record[19]}, Cyanosis: ${record[20]}, Clubbing: ${record[21]}, Edema: ${record[22]}<br><em>Notes:</em> ${record[23] || '--'}</p>
-            <p style="margin: 5px 0;"><strong>Systemic Exam:</strong> CVS: ${record[24]} | RS: ${record[25]} | P/A: ${record[26]} | CNS: ${record[27]}</p>
-            <p style="margin: 5px 0;"><strong>Primary Diagnosis:</strong> <span style="font-size:1.1em; font-weight:bold;">${record[28] || '--'}</span></p>
+            <p style="margin: 5px 0;"><strong>General Exam:</strong> Pallor: ${fe("Pallor")}, Icterus: ${fe("Icterus")}, Cyanosis: ${fe("Cyanosis")}, Clubbing: ${fe("Clubbing")}, Edema: ${fe("Edema")}<br><em>Notes:</em> ${fe("Other GE findings") || '--'}</p>
+            <p style="margin: 5px 0;"><strong>Systemic Exam:</strong> CVS: ${fe("CVS")} | RS: ${fe("RS")} | P/A: ${fe("PA")} | CNS: ${fe("CNS")}</p>
+            <p style="margin: 5px 0;"><strong>Primary Diagnosis:</strong> <span style="font-size:1.1em; font-weight:bold;">${fe("Primary Diagnosis") || '--'}</span></p>
         </div>
 
         <div style="margin-bottom: 20px; font-size: 0.9rem;">
@@ -345,15 +408,15 @@ function getIPCasesheetHtml(encounterId) {
             </div>
             <div style="width: 48%;">
                 <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 5px; color: #0369a1;">Radiology / Scans</h5>
-                <p style="margin: 5px 0; white-space: pre-wrap;">${record[32] || 'None'}</p>
+                <p style="margin: 5px 0; white-space: pre-wrap;">${fe("Radiological records") || 'None'}</p>
                 <h5 style="border-bottom: 1px solid #ccc; padding-bottom: 5px; margin-top: 15px; color: #0369a1;">Advice / Plan</h5>
-                <p style="margin: 5px 0; white-space: pre-wrap;">${record[33] || 'Standard ward protocol.'}</p>
+                <p style="margin: 5px 0; white-space: pre-wrap;">${fe("Advice") || 'Standard ward protocol.'}</p>
             </div>
         </div>
 
         <div style="text-align: right; margin-top: 60px;">
-            <div style="border-top: 1px solid #000; display: inline-block; padding-top: 5px; width: 200px; text-align: center;">
-                <strong>${record[34] || "Doctor's Signature"}</strong>
+            <div style="border-top: 1px solid #000; display: inline-block; padding-top: 5px; width: 220px; text-align: center;">
+                <strong>${e(signature)}</strong>
             </div>
         </div>
     </div>

@@ -87,6 +87,16 @@
         <span class="badge bg-dark border border-secondary text-light me-2 px-2 py-1" id="ip-cs-pat-id">ID: --</span>
         <span class="badge bg-danger me-2 px-2 py-1" id="ip-cs-bed">Bed: --</span>
         <span class="text-warning fw-bold small" id="ip-cs-details">Age: -- | Sex: --</span>
+        <!-- Phase 5: care team for this admission -->
+        <div id="ip-care-team-strip" class="d-flex align-items-center gap-1 flex-wrap mt-1 d-none">
+          <span class="text-secondary small me-1"><i class="fa-solid fa-user-group me-1"></i>Care team:</span>
+          <span id="ip-care-team-chips" class="d-flex gap-1 flex-wrap"></span>
+          <button type="button" id="ip-add-consult-btn"
+                  class="btn btn-outline-info btn-sm py-0 px-2 d-none"
+                  style="font-size:0.7rem;" onclick="ipOpenCrossConsult()">
+            <i class="fa-solid fa-plus"></i> Cross-consult
+          </button>
+        </div>
       </div>
     </div>
     
@@ -551,9 +561,19 @@
       document.getElementById('ip-cs-pat-name').innerText = "Searching...";
       
       google.script.run.withSuccessHandler(res => {
-        let data = JSON.parse(res);
+        let data;
+        try { data = JSON.parse(res); } catch (e) { data = null; }
+        // A scoped ward can come back as an error object rather than a list —
+        // an expired session, or a bed under another consultant.
+        if (!Array.isArray(data)) {
+          document.getElementById('ip-cs-pat-name').innerText =
+            (data && data.error) ? data.error : "Ward list unavailable";
+          currentIPPatientCtx = {};
+          ipResetCareTeam();
+          return;
+        }
         let patient = data.find(p => p.id === searchId || p.ipNumber === searchId);
-        
+
         if(patient) {
             currentIPPatientCtx = patient;
             document.getElementById('ip-doctor-name').innerText = window.currentDoctorName || '--';
@@ -571,12 +591,129 @@
             document.getElementById('prt-bed').innerText = `${patient.ward || ''} - ${patient.bed || ''}`;
 
             if(patient.triage) { document.getElementById('ip-triage-status').value = patient.triage; updateIPTriageUI(); }
+            ipLoadCareTeam(patient.ipNumber);
             checkIPDraftLocal(patient.id);
         } else {
-            document.getElementById('ip-cs-pat-name').innerText = "Not Found";
+            document.getElementById('ip-cs-pat-name').innerText =
+              "Not found in your ward list";
             currentIPPatientCtx = {};
+            ipResetCareTeam();
         }
-      }).getIPAdmissions();
+      }).getIPAdmissions(window.sessionToken);
+  }
+
+  // ═══ PHASE 5 — CARE TEAM / CROSS-CONSULTS ═══════════════════
+  var ipCareTeamCtx = null;
+
+  function ipEsc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function ipResetCareTeam() {
+    ipCareTeamCtx = null;
+    var strip = document.getElementById('ip-care-team-strip');
+    if (strip) strip.classList.add('d-none');
+    var btn = document.getElementById('ip-add-consult-btn');
+    if (btn) btn.classList.add('d-none');
+  }
+
+  function ipLoadCareTeam(ipNumber) {
+    if (!ipNumber) { ipResetCareTeam(); return; }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var strip = document.getElementById('ip-care-team-strip');
+        var chips = document.getElementById('ip-care-team-chips');
+        var addBtn = document.getElementById('ip-add-consult-btn');
+        if (!strip || !chips) return;
+
+        if (!res || !res.success) {
+          ipResetCareTeam();
+          return;
+        }
+        ipCareTeamCtx = res;
+        strip.classList.remove('d-none');
+
+        var roleStyle = {
+          PRIMARY:       'bg-primary',
+          CROSS_CONSULT: 'bg-info text-dark',
+          SURGEON:       'bg-danger',
+          ANAESTHETIST:  'bg-secondary'
+        };
+        chips.innerHTML = (res.team || []).map(function (t) {
+          var cls = roleStyle[t.teamRole] || 'bg-secondary';
+          var mine = (t.doctorId === res.selfDoctorId) ? ' border border-warning' : '';
+          var canDrop = res.canManageTeam && t.teamRole !== 'PRIMARY';
+          return '<span class="badge ' + cls + mine + ' px-2 py-1" style="font-size:0.68rem;">' +
+                 ipEsc(t.name) +
+                 ' <span style="opacity:.75;">' + ipEsc(t.teamRole.replace('_', ' ')) + '</span>' +
+                 (canDrop
+                   ? ' <i class="fa-solid fa-xmark ms-1" style="cursor:pointer;" title="Remove from care team" ' +
+                     'onclick="ipRemoveCrossConsult(\'' + ipEsc(t.entryId) + '\')"></i>'
+                   : '') +
+                 '</span>';
+        }).join('') || '<span class="text-secondary small fst-italic">No team recorded</span>';
+
+        if (addBtn) addBtn.classList.toggle('d-none', !res.canManageTeam);
+
+        // A doctor who is not on this care team cannot save — say so before
+        // they fill in an entire casesheet the server will refuse.
+        var saveBtn = document.querySelector("button[onclick='saveIPCasesheet()']");
+        if (saveBtn) {
+          saveBtn.disabled = !res.canWrite;
+          saveBtn.title = res.canWrite
+            ? ''
+            : 'You are not on the care team for this admission.';
+        }
+      })
+      .withFailureHandler(function () { ipResetCareTeam(); })
+      .getIPCareTeamPanel(ipNumber, window.sessionToken);
+  }
+
+  function ipOpenCrossConsult() {
+    if (!ipCareTeamCtx || !ipCareTeamCtx.addable || !ipCareTeamCtx.addable.length) {
+      alert('No other active doctors are available to add.');
+      return;
+    }
+    var lines = ipCareTeamCtx.addable.map(function (d, i) {
+      return (i + 1) + '. ' + d.name + (d.specialty ? ' (' + d.specialty + ')' : '');
+    }).join('\n');
+    var pick = prompt('Add a cross-consult to ' + ipCareTeamCtx.ipNumber + ':\n\n' + lines +
+                      '\n\nEnter the number:');
+    if (!pick) return;
+    var idx = parseInt(pick, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= ipCareTeamCtx.addable.length) {
+      alert('That is not one of the listed numbers.');
+      return;
+    }
+    var role = prompt('Team role — CROSS_CONSULT, SURGEON or ANAESTHETIST:', 'CROSS_CONSULT');
+    if (!role) return;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        alert(res.message);
+        if (res.success) ipLoadCareTeam(ipCareTeamCtx.ipNumber);
+      })
+      .withFailureHandler(function (e) { alert('Could not add: ' + e.message); })
+      .addIPCrossConsult({
+        ipNumber: ipCareTeamCtx.ipNumber,
+        doctorId: ipCareTeamCtx.addable[idx].doctorId,
+        teamRole: role.trim().toUpperCase()
+      }, window.sessionToken);
+  }
+
+  function ipRemoveCrossConsult(entryId) {
+    if (!ipCareTeamCtx) return;
+    if (!confirm('Remove this doctor from the care team?')) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        alert(res.message);
+        if (res.success) ipLoadCareTeam(ipCareTeamCtx.ipNumber);
+      })
+      .withFailureHandler(function (e) { alert('Could not remove: ' + e.message); })
+      .removeIPCrossConsult({ ipNumber: ipCareTeamCtx.ipNumber, entryId: entryId },
+                            window.sessionToken);
   }
 
   // --- UI & MINITOOLS ---
@@ -948,7 +1085,7 @@
             localStorage.removeItem('ip_draft_' + currentIPPatientCtx.id); 
             if(confirm(res.message + "\n\nWould you like to PRINT this casesheet?")) printIPCasesheet();
         } else alert(res.message);
-      }).saveIPRecord(payload);
+      }).saveIPRecord(payload, window.sessionToken);
   }
 
   // --- NATIVE BACKEND PRINT ENGINE ---
@@ -993,7 +1130,7 @@
           printBtn.disabled = false;
           alert("Server Error: " + e.message);
         })
-        .getIPCasesheetHtml(activeIpEncounterId);
+        .getIPCasesheetHtml(activeIpEncounterId, window.sessionToken);
   }
 
   // Close dropdowns globally
