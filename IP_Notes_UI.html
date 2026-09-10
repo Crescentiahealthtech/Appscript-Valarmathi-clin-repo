@@ -1257,6 +1257,108 @@
        JAVASCRIPT — ALL LOGIC
   ═══════════════════════════════════════════════════════ -->
   <script>
+// ============================================================================
+// HTML DIALOGS
+// A browser alert/confirm/prompt inside the Apps Script iframe is rendered by
+// the host and titled "An embedded page at ...googleusercontent.com says",
+// which shows clinicians a script URL where the message should be. These are
+// in-page replacements with the same call shape, except that they are
+// asynchronous — pass a callback instead of reading a return value.
+// ============================================================================
+function ipn_dialogHost() {
+    let host = document.getElementById('ipn-dialog-host');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'ipn-dialog-host';
+    host.style.cssText =
+        'position:fixed; inset:0; z-index:30000; display:none;' +
+        'align-items:center; justify-content:center; background:rgba(2,6,23,.72);';
+    host.innerHTML =
+        '<div id="ipn-dialog-card" role="dialog" aria-modal="true" style="' +
+          'background:var(--bg-card,#1e293b); border:1px solid var(--border-color,#334155);' +
+          'border-radius:12px; width:min(460px,92vw); box-shadow:0 20px 60px rgba(0,0,0,.6);' +
+          'color:var(--text-main,#f8fafc); overflow:hidden;">' +
+          '<div id="ipn-dialog-head" style="padding:14px 18px; font-weight:700; font-size:.9rem;' +
+            'border-bottom:1px solid var(--border-color,#334155);"></div>' +
+          '<div style="padding:18px;">' +
+            '<div id="ipn-dialog-msg" style="font-size:.84rem; line-height:1.5; white-space:pre-wrap;"></div>' +
+            '<input type="text" id="ipn-dialog-input" class="hd-input mt-3 d-none" autocomplete="off">' +
+          '</div>' +
+          '<div style="padding:12px 18px; display:flex; justify-content:flex-end; gap:8px;' +
+            'border-top:1px solid var(--border-color,#334155);">' +
+            '<button type="button" id="ipn-dialog-cancel" class="btn btn-sm btn-outline-light">Cancel</button>' +
+            '<button type="button" id="ipn-dialog-ok" class="btn btn-sm btn-primary fw-bold">OK</button>' +
+          '</div>' +
+        '</div>';
+    document.body.appendChild(host);
+    return host;
+}
+
+function ipn_dialog(opts) {
+    const host   = ipn_dialogHost();
+    const head   = document.getElementById('ipn-dialog-head');
+    const msg    = document.getElementById('ipn-dialog-msg');
+    const input  = document.getElementById('ipn-dialog-input');
+    const okBtn  = document.getElementById('ipn-dialog-cancel').parentNode.querySelector('#ipn-dialog-ok');
+    const cancel = document.getElementById('ipn-dialog-cancel');
+
+    head.textContent = opts.title || 'Crescentia';
+    head.style.color = opts.kind === 'err'  ? '#f87171'
+                     : opts.kind === 'warn' ? '#fbbf24'
+                     : 'var(--medical-purple,#635bff)';
+    msg.textContent = opts.message || '';
+
+    input.classList.toggle('d-none', opts.mode !== 'prompt');
+    if (opts.mode === 'prompt') input.value = opts.value || '';
+
+    cancel.classList.toggle('d-none', opts.mode === 'alert');
+    okBtn.textContent = opts.okLabel || 'OK';
+
+    host.style.display = 'flex';
+    setTimeout(function () { (opts.mode === 'prompt' ? input : okBtn).focus(); }, 30);
+
+    // Listeners are replaced, not added: reusing one host means a stale
+    // handler from the previous dialog would fire alongside the new one.
+    const close = function (result) {
+        host.style.display = 'none';
+        document.removeEventListener('keydown', onKey);
+        if (opts.done) opts.done(result);
+    };
+    const onKey = function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(opts.mode === 'confirm' ? false : null); }
+        if (e.key === 'Enter' && opts.mode !== 'confirm') {
+            e.preventDefault();
+            close(opts.mode === 'prompt' ? input.value : true);
+        }
+    };
+    okBtn.onclick     = function () { close(opts.mode === 'prompt' ? input.value : true); };
+    cancel.onclick    = function () { close(opts.mode === 'confirm' ? false : null); };
+    host.onmousedown  = function (e) { if (e.target === host) close(opts.mode === 'confirm' ? false : null); };
+    document.addEventListener('keydown', onKey);
+}
+
+/** Drop-in for alert(). Fire and forget. */
+function ipn_alert(message, kind, title) {
+    ipn_dialog({ mode: 'alert', message: message, kind: kind || 'info',
+                 title: title || (kind === 'err' ? 'Error' : 'Notice') });
+}
+
+/** Drop-in for confirm(), except the answer arrives in the callback. */
+function ipn_confirm(message, done, opts) {
+    opts = opts || {};
+    ipn_dialog({ mode: 'confirm', message: message, kind: opts.kind || 'warn',
+                 title: opts.title || 'Please confirm',
+                 okLabel: opts.okLabel || 'Continue', done: done });
+}
+
+/** Drop-in for prompt(). Calls back with the string, or null if cancelled. */
+function ipn_prompt(message, value, done, opts) {
+    opts = opts || {};
+    ipn_dialog({ mode: 'prompt', message: message, value: value || '',
+                 title: opts.title || 'Crescentia', okLabel: opts.okLabel || 'Save',
+                 done: done });
+}
+
   // ── MODULE STATE ─────────────────────────────────────────
   const IPNotesModule = {
     context: {},          // { ipNumber, patientId, name, ageSex, wardBed, doa }
@@ -1356,24 +1458,35 @@
     resetLeftPanel();
     resetRightPanel();
 
-    // Load clinical context (left + right panel)
-    loadClinicalContext(ipNumber);
+    // One call, not five. Opening a patient used to fire permissions,
+    // context, timeline, care team and the drug master as separate cold
+    // executions that raced each other; the race is what listed the same
+    // consultant on a care team twice.
+    google.script.run
+      .withSuccessHandler(applyIPNotesBundle)
+      .withFailureHandler(function (e) {
+        document.getElementById('ip-timeline-container').innerHTML =
+          '<div class="empty-timeline">Could not open this chart: ' + _esc(e.message) + '</div>';
+      })
+      .getIPNotesBundle(ipNumber, window.sessionToken);
+  }
 
-    // Load timeline (center panel)
-    loadIPTimeline(ipNumber);
-
-    // Preload drug master for autocomplete
-    if (IPNotesModule.drugMaster.length === 0) {
-      google.script.run
-        .withSuccessHandler(function(drugs) { IPNotesModule.drugMaster = drugs || []; })
-        .fetchPharmacyMasterForIP();
+  function applyIPNotesBundle(b) {
+    if (!b || !b.success) {
+      document.getElementById('ip-timeline-container').innerHTML =
+        '<div class="empty-timeline">' + _esc((b && b.message) || 'Chart unavailable.') + '</div>';
+      return;
     }
 
-    // Resolve what this session may author, and under whose name.
-    _loadNotePermissions_();
+    IPNotesModule.permissions = (b.permissions && b.permissions.success) ? b.permissions : { noteTypes: [] };
+    IPNotesModule.drugMaster  = b.drugMaster || [];
+    IPNotesModule.teamRoles   = b.teamRoles || [];
 
-    // Load the care team for this admission (Phase 5).
-    loadIPCareTeamPanel(ipNumber);
+    renderClinicalContext(b.context || { success: false });
+    renderIPTimeline(b.timeline || { success: true, data: [] });
+    applyIPCareTeamPanel(b.careTeam || { success: false, team: [] });
+    _applyNotePermissions_();
+    _refreshDiagnosisButton_();
   }
 
   /**
@@ -1934,15 +2047,50 @@
     }
   }
 
+  /**
+   * All WNL — fills the normal finding for each system.
+   *
+   * This used to assign 'S1S2+, No Murmur', 'NVBS, B/L AE+' and so on. None of
+   * those strings is an <option> in the corresponding <select>, and assigning
+   * a select a value it does not carry silently blanks it — which is why the
+   * button appeared to clear the examination instead of completing it.
+   *
+   * The values below are matched against the real options, and the assignment
+   * is verified rather than assumed, so an edited option list degrades to
+   * "leave it alone" rather than to "wipe it".
+   */
+  var IP_WNL_FINDINGS = {
+    'dr-se-cvs': ['S1S2 heard, no murmurs', 'WNL'],
+    'dr-se-rs':  ['NVBS bilateral', 'WNL'],
+    'dr-se-pa':  ['Soft, non-tender', 'WNL'],
+    'dr-se-cns': ['Conscious, oriented', 'WNL']
+  };
+
   function setAllWNL() {
-    document.getElementById('dr-se-cvs').value         = 'S1S2+, No Murmur';
-    document.getElementById('dr-se-cvs-detail').value  = '';
-    document.getElementById('dr-se-rs').value          = 'NVBS, B/L AE+';
-    document.getElementById('dr-se-rs-detail').value   = '';
-    document.getElementById('dr-se-pa').value          = 'Soft, No Organomegaly';
-    document.getElementById('dr-se-pa-detail').value   = '';
-    document.getElementById('dr-se-cns').value         = 'NFND';
-    document.getElementById('dr-se-cns-detail').value  = '';
+    let applied = 0, failed = [];
+    Object.keys(IP_WNL_FINDINGS).forEach(function (id) {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+
+      // Take the first preference the select actually offers.
+      const choice = IP_WNL_FINDINGS[id].find(function (want) {
+        return Array.prototype.some.call(sel.options, function (o) { return o.value === want; });
+      });
+      if (!choice) { failed.push(id.replace('dr-se-', '').toUpperCase()); return; }
+
+      sel.value = choice;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      applied++;
+
+      const detail = document.getElementById(id + '-detail');
+      if (detail) detail.value = '';
+    });
+
+    if (failed.length) {
+      ipnToast('No normal option available for: ' + failed.join(', ') + '.', 'warn');
+    } else if (applied) {
+      ipnToast('All systems marked within normal limits. Review before signing.', 'ok');
+    }
   }
 
   function copyPreviousNote() {
@@ -2463,10 +2611,21 @@
   }
 
   function loadIPCareTeamPanel(ipNumber) {
+    if (!document.getElementById('ipn-care-team-list')) return;
+    google.script.run
+      .withSuccessHandler(applyIPCareTeamPanel)
+      .withFailureHandler(function (e) {
+        const c = document.getElementById('ipn-care-team-list');
+        if (c) c.innerHTML = '<div style="color:#f87171; font-size:0.78rem;">' + _esc(e.message) + '</div>';
+      })
+      .getIPCareTeamPanel(ipNumber, window.sessionToken);
+  }
+
+  function applyIPCareTeamPanel(res) {
     const cont = document.getElementById('ipn-care-team-list');
     if (!cont) return;
-    google.script.run
-      .withSuccessHandler(function (res) {
+    {
+      {
         IPNotesModule.careTeam = res;
         const addBtn = document.getElementById('ipn-add-consult-btn');
 
@@ -2514,14 +2673,10 @@
             '<i class="fas fa-lock me-1"></i>You are not on this care team — ' +
             'notes are read-only until the primary consultant adds you.</div>');
         }
-        // Re-apply, because this lookup and the permission lookup race.
         _applyNotePermissions_();
         _refreshDiagnosisButton_();
-      })
-      .withFailureHandler(function (e) {
-        cont.innerHTML = '<div style="color:#f87171; font-size:0.78rem;">' + _esc(e.message) + '</div>';
-      })
-      .getIPCareTeamPanel(ipNumber, window.sessionToken);
+      }
+    }
   }
 
   function ipnAddCrossConsult() {
@@ -2595,7 +2750,13 @@
   function ipnRemoveCrossConsult(entryId) {
     const ct = IPNotesModule.careTeam;
     if (!ct) return;
-    if (!confirm('Remove this doctor from the care team?')) return;
+    ipn_confirm('Remove this doctor from the care team?', function (ok) {
+      if (!ok) return;
+      ipnDoRemoveCrossConsult(ct, entryId);
+    }, { okLabel: 'Remove' });
+  }
+
+  function ipnDoRemoveCrossConsult(ct, entryId) {
     google.script.run
       .withSuccessHandler(function (res) {
         ipnToast(res.message, res.success ? 'ok' : 'warn');

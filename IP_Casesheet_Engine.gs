@@ -321,6 +321,7 @@ function ipc_writeCasesheetRow_(payload, sessionToken) {
     put("Author_Username", w.username);
 
     sheet.appendRow(row);
+    dc_invalidate_("IP_CaseSheets_DB");
 
     var warnings = [];
 

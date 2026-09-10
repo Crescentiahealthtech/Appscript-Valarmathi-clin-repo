@@ -98,6 +98,25 @@
   .ipc-allergy-none { background: rgba(148,163,184,0.12); border: 1px dashed var(--border-color,#334155); color: #94a3b8; border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
   .ipc-taper-tag { font-size: 0.55rem; background: rgba(245,158,11,0.18); color: #fcd34d; border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
   .ipc-peds-hint { font-size: 0.6rem; color: #38bdf8; cursor: pointer; margin-top: 2px; display: inline-block; }
+
+  /* ========================================= */
+  /* IP CASESHEET HEADER                       */
+  /* Three explicit tracks: controls, identity, actions. The identity track is
+     the only one allowed to absorb slack, so long patient names ellipsize
+     instead of pushing the Save button off the row. The right track reserves
+     space for the shell's floating user badge. */
+  .ipc-hdr-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+  .ipc-hdr-left { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
+  .ipc-hdr-ident { display: flex; align-items: center; gap: 0.5rem; flex: 1 1 240px; min-width: 0; overflow: hidden; }
+  .ipc-hdr-right { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; margin-left: auto; }
+  .ipc-ward-select { width: 300px; max-width: 38vw; min-width: 170px; }
+
+  /* Row 1 clears the floating "signed in as" badge the shell overlays. */
+  #emr-workspace-ip-casesheet .ipc-hdr-row:first-of-type .ipc-hdr-right { padding-right: 15rem; }
+  @media (max-width: 1400px) {
+    #emr-workspace-ip-casesheet .ipc-hdr-row:first-of-type .ipc-hdr-right { padding-right: 0; }
+    .ipc-hdr-ident { flex-basis: 100%; }
+  }
 </style>
 
 <div id="emr-workspace-ip-casesheet" class="d-none hd-workspace mt-3 app-view h-100 flex-column px-2 triage-Stable">
@@ -106,59 +125,81 @@
     <div class="mb-3 pb-2 border-bottom border-secondary no-print">
 
     <!-- Row 1: ward context. An IP casesheet is opened from a bed, not
-         searched for by patient id — the ward roster is the entry point. -->
-    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-      <button class="btn btn-outline-secondary btn-sm py-1 px-2" onclick="ipcCloseIPCConsultationWorkspace()"><i class="fa-solid fa-arrow-left"></i></button>
+         searched for by patient id — the ward roster is the entry point.
 
-      <select id="ipc-ward-picker" class="form-select form-select-sm text-white-force"
-              style="width: 320px;" onchange="ipcOpenAdmission(this.value)">
-        <option value="">Loading ward...</option>
-      </select>
-      <button class="btn btn-sm btn-outline-secondary py-1 px-2" onclick="ipcLoadWard()" title="Refresh the ward list">
-        <i class="fa-solid fa-rotate"></i>
-      </button>
+         Laid out as a grid rather than one flex run: the identity block must
+         be free to shrink and ellipsize, and the right-hand column has to
+         keep clear of the floating user badge the shell overlays at the top
+         right, which is what the header was colliding with. -->
+    <div class="ipc-hdr-row mb-2">
+      <div class="ipc-hdr-left">
+        <button class="btn btn-outline-secondary btn-sm py-1 px-2 flex-shrink-0"
+                onclick="ipcCloseIPCConsultationWorkspace()" title="Back to the EMR menu">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
 
-      <div class="vr mx-1" style="opacity:.3;"></div>
+        <select id="ipc-ward-picker" class="form-select form-select-sm text-white-force ipc-ward-select"
+                onchange="ipcOpenAdmission(this.value)">
+          <option value="">Loading ward...</option>
+        </select>
+        <button class="btn btn-sm btn-outline-secondary py-1 px-2 flex-shrink-0"
+                onclick="ipcLoadWard()" title="Refresh the ward list">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+      </div>
 
-      <span class="fs-6 fw-bold" id="ipc-hd-pat-name" style="color: var(--text-main);">Select a bed</span>
-      <span class="badge bg-dark border border-secondary text-light px-2 py-1" id="ipc-hd-pat-id">ID: --</span>
-      <span class="badge bg-danger px-2 py-1" id="ipc-hd-bed">Bed: --</span>
-      <span class="text-warning fw-bold small" id="ipc-hd-pat-demo">-- Y | -</span>
-      <span id="ipc-hd-allergy-chip" class="ipc-allergy-none" onclick="ipcOpenAllergyEditor()">Allergies: not recorded</span>
+      <div class="ipc-hdr-ident">
+        <span class="fw-bold text-truncate" id="ipc-hd-pat-name"
+              style="color: var(--text-main); font-size: 1rem;">Select a bed</span>
+        <span class="badge bg-dark border border-secondary text-light px-2 py-1 flex-shrink-0" id="ipc-hd-pat-id">ID: --</span>
+        <span class="badge bg-danger px-2 py-1 flex-shrink-0" id="ipc-hd-bed">Bed: --</span>
+        <span class="text-warning fw-bold small flex-shrink-0" id="ipc-hd-pat-demo">-- Y | -</span>
+        <span id="ipc-hd-allergy-chip" class="ipc-allergy-none flex-shrink-0" onclick="ipcOpenAllergyEditor()">Allergies: not recorded</span>
+      </div>
 
-      <span class="ms-auto text-muted small">Date: <span id="ipc-hd-current-date" class="text-warning fw-bold"></span></span>
+      <div class="ipc-hdr-right">
+        <span class="text-muted small">Date: <span id="ipc-hd-current-date" class="text-warning fw-bold"></span></span>
+      </div>
     </div>
 
     <!-- Row 2: attribution, care team, actions -->
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="hd-label m-0" style="font-size:.68rem;">Signing as</span>
-      <span class="badge bg-dark border border-info text-info px-2 py-1" id="ipc-signing-as"
-            style="font-size:.72rem;">
-        <i class="fa-solid fa-id-badge me-1"></i>--
-      </span>
+    <div class="ipc-hdr-row">
+      <div class="ipc-hdr-left">
+        <span class="hd-label m-0 flex-shrink-0" style="font-size:.68rem;">Signing as</span>
+        <span class="badge bg-dark border border-info text-info px-2 py-1 text-truncate" id="ipc-signing-as"
+              style="font-size:.72rem; max-width: 200px;">
+          <i class="fa-solid fa-id-badge me-1"></i>--
+        </span>
+        <select id="ipc-triage-status" class="form-select form-select-sm bg-dark text-white fw-bold border-secondary flex-shrink-0"
+                style="width: 118px;" onchange="ipcUpdateTriageUI()">
+          <option value="Stable" selected>&#128994; Stable</option>
+          <option value="Moderate">&#128992; Moderate</option>
+          <option value="Critical">&#128308; Critical</option>
+        </select>
+      </div>
 
-      <div class="vr mx-1" style="opacity:.3;"></div>
+      <div class="ipc-hdr-ident">
+        <span class="hd-label m-0 flex-shrink-0" style="font-size:.68rem;">
+          <i class="fa-solid fa-user-group me-1"></i>Care team
+        </span>
+        <span id="ipc-care-team-chips" class="d-flex gap-1 flex-wrap"></span>
+      </div>
 
-      <span class="hd-label m-0" style="font-size:.68rem;"><i class="fa-solid fa-user-group me-1"></i>Care team</span>
-      <span id="ipc-care-team-chips" class="d-flex gap-1 flex-wrap"></span>
-
-      <select id="ipc-triage-status" class="form-select form-select-sm bg-dark text-white fw-bold border-secondary"
-              style="width: 110px;" onchange="ipcUpdateTriageUI()">
-        <option value="Stable" selected>&#128994; Stable</option>
-        <option value="Moderate">&#128992; Moderate</option>
-        <option value="Critical">&#128308; Critical</option>
-      </select>
-
-      <div class="ms-auto d-flex gap-2 align-items-center">
-        <span id="ipc-draft-status" class="text-secondary small fw-bold me-1">
+      <div class="ipc-hdr-right">
+        <span id="ipc-draft-status" class="text-secondary small fw-bold">
           <i class="fa-solid fa-cloud"></i> Up to date
         </span>
         <button class="btn btn-sm btn-outline-light py-1 px-2" id="ipc-btn-assist-toggle" onclick="ipcToggleAssistPanel()">
           <i class="fa-solid fa-wand-magic-sparkles"></i> Assist
         </button>
-        <button class="btn btn-sm btn-outline-warning py-1 px-2" onclick="ipcPrintCasesheet()" title="Print casesheet"><i class="fa-solid fa-print"></i></button>
-        <button class="btn btn-sm btn-outline-light py-1 px-2" onclick="ipcStartNewIPCConsult()" title="Clear the form"><i class="fa-solid fa-file-circle-plus"></i></button>
-        <button class="btn btn-sm text-white fw-bold py-1 px-3" style="background-color: var(--medical-purple, #0ea5e9);" onclick="ipcSubmitIPCEncounter()" id="ipc-btn-submit">Save Casesheet</button>
+        <button class="btn btn-sm btn-outline-warning py-1 px-2" onclick="ipcPrintCasesheet()" title="Print casesheet">
+          <i class="fa-solid fa-print"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-light py-1 px-2" onclick="ipcStartNewIPCConsult()" title="Clear the form">
+          <i class="fa-solid fa-file-circle-plus"></i>
+        </button>
+        <button class="btn btn-sm text-white fw-bold py-1 px-3" style="background-color: var(--medical-purple, #0ea5e9);"
+                onclick="ipcSubmitIPCEncounter()" id="ipc-btn-submit">Save Casesheet</button>
       </div>
     </div>
   </div>
@@ -336,9 +377,16 @@
             </select>
             <!-- Wrapped the input so dropdowns anchor exactly to the text box -->
             <div class="position-relative w-100">
-                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="ipc-diagnosis" oninput="ipcQueueDiagnosisAssist()" onchange="ipcOnDiagnosisChanged()">
+                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="ipc-diagnosis" oninput="ipcQueueDiagnosisAssist()" onchange="ipcOnDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();ipcAddDx();}">
             </div>
+            <button type="button" class="btn btn-outline-info" style="padding: 0.35rem 0.8rem;"
+                    onclick="ipcAddDx()" title="Add this as an additional diagnosis">
+              <i class="fa-solid fa-plus"></i>
+            </button>
         </div>
+        <!-- One patient commonly carries several diagnoses. Each is a chip;
+             the text box always holds the one being typed. -->
+        <div id="ipc-diagnosis-list" class="d-flex flex-wrap gap-2 mt-2"></div>
       </div>
       
       <!-- ===== TREATMENT ===== -->
@@ -375,10 +423,6 @@
                        <div id="ipc-advice-dropdown" class="custom-dropdown-menu p-2 w-100 d-none" style="background-color: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); position: absolute; z-index: 1000; border-radius: 4px; max-height: 260px; overflow-y: auto;"></div>
                    </div>
                    <input type="text" class="hd-input mt-2" id="ipc-advice-free" placeholder="Additional advice in your own words (type / to search)..." oninput="ipcOnSlashSearch(this, 'ADVICE')" autocomplete="off">
-               </div>
-               <div class="col-md-4">
-                   <label class="hd-label m-0 text-uppercase mb-2 text-warning">Next Review Date</label>
-                   <input type="date" class="hd-input text-warning fw-bold" style="padding: 0.5rem;" id="ipc-review-date">
                </div>
            </div>
       </div>
@@ -655,6 +699,168 @@
 
 <script>
 // ============================================================================
+// HTML DIALOGS
+// A browser alert/confirm/prompt inside the Apps Script iframe is rendered by
+// the host and titled "An embedded page at ...googleusercontent.com says",
+// which shows clinicians a script URL where the message should be. These are
+// in-page replacements with the same call shape, except that they are
+// asynchronous — pass a callback instead of reading a return value.
+// ============================================================================
+function ipc_dialogHost() {
+    let host = document.getElementById('ipc-dialog-host');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'ipc-dialog-host';
+    host.style.cssText =
+        'position:fixed; inset:0; z-index:30000; display:none;' +
+        'align-items:center; justify-content:center; background:rgba(2,6,23,.72);';
+    host.innerHTML =
+        '<div id="ipc-dialog-card" role="dialog" aria-modal="true" style="' +
+          'background:var(--bg-card,#1e293b); border:1px solid var(--border-color,#334155);' +
+          'border-radius:12px; width:min(460px,92vw); box-shadow:0 20px 60px rgba(0,0,0,.6);' +
+          'color:var(--text-main,#f8fafc); overflow:hidden;">' +
+          '<div id="ipc-dialog-head" style="padding:14px 18px; font-weight:700; font-size:.9rem;' +
+            'border-bottom:1px solid var(--border-color,#334155);"></div>' +
+          '<div style="padding:18px;">' +
+            '<div id="ipc-dialog-msg" style="font-size:.84rem; line-height:1.5; white-space:pre-wrap;"></div>' +
+            '<input type="text" id="ipc-dialog-input" class="hd-input mt-3 d-none" autocomplete="off">' +
+          '</div>' +
+          '<div style="padding:12px 18px; display:flex; justify-content:flex-end; gap:8px;' +
+            'border-top:1px solid var(--border-color,#334155);">' +
+            '<button type="button" id="ipc-dialog-cancel" class="btn btn-sm btn-outline-light">Cancel</button>' +
+            '<button type="button" id="ipc-dialog-ok" class="btn btn-sm btn-primary fw-bold">OK</button>' +
+          '</div>' +
+        '</div>';
+    document.body.appendChild(host);
+    return host;
+}
+
+function ipc_dialog(opts) {
+    const host   = ipc_dialogHost();
+    const head   = document.getElementById('ipc-dialog-head');
+    const msg    = document.getElementById('ipc-dialog-msg');
+    const input  = document.getElementById('ipc-dialog-input');
+    const okBtn  = document.getElementById('ipc-dialog-cancel').parentNode.querySelector('#ipc-dialog-ok');
+    const cancel = document.getElementById('ipc-dialog-cancel');
+
+    head.textContent = opts.title || 'Crescentia';
+    head.style.color = opts.kind === 'err'  ? '#f87171'
+                     : opts.kind === 'warn' ? '#fbbf24'
+                     : 'var(--medical-purple,#635bff)';
+    msg.textContent = opts.message || '';
+
+    input.classList.toggle('d-none', opts.mode !== 'prompt');
+    if (opts.mode === 'prompt') input.value = opts.value || '';
+
+    cancel.classList.toggle('d-none', opts.mode === 'alert');
+    okBtn.textContent = opts.okLabel || 'OK';
+
+    host.style.display = 'flex';
+    setTimeout(function () { (opts.mode === 'prompt' ? input : okBtn).focus(); }, 30);
+
+    // Listeners are replaced, not added: reusing one host means a stale
+    // handler from the previous dialog would fire alongside the new one.
+    const close = function (result) {
+        host.style.display = 'none';
+        document.removeEventListener('keydown', onKey);
+        if (opts.done) opts.done(result);
+    };
+    const onKey = function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(opts.mode === 'confirm' ? false : null); }
+        if (e.key === 'Enter' && opts.mode !== 'confirm') {
+            e.preventDefault();
+            close(opts.mode === 'prompt' ? input.value : true);
+        }
+    };
+    okBtn.onclick     = function () { close(opts.mode === 'prompt' ? input.value : true); };
+    cancel.onclick    = function () { close(opts.mode === 'confirm' ? false : null); };
+    host.onmousedown  = function (e) { if (e.target === host) close(opts.mode === 'confirm' ? false : null); };
+    document.addEventListener('keydown', onKey);
+}
+
+/** Drop-in for ipcToast(, 'warn'). Fire and forget. */
+function ipc_alert(message, kind, title) {
+    ipc_dialog({ mode: 'alert', message: message, kind: kind || 'info',
+                 title: title || (kind === 'err' ? 'Error' : 'Notice') });
+}
+
+/** Drop-in for confirm(), except the answer arrives in the callback. */
+function ipc_confirm(message, done, opts) {
+    opts = opts || {};
+    ipc_dialog({ mode: 'confirm', message: message, kind: opts.kind || 'warn',
+                 title: opts.title || 'Please confirm',
+                 okLabel: opts.okLabel || 'Continue', done: done });
+}
+
+/** Drop-in for prompt(). Calls back with the string, or null if cancelled. */
+function ipc_prompt(message, value, done, opts) {
+    opts = opts || {};
+    ipc_dialog({ mode: 'prompt', message: message, value: value || '',
+                 title: opts.title || 'Crescentia', okLabel: opts.okLabel || 'Save',
+                 done: done });
+}
+
+// ============================================================================
+// MULTIPLE DIAGNOSES
+// A single admission or consultation routinely carries more than one. The
+// text box holds the one being typed; confirmed ones become chips. The saved
+// value is the full comma-separated list, so nothing downstream changes.
+// ============================================================================
+var ipcDxList = [];
+
+function ipcAddDx(text) {
+    const el = document.getElementById('ipc-diagnosis');
+    const raw = (text !== undefined && text !== null) ? String(text) : (el ? el.value : '');
+    const added = [];
+    String(raw).split(',').forEach(function (part) {
+        const v = part.trim();
+        if (!v) return;
+        // Case-insensitive de-duplication: "COPD" and "copd" are one diagnosis.
+        const dup = ipcDxList.some(function (d) { return d.toLowerCase() === v.toLowerCase(); });
+        if (!dup) { ipcDxList.push(v); added.push(v); }
+    });
+    if (el) el.value = '';
+    ipcRenderDxList();
+    return added.length;
+}
+
+function ipcRemoveDx(i) {
+    ipcDxList.splice(i, 1);
+    ipcRenderDxList();
+}
+
+function ipcRenderDxList() {
+    const host = document.getElementById('ipc-diagnosis-list');
+    if (!host) return;
+    host.innerHTML = ipcDxList.map(function (d, i) {
+        return '<span class="badge bg-dark border border-info text-info px-2 py-1" style="font-size:.78rem;">' +
+               ipcEsc(d) +
+               ' <i class="fa-solid fa-xmark ms-1" style="cursor:pointer;" title="Remove" ' +
+               'onclick="ipcRemoveDx(' + i + ')"></i></span>';
+    }).join('');
+}
+
+/** The value saved: every chip, plus whatever is still in the box. */
+function ipcCollectDx() {
+    const el = document.getElementById('ipc-diagnosis');
+    const pending = el ? el.value.trim() : '';
+    const all = ipcDxList.slice();
+    if (pending && !all.some(function (d) { return d.toLowerCase() === pending.toLowerCase(); })) {
+        all.push(pending);
+    }
+    return all.join(', ');
+}
+
+/** Replaces the whole list — used by recall, templates and drafts. */
+function ipcSetDx(value) {
+    ipcDxList = String(value || '').split(',')
+        .map(function (d) { return d.trim(); }).filter(Boolean);
+    const el = document.getElementById('ipc-diagnosis');
+    if (el) el.value = '';
+    ipcRenderDxList();
+}
+
+// ============================================================================
 // IP ADMISSION CASESHEET ENGINE
 // Backend: getComposerContext / saveOPEncounterScoped / checkRxSafety /
 //          getLastVisitRecall / buildTaperPlan / suggestPaediatricDose /
@@ -728,6 +934,7 @@ var ipcWard = [];
 var ipcLastCasesheet = null;
 var ipcAdmission = null;      // the open admission's context payload
 var ipcDraftTimer = null;
+var ipcSaveInFlight = false;
 
 function ipcLoadWard() {
     const sel = document.getElementById('ipc-ward-picker');
@@ -761,13 +968,22 @@ function ipcLoadWard() {
 
 function ipcOpenAdmission(ipNumber) {
     if (!ipNumber) return;
-    if (ipcFormHasContent() &&
-        !confirm('This casesheet has unsaved content. Open a different bed anyway?')) {
-        document.getElementById('ipc-ward-picker').value =
-            (ipcAdmission && ipcAdmission.patient.ipNumber) || '';
+    if (ipcFormHasContent()) {
+        ipc_confirm('This casesheet has unsaved content. Open a different bed anyway?',
+            function (ok) {
+                if (!ok) {
+                    document.getElementById('ipc-ward-picker').value =
+                        (ipcAdmission && ipcAdmission.patient.ipNumber) || '';
+                    return;
+                }
+                ipcOpenAdmissionConfirmed(ipNumber);
+            }, { okLabel: 'Discard and open' });
         return;
     }
+    ipcOpenAdmissionConfirmed(ipNumber);
+}
 
+function ipcOpenAdmissionConfirmed(ipNumber) {
     ipcResetIPCConsultForm();
     document.getElementById('ipc-hd-pat-name').innerText = 'Loading...';
 
@@ -857,7 +1073,7 @@ function ipcApplyAdmissionContext(ctx) {
     ipcRenderAllergyChip();
     ipcRenderAssistRecent();
     if (document.getElementById('ipc-assist-search')) ipcRenderAssistSearch();
-    if (p.diagnosis) document.getElementById('ipc-diagnosis').value = p.diagnosis;
+    ipcSetDx(p.diagnosis);
 
     ipcLoadIntegrationData();      // fills only what the context could not
     ipcEnsureIPCLabsDatalist();
@@ -943,7 +1159,7 @@ function ipcApplyPrevious(includeMeds) {
         ipcSetVal('ipc-se-pa-text',  last.sysExam.pa);
         ipcSetVal('ipc-se-cns-text', last.sysExam.cns);
     }
-    if (last.diagnosis) ipcSetVal('ipc-diagnosis', last.diagnosis);
+    if (last.diagnosis) ipcSetDx(last.diagnosis);
     if (last.advice) ipcSetVal('ipc-advice-free', last.advice);
 
     if (includeMeds && last.meds && last.meds.length) {
@@ -979,13 +1195,17 @@ function ipcRestoreDraft(ip) {
     let raw = null;
     try { raw = localStorage.getItem(ipcDraftKey(ip)); } catch (e) { return; }
     if (!raw) return;
-    if (!confirm('An unsaved casesheet draft exists for this bed. Recover it?')) {
-        try { localStorage.removeItem(ipcDraftKey(ip)); } catch (e) {}
-        return;
-    }
+    ipc_confirm('An unsaved casesheet draft exists for this bed. Recover it?',
+        function (ok) {
+            if (!ok) { try { localStorage.removeItem(ipcDraftKey(ip)); } catch (e) {} return; }
+            ipcApplyDraft(raw);
+        }, { okLabel: 'Recover draft' });
+}
+
+function ipcApplyDraft(raw) {
     try {
         const d = JSON.parse(raw);
-        ipcSetVal('ipc-diagnosis', d.provDiagnosis);
+        ipcSetDx(d.provDiagnosis);
         ipcSetVal('ipc-advice-free', d.advice);
         if (d.vitals) {
             ipcSetVal('ipc-vit-sys', d.vitals.sys);   ipcSetVal('ipc-vit-dia', d.vitals.dia);
@@ -1007,7 +1227,7 @@ function ipcUpdateTriageUI() {
     if (ws) ws.className = ws.className.replace(/triage-\w+/, 'triage-' + v);
 }
 
-/** Toast, not alert(): a browser alert inside the Apps Script iframe shows
+/** Toast, not ipcToast(, 'warn'): a browser alert inside the Apps Script iframe shows
  *  clinicians "An embedded page at ...googleusercontent.com says". */
 function ipcToast(msg, kind) {
     let host = document.getElementById('ipc-toast-host');
@@ -1139,10 +1359,10 @@ function ipcSaveMyExamDefaults() {
     };
     google.script.run
         .withSuccessHandler(function (r) {
-            if (r && r.success) { ipcSysDefaults = { cvs: payload.cvs, rs: payload.rs, pa: payload.pa, cns: payload.cns }; alert(r.message); }
-            else alert((r && r.message) || 'Could not save defaults.');
+            if (r && r.success) { ipcSysDefaults = { cvs: payload.cvs, rs: payload.rs, pa: payload.pa, cns: payload.cns }; ipcToast(r.message, 'warn'); }
+            else ipcToast((r && r.message) || 'Could not save defaults.', 'err');
         })
-        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { ipcToast('Network error: ' + e.message, 'err'); })
         .saveExamDefaults(payload, window.sessionToken);
 }
 
@@ -1328,11 +1548,12 @@ function ipcOnIPCLabToggle(chk) {
 function ipcFormHasContent() {
     const anyVal = ['ipc-vit-sys', 'ipc-vit-dia', 'ipc-vit-pr', 'ipc-vit-spo2', 'ipc-vit-temp',
                     'ipc-vit-wt', 'ipc-vit-ht', 'ipc-diagnosis', 'ipc-advice-free',
-                    'ipc-review-date', 'ipc-rad-orders', 'ipc-rad-findings',
+                    'ipc-rad-orders', 'ipc-rad-findings',
                     'ipc-future-labs', 'ipc-lab-other']
         .some(function (id) { const el = document.getElementById(id); return el && el.value.trim(); });
     if (anyVal) return true;
 
+    if (ipcDxList.length) return true;
     if (ipcSelectedLabs.length) return true;
     if (ipcCollectRxRows().length) return true;
 
@@ -1388,7 +1609,9 @@ function ipcResetIPCConsultForm() {
     ipcApplyExamDefaults(ipcSysDefaults || {});
 
     // --- diagnosis / advice / review ---------------------------------------
-    ['ipc-diagnosis', 'ipc-advice-free', 'ipc-review-date',
+    ipcDxList = [];
+    ipcRenderDxList();
+    ['ipc-diagnosis', 'ipc-advice-free',
      'ipc-rad-orders', 'ipc-rad-findings', 'ipc-future-labs', 'ipc-lab-other']
         .forEach(function (id) { const el = document.getElementById(id); if (el) el.value = ''; });
     const dxType = document.getElementById('ipc-diagnosis-type');
@@ -1429,8 +1652,12 @@ function ipcResetIPCConsultForm() {
 
 /** Toolbar action: abandon the current chart and start a blank one. */
 function ipcStartNewIPCConsult() {
-    if (ipcFormHasContent() &&
-        !confirm('Clear this casesheet and start again? Anything unsaved will be lost.')) return;
+    if (ipcFormHasContent()) {
+        ipc_confirm('Clear this casesheet and start again? Anything unsaved will be lost.',
+            function (ok) { if (ok) ipcResetIPCConsultForm(); },
+            { okLabel: 'Clear' });
+        return;
+    }
     ipcResetIPCConsultForm();
 }
 
@@ -1462,15 +1689,21 @@ function ipcRenderAllergyChip() {
 
 function ipcOpenAllergyEditor() {
     const pId = ipcCurrentPatientId();
-    if (!pId || pId === '--') { alert('Fetch a patient first.'); return; }
-    const val = prompt('Known drug allergies (comma separated). Leave blank if none known:', ipcPatientAllergies.raw || '');
+    if (!pId || pId === '--') { ipcToast('Open a bed first.', 'warn'); return; }
+    ipc_prompt('Known drug allergies, comma separated. Leave blank if none are known.',
+        ipcPatientAllergies.raw || '',
+        function (val) { if (val !== null) ipcSaveAllergies(pId, val); },
+        { title: 'Drug allergies' });
+}
+
+function ipcSaveAllergies(pId, val) {
     if (val === null) return;
     google.script.run
         .withSuccessHandler(function (r) {
             if (r && r.success) { ipcLoadAllergies(pId); ipcRunSafetyCheck(); }
-            else alert((r && r.message) || 'Could not save.');
+            else ipcToast((r && r.message) || 'Could not save.', 'err');
         })
-        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { ipcToast('Network error: ' + e.message, 'err'); })
         .savePatientAllergies(pId, val, window.sessionToken);
 }
 
@@ -1545,7 +1778,7 @@ function ipcLoadConsultTemplates() {
 }
 
 function ipcUseConsultTemplate(id) {
-    if (!id) { alert('That template has no id - reload the module.'); return; }
+    if (!id) { ipcToast('That template has no id - reload the module.', 'warn'); return; }
 
     const host = document.getElementById('ipc-assist-recent');
     if (host) host.insertAdjacentHTML('afterbegin',
@@ -1556,7 +1789,7 @@ function ipcUseConsultTemplate(id) {
             const busy = document.getElementById('ipc-tpl-busy');
             if (busy) busy.remove();
 
-            if (!res || !res.success) { alert((res && res.message) || 'Could not apply template.'); return; }
+            if (!res || !res.success) { ipcToast((res && res.message) || 'Could not apply template.', 'err'); return; }
             const t = res.template || {};
 
             // Each field is applied independently. One missing element used to
@@ -1577,7 +1810,6 @@ function ipcUseConsultTemplate(id) {
                 if (t.reviewDays) {
                     const d = new Date();
                     d.setDate(d.getDate() + t.reviewDays);
-                    ipcSetVal('ipc-review-date', d.toISOString().split('T')[0]);
                 }
 
                 // A template's investigations are ORDERS. Tick the real catalog
@@ -1591,7 +1823,7 @@ function ipcUseConsultTemplate(id) {
                 }
             } catch (err) {
                 console.error('applying template:', err);
-                alert('Template applied partially: ' + err.message);
+                ipcToast('Template applied partially: ' + err.message, 'warn');
             }
 
             ipcOpenAssistPanel();
@@ -1601,7 +1833,7 @@ function ipcUseConsultTemplate(id) {
         .withFailureHandler(function (e) {
             const busy = document.getElementById('ipc-tpl-busy');
             if (busy) busy.remove();
-            alert('Network error: ' + (e && e.message ? e.message : e));
+            ipcToast('Network error: ' + (e && e.message ? e.message : e), 'err');
         })
         .applyConsultTemplate(id, window.sessionToken);
 }
@@ -1646,10 +1878,10 @@ function ipcSaveCurrentAsTemplate() {
             if (r && r.success) {
                 bootstrap.Modal.getInstance(document.getElementById('ipc-opSaveTemplateModal'))?.hide();
                 ipcLoadConsultTemplates();
-                alert(r.message);
-            } else alert((r && r.message) || 'Could not save template.');
+                ipcToast(r.message, 'warn');
+            } else ipcToast((r && r.message) || 'Could not save template.', 'err');
         })
-        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { btn.disabled = false; ipcToast('Network error: ' + e.message, 'err'); })
         .saveConsultTemplate({
             doctorId: window.currentDoctorId || '',
             scope: 'PERSONAL',
@@ -1723,7 +1955,7 @@ function ipcPreviewBundle(key) {
 
 function ipcAddBundleItem(key, ii) {
     const b = ipcFindBundle(key);
-    if (!b || !b.items || !b.items[ii]) { alert('That medicine is no longer in the bundle - reload the module.'); return; }
+    if (!b || !b.items || !b.items[ii]) { ipcToast('That medicine is no longer in the bundle - reload the module.', 'warn'); return; }
     ipcAddIPCRxRow(b.items[ii]);
     if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
     ipcQueueSafetyCheck();
@@ -1731,7 +1963,7 @@ function ipcAddBundleItem(key, ii) {
 
 function ipcAddWholeBundle(key) {
     const b = ipcFindBundle(key);
-    if (!b || !(b.items || []).length) { alert('That bundle is empty or no longer available.'); return; }
+    if (!b || !(b.items || []).length) { ipcToast('That bundle is empty or no longer available.', 'warn'); return; }
     b.items.forEach(function (it) { ipcAddIPCRxRow(it); });
     if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
     ipcQueueSafetyCheck();
@@ -1739,7 +1971,7 @@ function ipcAddWholeBundle(key) {
 
 function ipcOpenSaveBundleModal() {
     const meds = ipcCollectRxRows();
-    if (!meds.length) { alert('Add at least one medicine before saving a bundle.'); return; }
+    if (!meds.length) { ipcToast('Add at least one medicine before saving a bundle.', 'warn'); return; }
     document.getElementById('ipc-bnd-name').value = '';
     document.getElementById('ipc-bnd-indication').value = document.getElementById('ipc-diagnosis').value || '';
     document.getElementById('ipc-bnd-preview').innerHTML =
@@ -1756,10 +1988,10 @@ function ipcSaveCurrentAsBundle() {
             if (r && r.success) {
                 bootstrap.Modal.getInstance(document.getElementById('ipc-opSaveBundleModal'))?.hide();
                 ipcLoadComposerContext();
-                alert(r.message);
-            } else alert((r && r.message) || 'Could not save bundle.');
+                ipcToast(r.message, 'warn');
+            } else ipcToast((r && r.message) || 'Could not save bundle.', 'err');
         })
-        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { btn.disabled = false; ipcToast('Network error: ' + e.message, 'err'); })
         .saveRxBundle({
             doctorId: window.currentDoctorId || '',
             scope: 'PERSONAL',
@@ -2017,7 +2249,7 @@ function ipcAddSelectedAssist() {
         added++;
     });
 
-    if (!added) { alert('Tick something first.'); return; }
+    if (!added) { ipcToast('Tick something first.', 'warn'); return; }
     document.querySelectorAll('.ax-your, .ax-class').forEach(function (c) { c.checked = false; });
     ipcQueueSafetyCheck();
 }
@@ -2027,10 +2259,7 @@ function ipcApplyAssistAdvice() {
     if (!res || !res.advice) return;
     const el = document.getElementById('ipc-advice-free');
     el.value = el.value ? el.value + '. ' + res.advice : res.advice;
-    if (res.reviewDays) {
-        const d = new Date(); d.setDate(d.getDate() + res.reviewDays);
-        document.getElementById('ipc-review-date').value = d.toISOString().split('T')[0];
-    }
+    // No review date on an inpatient chart: the review is the next ward round.
 }
 
 // ============================================================================
@@ -2327,25 +2556,65 @@ function ipcAppendIPCDial(val) {
     const v = val.trim();
     const rxPatterns = { 'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1' };
 
+    // Mutually exclusive token groups. Pressing Days then Months means the
+    // doctor changed their mind, so the new unit REPLACES the old one —
+    // appending gave "3 Days Months", and pressing the same unit twice gave
+    // "3 Days Days".
+    const DURATION = ['Days', 'Wks', 'Mths', 'Yrs'];
+    const DOSEUNIT = ['ml', 'Drops', 'Oint'];
+    const URGENCY  = ['STAT', 'SOS'];
+
+    const swapToken = function (text, group, token) {
+        // Strip every member of the group (with its separating space), then
+        // append the one just pressed. Word-boundary anchored so "ml" does not
+        // eat the "ml" inside "5ml" typed by hand.
+        let out = text;
+        group.forEach(function (g) {
+            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
+        });
+        out = out.trim();
+        return out ? out + ' ' + token : token;
+    };
+
     if (rxPatterns[v]) {
         let base = rxPatterns[v];
         if (cVal && !isNaN(cVal)) base = base.replace(/1/g, cVal);
         currentIPCDialTarget.value = base;
+
     } else if (v === 'AF' || v === 'BF') {
+        // AF and BF are also exclusive: clear the other before applying.
+        const other = (v === 'AF') ? 'BF' : 'AF';
+        cVal = cVal.replace(new RegExp('\\(' + other + '\\)', 'g'), '');
         if (cVal.includes('-')) {
             currentIPCDialTarget.value = cVal.split('-').map(function (p) {
-                const clean = p.replace(/\(AF\)|\(BF\)/g, '');
-                return (clean !== '0') ? clean + '(' + v + ')' : '0';
+                const clean = p.replace(/\((?:AF|BF)\)/g, '').trim();
+                return (clean !== '0' && clean !== '') ? clean + '(' + v + ')' : (clean || '0');
             }).join('-');
         } else {
+            cVal = cVal.replace(/\((?:AF|BF)\)/g, '').trim();
             currentIPCDialTarget.value = cVal ? cVal + ' (' + v + ')' : '(' + v + ')';
         }
-    } else if (['STAT', 'SOS', 'ml', 'Drops', 'Oint'].includes(v) || v.includes('Days') || v.includes('Wks')) {
-        currentIPCDialTarget.value = cVal ? cVal + ' ' + v : v;
+
+    } else if (DURATION.indexOf(v) !== -1) {
+        currentIPCDialTarget.value = swapToken(cVal, DURATION, v);
+    } else if (DOSEUNIT.indexOf(v) !== -1) {
+        currentIPCDialTarget.value = swapToken(cVal, DOSEUNIT, v);
+    } else if (URGENCY.indexOf(v) !== -1) {
+        // Pressing STAT twice clears it: it is a toggle, not an accumulator.
+        const had = new RegExp('\\b' + v + '\\b', 'i').test(cVal);
+        let out = cVal;
+        URGENCY.forEach(function (g) {
+            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
+        });
+        out = out.trim();
+        currentIPCDialTarget.value = had ? out : (out ? out + ' ' + v : v);
+
     } else {
+        // Digits and fractions still accumulate — that is how a number is typed.
         currentIPCDialTarget.value = cVal + val;
     }
 }
+
 function ipcClearIPCDial() { if (currentIPCDialTarget) currentIPCDialTarget.value = ''; }
 
 // ============================================================================
@@ -2397,7 +2666,7 @@ function ipcRecalcTaper() {
 }
 
 function ipcApplyTaperToRow() {
-    if (!_ipcTaperPlan || !ipcTaperTargetRow) { alert('Build a valid schedule first.'); return; }
+    if (!_ipcTaperPlan || !ipcTaperTargetRow) { ipcToast('Build a valid schedule first.', 'warn'); return; }
     const nameEl = ipcTaperTargetRow.querySelector('.ipc-rx-name');
     ipcTaperTargetRow.querySelector('.ipc-rx-sig').value = _ipcTaperPlan.sig;
     ipcTaperTargetRow.querySelector('.ipc-rx-days').value = _ipcTaperPlan.totalDays + ' Days';
@@ -2693,7 +2962,7 @@ function ipcBuildIPCFlatPayload() {
             pa:  document.getElementById('ipc-se-pa-text')?.value  || '',
             cns: document.getElementById('ipc-se-cns-text')?.value || ''
         },
-        provDiagnosis: document.getElementById('ipc-diagnosis')?.value || '',
+        provDiagnosis: ipcCollectDx(),
         meds:          ipcCollectRxRows(),
         labs:          labs,
         outsideLabs:   outsideLabs,
@@ -2709,8 +2978,22 @@ function ipcSubmitIPCEncounter() {
         ipcToast('You are not on the care team for this admission.', 'err');
         return;
     }
-    const dx = document.getElementById('ipc-diagnosis').value.trim();
-    if (!dx && !confirm('No diagnosis has been entered. Save the casesheet anyway?')) return;
+    const dx = ipcCollectDx();
+    if (!dx) {
+        ipc_confirm('No diagnosis has been entered. Save the casesheet anyway?',
+            function (ok) { if (ok) ipcSubmitConfirmed(); }, { okLabel: 'Save anyway' });
+        return;
+    }
+    ipcSubmitConfirmed();
+}
+
+function ipcSubmitConfirmed() {
+    // A slow save used to invite a second click, which wrote a second
+    // casesheet and a second set of medication orders. The in-flight flag is
+    // the guard; the disabled button alone was not enough, because the click
+    // could land before the handler ran.
+    if (ipcSaveInFlight) { ipcToast('Already saving — one moment.', 'warn'); return; }
+    ipcSaveInFlight = true;
 
     const btn = document.getElementById('ipc-btn-submit');
     const original = btn.innerHTML;
@@ -2719,6 +3002,7 @@ function ipcSubmitIPCEncounter() {
 
     google.script.run
         .withSuccessHandler(function (res) {
+            ipcSaveInFlight = false;
             btn.disabled = false;
             btn.innerHTML = original;
             if (!res || !res.success) {
@@ -2729,12 +3013,12 @@ function ipcSubmitIPCEncounter() {
             try { localStorage.removeItem(ipcDraftKey()); } catch (e) {}
 
             ipcToast(res.message, res.warnings && res.warnings.length ? 'warn' : 'ok');
-
-            // Learned phrases only exist after the save, so refresh from the
-            // admission we already have rather than re-opening the bed.
-            if (confirm('Casesheet saved. Print it now?')) ipcPrintCasesheet();
+            ipc_confirm('Casesheet saved. Print it now?',
+                function (ok) { if (ok) ipcPrintCasesheet(); },
+                { title: 'Saved', kind: 'info', okLabel: 'Print' });
         })
         .withFailureHandler(function (e) {
+            ipcSaveInFlight = false;
             btn.disabled = false;
             btn.innerHTML = original;
             ipcToast('Save failed: ' + e.message, 'err');
@@ -2743,7 +3027,16 @@ function ipcSubmitIPCEncounter() {
 }
 
 function ipcCloseIPCConsultationWorkspace() {
-    if (ipcFormHasContent() && !confirm('This casesheet has unsaved content. Leave anyway?')) return;
+    if (ipcFormHasContent()) {
+        ipc_confirm('This casesheet has unsaved content. Leave anyway?', function (ok) {
+            if (ok) ipcCloseWorkspaceConfirmed();
+        }, { okLabel: 'Leave' });
+        return;
+    }
+    ipcCloseWorkspaceConfirmed();
+}
+
+function ipcCloseWorkspaceConfirmed() {
     if (ipcDraftTimer) { clearInterval(ipcDraftTimer); ipcDraftTimer = null; }
 
     // Clear the chart, not just the encounter id: leaving it in the DOM is

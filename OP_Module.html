@@ -336,9 +336,16 @@
             </select>
             <!-- Wrapped the input so dropdowns anchor exactly to the text box -->
             <div class="position-relative w-100">
-                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter complete diagnosis..." id="clin-diagnosis" oninput="queueDiagnosisAssist()" onchange="onDiagnosisChanged()">
+                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="clin-diagnosis" oninput="queueDiagnosisAssist()" onchange="onDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();opAddDx();}">
             </div>
+            <button type="button" class="btn btn-outline-info" style="padding: 0.35rem 0.8rem;"
+                    onclick="opAddDx()" title="Add this as an additional diagnosis">
+              <i class="fa-solid fa-plus"></i>
+            </button>
         </div>
+        <!-- One patient commonly carries several diagnoses. Each is a chip;
+             the text box always holds the one being typed. -->
+        <div id="clin-diagnosis-list" class="d-flex flex-wrap gap-2 mt-2"></div>
       </div>
       
       <!-- ===== TREATMENT ===== -->
@@ -655,6 +662,189 @@
 
 <script>
 // ============================================================================
+// HTML DIALOGS
+// A browser alert/confirm/prompt inside the Apps Script iframe is rendered by
+// the host and titled "An embedded page at ...googleusercontent.com says",
+// which shows clinicians a script URL where the message should be. These are
+// in-page replacements with the same call shape, except that they are
+// asynchronous — pass a callback instead of reading a return value.
+// ============================================================================
+function op_dialogHost() {
+    let host = document.getElementById('op-dialog-host');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'op-dialog-host';
+    host.style.cssText =
+        'position:fixed; inset:0; z-index:30000; display:none;' +
+        'align-items:center; justify-content:center; background:rgba(2,6,23,.72);';
+    host.innerHTML =
+        '<div id="op-dialog-card" role="dialog" aria-modal="true" style="' +
+          'background:var(--bg-card,#1e293b); border:1px solid var(--border-color,#334155);' +
+          'border-radius:12px; width:min(460px,92vw); box-shadow:0 20px 60px rgba(0,0,0,.6);' +
+          'color:var(--text-main,#f8fafc); overflow:hidden;">' +
+          '<div id="op-dialog-head" style="padding:14px 18px; font-weight:700; font-size:.9rem;' +
+            'border-bottom:1px solid var(--border-color,#334155);"></div>' +
+          '<div style="padding:18px;">' +
+            '<div id="op-dialog-msg" style="font-size:.84rem; line-height:1.5; white-space:pre-wrap;"></div>' +
+            '<input type="text" id="op-dialog-input" class="hd-input mt-3 d-none" autocomplete="off">' +
+          '</div>' +
+          '<div style="padding:12px 18px; display:flex; justify-content:flex-end; gap:8px;' +
+            'border-top:1px solid var(--border-color,#334155);">' +
+            '<button type="button" id="op-dialog-cancel" class="btn btn-sm btn-outline-light">Cancel</button>' +
+            '<button type="button" id="op-dialog-ok" class="btn btn-sm btn-primary fw-bold">OK</button>' +
+          '</div>' +
+        '</div>';
+    document.body.appendChild(host);
+    return host;
+}
+
+function op_dialog(opts) {
+    const host   = op_dialogHost();
+    const head   = document.getElementById('op-dialog-head');
+    const msg    = document.getElementById('op-dialog-msg');
+    const input  = document.getElementById('op-dialog-input');
+    const okBtn  = document.getElementById('op-dialog-cancel').parentNode.querySelector('#op-dialog-ok');
+    const cancel = document.getElementById('op-dialog-cancel');
+
+    head.textContent = opts.title || 'Crescentia';
+    head.style.color = opts.kind === 'err'  ? '#f87171'
+                     : opts.kind === 'warn' ? '#fbbf24'
+                     : 'var(--medical-purple,#635bff)';
+    msg.textContent = opts.message || '';
+
+    input.classList.toggle('d-none', opts.mode !== 'prompt');
+    if (opts.mode === 'prompt') input.value = opts.value || '';
+
+    cancel.classList.toggle('d-none', opts.mode === 'alert');
+    okBtn.textContent = opts.okLabel || 'OK';
+
+    host.style.display = 'flex';
+    setTimeout(function () { (opts.mode === 'prompt' ? input : okBtn).focus(); }, 30);
+
+    // Listeners are replaced, not added: reusing one host means a stale
+    // handler from the previous dialog would fire alongside the new one.
+    const close = function (result) {
+        host.style.display = 'none';
+        document.removeEventListener('keydown', onKey);
+        if (opts.done) opts.done(result);
+    };
+    const onKey = function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(opts.mode === 'confirm' ? false : null); }
+        if (e.key === 'Enter' && opts.mode !== 'confirm') {
+            e.preventDefault();
+            close(opts.mode === 'prompt' ? input.value : true);
+        }
+    };
+    okBtn.onclick     = function () { close(opts.mode === 'prompt' ? input.value : true); };
+    cancel.onclick    = function () { close(opts.mode === 'confirm' ? false : null); };
+    host.onmousedown  = function (e) { if (e.target === host) close(opts.mode === 'confirm' ? false : null); };
+    document.addEventListener('keydown', onKey);
+}
+
+/** Non-blocking notice, styled like the module rather than the host frame. */
+function opToast(msg, kind) {
+    let host = document.getElementById('op-toast-host');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'op-toast-host';
+        host.style.cssText = 'position:fixed; right:18px; bottom:18px; z-index:20000;' +
+                             'display:flex; flex-direction:column; gap:8px; max-width:400px;';
+        document.body.appendChild(host);
+    }
+    const colour = kind === 'err' ? '#ef4444' : kind === 'warn' ? '#f59e0b' : '#10b981';
+    const el = document.createElement('div');
+    el.style.cssText = 'background:var(--bg-card,#1e293b); border:1px solid ' + colour +
+        '; border-left-width:4px; color:var(--text-main,#e2e8f0); padding:12px 16px;' +
+        'border-radius:8px; font-size:.8rem; box-shadow:0 8px 24px rgba(0,0,0,.5); cursor:pointer;';
+    el.textContent = msg;
+    el.onclick = function () { el.remove(); };
+    host.appendChild(el);
+    setTimeout(function () { el.remove(); }, kind === 'ok' ? 4000 : 9000);
+}
+
+/** Drop-in for opToast(, 'warn'). Fire and forget. */
+function op_alert(message, kind, title) {
+    op_dialog({ mode: 'alert', message: message, kind: kind || 'info',
+                 title: title || (kind === 'err' ? 'Error' : 'Notice') });
+}
+
+/** Drop-in for confirm(), except the answer arrives in the callback. */
+function op_confirm(message, done, opts) {
+    opts = opts || {};
+    op_dialog({ mode: 'confirm', message: message, kind: opts.kind || 'warn',
+                 title: opts.title || 'Please confirm',
+                 okLabel: opts.okLabel || 'Continue', done: done });
+}
+
+/** Drop-in for prompt(). Calls back with the string, or null if cancelled. */
+function op_prompt(message, value, done, opts) {
+    opts = opts || {};
+    op_dialog({ mode: 'prompt', message: message, value: value || '',
+                 title: opts.title || 'Crescentia', okLabel: opts.okLabel || 'Save',
+                 done: done });
+}
+
+// ============================================================================
+// MULTIPLE DIAGNOSES
+// A single admission or consultation routinely carries more than one. The
+// text box holds the one being typed; confirmed ones become chips. The saved
+// value is the full comma-separated list, so nothing downstream changes.
+// ============================================================================
+var opDxList = [];
+
+function opAddDx(text) {
+    const el = document.getElementById('clin-diagnosis');
+    const raw = (text !== undefined && text !== null) ? String(text) : (el ? el.value : '');
+    const added = [];
+    String(raw).split(',').forEach(function (part) {
+        const v = part.trim();
+        if (!v) return;
+        // Case-insensitive de-duplication: "COPD" and "copd" are one diagnosis.
+        const dup = opDxList.some(function (d) { return d.toLowerCase() === v.toLowerCase(); });
+        if (!dup) { opDxList.push(v); added.push(v); }
+    });
+    if (el) el.value = '';
+    opRenderDxList();
+    return added.length;
+}
+
+function opRemoveDx(i) {
+    opDxList.splice(i, 1);
+    opRenderDxList();
+}
+
+function opRenderDxList() {
+    const host = document.getElementById('clin-diagnosis-list');
+    if (!host) return;
+    host.innerHTML = opDxList.map(function (d, i) {
+        return '<span class="badge bg-dark border border-info text-info px-2 py-1" style="font-size:.78rem;">' +
+               opEsc(d) +
+               ' <i class="fa-solid fa-xmark ms-1" style="cursor:pointer;" title="Remove" ' +
+               'onclick="opRemoveDx(' + i + ')"></i></span>';
+    }).join('');
+}
+
+/** The value saved: every chip, plus whatever is still in the box. */
+function opCollectDx() {
+    const el = document.getElementById('clin-diagnosis');
+    const pending = el ? el.value.trim() : '';
+    const all = opDxList.slice();
+    if (pending && !all.some(function (d) { return d.toLowerCase() === pending.toLowerCase(); })) {
+        all.push(pending);
+    }
+    return all.join(', ');
+}
+
+/** Replaces the whole list — used by recall, templates and drafts. */
+function opSetDx(value) {
+    opDxList = String(value || '').split(',')
+        .map(function (d) { return d.trim(); }).filter(Boolean);
+    const el = document.getElementById('clin-diagnosis');
+    if (el) el.value = '';
+    opRenderDxList();
+}
+
+// ============================================================================
 // OP CONSULTATION ENGINE
 // Backend: getComposerContext / saveOPEncounterScoped / checkRxSafety /
 //          getLastVisitRecall / buildTaperPlan / suggestPaediatricDose /
@@ -853,10 +1043,10 @@ function saveMyExamDefaults() {
     };
     google.script.run
         .withSuccessHandler(function (r) {
-            if (r && r.success) { opSysDefaults = { cvs: payload.cvs, rs: payload.rs, pa: payload.pa, cns: payload.cns }; alert(r.message); }
-            else alert((r && r.message) || 'Could not save defaults.');
+            if (r && r.success) { opSysDefaults = { cvs: payload.cvs, rs: payload.rs, pa: payload.pa, cns: payload.cns }; opToast(r.message, 'warn'); }
+            else opToast((r && r.message) || 'Could not save defaults.', 'err');
         })
-        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { opToast('Network error: ' + e.message, 'err'); })
         .saveExamDefaults(payload, window.sessionToken);
 }
 
@@ -1047,6 +1237,7 @@ function opFormHasContent() {
         .some(function (id) { const el = document.getElementById(id); return el && el.value.trim(); });
     if (anyVal) return true;
 
+    if (opDxList.length) return true;
     if (opSelectedLabs.length) return true;
     if (collectRxRows().length) return true;
 
@@ -1102,6 +1293,8 @@ function resetOPConsultForm() {
     applyExamDefaults(opSysDefaults || {});
 
     // --- diagnosis / advice / review ---------------------------------------
+    opDxList = [];
+    opRenderDxList();
     ['clin-diagnosis', 'op-advice-free', 'clin-review-date',
      'op-rad-orders', 'op-rad-findings', 'op-future-labs', 'op-lab-other']
         .forEach(function (id) { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -1143,14 +1336,17 @@ function resetOPConsultForm() {
 
 /** Toolbar action: abandon the current chart and start a blank one. */
 function startNewOPConsult() {
-    if (opFormHasContent() &&
-        !confirm('Clear this consultation and start a new one? Anything unsaved will be lost.')) return;
+    if (opFormHasContent()) {
+        op_confirm('Clear this consultation and start a new one? Anything unsaved will be lost.',
+            function (ok) { if (ok) resetOPConsultForm(); }, { okLabel: 'Clear' });
+        return;
+    }
     resetOPConsultForm();
 }
 
 function searchEMRPatient() {
     const pId = document.getElementById('op-search-pat-id').value.trim();
-    if (!pId) { alert("Please enter a Patient ID."); return; }
+    if (!pId) { opToast("Please enter a Patient ID.", 'warn'); return; }
 
     // Switching patients MUST start a blank chart. Without this the previous
     // patient's vitals, investigations and prescription stayed on screen and
@@ -1161,10 +1357,16 @@ function searchEMRPatient() {
     const current = opCurrentPatientId();
     const isSwitch = !!current && current !== '--' && current.toUpperCase() !== pId.toUpperCase();
 
-    if (isSwitch && opFormHasContent() &&
-        !confirm('Load ' + pId + '? The consultation on screen has not been saved and will be cleared.')) {
+    if (opFormHasContent() && pId !== opCurrentPatientId()) {
+        op_confirm('Load ' + pId + '? The consultation on screen has not been saved and will be cleared.',
+            function (ok) { if (ok) { resetOPConsultForm(); doSearchEMRPatient(pId); } },
+            { okLabel: 'Load patient' });
         return;
     }
+    doSearchEMRPatient(pId);
+}
+
+function doSearchEMRPatient(pId) {
     if (isSwitch) resetOPConsultForm();
 
     document.getElementById('hd-pat-name').innerText = "Fetching...";
@@ -1172,7 +1374,7 @@ function searchEMRPatient() {
     google.script.run.withSuccessHandler(function (data) {
         if (!data) {
             document.getElementById('hd-pat-name').innerText = "Patient Not Found";
-            alert("Patient ID not found in database.");
+            opToast("Patient ID not found in database.", 'warn');
             return;
         }
         window.currentPatientId = pId;
@@ -1188,7 +1390,7 @@ function searchEMRPatient() {
         runSafetyCheck();
     }).withFailureHandler(function (err) {
         document.getElementById('hd-pat-name').innerText = "Search Failed";
-        alert("Backend Network Error: " + err.message);
+        opToast("Backend Network Error: " + err.message, 'err');
     }).getUserProfile(pId);
 }
 
@@ -1220,15 +1422,21 @@ function renderAllergyChip() {
 
 function openAllergyEditor() {
     const pId = opCurrentPatientId();
-    if (!pId || pId === '--') { alert('Fetch a patient first.'); return; }
-    const val = prompt('Known drug allergies (comma separated). Leave blank if none known:', opPatientAllergies.raw || '');
+    if (!pId || pId === '--') { opToast('Fetch a patient first.', 'warn'); return; }
+    op_prompt('Known drug allergies, comma separated. Leave blank if none are known.',
+        opPatientAllergies.raw || '',
+        function (val) { if (val !== null) opSaveAllergies(pId, val); },
+        { title: 'Drug allergies' });
+}
+
+function opSaveAllergies(pId, val) {
     if (val === null) return;
     google.script.run
         .withSuccessHandler(function (r) {
             if (r && r.success) { loadAllergies(pId); runSafetyCheck(); }
-            else alert((r && r.message) || 'Could not save.');
+            else opToast((r && r.message) || 'Could not save.', 'err');
         })
-        .withFailureHandler(function (e) { alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { opToast('Network error: ' + e.message, 'err'); })
         .savePatientAllergies(pId, val, window.sessionToken);
 }
 
@@ -1267,9 +1475,13 @@ function loadLastVisit(pId) {
 function recallLastVisit(includeMeds) {
     const v = window._opLastVisit;
     if (!v) return;
-    if (!confirm('Copy the ' + (includeMeds ? 'notes and medicines' : 'notes') +
-                 ' from the visit on ' + v.date + '? Existing entries will be replaced.')) return;
+    op_confirm('Copy the ' + (includeMeds ? 'notes and medicines' : 'notes') +
+               ' from the visit on ' + v.date + '? Existing entries will be replaced.',
+        function (ok) { if (ok) doRecallLastVisit(includeMeds, v); },
+        { okLabel: 'Copy' });
+}
 
+function doRecallLastVisit(includeMeds, v) {
     // Notes
     document.getElementById('op-cc-tbody').innerHTML = '';
     (v.complaints || '').split('|').forEach(function (c) {
@@ -1295,7 +1507,7 @@ function recallLastVisit(includeMeds) {
             if (el && v.exam[s]) el.value = v.exam[s];
         });
     }
-    if (v.diagnosis) document.getElementById('clin-diagnosis').value = v.diagnosis;
+    if (v.diagnosis) opSetDx(v.diagnosis);
     if (v.radiology) document.getElementById('op-rad-orders').value = v.radiology;
 
     if (includeMeds && v.meds && v.meds.length) {
@@ -1305,7 +1517,7 @@ function recallLastVisit(includeMeds) {
 
     onDiagnosisChanged();
     runSafetyCheck();
-    alert('Copied. Review every line before saving.');
+    opToast('Copied. Review every line before saving.', 'warn');
 }
 
 // ============================================================================
@@ -1382,7 +1594,7 @@ function loadConsultTemplates() {
 }
 
 function useConsultTemplate(id) {
-    if (!id) { alert('That template has no id - reload the module.'); return; }
+    if (!id) { opToast('That template has no id - reload the module.', 'warn'); return; }
 
     const host = document.getElementById('op-assist-recent');
     if (host) host.insertAdjacentHTML('afterbegin',
@@ -1393,7 +1605,7 @@ function useConsultTemplate(id) {
             const busy = document.getElementById('tpl-busy');
             if (busy) busy.remove();
 
-            if (!res || !res.success) { alert((res && res.message) || 'Could not apply template.'); return; }
+            if (!res || !res.success) { opToast((res && res.message) || 'Could not apply template.', 'err'); return; }
             const t = res.template || {};
 
             // Each field is applied independently. One missing element used to
@@ -1407,7 +1619,7 @@ function useConsultTemplate(id) {
                     if (t.exam[s]) opSetVal('op-se-' + s + '-text', t.exam[s]);
                 });
 
-                if (t.diagnosis)     opSetVal('clin-diagnosis', t.diagnosis);
+                if (t.diagnosis)     opSetDx(t.diagnosis);
                 if (t.diagnosisType) opSetVal('clin-diagnosis-type', t.diagnosisType);
                 if (t.advice)        opSetVal('op-advice-free', t.advice);
 
@@ -1428,7 +1640,7 @@ function useConsultTemplate(id) {
                 }
             } catch (err) {
                 console.error('applying template:', err);
-                alert('Template applied partially: ' + err.message);
+                opToast('Template applied partially: ' + err.message, 'warn');
             }
 
             openAssistPanel();
@@ -1438,7 +1650,7 @@ function useConsultTemplate(id) {
         .withFailureHandler(function (e) {
             const busy = document.getElementById('tpl-busy');
             if (busy) busy.remove();
-            alert('Network error: ' + (e && e.message ? e.message : e));
+            opToast('Network error: ' + (e && e.message ? e.message : e), 'err');
         })
         .applyConsultTemplate(id, window.sessionToken);
 }
@@ -1483,10 +1695,10 @@ function saveCurrentAsTemplate() {
             if (r && r.success) {
                 bootstrap.Modal.getInstance(document.getElementById('opSaveTemplateModal'))?.hide();
                 loadConsultTemplates();
-                alert(r.message);
-            } else alert((r && r.message) || 'Could not save template.');
+                opToast(r.message, 'warn');
+            } else opToast((r && r.message) || 'Could not save template.', 'err');
         })
-        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { btn.disabled = false; opToast('Network error: ' + e.message, 'err'); })
         .saveConsultTemplate({
             doctorId: window.currentDoctorId || '',
             scope: 'PERSONAL',
@@ -1560,7 +1772,7 @@ function previewBundle(key) {
 
 function addBundleItem(key, ii) {
     const b = opFindBundle(key);
-    if (!b || !b.items || !b.items[ii]) { alert('That medicine is no longer in the bundle - reload the module.'); return; }
+    if (!b || !b.items || !b.items[ii]) { opToast('That medicine is no longer in the bundle - reload the module.', 'warn'); return; }
     addOPRxRow(b.items[ii]);
     if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
     queueSafetyCheck();
@@ -1568,7 +1780,7 @@ function addBundleItem(key, ii) {
 
 function addWholeBundle(key) {
     const b = opFindBundle(key);
-    if (!b || !(b.items || []).length) { alert('That bundle is empty or no longer available.'); return; }
+    if (!b || !(b.items || []).length) { opToast('That bundle is empty or no longer available.', 'warn'); return; }
     b.items.forEach(function (it) { addOPRxRow(it); });
     if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
     queueSafetyCheck();
@@ -1576,7 +1788,7 @@ function addWholeBundle(key) {
 
 function openSaveBundleModal() {
     const meds = collectRxRows();
-    if (!meds.length) { alert('Add at least one medicine before saving a bundle.'); return; }
+    if (!meds.length) { opToast('Add at least one medicine before saving a bundle.', 'warn'); return; }
     document.getElementById('bnd-name').value = '';
     document.getElementById('bnd-indication').value = document.getElementById('clin-diagnosis').value || '';
     document.getElementById('bnd-preview').innerHTML =
@@ -1593,10 +1805,10 @@ function saveCurrentAsBundle() {
             if (r && r.success) {
                 bootstrap.Modal.getInstance(document.getElementById('opSaveBundleModal'))?.hide();
                 loadComposerContext();
-                alert(r.message);
-            } else alert((r && r.message) || 'Could not save bundle.');
+                opToast(r.message, 'warn');
+            } else opToast((r && r.message) || 'Could not save bundle.', 'err');
         })
-        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { btn.disabled = false; opToast('Network error: ' + e.message, 'err'); })
         .saveRxBundle({
             doctorId: window.currentDoctorId || '',
             scope: 'PERSONAL',
@@ -1744,9 +1956,10 @@ function loadConsultDoctors() {
                 // Never fail silently here — an empty picker blocks every save.
                 sel.innerHTML = '<option value="">Unavailable</option>';
                 console.error('getDoctorPickerContext:', res);
-                alert('Could not load the doctor list: ' +
+                op_alert('Could not load the doctor list: ' +
                       ((res && res.message) || 'no response') +
-                      '\n\nsessionToken present: ' + (window.sessionToken ? 'yes' : 'NO'));
+                      '\n\nSigned-in session: ' + (window.sessionToken ? 'present' : 'MISSING'),
+                      'err');
                 return;
             }
             opDoctorList = res.doctors || [];
@@ -1764,7 +1977,7 @@ function loadConsultDoctors() {
         })
         .withFailureHandler(function (e) {
             sel.innerHTML = '<option value="">Unavailable</option>';
-            alert('Network error loading doctors: ' + e.message);
+            opToast('Network error loading doctors: ' + e.message, 'err');
         })
         .getDoctorPickerContext(window.sessionToken);
 }
@@ -1903,7 +2116,7 @@ function addSelectedAssist() {
         added++;
     });
 
-    if (!added) { alert('Tick something first.'); return; }
+    if (!added) { opToast('Tick something first.', 'warn'); return; }
     document.querySelectorAll('.ax-your, .ax-class').forEach(function (c) { c.checked = false; });
     queueSafetyCheck();
 }
@@ -1924,7 +2137,7 @@ function applyAssistAdvice() {
 // ============================================================================
 function openReferModal() {
     const pId = opCurrentPatientId();
-    if (!pId || pId === '--') { alert('Fetch a patient first.'); return; }
+    if (!pId || pId === '--') { opToast('Fetch a patient first.', 'warn'); return; }
     document.getElementById('ref-reason').value = '';
     document.getElementById('ref-to-doctor').value = '';
     new bootstrap.Modal(document.getElementById('opReferModal')).show();
@@ -1938,10 +2151,10 @@ function sendReferral() {
             btn.disabled = false;
             if (r && r.success) {
                 bootstrap.Modal.getInstance(document.getElementById('opReferModal'))?.hide();
-                alert(r.message);
-            } else alert((r && r.message) || 'Could not create the referral.');
+                opToast(r.message, 'warn');
+            } else opToast((r && r.message) || 'Could not create the referral.', 'err');
         })
-        .withFailureHandler(function (e) { btn.disabled = false; alert('Network error: ' + e.message); })
+        .withFailureHandler(function (e) { btn.disabled = false; opToast('Network error: ' + e.message, 'err'); })
         .createOPReferral({
             fromDoctorId: window.currentDoctorId || '',
             patientId: opCurrentPatientId(),
@@ -2247,25 +2460,65 @@ function appendOPDial(val) {
     const v = val.trim();
     const rxPatterns = { 'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1' };
 
+    // Mutually exclusive token groups. Pressing Days then Months means the
+    // doctor changed their mind, so the new unit REPLACES the old one —
+    // appending gave "3 Days Months", and pressing the same unit twice gave
+    // "3 Days Days".
+    const DURATION = ['Days', 'Wks', 'Mths', 'Yrs'];
+    const DOSEUNIT = ['ml', 'Drops', 'Oint'];
+    const URGENCY  = ['STAT', 'SOS'];
+
+    const swapToken = function (text, group, token) {
+        // Strip every member of the group (with its separating space), then
+        // append the one just pressed. Word-boundary anchored so "ml" does not
+        // eat the "ml" inside "5ml" typed by hand.
+        let out = text;
+        group.forEach(function (g) {
+            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
+        });
+        out = out.trim();
+        return out ? out + ' ' + token : token;
+    };
+
     if (rxPatterns[v]) {
         let base = rxPatterns[v];
         if (cVal && !isNaN(cVal)) base = base.replace(/1/g, cVal);
         currentOPDialTarget.value = base;
+
     } else if (v === 'AF' || v === 'BF') {
+        // AF and BF are also exclusive: clear the other before applying.
+        const other = (v === 'AF') ? 'BF' : 'AF';
+        cVal = cVal.replace(new RegExp('\\(' + other + '\\)', 'g'), '');
         if (cVal.includes('-')) {
             currentOPDialTarget.value = cVal.split('-').map(function (p) {
-                const clean = p.replace(/\(AF\)|\(BF\)/g, '');
-                return (clean !== '0') ? clean + '(' + v + ')' : '0';
+                const clean = p.replace(/\((?:AF|BF)\)/g, '').trim();
+                return (clean !== '0' && clean !== '') ? clean + '(' + v + ')' : (clean || '0');
             }).join('-');
         } else {
+            cVal = cVal.replace(/\((?:AF|BF)\)/g, '').trim();
             currentOPDialTarget.value = cVal ? cVal + ' (' + v + ')' : '(' + v + ')';
         }
-    } else if (['STAT', 'SOS', 'ml', 'Drops', 'Oint'].includes(v) || v.includes('Days') || v.includes('Wks')) {
-        currentOPDialTarget.value = cVal ? cVal + ' ' + v : v;
+
+    } else if (DURATION.indexOf(v) !== -1) {
+        currentOPDialTarget.value = swapToken(cVal, DURATION, v);
+    } else if (DOSEUNIT.indexOf(v) !== -1) {
+        currentOPDialTarget.value = swapToken(cVal, DOSEUNIT, v);
+    } else if (URGENCY.indexOf(v) !== -1) {
+        // Pressing STAT twice clears it: it is a toggle, not an accumulator.
+        const had = new RegExp('\\b' + v + '\\b', 'i').test(cVal);
+        let out = cVal;
+        URGENCY.forEach(function (g) {
+            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
+        });
+        out = out.trim();
+        currentOPDialTarget.value = had ? out : (out ? out + ' ' + v : v);
+
     } else {
+        // Digits and fractions still accumulate — that is how a number is typed.
         currentOPDialTarget.value = cVal + val;
     }
 }
+
 function clearOPDial() { if (currentOPDialTarget) currentOPDialTarget.value = ''; }
 
 // ============================================================================
@@ -2317,7 +2570,7 @@ function recalcTaper() {
 }
 
 function applyTaperToRow() {
-    if (!_opTaperPlan || !opTaperTargetRow) { alert('Build a valid schedule first.'); return; }
+    if (!_opTaperPlan || !opTaperTargetRow) { opToast('Build a valid schedule first.', 'warn'); return; }
     const nameEl = opTaperTargetRow.querySelector('.op-rx-name');
     opTaperTargetRow.querySelector('.op-rx-sig').value = _opTaperPlan.sig;
     opTaperTargetRow.querySelector('.op-rx-days').value = _opTaperPlan.totalDays + ' Days';
@@ -2581,7 +2834,7 @@ function buildOPFlatPayload() {
         rs: document.getElementById('op-se-rs-text')?.value || '',
         pa: document.getElementById('op-se-pa-text')?.value || '',
         cns: document.getElementById('op-se-cns-text')?.value || '',
-        diagnosis: document.getElementById('clin-diagnosis')?.value || '',
+        diagnosis: opCollectDx(),
         diagnosisType: document.getElementById('clin-diagnosis-type')?.value || 'Provisional',
         reviewDate: document.getElementById('clin-review-date')?.value || '',
         radiologyOrders: document.getElementById('op-rad-orders')?.value || '',
@@ -2601,37 +2854,49 @@ function submitOPEncounter() {
     const payload = buildOPFlatPayload();
 
     if (!payload.patientId || payload.patientId === "--") {
-        alert("Please fetch a patient first using the Search button.");
+        opToast("Please fetch a patient first using the Search button.", 'warn');
         return;
     }
 
     // Danger-level safety alerts require an explicit override before saving.
     const dangers = document.querySelectorAll('#op-safety-bar .op-safety-danger');
-    if (dangers.length &&
-        !confirm("There are allergy alerts on this prescription. Save anyway?")) return;
+    if (dangers.length && !window.__opAllergyAck) {
+        op_confirm('There are allergy alerts on this prescription. Save anyway?',
+            function (ok) {
+                if (!ok) return;
+                window.__opAllergyAck = true;
+                try { submitOPEncounter(); } finally { window.__opAllergyAck = false; }
+            }, { kind: 'err', okLabel: 'Save anyway' });
+        return;
+    }
+
+    // A slow save invites a second click, which writes a second encounter.
+    if (window.__opSaveInFlight) { opToast('Already saving — one moment.', 'warn'); return; }
+    window.__opSaveInFlight = true;
 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
     btn.disabled = true;
 
     google.script.run
         .withSuccessHandler(function (response) {
+            window.__opSaveInFlight = false;
             btn.innerHTML = 'Save Consult';
             btn.disabled = false;
             if (response && response.success) {
                 activeOpEncounterId = response.encounterId;
                 loadComposerContext();   // pick up newly learnt phrases
-                alert("Saved.\nEncounter: " + activeOpEncounterId +
+                opToast("Saved.\nEncounter: " + activeOpEncounterId +
                       (response.doctorName ? "\nRecorded under: " + response.doctorName : "") +
                       (response.attributionSource === 'SUBSTITUTE'
-                        ? "\n\nNote: this was booked with a different doctor." : ""));
+                        ? "\n\nNote: this was booked with a different doctor." : ""), 'warn');
             } else {
-                alert("Could not save: " + ((response && response.message) || 'Unknown error'));
+                op_alert("Could not save: " + ((response && response.message) || 'Unknown error'), 'err');
             }
         })
         .withFailureHandler(function (err) {
             btn.innerHTML = 'Save Consult';
             btn.disabled = false;
-            alert("Network error: " + err.message);
+            opToast("Network error: " + err.message, 'err');
         })
         .saveOPEncounterScoped(payload, window.sessionToken);
 }
@@ -2662,7 +2927,7 @@ function closeOPConsultationWorkspace() {
 // PRINT / DISPATCH
 // ============================================================================
 function printOPPrescription() {
-  if (!activeOpEncounterId) { alert("Save the consultation before printing."); return; }
+  if (!activeOpEncounterId) { opToast("Save the consultation before printing.", 'warn'); return; }
 
   const printBtn = document.querySelector('button[onclick="printOPPrescription()"]');
   const originalHtml = printBtn ? printBtn.innerHTML : "Print";
@@ -2671,10 +2936,10 @@ function printOPPrescription() {
   google.script.run
     .withSuccessHandler(function (res) {
       if (printBtn) { printBtn.innerHTML = originalHtml; printBtn.disabled = false; }
-      if (!res || !res.success) { alert("Could not generate prescription: " + (res.message || "Unknown error")); return; }
+      if (!res || !res.success) { opToast("Could not generate prescription: " + (res.message || "Unknown error"), 'err'); return; }
 
       const printWindow = window.open('', '_blank', 'width=900,height=1100');
-      if (!printWindow) { alert('Pop-up blocked. Allow pop-ups for this site, then retry.'); return; }
+      if (!printWindow) { opToast('Pop-up blocked. Allow pop-ups for this site, then retry.', 'warn'); return; }
       printWindow.document.open();
       printWindow.document.write(res.html);
       printWindow.document.close();
@@ -2683,13 +2948,13 @@ function printOPPrescription() {
     })
     .withFailureHandler(function (e) {
       if (printBtn) { printBtn.innerHTML = originalHtml; printBtn.disabled = false; }
-      alert("Server Error: " + e.message);
+      opToast("Server Error: " + e.message, 'err');
     })
     .getOPPrescriptionHtml(activeOpEncounterId);
 }
 
 function dispatchOPWhatsApp() {
-  if (!activeOpEncounterId) { alert("Save the consultation before sending it."); return; }
+  if (!activeOpEncounterId) { opToast("Save the consultation before sending it.", 'warn'); return; }
 
   const btn = document.getElementById('btn-wa-op');
   const originalHtml = btn.innerHTML;
@@ -2698,37 +2963,52 @@ function dispatchOPWhatsApp() {
 
   const patientId = opCurrentPatientId();
 
+  const restore = function () { btn.innerHTML = originalHtml; btn.disabled = false; };
+
   google.script.run.withSuccessHandler(function (profile) {
     let mobileNumber = window.currentPatientMobile;
     if (mobileNumber === "undefined") mobileNumber = "";
     if (!mobileNumber && profile) mobileNumber = profile.whatsapp || profile.mobile || "";
+
     if (!mobileNumber || String(mobileNumber).trim() === "") {
-        mobileNumber = prompt("No mobile number on file. Enter WhatsApp number (with country code):", "");
-        if (!mobileNumber) { btn.innerHTML = originalHtml; btn.disabled = false; return; }
+        // Asking for the number is now asynchronous, so the send has to be
+        // resumed from the callback rather than falling through.
+        op_prompt('No mobile number on file. Enter the WhatsApp number, with country code.',
+            '',
+            function (v) {
+                if (!v || !String(v).trim()) { restore(); return; }
+                sendOPWhatsAppTo(String(v).trim(), btn, originalHtml);
+            },
+            { title: 'WhatsApp', okLabel: 'Send' });
+        return;
     }
+    sendOPWhatsAppTo(mobileNumber, btn, originalHtml);
+
+  }).withFailureHandler(function () {
+    restore();
+    opToast("Could not verify patient contact details.", 'err');
+  }).getUserProfile(patientId);
+}
+
+function sendOPWhatsAppTo(mobileNumber, btn, originalHtml) {
     let cleanNum = String(mobileNumber).replace(/\D/g, '');
     if (cleanNum.length === 10) cleanNum = "91" + cleanNum;
 
     google.script.run.withSuccessHandler(function (res) {
         btn.innerHTML = originalHtml; btn.disabled = false;
-        if (!res || !res.success) { alert("Could not generate the link: " + (res ? res.message : 'Unknown error')); return; }
+        if (!res || !res.success) { opToast("Could not generate the link: " + (res ? res.message : 'Unknown error'), 'err'); return; }
         const patientName = document.getElementById('hd-pat-name').innerText || 'Patient';
         const msg = "Hello " + patientName + ",\n\nHere is your digital prescription from *Valarmathi Clinic*.\n\n" +
                     "View & download your secure PDF here:\n" + res.link + "\n\nWishing you a speedy recovery!";
         window.open("https://wa.me/" + cleanNum + "?text=" + encodeURIComponent(msg), '_blank');
     }).withFailureHandler(function (e) {
         btn.innerHTML = originalHtml; btn.disabled = false;
-        alert("Server Error: " + e.message);
+        opToast("Server Error: " + e.message, 'err');
     }).generateAndStoreOPPrescriptionPDF(activeOpEncounterId);
-
-  }).withFailureHandler(function () {
-    btn.innerHTML = originalHtml; btn.disabled = false;
-    alert("Could not verify patient contact details.");
-  }).getUserProfile(patientId);
 }
 
 function dispatchOPEmail() {
-  if (!activeOpEncounterId) { alert("Save the consultation before emailing it."); return; }
+  if (!activeOpEncounterId) { opToast("Save the consultation before emailing it.", 'warn'); return; }
 
   const btn = document.getElementById('btn-email-op');
   const originalHtml = btn.innerHTML;
@@ -2742,26 +3022,37 @@ function dispatchOPEmail() {
     if (patientEmail === "undefined") patientEmail = "";
     if (!patientEmail && profile) patientEmail = profile.email || "";
 
-    if (!patientEmail || String(patientEmail).trim() === "") {
-        patientEmail = prompt("No email on file. Enter the patient's email address:", "");
-        if (!patientEmail) { btn.innerHTML = originalHtml; btn.disabled = false; return; }
-    } else if (!confirm("Send prescription to " + patientEmail + "?")) {
-        btn.innerHTML = originalHtml; btn.disabled = false; return;
-    }
+    const restore = function () { btn.innerHTML = originalHtml; btn.disabled = false; };
 
-    google.script.run.withSuccessHandler(function (res) {
-        btn.innerHTML = originalHtml; btn.disabled = false;
-        alert(res && res.success ? "Prescription emailed to " + patientEmail
-                                 : "Failed: " + (res && res.message));
-    }).withFailureHandler(function (err) {
-        btn.innerHTML = originalHtml; btn.disabled = false;
-        alert("Network Error: " + err.message);
-    }).emailOPPrescriptionPDF(activeOpEncounterId, patientEmail.trim());
+    if (!patientEmail || String(patientEmail).trim() === "") {
+        op_prompt("No email on file. Enter the patient's email address.", '',
+            function (v) {
+                if (!v || !String(v).trim()) { restore(); return; }
+                sendOPEmailTo(String(v).trim(), btn, originalHtml);
+            }, { title: 'Email prescription', okLabel: 'Send' });
+        return;
+    }
+    op_confirm("Send prescription to " + patientEmail + "?", function (ok) {
+        if (!ok) { restore(); return; }
+        sendOPEmailTo(String(patientEmail).trim(), btn, originalHtml);
+    }, { kind: 'info', okLabel: 'Send' });
 
   }).withFailureHandler(function () {
     btn.innerHTML = originalHtml; btn.disabled = false;
-    alert("Could not verify patient contact details.");
+    opToast("Could not verify patient contact details.", 'err');
   }).getUserProfile(patientId);
+}
+
+function sendOPEmailTo(patientEmail, btn, originalHtml) {
+    google.script.run.withSuccessHandler(function (res) {
+        btn.innerHTML = originalHtml; btn.disabled = false;
+        opToast(res && res.success ? "Prescription emailed to " + patientEmail
+                                  : "Failed: " + (res && res.message),
+                res && res.success ? 'ok' : 'err');
+    }).withFailureHandler(function (err) {
+        btn.innerHTML = originalHtml; btn.disabled = false;
+        opToast("Network Error: " + err.message, 'err');
+    }).emailOPPrescriptionPDF(activeOpEncounterId, patientEmail.trim());
 }
 
 // Close open dropdowns on outside click

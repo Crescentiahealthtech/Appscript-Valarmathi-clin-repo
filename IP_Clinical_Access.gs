@@ -164,7 +164,7 @@ function ipc_doctorIdByName_(name) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Doctors");
     if (!sh) return "";
-    var data = sh.getDataRange().getDisplayValues();
+    var data = dc_sheetValues_(sh);
     for (var i = 1; i < data.length; i++) {
       var rowName = dc_upper_(data[i][2]).replace(/^DR\.?\s+/, "");
       if (rowName && rowName === needle) return dc_str_(data[i][0]);
@@ -178,7 +178,7 @@ function ipc_admissionRow_(ipNumber) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("IP_Admissions");
     if (!sh) return null;
-    var data = sh.getDataRange().getDisplayValues();
+    var data = dc_sheetValues_(sh);
     var ip = dc_upper_(ipNumber);
     if (!ip) return null;
     var m = dc_headerMap_(sh);
@@ -210,6 +210,9 @@ function ipc_primaryDoctorId_(ipNumber) {
   if (resolved && idxPrimary !== undefined) {
     try {
       adm.sheet.getRange(adm.rowNumber, idxPrimary + 1).setValue(String(resolved));
+      // Without this the memo still holds the blank cell and the next call in
+      // this execution writes it again.
+      dc_invalidate_("IP_Admissions");
     } catch (e) { /* best effort — never block the caller */ }
   }
   return resolved;
@@ -225,7 +228,18 @@ function ipc_ensurePrimaryOnCareTeam_(ipNumber) {
   if (!primary) return "";
   if (dc_isOnCareTeam_(ipNumber, primary)) return primary;
 
+  // The seed has to be serialised. The casesheet context, the care-team panel
+  // and the clinical context all call this, and the UI fires them in parallel
+  // as separate executions: each read "not on the team" before any of them had
+  // written, and each appended a row. That is how one admission ended up
+  // listing the same consultant twice.
+  var lock = LockService.getScriptLock();
   try {
+    if (!lock.tryLock(8000)) return primary;   // someone else is seeding it
+
+    dc_invalidate_("IP_Care_Team");
+    if (dc_isOnCareTeam_(ipNumber, primary)) return primary;   // they won
+
     var adm = ipc_admissionRow_(ipNumber);
     dc_careTeamSheet_().appendRow([
       String("CT-" + Utilities.getUuid().substring(0, 8).toUpperCase()),
@@ -239,8 +253,51 @@ function ipc_ensurePrimaryOnCareTeam_(ipNumber) {
       new Date(),
       ""
     ]);
-  } catch (e) { /* best effort */ }
+    dc_invalidate_("IP_Care_Team");
+  } catch (e) {
+    /* best effort — never block a chart over care-team bookkeeping */
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
   return primary;
+}
+
+/**
+ * MAINTENANCE. Deactivates duplicate care-team rows left by the seeding race
+ * described above, keeping the earliest row for each doctor+role on each
+ * admission. Rows are deactivated, never deleted — the sheet is an audit
+ * trail. Safe to re-run; reports what it changed.
+ */
+function repairDuplicateCareTeamRows() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    var sh = dc_careTeamSheet_();
+    var m = dc_headerMap_(sh);
+    var data = sh.getDataRange().getDisplayValues();
+    var seen = {}, fixed = [];
+
+    for (var i = 1; i < data.length; i++) {
+      if (dc_upper_(data[i][6]) !== "TRUE") continue;
+      var key = dc_upper_(data[i][2]) + "|" + dc_upper_(data[i][4]) + "|" + dc_upper_(data[i][5]);
+      if (!seen[key]) { seen[key] = true; continue; }
+      sh.getRange(i + 1, m["Active"] + 1).setValue("FALSE");
+      sh.getRange(i + 1, m["Removed_At"] + 1).setValue(new Date());
+      fixed.push(dc_str_(data[i][0]) + " (" + dc_str_(data[i][2]) + " / " + dc_str_(data[i][4]) + ")");
+    }
+    dc_invalidate_("IP_Care_Team");
+    SpreadsheetApp.flush();
+
+    var report = fixed.length
+      ? "Deactivated " + fixed.length + " duplicate care-team row(s):\n  " + fixed.join("\n  ")
+      : "No duplicate care-team rows found.";
+    Logger.log(report);
+    return report;
+  } catch (e) {
+    return "Repair failed: " + e.message;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
@@ -297,7 +354,7 @@ function ipc_wardVisibilityFilter_(scope) {
 
   // Care-team membership — one scan.
   try {
-    var ct = dc_careTeamSheet_().getDataRange().getDisplayValues();
+    var ct = dc_sheetValues_(dc_careTeamSheet_());
     for (var i = 1; i < ct.length; i++) {
       if (dc_upper_(ct[i][6]) !== "TRUE") continue;
       if (mine[dc_upper_(ct[i][4])]) visible[dc_upper_(ct[i][2])] = true;
@@ -311,7 +368,7 @@ function ipc_wardVisibilityFilter_(scope) {
     if (sh) {
       var m = dc_headerMap_(sh);
       var idxPrimary = m["Primary_Doctor_ID"];
-      var data = sh.getDataRange().getDisplayValues();
+      var data = dc_sheetValues_(sh);
       var nameCache = {};
       for (var j = 1; j < data.length; j++) {
         var ipKey = dc_upper_(data[j][0]);
@@ -736,5 +793,41 @@ function updateIPDiagnosis(payload, sessionToken) {
     return { success: true, message: "Working diagnosis updated.", diagnosis: list };
   } catch (e) {
     return { success: false, message: "Could not update diagnosis: " + e.message };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION H — ONE-SHOT NOTES BUNDLE
+//
+// Opening a patient in IP Notes used to fire five separate google.script.run
+// calls: permissions, clinical context, timeline, care team and the drug
+// master. Each is a cold Apps Script execution that re-reads the same handful
+// of sheets, and they raced each other — that race is what seeded the care
+// team twice and listed the same consultant on one admission.
+//
+// One call, one execution, one memo cache shared across every section.
+// ---------------------------------------------------------------------------
+
+/** Everything the IP Notes detail view needs for a patient, in one round trip. */
+function getIPNotesBundle(ipNumber, sessionToken) {
+  try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message };
+
+    // Seed the care team once, before the sections that read it, so they all
+    // observe the same state instead of each trying to create it.
+    ipc_ensurePrimaryOnCareTeam_(ipNumber);
+
+    return {
+      success:     true,
+      permissions: ipc_safe_(function () { return getIPNotePermissions(sessionToken); }, { noteTypes: [] }),
+      context:     ipc_safe_(function () { return getClinicalContext(ipNumber, sessionToken); }, { success: false }),
+      timeline:    ipc_safe_(function () { return getIPTimeline(ipNumber, sessionToken); }, { success: true, data: [] }),
+      careTeam:    ipc_safe_(function () { return getIPCareTeamPanel(ipNumber, sessionToken); }, { success: false, team: [] }),
+      drugMaster:  ipc_safe_(function () { return fetchPharmacyMasterForIP(); }, []),
+      teamRoles:   ipc_safe_(function () { return getIPTeamRoles(); }, [])
+    };
+  } catch (e) {
+    return { success: false, message: "Could not open this chart: " + e.message };
   }
 }
