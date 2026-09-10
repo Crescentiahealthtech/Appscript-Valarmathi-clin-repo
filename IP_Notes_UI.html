@@ -1287,6 +1287,18 @@
        JAVASCRIPT — ALL LOGIC
   ═══════════════════════════════════════════════════════ -->
   <script>
+/* Never let error reporting become the error. Auth.html defines the real
+   translator; if this partial is newer than Auth.html in the deployed project,
+   this returns the raw message instead of throwing inside a handler and
+   leaving the screen stuck on "Loading...". */
+function _crescExplain(msg) {
+  try {
+    return (typeof window.crescExplainError === 'function')
+      ? window.crescExplainError(msg)
+      : String(msg == null ? '' : msg);
+  } catch (e) { return String(msg == null ? '' : msg); }
+}
+
 // ============================================================================
 // HTML DIALOGS
 // A browser alert/confirm/prompt inside the Apps Script iframe is rendered by
@@ -1427,7 +1439,7 @@ function ipn_prompt(message, value, done, opts) {
     if (!resp.success) {
       tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">' +
         '<i class="fas fa-triangle-exclamation me-2"></i>' +
-        _esc(window.crescExplainError(resp.message || 'Ward unavailable.')) +
+        _esc(_crescExplain(resp.message || 'Ward unavailable.')) +
         '</td></tr>';
       return;
     }

@@ -710,6 +710,18 @@
 </div>
 
 <script>
+/* Never let error reporting become the error. Auth.html defines the real
+   translator; if this partial is newer than Auth.html in the deployed project,
+   this returns the raw message instead of throwing inside a handler and
+   leaving the screen stuck on "Loading...". */
+function _crescExplain(msg) {
+  try {
+    return (typeof window.crescExplainError === 'function')
+      ? window.crescExplainError(msg)
+      : String(msg == null ? '' : msg);
+  } catch (e) { return String(msg == null ? '' : msg); }
+}
+
 // ============================================================================
 // HTML DIALOGS
 // A browser alert/confirm/prompt inside the Apps Script iframe is rendered by
@@ -955,7 +967,7 @@ function ipcLoadWard() {
         .withSuccessHandler(function (res) {
             if (!res || !res.success) {
                 sel.innerHTML = '<option value="">' +
-                    ipcEsc(window.crescExplainError((res && res.message) || 'Ward unavailable')) + '</option>';
+                    ipcEsc(_crescExplain((res && res.message) || 'Ward unavailable')) + '</option>';
                 return;
             }
             ipcWard = res.data || [];

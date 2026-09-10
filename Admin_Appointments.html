@@ -62,6 +62,18 @@
 </div>
 
 <script>
+/* Never let error reporting become the error. Auth.html defines the real
+   translator; if this partial is newer than Auth.html in the deployed project,
+   this returns the raw message instead of throwing inside a handler and
+   leaving the screen stuck on "Loading...". */
+function _crescExplain(msg) {
+  try {
+    return (typeof window.crescExplainError === 'function')
+      ? window.crescExplainError(msg)
+      : String(msg == null ? '' : msg);
+  } catch (e) { return String(msg == null ? '' : msg); }
+}
+
 // ============================================================================
 // DOCTOR-SCOPED APPOINTMENTS LEDGER  (Phase 3)
 // Backend: fetchDailyLedgerScoped / updateAppointmentStatus
@@ -117,7 +129,7 @@ function loadAdminLedger() {
     .withSuccessHandler(function (res) {
       if (!res || !res.success) {
         tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">' +
-                          window.crescEsc(window.crescExplainError((res && res.message) || 'Could not load the ledger.')) +
+                          window.crescEsc(_crescExplain((res && res.message) || 'Could not load the ledger.')) +
                           '</td></tr>';
         setLedgerStats(0, 0, 0);
         return;
