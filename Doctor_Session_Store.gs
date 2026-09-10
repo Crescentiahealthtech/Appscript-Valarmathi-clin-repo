@@ -41,6 +41,16 @@ function ds_sessionSheet_() {
  *   3. null           -> genuinely expired or revoked (fails closed)
  * Every successful validation slides Last_Seen and Expires_At forward.
  */
+/**
+ * The human-readable name for a session, whichever field it was written with.
+ * issueSession_() sets `name`; the durable Sessions row sets `displayName`.
+ * Reading only one of them yields the login username instead of the person.
+ */
+function dc_sessionName_(sess) {
+  if (!sess) return "";
+  return dc_str_(sess.displayName) || dc_str_(sess.name) || dc_str_(sess.username);
+}
+
 function dc_validateSession_(sessionToken) {
   var token = dc_str_(sessionToken);
   if (!token) return null;
@@ -77,13 +87,18 @@ function dc_validateSession_(sessionToken) {
         username:    dc_str_(data[i][1]),
         role:        dc_str_(data[i][2]),
         doctorId:    dc_str_(data[i][3]),
+        // Both spellings: issueSession_() writes `name`, the Sessions sheet
+        // stores Display_Name, and callers read whichever they were written
+        // against. Keeping them in step here is cheaper than auditing every
+        // reader.
+        name:        dc_str_(data[i][4]),
         displayName: dc_str_(data[i][4])
       };
 
       // Rehydrate the cache so the next call takes the fast path.
       try {
         CacheService.getScriptCache()
-          .put("SESSION_" + token, JSON.stringify(revived), DS_CACHE_SECONDS);
+          .put("SESS_" + token, JSON.stringify(revived), DS_CACHE_SECONDS);
       } catch (e) { /* cache is best-effort; the sheet is the truth */ }
 
       ds_slideExpiry_(sh, i + 1);
@@ -116,7 +131,7 @@ function ds_touchSession_(token, sess) {
       String(dc_str_(sess.username)),
       String(dc_str_(sess.role)),
       String(dc_str_(sess.doctorId)),
-      String(dc_str_(sess.displayName)),
+      String(dc_sessionName_(sess)),
       now, now, exp, "ACTIVE"
     ]);
   } catch (e) { /* never block the request over session bookkeeping */ }
@@ -141,7 +156,7 @@ function revokeSession(sessionToken) {
     var token = dc_str_(sessionToken);
     if (!token) return { success: true, message: "Signed out." };
 
-    try { CacheService.getScriptCache().remove("SESSION_" + token); } catch (e) {}
+    try { CacheService.getScriptCache().remove("SESS_" + token); } catch (e) {}
 
     var sh = ds_sessionSheet_();
     var data = sh.getDataRange().getDisplayValues();

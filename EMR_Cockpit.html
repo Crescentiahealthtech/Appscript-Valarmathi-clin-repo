@@ -199,10 +199,11 @@ function openEMRWorkspace(workspaceId) {
             initializeOPWorkspaceState();
         }
     } else if (workspaceId === 'ip-casesheet') {
-        if (typeof cachedDrugs === 'undefined' || cachedDrugs.length === 0) {
-            google.script.run.withSuccessHandler(drugs => {
-                cachedDrugs = drugs;
-            }).fetchPharmacyMaster();
+        // The casesheet loads its own formulary, lab catalogue and composer
+        // with the admission, in one call. The old pre-fetch here populated a
+        // global the rewritten module no longer reads.
+        if (typeof ipcInitializeIPCWorkspaceState === 'function') {
+            ipcInitializeIPCWorkspaceState();
         }
     } else if (workspaceId === 'ip-notes') {
         document.getElementById('ip-notes-detail-view')?.classList.add('d-none');

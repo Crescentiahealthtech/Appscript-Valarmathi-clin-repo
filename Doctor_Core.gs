@@ -505,6 +505,55 @@ function resolveWriteDoctor_(sessionToken, targetDoctorId) {
 // SECTION F — IP CARE TEAM (cross-consults)
 // ============================================================================
 
+/**
+ * The roles a doctor can hold on an admission. Extend this list rather than
+ * inventing a role at the call site — the value is written to IP_Care_Team
+ * and read back by the notes and casesheet modules.
+ */
+var DC_TEAM_ROLES = [
+  "PRIMARY", "CROSS_CONSULT", "JUNIOR_CONSULTANT", "REGISTRAR",
+  "DUTY_MO", "SURGEON", "ANAESTHETIST", "PHYSIOTHERAPIST"
+];
+
+/**
+ * Accepts what a human would actually type — "Junior consultant", "junior
+ * consultant", "cross consult" — and returns the canonical role, or "" if it
+ * genuinely is not one of ours.
+ */
+function dc_normaliseTeamRole_(raw) {
+  var v = dc_upper_(raw).replace(/[\s\-]+/g, "_").replace(/_+/g, "_");
+  if (!v) return "CROSS_CONSULT";
+  if (DC_TEAM_ROLES.indexOf(v) !== -1) return v;
+
+  var aliases = {
+    "CROSS_CONSULTANT": "CROSS_CONSULT",
+    "CROSS_CONSULTATION": "CROSS_CONSULT",
+    "CONSULT": "CROSS_CONSULT",
+    "CONSULTANT": "CROSS_CONSULT",
+    "JUNIOR": "JUNIOR_CONSULTANT",
+    "JR_CONSULTANT": "JUNIOR_CONSULTANT",
+    "ASSISTANT_CONSULTANT": "JUNIOR_CONSULTANT",
+    "SENIOR_REGISTRAR": "REGISTRAR",
+    "SR": "REGISTRAR",
+    "DUTY_MEDICAL_OFFICER": "DUTY_MO",
+    "MO": "DUTY_MO",
+    "RMO": "DUTY_MO",
+    "ANESTHETIST": "ANAESTHETIST",
+    "ANAESTHESIOLOGIST": "ANAESTHETIST",
+    "PHYSIO": "PHYSIOTHERAPIST"
+  };
+  return aliases[v] || "";
+}
+
+/** The role list for a picker, as { value, label } pairs. */
+function getIPTeamRoles() {
+  return DC_TEAM_ROLES.filter(function (r) { return r !== "PRIMARY"; })
+    .map(function (r) {
+      return { value: r, label: r.toLowerCase().replace(/_/g, " ")
+                 .replace(/\b\w/g, function (c) { return c.toUpperCase(); }) };
+    });
+}
+
 function dc_careTeamSheet_() {
   return dc_ensureSheet_(SpreadsheetApp.getActiveSpreadsheet(), "IP_Care_Team", [
     "Entry_ID", "Tenant_ID", "IP_Number", "Patient_ID", "Doctor_ID",
@@ -551,10 +600,11 @@ function addIPCareTeamMember(payload, sessionToken) {
     var ip = dc_upper_(payload.ipNumber);
     if (!ip) return { success: false, message: "IP number is required." };
 
-    var teamRole = dc_upper_(payload.teamRole) || "CROSS_CONSULT";
-    var valid = ["PRIMARY", "CROSS_CONSULT", "SURGEON", "ANAESTHETIST"];
-    if (valid.indexOf(teamRole) === -1) {
-      return { success: false, message: "Invalid team role." };
+    var teamRole = dc_normaliseTeamRole_(payload.teamRole);
+    if (!teamRole) {
+      return { success: false,
+               message: "'" + dc_str_(payload.teamRole) + "' is not a team role. Use one of: " +
+                        DC_TEAM_ROLES.join(", ").replace(/_/g, " ") + "." };
     }
 
     var sh = dc_careTeamSheet_();
