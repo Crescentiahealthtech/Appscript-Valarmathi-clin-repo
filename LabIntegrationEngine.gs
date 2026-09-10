@@ -212,12 +212,6 @@ function setCatalogActive(testId, isActive) {
 }
 
 /** Global HTML-escape helper — used by getLabBillHtml, _buildReportHtmlGrouped, etc. */
-function _esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 function calculateFlag(value, resultType, gender, ref) {
   if (!resultType || String(resultType).toUpperCase() !== 'NUMERIC') return '';
   const v = parseFloat(value);
@@ -1133,86 +1127,6 @@ function DIAG_labRecords() {
   return { orders: report, results: resCount };
 }
 
-
-function searchLabRecords(query) {
-  try {
-    if (!query || !String(query).trim()) return { success:false, message:'Enter a Patient ID or name.' };
-    var q = String(query).trim().toUpperCase();
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var oSheet = ss.getSheetByName(LAB.ORDERS);
-    if (!oSheet || oSheet.getLastRow() < 2) return { success:true, records:[], patient:null };
- 
-    var oMap  = labHeaderMap(oSheet);
-    var oData = oSheet.getRange(2,1,oSheet.getLastRow()-1,oSheet.getLastColumn()).getValues();
-    var matched = {};
-    var patHeader = null;
- 
-    var REPORTABLE = ['VERIFIED','REPORT_DISPATCHED','AMENDED'];
- 
-    oData.forEach(function(r){
-      var pid    = String(r[oMap['PatientID']]||'').toUpperCase();
-      var pname  = String(r[oMap['PatientName']]||'').toUpperCase();
-      var status = String(r[oMap['OrderStatus']]||'');
-      // OLD — fails on leading/trailing spaces or case differences
-        if (pid !== q && pname.indexOf(q) === -1) return;
-
-        // NEW — trim and uppercase both sides before comparing
-      var pidClean   = String(r[oMap['PatientID']]  || '').trim().toUpperCase();
-      var pnameClean = String(r[oMap['PatientName']]|| '').trim().toUpperCase();
-      var qClean     = q.trim().toUpperCase();
-      if (pidClean !== qClean && pnameClean.indexOf(qClean) === -1) return;
-      if (REPORTABLE.indexOf(status) === -1) return;
-      var oid = String(r[oMap['OrderID']]);
-      matched[oid] = {
-        orderId: oid,
-        date:    String(r[oMap['CreatedAt']]||''),
-        testNames: String(r[oMap['TestNames']]||''),
-        source:  String(r[oMap['SourceModule']]||''),
-        doctor:  String(r[oMap['OrderingDoctorName']]||''),
-        status:  status,
-        verifiedBy: '',
-        results: []
-      };
-      if (!patHeader) patHeader = {
-        patientId: String(r[oMap['PatientID']]),
-        name:      String(r[oMap['PatientName']]||''),
-        age:       String(r[oMap['Age']]||''),
-        gender:    String(r[oMap['Gender']]||'')
-      };
-    });
- 
-    var oids = Object.keys(matched);
-    if (!oids.length) return { success:true, records:[], patient:null };
- 
-    var rSheet = ss.getSheetByName(LAB.RESULTS);
-    if (rSheet && rSheet.getLastRow() >= 2) {
-      var rMap  = labHeaderMap(rSheet);
-      var rData = rSheet.getRange(2,1,rSheet.getLastRow()-1,rSheet.getLastColumn()).getValues();
-      rData.forEach(function(r){
-        var oid = String(r[rMap['OrderID']]);
-        var rec = matched[oid];
-        if (!rec) return;
-        var isLatest = (r[rMap['IsLatest']]===true || String(r[rMap['IsLatest']]).toUpperCase()==='TRUE');
-        var isDraft  = (r[rMap['IsDraft']]===true  || String(r[rMap['IsDraft']]).toUpperCase()==='TRUE');
-        if (!isLatest || isDraft) return;
-        rec.results.push({
-          parameterName: String(r[rMap['ParameterName']]||''),
-          value:         String(r[rMap['ResultValue']]||''),
-          unit:          String(r[rMap['Unit']]||''),
-          flag:          String(r[rMap['Flag']]||''),
-          refRangeText:  String(r[rMap['RefRangeText']]||'')
-        });
-        if (!rec.verifiedBy) rec.verifiedBy = String(r[rMap['VerifiedBy']]||'');
-      });
-    }
- 
-    var records = oids.map(function(k){ return matched[k]; })
-                      .sort(function(a,b){ return a.date < b.date ? 1 : -1; });
-    return { success:true, records:records, patient:patHeader };
-  } catch(err) {
-    return { success:false, message:'searchLabRecords failed: ' + err.message };
-  }
-}
 
 /**
  * ============================================================================

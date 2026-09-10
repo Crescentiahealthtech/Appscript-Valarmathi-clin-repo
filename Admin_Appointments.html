@@ -117,7 +117,7 @@ function loadAdminLedger() {
     .withSuccessHandler(function (res) {
       if (!res || !res.success) {
         tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">' +
-                          window.crescEsc((res && res.message) || 'Could not load the ledger.') +
+                          window.crescEsc(window.crescExplainError((res && res.message) || 'Could not load the ledger.')) +
                           '</td></tr>';
         setLedgerStats(0, 0, 0);
         return;

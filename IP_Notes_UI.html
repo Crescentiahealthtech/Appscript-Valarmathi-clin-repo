@@ -1426,7 +1426,8 @@ function ipn_prompt(message, value, done, opts) {
     const tbody = document.getElementById('ip-notes-ledger-tbody');
     if (!resp.success) {
       tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">' +
-        '<i class="fas fa-triangle-exclamation me-2"></i>' + _esc(resp.message || 'Ward unavailable.') +
+        '<i class="fas fa-triangle-exclamation me-2"></i>' +
+        _esc(window.crescExplainError(resp.message || 'Ward unavailable.')) +
         '</td></tr>';
       return;
     }

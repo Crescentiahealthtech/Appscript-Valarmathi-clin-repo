@@ -954,7 +954,8 @@ function ipcLoadWard() {
     google.script.run
         .withSuccessHandler(function (res) {
             if (!res || !res.success) {
-                sel.innerHTML = '<option value="">' + ipcEsc((res && res.message) || 'Ward unavailable') + '</option>';
+                sel.innerHTML = '<option value="">' +
+                    ipcEsc(window.crescExplainError((res && res.message) || 'Ward unavailable')) + '</option>';
                 return;
             }
             ipcWard = res.data || [];
