@@ -838,6 +838,80 @@ function getDiagnosisDrugSuggestions(diagnosis, doctorId, sessionToken) {
 var OPT_ASSIST_SCAN_LIMIT = 60;   // recent history is what reflects habit
 var OPT_ASSIST_MAX_LABS   = 6;
 
+
+// ---------------------------------------------------------------------------
+// SEED TIER FOR DIAGNOSIS ASSIST
+//
+// getAssistForDiagnosis mined only the doctor's OWN past OP encounters. On a
+// fresh deployment, or for a diagnosis a doctor has not personally recorded
+// before, that is always empty — which is why a fully seeded
+// Clinical_Seed_Library appeared to do nothing at all in the diagnosis box.
+//
+// The seed library is the clinic's starting knowledge. It belongs behind the
+// doctor's own habits, not outside the lookup entirely.
+// ---------------------------------------------------------------------------
+
+/** "ECG, Trop T" and '["X-Ray LS Spine"]' both occur in the sheet. */
+function opt_parseList_(raw) {
+  var v = dc_str_(raw);
+  if (!v) return [];
+  if (v.charAt(0) === "[") {
+    try {
+      var arr = JSON.parse(v);
+      if (Object.prototype.toString.call(arr) === "[object Array]") {
+        return arr.map(function (x) { return dc_str_(x); }).filter(Boolean);
+      }
+    } catch (e) { /* fall through to comma parsing */ }
+  }
+  return v.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+}
+
+/**
+ * Seeded labs and diagnoses matching a free-text diagnosis.
+ * Matches DX rows on their Text and Aliases, and CC rows on Suggested_Dx, so
+ * "UTI" finds SEED-018 by alias and SEED-019 by its suggested diagnosis.
+ * @return {{labs:[], matchedSeeds:[]}}
+ */
+function opt_seedAssistFor_(diagnosis) {
+  var out = { labs: [], matchedSeeds: [] };
+  try {
+    var tokens = opt_dxTokens_(diagnosis);
+    if (!tokens.length) return out;
+
+    var sh = rx_seedSheet_();
+    var data = dc_sheetValues_(sh);
+    var labSeen = {};
+
+    for (var i = 1; i < data.length; i++) {
+      if (dc_upper_(data[i][8]) === "INACTIVE") continue;
+
+      var cat = dc_upper_(data[i][1]);
+      // Where this row's diagnosis-ish text lives depends on the category:
+      // a DX row IS the diagnosis; a CC row merely suggests one.
+      var haystack = (cat === "DX")
+        ? (dc_str_(data[i][3]) + " " + dc_str_(data[i][4]))
+        : dc_str_(data[i][6]);
+      if (!haystack) continue;
+
+      var rowTokens = opt_dxTokens_(haystack);
+      var overlap = false;
+      for (var t = 0; t < tokens.length && !overlap; t++) {
+        if (rowTokens.indexOf(tokens[t]) !== -1) overlap = true;
+      }
+      if (!overlap) continue;
+
+      out.matchedSeeds.push(dc_str_(data[i][3]));
+      opt_parseList_(data[i][5]).forEach(function (l) {
+        var k = l.toLowerCase();
+        if (labSeen[k]) return;
+        labSeen[k] = true;
+        out.labs.push(l);
+      });
+    }
+  } catch (e) { /* the seed tier is a bonus; never fail the whole assist */ }
+  return out;
+}
+
 function getAssistForDiagnosis(diagnosis, doctorId, sessionToken) {
   var blank = { success: true, matched: "", yours: [], classes: [],
                 labs: [], advice: "", reviewDays: 0, message: "" };
@@ -904,17 +978,33 @@ function getAssistForDiagnosis(diagnosis, doctorId, sessionToken) {
       if (advKeys.length && adviceTally[advKeys[0]] >= 2) advice = advKeys[0];
     }
 
+    // --- seed tier: the clinic's starting knowledge, behind the doctor's own
+    var seed = opt_seedAssistFor_(dx);
+    var seenLab = {};
+    labs.forEach(function (l) { seenLab[l.toLowerCase()] = true; });
+    var seedLabs = seed.labs.filter(function (l) { return !seenLab[l.toLowerCase()]; });
+    var mergedLabs = labs.concat(seedLabs).slice(0, OPT_ASSIST_MAX_LABS);
+
     var n = drugs.matchedEncounters || 0;
     var sugg = drugs.suggestions || [];
+
+    var matchedText = n ? (n + " similar consult" + (n === 1 ? "" : "s")) : "";
+    if (seed.matchedSeeds.length) {
+      matchedText += (matchedText ? " + " : "") +
+                     seed.matchedSeeds.length + " from the clinic library";
+    }
+
     return {
       success: true,
-      matched: n ? (n + " similar consult" + (n === 1 ? "" : "s")) : "",
+      matched: matchedText,
       yours: sugg,
       classes: [],
-      labs: labs,
+      labs: mergedLabs,
+      seedLabs: seedLabs,
+      seedMatches: seed.matchedSeeds,
       advice: advice,
       reviewDays: 0,
-      message: (sugg.length || labs.length || advice) ? "" :
+      message: (sugg.length || mergedLabs.length || advice) ? "" :
                "Nothing on file for this diagnosis yet."
     };
   } catch (e) {

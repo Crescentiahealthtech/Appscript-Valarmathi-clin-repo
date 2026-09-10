@@ -70,12 +70,43 @@
   // 1. Sidebar Toggle Logic
   function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
-    if(window.innerWidth <= 768) { 
-        sidebar.classList.toggle('mobile-open'); 
-    } else { 
-        sidebar.classList.toggle('collapsed'); 
+    if (window.innerWidth <= 768) {
+        sidebar.classList.toggle('mobile-open');
+    } else {
+        sidebar.classList.toggle('collapsed');
+        // An explicit click is a preference: remember it, and stop auto-
+        // collapsing until the user chooses again this session.
+        window.crescSidebarPinned = !sidebar.classList.contains('collapsed');
+        try {
+            localStorage.setItem('sidebarCollapsed',
+                sidebar.classList.contains('collapsed') ? '1' : '0');
+        } catch (e) { /* a full localStorage must not break navigation */ }
     }
   }
+
+  /**
+   * Collapses the sidebar when the user moves into a working screen.
+   *
+   * Clinical screens — the OP consult, the IP casesheet, IP notes, the lab and
+   * pharmacy desks — are dense, and 260px of navigation is 260px not spent on
+   * the chart. The rail stays, so nothing becomes unreachable, and an explicit
+   * click on the toggle pins it open for the rest of the session.
+   */
+  window.crescAutoCollapseSidebar = function (collapse) {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    if (window.innerWidth <= 768) return;      // mobile uses the overlay
+    if (window.crescSidebarPinned) return;     // the user asked for it open
+    sidebar.classList.toggle('collapsed', collapse !== false);
+  };
+
+  // Restore the last explicit choice on load.
+  (function () {
+    try {
+      const v = localStorage.getItem('sidebarCollapsed');
+      if (v === '0') window.crescSidebarPinned = true;
+    } catch (e) { /* ignore */ }
+  })();
 
   // 2. Dynamic Moon/Sun Theme Logic
   function toggleTheme() {

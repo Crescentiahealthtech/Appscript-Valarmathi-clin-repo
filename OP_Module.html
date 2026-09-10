@@ -1619,9 +1619,15 @@ function useConsultTemplate(id) {
                     if (t.exam[s]) opSetVal('op-se-' + s + '-text', t.exam[s]);
                 });
 
-                if (t.diagnosis)     opSetDx(t.diagnosis);
+                // Additive, like the complaint and history rows above.
+                if (t.diagnosis)     opAddDx(t.diagnosis);
                 if (t.diagnosisType) opSetVal('clin-diagnosis-type', t.diagnosisType);
-                if (t.advice)        opSetVal('op-advice-free', t.advice);
+                if (t.advice) {
+                    const adv = document.getElementById('op-advice-free');
+                    if (adv) adv.value = adv.value.trim()
+                        ? (adv.value.trim().replace(/[.\s]+$/, '') + '. ' + t.advice)
+                        : t.advice;
+                }
 
                 if (t.reviewDays) {
                     const d = new Date();
@@ -1667,14 +1673,39 @@ function opSetVal(id, val) {
 function opFillRows(tbodyId, type, pipeText) {
     const tb = document.getElementById(tbodyId);
     if (!tb) { console.warn('opFillRows: #' + tbodyId + ' is not in the DOM.'); return; }
-    tb.innerHTML = '';
+
+    // ADDITIVE. A template is a starting point layered onto what the doctor
+    // has already written, not a replacement for it — wiping entered
+    // complaints because a template was clicked loses real clinical work.
+    // Blank starter rows are cleared; anything typed is kept, and duplicates
+    // are skipped so applying the same template twice is a no-op.
+    const existing = [];
+    tb.querySelectorAll('tr').forEach(function (tr) {
+        const el = tr.querySelector('.op-array-text');
+        const v = el ? el.value.trim() : '';
+        if (v) existing.push(v.toLowerCase());
+        else tr.remove();
+    });
+
     String(pipeText).split('|').forEach(function (v) {
-        if (!v.trim()) return;
+        const text = v.trim();
+        if (!text) return;
+        const bare = text.replace(/\s*\([^)]*\)\s*$/, '').trim();
+        if (existing.indexOf(bare.toLowerCase()) !== -1) return;
+        existing.push(bare.toLowerCase());
+
         addOPDynamicRow(tbodyId, type);
         const rows = tb.querySelectorAll('tr');
-        const input = rows[rows.length - 1] && rows[rows.length - 1].querySelector('.op-array-text');
-        if (input) input.value = v.trim();
+        const row = rows[rows.length - 1];
+        if (!row) return;
+        const input = row.querySelector('.op-array-text');
+        const dur = row.querySelector('.op-array-dur');
+        // "Fever (3 Days)" splits back into text and duration.
+        const m = text.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+        if (input) input.value = m ? m[1].trim() : text;
+        if (dur && m) dur.value = m[2].trim();
     });
+
     if (!tb.querySelectorAll('tr').length) addOPDynamicRow(tbodyId, type);
 }
 

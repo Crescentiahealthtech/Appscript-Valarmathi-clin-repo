@@ -49,10 +49,14 @@ function getIPCasesheetWard(sessionToken) {
     if (data.length <= 1) return { success: true, data: [] };
 
     var canSee = ipc_wardVisibilityFilter_(gate.scope);
+    // One admission carries one casesheet. Once it exists, the bed leaves this
+    // picker — the sheet is amended from IP Records, not written again.
+    var done = ipc_admissionsWithCasesheet_();
     var out = [];
     for (var i = 1; i < data.length; i++) {
       if (dc_upper_(data[i][11]) !== "ACTIVE") continue;
       if (!canSee(data[i][0])) continue;
+      if (done[dc_upper_(data[i][0])]) continue;
 
       var ageSex = dc_str_(data[i][3]);
       var parts = ageSex.split("/");
@@ -74,6 +78,43 @@ function getIPCasesheetWard(sessionToken) {
   } catch (e) {
     return { success: false, message: "Ward unavailable: " + e.message, data: [] };
   }
+}
+
+/** { IP_NUMBER : true } for every admission that already has a CURRENT casesheet. */
+function ipc_admissionsWithCasesheet_() {
+  var out = {};
+  try {
+    var sh = ipc_casesheetSheet_();
+    var m = dc_headerMap_(sh);
+    var data = dc_sheetValues_(sh);
+    var iStatus = m["Status"];
+    for (var i = 1; i < data.length; i++) {
+      var ip = dc_upper_(data[i][1]);
+      if (!ip) continue;
+      // Rows written before the Status column existed are current by default.
+      var st = (iStatus === undefined) ? "" : dc_upper_(data[i][iStatus]);
+      if (st === "SUPERSEDED") continue;
+      out[ip] = true;
+    }
+  } catch (e) { /* if this fails the picker simply shows every bed */ }
+  return out;
+}
+
+/** The CURRENT casesheet row for an admission, or null. */
+function ipc_currentCasesheet_(ipNumber) {
+  var sh = ipc_casesheetSheet_();
+  var m = dc_headerMap_(sh);
+  var data = dc_sheetValues_(sh);
+  var ip = dc_upper_(ipNumber);
+  var iStatus = m["Status"];
+
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (dc_upper_(data[i][1]) !== ip) continue;
+    var st = (iStatus === undefined) ? "" : dc_upper_(data[i][iStatus]);
+    if (st === "SUPERSEDED") continue;
+    return { row: data[i], rowNumber: i + 1, headers: m, sheet: sh };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +310,21 @@ function ipc_writeCasesheetRow_(payload, sessionToken) {
     var adm = ipc_admissionRow_(payload.ipNumber);
     if (!adm) return { success: false, message: "Admission not found." };
 
+    // An admission carries ONE casesheet. Saving again is an amendment, which
+    // goes through amendIPCasesheet() so it records a reason and keeps the
+    // superseded version. Without this guard, re-opening a completed chart and
+    // pressing Save wrote a duplicate row and re-queued every drug order.
+    var existing = ipc_currentCasesheet_(payload.ipNumber);
+    if (existing && !payload.__amending) {
+      return {
+        success: false,
+        alreadyExists: true,
+        encounterId: dc_str_(existing.row[0]),
+        message: "This admission already has a casesheet (" +
+                 dc_str_(existing.row[0]) + "). Open it from IP Records to amend it."
+      };
+    }
+
     var patientId = dc_upper_(payload.patientId) || dc_upper_(adm.row[1]);
     var timestamp = new Date();
     var dateStr = Utilities.formatDate(timestamp, ss.getSpreadsheetTimeZone(), "MM/dd/yyyy hh:mm a");
@@ -319,6 +375,11 @@ function ipc_writeCasesheetRow_(payload, sessionToken) {
     put("Doctor_ID", w.doctorId);
     put("Author_Signature_Snapshot", w.signature);
     put("Author_Username", w.username);
+    put("Status", "CURRENT");
+    put("Version", payload.__version || 1);
+    put("Amended_At", payload.__amending ? timestamp : "");
+    put("Amended_By", payload.__amending ? w.authorLabel : "");
+    put("Amend_Reason", payload.__amending ? dc_str_(payload.__amendReason) : "");
 
     sheet.appendRow(row);
     dc_invalidate_("IP_CaseSheets_DB");
@@ -379,7 +440,11 @@ function ipc_routeAdmissionOrders_(ss, payload, patientId, encounterId, w, times
       "IPQ-" + Utilities.getUuid().substring(0, 8).toUpperCase(),
       dc_upper_(payload.ipNumber),
       patientId,
-      (dc_str_(md.strength) + " " + dc_str_(md.drugName)).trim(),
+      // The drug NAME only. This used to be written as strength + name
+      // ("500 Tab Azithral") while IP Notes sends the name as displayed
+      // ("Tab Azithral 500"), so a STOP order never matched its own row and
+      // the drug stayed on the Continue list for every later note.
+      dc_str_(md.drugName),
       dc_str_(md.dose) || dc_str_(md.strength),
       dc_str_(md.freq) || dc_str_(md.sig),
       dc_str_(md.route) || "Oral",
@@ -610,6 +675,186 @@ function getIPCasesheetHistory(ipNumber, sessionToken) {
         timestamp:   g("Timestamp"),
         doctorName:  g("Doctor's Name"),
         diagnosis:   g("Primary Diagnosis")
+      });
+    }
+    return { success: true, data: out };
+  } catch (e) {
+    return { success: false, message: e.message, data: [] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION E — AMENDMENTS
+//
+// A casesheet is a signed clinical record. It is never edited in place and
+// never re-entered: an amendment writes a NEW current version, marks the
+// previous one SUPERSEDED with a pointer to its replacement, and records who
+// changed it and why. The whole chain stays readable.
+// ---------------------------------------------------------------------------
+
+/** The current casesheet for an admission, in the shape the composer loads. */
+function getIPCasesheetForEdit(ipNumber, sessionToken) {
+  try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message };
+
+    var cur = ipc_currentCasesheet_(ipNumber);
+    if (!cur) return { success: false, message: "No casesheet on file for " + ipNumber + "." };
+
+    var m = cur.headers;
+    var g = function (h) { return (m[h] === undefined) ? "" : dc_str_(cur.row[m[h]]); };
+    var parse = function (h) { try { return JSON.parse(g(h) || "[]"); } catch (e) { return []; } };
+
+    var flags = [];
+    ["Pallor", "Icterus", "Cyanosis", "Clubbing", "Edema"].forEach(function (f) {
+      if (dc_upper_(g(f)) === "YES") flags.push(f);
+    });
+
+    return {
+      success: true,
+      encounterId: g("Encounter_ID"),
+      version:     dc_int_(g("Version")) || 1,
+      status:      g("Status") || "CURRENT",
+      recordedBy:  g("Doctor's Name"),
+      recordedAt:  g("Timestamp"),
+      data: {
+        ipNumber:   g("IP_Number"),
+        patientId:  g("Patient_ID"),
+        patientName: g("Patient Name"),
+        age: g("Age"), sex: g("Sex"),
+        ward: g("Ward"), bed: g("Bed"),
+        vitals: {
+          sys: g("Sys_BP"), dia: g("Dia_BP"), hr: g("PR"), spo2: g("SpO2"),
+          temp: g("Temp"), height: g("Height"), weight: g("Weight")
+        },
+        complaints:  parse("Chief_Complaints"),
+        history:     parse("History"),
+        genExam:     { flags: flags, notes: g("Other GE findings") },
+        sysExam:     { cvs: g("CVS"), rs: g("RS"), pa: g("PA"), cns: g("CNS") },
+        provDiagnosis: g("Primary Diagnosis"),
+        meds:        parse("Prescription_JSON"),
+        labs:        parse("Lab_Orders_JSON"),
+        outsideLabs: parse("Outside Lab Records"),
+        radiology:   g("Radiological records"),
+        advice:      g("Advice")
+      }
+    };
+  } catch (e) {
+    return { success: false, message: "Could not load the casesheet: " + e.message };
+  }
+}
+
+/**
+ * Records an amended casesheet. Requires a reason — an unexplained change to a
+ * signed record is worse than no change at all.
+ *
+ * Medication and lab orders are NOT re-routed: the ward already has them, and
+ * re-queueing on every amendment is what produced the duplicate drug cards.
+ * Order changes belong in a progress note, which is where the ward looks.
+ */
+function amendIPCasesheet(payload, sessionToken) {
+  try {
+    payload = payload || {};
+    var reason = dc_str_(payload.amendReason);
+    if (reason.length < 5) {
+      return { success: false, message: "Give a reason for the amendment (at least a few words)." };
+    }
+
+    var cur = ipc_currentCasesheet_(payload.ipNumber);
+    if (!cur) return { success: false, message: "No casesheet to amend for " + payload.ipNumber + "." };
+
+    var m = cur.headers;
+    var prevId = dc_str_(cur.row[0]);
+    var prevVersion = (m["Version"] === undefined) ? 1 : (dc_int_(cur.row[m["Version"]]) || 1);
+
+    // Write the new version first: if this fails, the old one is still current.
+    var amended = {};
+    Object.keys(payload).forEach(function (k) { amended[k] = payload[k]; });
+    amended.__amending = true;
+    amended.__version = prevVersion + 1;
+    amended.__amendReason = reason;
+    amended.meds = [];        // orders are not re-queued from an amendment
+    amended.labs = (payload.labs || []).map(function (l) {
+      var c = {}; Object.keys(l).forEach(function (k) { c[k] = l[k]; });
+      c.type = "Result";      // keep them on the record, out of the order path
+      return c;
+    });
+
+    var saved = ipc_writeCasesheetRow_(amended, sessionToken);
+    if (!saved.success) return saved;
+
+    // Then retire the previous version.
+    try {
+      var sh = ipc_casesheetSheet_();
+      if (m["Status"] !== undefined) {
+        sh.getRange(cur.rowNumber, m["Status"] + 1).setValue("SUPERSEDED");
+      }
+      if (m["Superseded_By"] !== undefined) {
+        sh.getRange(cur.rowNumber, m["Superseded_By"] + 1).setValue(saved.encounterId);
+      }
+      dc_invalidate_("IP_CaseSheets_DB");
+      SpreadsheetApp.flush();
+    } catch (e) {
+      return { success: false,
+               message: "The amendment was written as " + saved.encounterId +
+                        " but the previous version could not be retired: " + e.message +
+                        " Two versions are now marked current — fix this before continuing." };
+    }
+
+    // The amendment is itself a clinical event, so it belongs on the timeline.
+    try {
+      saveIPNote({
+        ipNumber:  payload.ipNumber,
+        patientId: saved.patientId,
+        roleType:  "DOCTOR",
+        flags:     "CASESHEET_AMENDED",
+        noteData:  {
+          assessment: "Admission casesheet amended (v" + prevVersion +
+                      " → v" + (prevVersion + 1) + ").",
+          plan: "Reason: " + reason
+        }
+      }, sessionToken);
+    } catch (e) { /* the amendment is saved; the timeline note is a courtesy */ }
+
+    return {
+      success: true,
+      encounterId: saved.encounterId,
+      supersededId: prevId,
+      version: prevVersion + 1,
+      message: "Casesheet amended. Version " + (prevVersion + 1) +
+               " is now current; v" + prevVersion + " is kept as superseded."
+    };
+  } catch (e) {
+    return { success: false, message: "Could not amend the casesheet: " + e.message };
+  }
+}
+
+/** Full version history for an admission, newest first. */
+function getIPCasesheetVersions(ipNumber, sessionToken) {
+  try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message, data: [] };
+
+    var sh = ipc_casesheetSheet_();
+    var m = dc_headerMap_(sh);
+    var data = dc_sheetValues_(sh);
+    var ip = dc_upper_(ipNumber);
+    var out = [];
+
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (dc_upper_(data[i][1]) !== ip) continue;
+      var g = function (h) { return (m[h] === undefined) ? "" : dc_str_(data[i][m[h]]); };
+      out.push({
+        encounterId:  g("Encounter_ID"),
+        version:      dc_int_(g("Version")) || 1,
+        status:       g("Status") || "CURRENT",
+        supersededBy: g("Superseded_By"),
+        recordedAt:   g("Timestamp"),
+        recordedBy:   g("Doctor's Name"),
+        amendedAt:    g("Amended_At"),
+        amendedBy:    g("Amended_By"),
+        amendReason:  g("Amend_Reason"),
+        diagnosis:    g("Primary Diagnosis")
       });
     }
     return { success: true, data: out };

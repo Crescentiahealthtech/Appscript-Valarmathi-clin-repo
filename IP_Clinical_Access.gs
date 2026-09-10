@@ -49,7 +49,9 @@ var IPC_CASESHEET_HEADERS = [
   "CVS", "RS", "PA", "CNS", "Primary Diagnosis",
   "Prescription_JSON", "Lab_Orders_JSON",
   "Outside Lab Records", "Radiological records", "Advice",
-  "Doctor's Name", "Doctor_ID", "Author_Signature_Snapshot", "Author_Username"
+  "Doctor's Name", "Doctor_ID", "Author_Signature_Snapshot", "Author_Username",
+  // Phase 7 — one casesheet per admission, amended rather than re-entered.
+  "Status", "Version", "Superseded_By", "Amended_At", "Amended_By", "Amend_Reason"
 ];
 
 /** IP_CaseSheets_DB with the full Phase 5 attribution schema. Idempotent. */
