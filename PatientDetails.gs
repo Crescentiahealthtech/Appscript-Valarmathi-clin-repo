@@ -2,12 +2,6 @@
 // 🧠 SYSTEM CORE & ROUTER (Code.gs)
 // ==========================================
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('Crescentia HealthTech').addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-function include(filename) { return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
-
-
 function getPatientNameById(patientId) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
@@ -102,36 +96,3 @@ function getPatientDashboardStats(patientId) {
 }
 
 // 🚀 BATCH OPTIMIZED AVAILABILITY SAVER (Fixes the Speed Issue)
-function saveAdminAvailability(dateStr, blockedSlots) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('Appointments');
-    const data = sheet.getDataRange().getValues();
-    const rowsToDelete = [];
-
-    // Find old blocks
-    for(let i = data.length - 1; i >= 1; i--) {
-      let dObj = data[i][3];
-      let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
-      if(rowDate === dateStr && data[i][6] === 'Blocked') rowsToDelete.push(i + 1);
-    }
-
-    // Delete old blocks safely
-    rowsToDelete.forEach(r => sheet.deleteRow(r));
-
-    // Batch append new blocks for instant speed
-    if (blockedSlots.length > 0) {
-      const newRows = [];
-      let startId = sheet.getLastRow();
-      blockedSlots.forEach((slot, index) => {
-        let apptId = "APT-" + (startId + index).toString().padStart(4, '0');
-        newRows.push([apptId, 'ADMIN', 'BLOCKED', dateStr, slot, 'Doctor Unavailable', 'Blocked', 0]);
-      });
-      sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
-    }
-
-    return {success: true, message: 'Availability Updated!'};
-  } catch(e) {
-    return {success: false, message: 'Failed to save availability.'};
-  }
-}

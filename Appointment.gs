@@ -74,11 +74,13 @@ function getAppointmentsByDate(dateStr) {
 // 2. PATIENT AUTO-FETCH DEMOGRAPHICS
 function getPatientDemographics(patientId) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
-  if(!sheet) return null;
+  if (!sheet || !patientId) return null;
   const data = sheet.getDataRange().getValues();
+  const want = patientId.toString().trim().toUpperCase();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0].toString().toUpperCase() === patientId.trim().toUpperCase()) {
-      return { name: data[i][2], age: data[i][3], sex: data[i][4] };
+    if (data[i][0] && data[i][0].toString().trim().toUpperCase() === want) {
+      // gender + sex both returned: the booking modal reads gender, the ledger reads sex
+      return { id: data[i][0], name: data[i][2], age: data[i][3], sex: data[i][4], gender: data[i][4], mobile: data[i][6] || "" };
     }
   }
   return null;
@@ -86,69 +88,94 @@ function getPatientDemographics(patientId) {
 
 // 3. ADMIN DAILY LEDGER
 function fetchDailyLedger(dateStr) {
-  const apptSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
-  const patientSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
-  if(!apptSheet || !patientSheet) return [];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const apptSheet = ss.getSheetByName('Appointments');
+  const patientSheet = ss.getSheetByName('Patients');
+  if (!apptSheet || !patientSheet) return [];
   const apptData = apptSheet.getDataRange().getValues();
+
+  // Collect the ids this date actually needs BEFORE touching the Patients sheet,
+  // so a 20-row ledger does not pay for a 10,000-row patient master.
+  const needed = {};
+  const rows = [];
+  for (let i = 1; i < apptData.length; i++) {
+    let dObj = apptData[i][3];
+    let rowDate = (dObj instanceof Date)
+      ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd")
+      : (dObj ? dObj.toString().substring(0, 10) : "");
+    if (rowDate !== dateStr) continue;
+    let pId = apptData[i][1] ? apptData[i][1].toString().toUpperCase() : "";
+    if (pId === "ADMIN") continue;
+    needed[pId] = true;
+    rows.push({ r: apptData[i], pId: pId });
+  }
+  if (!rows.length) return [];
+
   const patientData = patientSheet.getDataRange().getValues();
   const patientMap = {};
   for (let i = 1; i < patientData.length; i++) {
-    patientMap[patientData[i][0].toString().toUpperCase()] = { age: patientData[i][3], sex: patientData[i][4] };
+    let key = patientData[i][0] ? patientData[i][0].toString().toUpperCase() : "";
+    if (needed[key]) patientMap[key] = { name: patientData[i][2], age: patientData[i][3], sex: patientData[i][4] };
   }
 
-  const ledger = [];
-  for (let i = 1; i < apptData.length; i++) {
-    let dObj = apptData[i][3];
-    let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
-
-    if (rowDate === dateStr) {
-      let pId = apptData[i][1].toString().toUpperCase();
-      if (pId === "ADMIN") continue;
-
-      ledger.push({
-        apptId: apptData[i][0],
-        time: formatTimeSafely(apptData[i][4]),
-        patientId: pId,
-        name: apptData[i][2],
-        age: patientMap[pId] ? patientMap[pId].age : '-',
-        sex: patientMap[pId] ? patientMap[pId].sex : '-',
-        purpose: apptData[i][5],
-        status: apptData[i][6]
-      });
-    }
-  }
-  return ledger;
+  return rows.map(function (x) {
+    const p = patientMap[x.pId];
+    const nm = x.r[2] || (p ? p.name : '-');
+    return {
+      apptId: x.r[0],
+      time: formatTimeSafely(x.r[4]),
+      patientId: x.pId,
+      // both keys on purpose: older screens read .name, newer ones read .patientName
+      name: nm,
+      patientName: nm,
+      age: p ? p.age : '-',
+      sex: p ? p.sex : '-',
+      purpose: x.r[5],
+      status: x.r[6]
+    };
+  });
 }
 
 // 4. BOOK APPOINTMENT WRITER (With Security Overrides)
 function submitNewAppointment(apptObj) {
+  const lock = LockService.getScriptLock();
   try {
+    lock.waitLock(10000);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
     const data = sheet.getDataRange().getValues();
 
-    // Check double booking for actual patients (ignores walk-ins and admin blocks)
     if (apptObj.patientId !== 'ADMIN' && apptObj.patientId !== 'DIRECT' && apptObj.patientId !== 'WALK-IN') {
       for (let i = 1; i < data.length; i++) {
         let dObj = data[i][3];
-        let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
-        if (rowDate === apptObj.date && data[i][1] === apptObj.patientId) {
+        let rowDate = (dObj instanceof Date)
+          ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd")
+          : (dObj ? dObj.toString().substring(0, 10) : "");
+        if (rowDate !== apptObj.date) continue;
+        if (data[i][1] === apptObj.patientId) {
           let status = data[i][6];
-          if(status === 'Booked' || status === 'Arrived' || status === 'In-Progress') {
-            return { success: false, message: "You already have an active appointment scheduled for this date. Please wait until it is completed." };
+          if (status === 'Booked' || status === 'Arrived' || status === 'In-Progress') {
+            return { success: false, message: "This patient already has an active appointment on that date." };
           }
+        }
+        if (formatTimeSafely(data[i][4]) === apptObj.time && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') {
+          return { success: false, message: "Slot collision. That time was just booked by another user." };
         }
       }
     }
 
-    const newId = "APT-" + (sheet.getLastRow()).toString().padStart(4, '0');
+    // Timestamp-derived, not row-count-derived: deleting a row must never let the
+    // next booking reuse an id that is already printed on a bill.
+    const newId = "APT-" + Date.now().toString().slice(-8);
     sheet.appendRow([
-      newId, apptObj.patientId, apptObj.patientName, apptObj.date, apptObj.time, apptObj.purpose, apptObj.status || 'Booked', apptObj.fee || 0
+      newId, apptObj.patientId, apptObj.patientName, apptObj.date, apptObj.time,
+      apptObj.purpose, apptObj.status || 'Booked', apptObj.fee || 0, new Date().toISOString()
     ]);
-    
-    SpreadsheetApp.flush(); // Force save to datastore immediately
+    SpreadsheetApp.flush();
     return { success: true, apptId: newId };
-  } catch(e) {
+  } catch (e) {
     return { success: false, message: e.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
   }
 }
 

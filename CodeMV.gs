@@ -78,32 +78,6 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent(); 
 }
 
-function getUserProfile(patientId) {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Patients");
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      if (data[i][0].toString().toUpperCase() === patientId.toUpperCase()) {
-        return {
-          id: data[i][0],
-          name: data[i][2], 
-          age: data[i][3], 
-          gender: data[i][4], 
-          dob: (data[i][5] instanceof Date) ? Utilities.formatDate(data[i][5], Session.getScriptTimeZone(), "yyyy-MM-dd") : data[i][5].toString(),
-          mobile: data[i][6], 
-          whatsapp: data[i][7], 
-          address: data[i][8], 
-          comorb: data[i][9],
-          email: data[i][10] || "" // <-- NEW: Grabs Column K (Index 10)
-        };
-      }
-    }
-    return null;
-  } catch (e) { 
-    return null; 
-  }
-}
-
 function registerPatient(data) {
   const lock = LockService.getScriptLock();
   try {
@@ -189,159 +163,6 @@ function getAllPatients() {
   return roster;
 }
 
-function formatTimeSafely(timeVal) {
-  if(!timeVal) return "";
-  if(timeVal instanceof Date) { return Utilities.formatDate(timeVal, Session.getScriptTimeZone(), "hh:mm a").toUpperCase(); }
-  let t = String(timeVal).trim().toUpperCase();
-  t = t.replace(/([0-9])(AM|PM)/, "$1 $2"); return t;
-}
-
-function getPatientDashboardStats(patientId) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const apptSheet = ss.getSheetByName('Appointments');
-    let lastVisit = "None Recorded";
-    let upcomingBookings = [];
-    
-    if (apptSheet) {
-      const apptData = apptSheet.getDataRange().getValues();
-      let today = new Date(); today.setHours(0,0,0,0);
-      for(let i = 1; i < apptData.length; i++) {
-        if(apptData[i][1] === patientId) {
-          let rawDate = apptData[i][3];
-          let apptDateObj = (rawDate instanceof Date) ? new Date(rawDate) : new Date(rawDate);
-          apptDateObj.setHours(0,0,0,0);
-          let dateStr = (rawDate instanceof Date) ? Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "dd MMM yyyy") : String(rawDate).substring(0,10);
-          let timeStr = formatTimeSafely(apptData[i][4]);
-          let status = apptData[i][6];
-          
-          if(apptDateObj >= today && (status === 'Booked' || status === 'Arrived' || status === 'In-Progress')) {
-            upcomingBookings.push({ dateVal: apptDateObj, display: `${dateStr} • ${timeStr}` });
-          }
-          if(apptDateObj < today && status === 'Completed') lastVisit = dateStr; 
-        }
-      }
-      upcomingBookings.sort((a,b) => a.dateVal - b.dateVal);
-    }
-    
-    const emrSheet = ss.getSheetByName('EMR_Records');
-    let emrNextVisit = "Awaiting Doctor's Update";
-    let emrNextLab = "Awaiting Doctor's Update";
-    
-    if(emrSheet) {
-        const emrData = emrSheet.getDataRange().getValues();
-        for(let i = emrData.length - 1; i >= 1; i--) {
-            if(emrData[i][2] === patientId) {
-                let lines = String(emrData[i][8]).split('\n');
-                lines.forEach(line => {
-                    let l = line.toLowerCase();
-                    if(l.includes('follow-up') || l.includes('next visit')) emrNextVisit = line.replace(/follow-up|next visit|:/gi, '').trim() || "See EMR Plan";
-                    if(l.includes('lab') || l.includes('blood test') || l.includes('investigation')) emrNextLab = line.replace(/lab visit|lab date|next lab|investigations|:/gi, '').trim() || "See EMR Plan";
-                }); break;
-            }
-        }
-    }
-    return { lastVisit: lastVisit, upcomingBookings: upcomingBookings.map(b => b.display), emrNextVisit: emrNextVisit, emrNextLab: emrNextLab };
-  } catch (e) { return { lastVisit: "Error", upcomingBookings: [], emrNextVisit: "Error", emrNextLab: "Error" }; }
-}
-
-function getAvailableTimeSlots(dateStr) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
-  if(!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  const standardSlots = [
-    "10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM", "11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM", "12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM", "05:00 PM", "05:15 PM", "05:30 PM", "05:45 PM", "06:00 PM", "06:15 PM", "06:30 PM", "06:45 PM", "07:00 PM", "07:15 PM", "07:30 PM", "07:45 PM", "08:00 PM", "08:15 PM", "08:30 PM", "08:45 PM"
-  ];
-  const takenSlots = [];
-  for (let i = 1; i < data.length; i++) {
-    let dObj = data[i][3];
-    let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
-    if (rowDate === dateStr && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') takenSlots.push(formatTimeSafely(data[i][4]));
-  }
-  return standardSlots.filter(slot => !takenSlots.includes(slot));
-}
-
-function getAppointmentsByDate(dateStr) {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
-    if(!sheet) return [];
-    const data = sheet.getDataRange().getValues();
-    let appts = [];
-    for(let i = 1; i < data.length; i++) {
-      let dObj = data[i][3];
-      let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : (dObj ? dObj.toString().substring(0,10) : "");
-      if(rowDate === dateStr) {
-        appts.push({ apptId: data[i][0], patientId: data[i][1], patientName: data[i][2], time: formatTimeSafely(data[i][4]), purpose: data[i][5], status: data[i][6], fee: data[i][7] });
-      }
-    } return appts;
-  } catch(e) { return []; }
-}
-
-function fetchDailyLedger(dateStr) {
-  const apptSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
-  const patientSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
-  if(!apptSheet || !patientSheet) return [];
-  const apptData = apptSheet.getDataRange().getValues();
-  const patientData = patientSheet.getDataRange().getValues();
-  
-  const patientMap = {};
-  for (let i = 1; i < patientData.length; i++) {
-    patientMap[patientData[i][0].toString().toUpperCase()] = { name: patientData[i][2], age: patientData[i][3], sex: patientData[i][4] };
-  }
-
-  const ledger = [];
-  for (let i = 1; i < apptData.length; i++) {
-    let dObj = apptData[i][3];
-    let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
-    if (rowDate === dateStr) {
-      let pId = apptData[i][1].toString().toUpperCase();
-      if (pId === "ADMIN") continue;
-      ledger.push({
-        apptId: apptData[i][0], time: formatTimeSafely(apptData[i][4]), patientId: pId,
-        patientName: apptData[i][2] || (patientMap[pId] ? patientMap[pId].name : '-'),
-        age: patientMap[pId] ? patientMap[pId].age : '-', sex: patientMap[pId] ? patientMap[pId].sex : '-',
-        purpose: apptData[i][5], status: apptData[i][6]
-      });
-    }
-  } return ledger;
-}
-
-function submitNewAppointment(apptObj) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(10000);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
-    const data = sheet.getDataRange().getValues();
-
-    if (apptObj.patientId !== 'ADMIN' && apptObj.patientId !== 'DIRECT' && apptObj.patientId !== 'WALK-IN') {
-      for (let i = 1; i < data.length; i++) {
-        let dObj = data[i][3];
-        let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
-        if (rowDate === apptObj.date && data[i][1] === apptObj.patientId) {
-          let status = data[i][6];
-          if(status === 'Booked' || status === 'Arrived' || status === 'In-Progress') return { success: false, message: "You already have an active appointment scheduled for this date." };
-        }
-        if (rowDate === apptObj.date && formatTimeSafely(data[i][4]) === apptObj.time) return { success: false, message: "Slot collision. Time was just booked by another user." };
-      }
-    }
-    const newId = "APT-" + Date.now().toString().slice(-6);
-    sheet.appendRow([newId, apptObj.patientId, apptObj.patientName, apptObj.date, apptObj.time, apptObj.purpose, apptObj.status || 'Booked', apptObj.fee || 0, new Date().toISOString()]);
-    SpreadsheetApp.flush(); return { success: true, apptId: newId };
-  } catch(e) { return { success: false, message: e.message }; } finally { lock.releaseLock(); }
-}
-
-function updateAppointmentStatus(apptId, newStatus) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
-  const data = sheet.getDataRange().getValues();
-  for(let i = 1; i < data.length; i++) {
-    if(data[i][0] == apptId) {
-      if(newStatus === "DELETE") sheet.deleteRow(i + 1);
-      else sheet.getRange(i + 1, 7).setValue(newStatus);
-      SpreadsheetApp.flush(); return "Status updated!";
-    }
-  } return "Error updating.";
-}
-
 function saveAdminAvailability(dateStr, blockedSlots) {
   const lock = LockService.getScriptLock();
   try {
@@ -368,8 +189,6 @@ function saveAdminAvailability(dateStr, blockedSlots) {
     SpreadsheetApp.flush(); return {success: true, message: 'Availability Updated!'};
   } catch(e) { return {success: false, message: 'Failed to save availability.'}; } finally { lock.releaseLock(); }
 }
-
-function getPatientDemographics(patientId) { return getUserProfile(patientId); }
 
 function saveEMRRecord(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('EMR_Records');

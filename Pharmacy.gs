@@ -408,27 +408,6 @@ function processPharmacyBill(payload) {
 // SECTION D — CREDIT SETTLEMENT (close IPD / staff credit bills)
 // =====================================================================
 
-function getPendingCreditBills() {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(PH_SHEETS.INVOICES);
-    if (!sheet || sheet.getLastRow() <= 1) return { success: true, data: [] };
-    var data = sheet.getDataRange().getValues();
-    var out = [];
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][16]).trim().toUpperCase() !== "PENDING") continue;
-      if (String(data[i][17]).trim().toUpperCase() !== "ACTIVE") continue;
-      out.push({ invoiceNo: String(data[i][0]), date: _fmtDate_(data[i][1]),
-        billType: String(data[i][2] || ""), patientId: String(data[i][3] || ""),
-        patientName: String(data[i][4] || ""), net: parseFloat(data[i][13]) || 0 });
-    }
-    out.reverse();
-    return { success: true, data: out };
-  } catch (error) {
-    return { success: false, message: "Could not load credits: " + error.toString() };
-  }
-}
-
 function settleCreditBill(payload) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
