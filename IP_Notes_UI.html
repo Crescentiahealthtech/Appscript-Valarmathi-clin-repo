@@ -608,6 +608,11 @@
             <i class="fa-solid fa-right-from-bracket" style="color:#94a3b8;"></i>
             <span style="font-size:0.8rem;">Handover</span>
           </button>
+          <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
+            onclick="ipnPrintNotes()" title="Print the progress record">
+            <i class="fa-solid fa-print" style="color:#fbbf24;"></i>
+            <span style="font-size:0.8rem;">Print</span>
+          </button>
         </div>
       </div>
 
@@ -925,16 +930,34 @@
             </div>
           </div>
 
-          <!-- Investigation Orders -->
+          <!-- Investigation Orders — from the lab catalogue, so a ward-round
+               order is billable and resultable like an OP one. -->
           <div class="mb-4">
             <label class="ip-form-label">Order Investigations</label>
-            <div id="dr-inv-orders-container">
-              <!-- One row by default -->
+            <input type="text" class="ip-form-input mb-2" id="ipn-lab-search"
+                   placeholder="Search the lab catalogue..." oninput="ipnRenderLabPicker()">
+            <div id="ipn-lab-catalog"
+                 style="max-height:190px; overflow-y:auto; background:#131720;
+                        border:1px solid var(--ip-border-soft); border-radius:8px; padding:8px;">
+              <div style="color:#475569; font-size:.78rem;">Loading catalogue...</div>
             </div>
-            <button class="action-fab mt-2 py-2 px-3" style="flex-direction:row; gap:6px; font-size:0.78rem;"
-              onclick="addInvOrderRow()">
-              <i class="fas fa-plus me-1"></i> Add Test
-            </button>
+            <div id="ipn-lab-selected" style="color:#64748b; font-size:.72rem; margin-top:6px;">
+              No investigations selected.
+            </div>
+
+            <details class="mt-2">
+              <summary style="color:#64748b; font-size:.72rem; cursor:pointer;">
+                Order a test that is not in the catalogue
+              </summary>
+              <div id="dr-inv-orders-container" class="mt-2"></div>
+              <button class="action-fab mt-2 py-2 px-3" style="flex-direction:row; gap:6px; font-size:0.78rem;"
+                onclick="addInvOrderRow()">
+                <i class="fas fa-plus me-1"></i> Add free-text test
+              </button>
+              <div style="color:#64748b; font-size:.68rem; margin-top:4px;">
+                A test typed here has no catalogue ID, so the lab cannot price it.
+              </div>
+            </details>
           </div>
 
           <!-- Notes / Advice -->
@@ -1949,6 +1972,9 @@ function ipn_prompt(message, value, done, opts) {
 
   // ── 7. DOCTOR NOTE MODAL ────────────────────────────────
   function openDoctorNoteModal() {
+    IPNotesModule.selectedLabs = [];
+    ipnLoadLabCatalog(ipnRenderLabPicker);
+    ipnRunSafetyCheck();
     // Populate active orders
     const cont = document.getElementById('dr-active-orders-container');
     if (IPNotesModule.activeMeds.length === 0) {
@@ -2292,12 +2318,15 @@ function ipn_prompt(message, value, done, opts) {
     // Add new drug orders
     IPNotesModule.newDrugOrders.forEach(function(o) { medOrders.push(o); });
 
-    // Collect investigation orders
+    // Collect investigation orders: catalogue picks carry a real testId.
     const investigationOrders = [];
+    (IPNotesModule.selectedLabs || []).forEach(function (c) {
+      investigationOrders.push({ testId: c.testId, testName: c.testName, priority: 'ROUTINE' });
+    });
     document.querySelectorAll('.inv-order-row').forEach(function(row) {
       const name = row.querySelector('.inv-test-name').value.trim();
       const prio = row.querySelector('.inv-priority').value;
-      if (name) investigationOrders.push({ testName: name, priority: prio });
+      if (name) investigationOrders.push({ testId: '', testName: name, priority: prio });
     });
 
     const noteData = {
@@ -2346,6 +2375,8 @@ function ipn_prompt(message, value, done, opts) {
         // Refresh context (active meds may have changed)
         loadClinicalContext(ctx.ipNumber);
         IPNotesModule.newDrugOrders = [];
+        IPNotesModule.selectedLabs = [];
+        ipnRunSafetyCheck();
       })
       .withFailureHandler(function(e) {
         btn.disabled = false;
@@ -2863,6 +2894,167 @@ function ipn_prompt(message, value, done, opts) {
   function _hideErr_(id) {
     const el = document.getElementById(id);
     if (el) el.classList.add('d-none');
+  }
+
+  // ── 13e. PRESCRIBING SAFETY ─────────────────────────────
+  /**
+   * The same allergy, duplicate-therapy and drug-interaction check the OP
+   * module and the casesheet run. A ward round prescribes as freely as a
+   * clinic does; it had no safety net at all.
+   */
+  function ipnRunSafetyCheck() {
+    const ctx = IPNotesModule.context;
+    if (!ctx.patientId) return;
+
+    const meds = ipnCollectAllMeds();
+    if (meds.length < 1) { ipnRenderSafetyBar([]); return; }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { ipnRenderSafetyBar([]); return; }
+        ipnRenderSafetyBar(res.alerts || [], res.coverage);
+      })
+      .withFailureHandler(function () { ipnRenderSafetyBar([]); })
+      .checkRxSafety(ctx.patientId, meds, window.sessionToken);
+  }
+
+  /** Drugs already running plus anything being ordered in the open note. */
+  function ipnCollectAllMeds() {
+    const out = [];
+    (IPNotesModule.activeMeds || []).forEach(function (m) {
+      out.push({ drugName: m.drugName });
+    });
+    (IPNotesModule.runningIV || []).forEach(function (m) {
+      out.push({ drugName: m.drugName });
+    });
+    (IPNotesModule.newDrugOrders || []).forEach(function (m) {
+      out.push({ drugName: m.drugName });
+    });
+    return out.filter(function (m) { return m.drugName; });
+  }
+
+  function ipnRenderSafetyBar(alerts, coverage) {
+    let bar = document.getElementById('ipn-safety-bar');
+    if (!bar) {
+      const host = document.getElementById('ip-timeline-container');
+      if (!host || !host.parentNode) return;
+      bar = document.createElement('div');
+      bar.id = 'ipn-safety-bar';
+      host.parentNode.insertBefore(bar, host);
+    }
+    if (!alerts || !alerts.length) { bar.innerHTML = ''; return; }
+
+    const style = {
+      DANGER: 'background:rgba(239,68,68,.12); border:1px solid #ef4444; color:#fca5a5;',
+      WARN:   'background:rgba(245,158,11,.10); border:1px solid #f59e0b; color:#fcd34d;',
+      INFO:   'background:rgba(148,163,184,.08); border:1px solid #334155; color:#94a3b8;'
+    };
+    bar.innerHTML = alerts.map(function (a) {
+      const icon = a.level === 'DANGER' ? 'fa-triangle-exclamation'
+                 : a.level === 'WARN'   ? 'fa-circle-exclamation' : 'fa-circle-info';
+      return '<div style="' + (style[a.level] || style.INFO) +
+             ' border-radius:8px; padding:8px 12px; margin-bottom:8px; font-size:.78rem;">' +
+             '<i class="fas ' + icon + ' me-2"></i>' + _esc(a.message) + '</div>';
+    }).join('') +
+    (coverage && coverage.note
+      ? '<div style="font-size:.68rem; color:#64748b; margin:-4px 0 8px 2px;">' +
+        _esc(coverage.note) + '</div>'
+      : '');
+  }
+
+  // ── 13f. PRINT THE PROGRESS RECORD ──────────────────────
+  function ipnPrintNotes() {
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) { ipnToast('Open a patient first.', 'warn'); return; }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          ipnToast((res && res.message) || 'Could not build the record.', 'err');
+          return;
+        }
+        const w = window.open('', '_blank', 'width=900,height=1100');
+        if (!w) { ipnToast('Pop-up blocked. Allow pop-ups, then retry.', 'warn'); return; }
+        w.document.open(); w.document.write(res.html); w.document.close(); w.focus();
+        setTimeout(function () { try { w.print(); } catch (e) {} }, 500);
+      })
+      .withFailureHandler(function (e) { ipnToast('Print failed: ' + e.message, 'err'); })
+      .getIPNotesPrintHtml(ctx.ipNumber, {}, window.sessionToken);
+  }
+
+  // ── 13g. LAB CATALOGUE ──────────────────────────────────
+  /**
+   * Investigations now come from the same catalogue the OP module and the
+   * casesheet order from, so a ward-round order carries a real catalog ID and
+   * is billable and resultable. Free-typed names were neither.
+   */
+  function ipnLoadLabCatalog(done) {
+    if (IPNotesModule.labCatalog) { if (done) done(); return; }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        IPNotesModule.labCatalog = (res && res.success)
+          ? res : { panels: [], tests: [], packages: [] };
+        if (done) done();
+      })
+      .withFailureHandler(function () {
+        IPNotesModule.labCatalog = { panels: [], tests: [], packages: [] };
+        if (done) done();
+      })
+      .getIPNotesLabCatalog(window.sessionToken);
+  }
+
+  function ipnRenderLabPicker() {
+    const host = document.getElementById('ipn-lab-catalog');
+    if (!host) return;
+    const cat = IPNotesModule.labCatalog || { panels: [], tests: [], packages: [] };
+    const q = (document.getElementById('ipn-lab-search')?.value || '').toLowerCase().trim();
+
+    const all = [].concat(
+      (cat.panels || []).map(function (t) { return { t: t, kind: 'Panel' }; }),
+      (cat.tests || []).map(function (t) { return { t: t, kind: 'Test' }; }),
+      (cat.packages || []).map(function (t) { return { t: t, kind: 'Package' }; })
+    ).filter(function (x) {
+      return !q || String(x.t.testName || '').toLowerCase().indexOf(q) !== -1;
+    });
+
+    if (!all.length) {
+      host.innerHTML = '<div style="color:#475569; font-size:.78rem;">' +
+        (cat.tests && cat.tests.length ? 'No test matches that search.'
+         : 'No tests in the catalogue. Add them under Labs &gt; Test Catalog.') + '</div>';
+      return;
+    }
+
+    const chosen = IPNotesModule.selectedLabs || [];
+    host.innerHTML = all.slice(0, 120).map(function (x) {
+      const on = chosen.some(function (c) { return c.testId === x.t.testId; });
+      return '<label class="d-flex align-items-center gap-2 py-1" style="font-size:.78rem; cursor:pointer;">' +
+             '<input type="checkbox" ' + (on ? 'checked' : '') +
+               ' data-test-id="' + _esc(x.t.testId) + '"' +
+               ' data-test-name="' + _esc(x.t.testName) + '"' +
+               ' onchange="ipnToggleLab(this)">' +
+             '<span>' + _esc(x.t.testName) +
+             ' <span style="color:#475569; font-size:.68rem;">' + x.kind + '</span></span></label>';
+    }).join('');
+  }
+
+  function ipnToggleLab(chk) {
+    IPNotesModule.selectedLabs = IPNotesModule.selectedLabs || [];
+    const id = chk.dataset.testId, name = chk.dataset.testName;
+    if (chk.checked) {
+      if (!IPNotesModule.selectedLabs.some(function (c) { return c.testId === id; })) {
+        IPNotesModule.selectedLabs.push({ testId: id, testName: name });
+      }
+    } else {
+      IPNotesModule.selectedLabs = IPNotesModule.selectedLabs.filter(function (c) {
+        return c.testId !== id;
+      });
+    }
+    const sum = document.getElementById('ipn-lab-selected');
+    if (sum) {
+      sum.textContent = IPNotesModule.selectedLabs.length
+        ? 'Ordering: ' + IPNotesModule.selectedLabs.map(function (c) { return c.testName; }).join(', ')
+        : 'No investigations selected.';
+    }
   }
 
   // ── 14. HELPERS ─────────────────────────────────────────

@@ -58,6 +58,22 @@ function _ensureLabQueueSheet_(ss) {
   return sheet;
 }
 
+/**
+ * Canonical form of a drug name for matching queue rows.
+ * Rows have been written with the strength ahead of the name, behind it, and
+ * with inconsistent spacing and case. Comparing raw strings meant a STOP order
+ * silently failed to find the drug it was stopping.
+ */
+function _normDrug_(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .sort()            // "azithral tab 500" === "500 azithral tab"
+    .join(" ");
+}
+
 function _getCurrentShift_() {
   const hour = new Date().getHours();
   if (hour >= 6 && hour < 14) return "MORNING";
@@ -253,10 +269,18 @@ function getClinicalContext(ipNumber, sessionToken) {
       const pqData = pqSheet.getDataRange().getValues();
       const now = new Date();
 
-      for (let i = 1; i < pqData.length; i++) {
+      // The same drug can hold several ACTIVE rows: a double-save, or a
+      // MODIFY whose retire step failed. Show one card per drug — the newest —
+      // rather than repeating it down the panel.
+      const seenDrug = {};
+      for (let i = pqData.length - 1; i > 0; i--) {
         if (String(pqData[i][1]).trim() !== String(ipNumber).trim()) continue;
         const actionFlag = String(pqData[i][11] || "ACTIVE").toUpperCase();
         if (actionFlag !== 'ACTIVE') continue;
+
+        const dedupeKey = _normDrug_(pqData[i][3]);
+        if (dedupeKey && seenDrug[dedupeKey]) continue;
+        if (dedupeKey) seenDrug[dedupeKey] = true;
 
         const route = String(pqData[i][6] || "").toUpperCase().trim();
         const drug = {
@@ -506,11 +530,11 @@ function _syncMedOrdersToPharmacyQueue_(ss, ipNumber, patientId, medOrders, auth
   /** Newest ACTIVE row for this drug on THIS admission, or -1. */
   const findActive = function (drugName) {
     const data = readRows();
-    const needle = String(drugName || "").toLowerCase().trim();
+    const needle = _normDrug_(drugName);
     if (!needle) return -1;
     for (let i = data.length - 1; i > 0; i--) {
       if (String(data[i][1]).trim().toUpperCase() !== ip) continue;
-      if (String(data[i][3]).toLowerCase().trim() !== needle) continue;
+      if (_normDrug_(data[i][3]) !== needle) continue;
       if (String(data[i][11]).toUpperCase() !== 'ACTIVE') continue;
       return i + 1;
     }
@@ -529,8 +553,13 @@ function _syncMedOrdersToPharmacyQueue_(ss, ipNumber, patientId, medOrders, auth
     if (action === 'NEW') {
       appendOrder(order);
     } else if (action === 'STOP' || action === 'HOLD') {
-      const r = findActive(order.drugName);
-      if (r > 0) stamp(r, action === 'STOP' ? 'STOPPED' : 'HOLD');
+      // Every active row for this drug, not just the newest: a duplicate left
+      // by an earlier double-save would otherwise stay on the Continue list
+      // after the doctor had stopped the drug.
+      let r, guard = 0;
+      while ((r = findActive(order.drugName)) > 0 && guard++ < 20) {
+        stamp(r, action === 'STOP' ? 'STOPPED' : 'HOLD');
+      }
     } else if (action === 'MODIFY') {
       const r = findActive(order.drugName);
       if (r > 0) stamp(r, 'MODIFIED');
@@ -547,12 +576,16 @@ function _routeInvestigationOrders_(ss, ipNumber, patientId, orders, author, tim
   if (!orders || !orders.length) return;
   try {
     const testNames = orders.map(function(o){ return String(o.testName||'').trim(); }).filter(Boolean);
+    const testIds   = orders.map(function(o){ return String(o.testId||'').trim(); }).filter(Boolean);
     const hasStat   = orders.some(function(o){ return String(o.priority||'').toUpperCase() === 'STAT'; });
-    if (!testNames.length) return;
+    if (!testNames.length && !testIds.length) return;
     createLabRequest({
       patientId:          String(patientId).trim(),
       admissionId:        String(ipNumber).trim(),
       sourceModule:       'IP_NOTES',
+      // Real catalog IDs when the picker supplied them; names only as a
+      // fallback for a test typed by hand.
+      testIds:            testIds,
       testNames:          testNames,
       priority:           hasStat ? 'STAT' : 'ROUTINE',
       orderingDoctorName: String(author || ''),
@@ -697,15 +730,22 @@ function generateIPHandoverSummary(payload, sessionToken) {
     let doctorNotes = [];
     let nurseNotes = [];
     let alerts = [];
+    let events = [];        // diagnosis revisions, amendments, procedures
+    let consults = [];
 
     if (tlSheet) {
       const tlData = tlSheet.getDataRange().getValues();
+      const tlMap  = dc_headerMap_(tlSheet);
+      const iFlags = (tlMap["Flags"] === undefined) ? 7 : tlMap["Flags"];
+
       for (let i = 1; i < tlData.length; i++) {
         if (String(tlData[i][1]).trim() !== String(payload.ipNumber).trim()) continue;
         const rowTs = new Date(tlData[i][0]);
         if ((now - rowTs) > cutoffMs) continue;
 
         const roleType = String(tlData[i][3] || "");
+        const author   = String(tlData[i][5] || "");
+        const flags    = String(tlData[i][iFlags] || "");
         let nd = {};
         try { nd = JSON.parse(tlData[i][4] || "{}"); } catch(e) {}
 
@@ -714,32 +754,66 @@ function generateIPHandoverSummary(payload, sessionToken) {
         if (roleType === 'NURSE' && nd.vitals) {
           vitalsList.push(`${timeStr}: BP ${nd.vitals.bp || "--"} | P ${nd.vitals.pulse || "--"} | SpO2 ${nd.vitals.spo2 || "--"}% | T ${nd.vitals.temp || "--"}`);
         }
-        if (roleType === 'DOCTOR' && nd.subjectiveObjective) {
-          doctorNotes.push(`${timeStr} [${tlData[i][5]}]: ${nd.subjectiveObjective}`);
+
+        // A doctor note is more than its subjective line. Recording only
+        // nd.subjectiveObjective is why a diagnosis revised at 20:27 never
+        // reached the handover — that change lives in assessment/diagnosis.
+        if (roleType === 'DOCTOR') {
+          const body = [nd.subjectiveObjective, nd.assessment, nd.adviceText]
+            .map(function (x) { return String(x || "").trim(); })
+            .filter(Boolean).join(" — ");
+          if (body) doctorNotes.push(`${timeStr} [${author}]: ${body}`);
         }
+
         if (roleType === 'NURSE' && nd.observations) {
-          nurseNotes.push(`${timeStr} [${tlData[i][5]}]: ${nd.observations}`);
+          nurseNotes.push(`${timeStr} [${author}]: ${nd.observations}`);
         }
-        if (tlData[i][7] && tlData[i][7].toString().includes('ALERT')) {
-          alerts.push(`⚠ ${nd.alertText || "Clinical alert triggered."}`);
+
+        if (roleType === 'CONSULTANT') {
+          consults.push(`${timeStr} [${author}] ${nd.specialty ? nd.specialty + ": " : ""}` +
+                        `${String(nd.recommendations || nd.findings || "opinion recorded").trim()}`);
+        }
+
+        if (roleType === 'PROCEDURE') {
+          events.push(`${timeStr} Procedure — ${String(nd.procedureName || "unnamed").trim()}` +
+                      `${nd.complications ? " (complications: " + nd.complications + ")" : ""} [${author}]`);
+        }
+
+        // Flagged clinical events: a diagnosis revision or a casesheet
+        // amendment is exactly what the incoming shift needs to know.
+        if (flags.indexOf('DIAGNOSIS') !== -1) {
+          events.push(`${timeStr} Diagnosis revised — ${String(nd.diagnosis || nd.assessment || "").trim()} [${author}]`);
+        }
+        if (flags.indexOf('CASESHEET_AMENDED') !== -1) {
+          events.push(`${timeStr} Casesheet amended — ${String(nd.plan || "").trim()} [${author}]`);
+        }
+        if (flags.indexOf('ALERT') !== -1) {
+          alerts.push(`\u26A0 ${timeStr} ${nd.alertText || "Clinical alert triggered."} [${author}]`);
         }
       }
     }
 
-    let activeMedsList = [];
-    if (pqSheet) {
-      const pqData = pqSheet.getDataRange().getValues();
-      for (let i = 1; i < pqData.length; i++) {
-        if (String(pqData[i][1]).trim() !== String(payload.ipNumber).trim()) continue;
-        if (String(pqData[i][11] || "").toUpperCase() !== 'ACTIVE') continue;
-        activeMedsList.push(`• ${pqData[i][3]} ${pqData[i][4]} ${pqData[i][5]} (${pqData[i][6]})`);
-      }
-    }
+    // Current working diagnosis, so the handover states where things stand and
+    // not merely what changed.
+    let currentDx = "";
+    try {
+      const adm = ipc_admissionRow_(payload.ipNumber);
+      if (adm) currentDx = dc_str_(adm.row[10]);
+    } catch (e) { /* the summary is still worth producing without it */ }
 
     const summaryLines = [
       `=== ${payload.shift || _getCurrentShift_()} SHIFT HANDOVER SUMMARY ===`,
       `Generated: ${Utilities.formatDate(now, Session.getScriptTimeZone(), "dd-MMM-yyyy hh:mm a")}`,
       `Generated by: ${w.authorLabel}`,
+      "",
+      "WORKING DIAGNOSIS:",
+      currentDx || "Not recorded.",
+      "",
+      "CHANGES THIS PERIOD:",
+      events.length ? events.join("\n") : "No diagnosis changes, procedures or amendments.",
+      "",
+      "ALERTS:",
+      alerts.length ? alerts.join("\n") : "No alerts in this period.",
       "",
       "VITALS TREND (Last 12h):",
       vitalsList.length ? vitalsList.join("\n") : "No vitals recorded.",
@@ -747,14 +821,14 @@ function generateIPHandoverSummary(payload, sessionToken) {
       "ACTIVE MEDICATIONS:",
       activeMedsList.length ? activeMedsList.join("\n") : "No active medications.",
       "",
-      "DOCTOR NOTES SUMMARY:",
+      "DOCTOR NOTES:",
       doctorNotes.length ? doctorNotes.join("\n") : "No doctor notes.",
       "",
-      "NURSING OBSERVATIONS:",
-      nurseNotes.length ? nurseNotes.join("\n") : "No nursing notes.",
+      "CONSULTANT OPINIONS:",
+      consults.length ? consults.join("\n") : "No consultant opinions this period.",
       "",
-      "ALERTS:",
-      alerts.length ? alerts.join("\n") : "No alerts in this period."
+      "NURSING OBSERVATIONS:",
+      nurseNotes.length ? nurseNotes.join("\n") : "No nursing notes."
     ];
     const handoverText = summaryLines.join("\n");
 
@@ -943,5 +1017,158 @@ function getIPLabResults(ipNumber, patientId, sessionToken) {
     return { success: true, data: results };
   } catch (error) {
     return { success: false, message: error.toString() };
+  }
+}
+// ── 14. PRINTABLE PROGRESS RECORD ─────────────────────────
+
+/**
+ * Print-ready HTML for an admission's notes.
+ * @param {string} ipNumber
+ * @param {Object} opts  { from, to } ISO dates, or blank for the whole stay
+ */
+function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
+  try {
+    var gate = resolveIPRead_(sessionToken, ipNumber);
+    if (!gate.ok) return { success: false, message: gate.message };
+
+    opts = opts || {};
+    var tl = getIPTimeline(ipNumber, sessionToken);
+    if (!tl.success) return { success: false, message: tl.message };
+
+    var adm = ipc_admissionRow_(ipNumber);
+    var e = function (v) {
+      return String(v === null || v === undefined ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    };
+
+    var from = opts.from ? new Date(opts.from) : null;
+    var to   = opts.to   ? new Date(opts.to)   : null;
+    if (to) to.setHours(23, 59, 59, 999);
+
+    // Timeline comes newest-first; a printed record reads chronologically.
+    var rows = tl.data.filter(function (n) {
+      if (!n.rawTs) return true;
+      var d = new Date(n.rawTs);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }).reverse();
+
+    if (!rows.length) {
+      return { success: false, message: "No notes in that period to print." };
+    }
+
+    var LABEL = {
+      DOCTOR: "Clinical Progress Note", NURSE: "Nursing Note",
+      CONSULTANT: "Consultant Opinion", PROCEDURE: "Procedure Note",
+      HANDOVER: "Shift Handover", QUICK: "Quick Note"
+    };
+
+    var body = rows.map(function (n) {
+      var d = n.noteData || {};
+      var parts = [];
+
+      var line = function (label, val) {
+        var v = String(val === null || val === undefined ? "" : val).trim();
+        if (!v) return;
+        parts.push('<p style="margin:3px 0;"><strong>' + e(label) + ':</strong> ' + e(v) + '</p>');
+      };
+
+      line("Subjective / Objective", d.subjectiveObjective);
+      if (d.vitals) {
+        line("Vitals", "BP " + (d.vitals.bp || "--") + " | Pulse " + (d.vitals.pulse || "--") +
+                       " | SpO2 " + (d.vitals.spo2 || "--") + "% | Temp " + (d.vitals.temp || "--"));
+      }
+      if (d.sysExam) {
+        line("Systemic exam", ["CVS: " + (d.sysExam.cvs || "--"), "RS: " + (d.sysExam.rs || "--"),
+                               "P/A: " + (d.sysExam.pa || "--"), "CNS: " + (d.sysExam.cns || "--")].join(" | "));
+      }
+      line("Assessment", d.assessment);
+      line("Diagnosis", d.diagnosis);
+      line("Plan", d.plan);
+      line("Advice", d.adviceText);
+      line("Intervention", d.intervention);
+      line("Observations", d.observations);
+      line("Specialty", d.specialty);
+      line("Findings", d.findings);
+      line("Recommendations", d.recommendations);
+      line("Procedure", d.procedureName);
+      line("Operator", d.operator);
+      line("Complications", d.complications);
+      line("Note", d.text);
+
+      if (d.medOrders && d.medOrders.length) {
+        parts.push('<p style="margin:3px 0;"><strong>Orders:</strong> ' +
+          d.medOrders.map(function (m) {
+            return e((m.action || "NEW") + " " + (m.drugName || "") + " " +
+                     (m.dose || "") + " " + (m.freq || "") + " " + (m.route || ""));
+          }).join("; ") + '</p>');
+      }
+      if (d.investigationOrders && d.investigationOrders.length) {
+        parts.push('<p style="margin:3px 0;"><strong>Investigations:</strong> ' +
+          e(d.investigationOrders.map(function (o) { return o.testName; }).filter(Boolean).join(", ")) + '</p>');
+      }
+      if (d.handoverText) {
+        parts.push('<pre style="margin:3px 0; white-space:pre-wrap; font-family:inherit; font-size:.82rem;">' +
+                   e(d.handoverText) + '</pre>');
+      }
+      if (!parts.length) parts.push('<p style="margin:3px 0; color:#666;">No content recorded.</p>');
+
+      return '<div style="border:1px solid #e2e8f0; border-left:3px solid #0369a1; ' +
+             'border-radius:5px; padding:10px 12px; margin-bottom:10px; page-break-inside:avoid;">' +
+               '<div style="display:flex; justify-content:space-between; font-size:.78rem; ' +
+                 'color:#475569; margin-bottom:6px;">' +
+                 '<span><strong>' + e(LABEL[n.roleType] || n.roleType) + '</strong> &mdash; ' +
+                   e(n.author) + (n.signature ? ' <em>(' + e(n.signature) + ')</em>' : '') + '</span>' +
+                 '<span>' + e(n.timestamp) + (n.shift ? ' &bull; ' + e(n.shift) : '') + '</span>' +
+               '</div>' + parts.join("") +
+             '</div>';
+    }).join("");
+
+    var html =
+      '<html><head><meta charset="utf-8"><title>IP Notes ' + e(ipNumber) + '</title>' +
+      '<style>@media print{@page{margin:14mm;}}' +
+      'body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0;padding:20px;font-size:.86rem;}' +
+      '</style></head><body><div style="max-width:820px;margin:auto;">' +
+        '<div style="border-bottom:2px solid #0369a1;padding-bottom:10px;margin-bottom:16px;text-align:center;">' +
+          '<h2 style="margin:0;text-transform:uppercase;color:#0369a1;">Valarmathi Clinic</h2>' +
+          '<p style="margin:0;font-size:.82rem;color:#555;">Premium Healthcare Services | Ph: +91 88387 23513</p>' +
+          '<h4 style="margin:8px 0 0;">Inpatient Progress Record</h4>' +
+        '</div>' +
+        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-bottom:16px;">' +
+          '<strong>Patient:</strong> ' + e(adm ? adm.row[2] : "") +
+          ' &nbsp;|&nbsp; <strong>IP No:</strong> ' + e(ipNumber) +
+          ' &nbsp;|&nbsp; <strong>PID:</strong> ' + e(adm ? adm.row[1] : "") + '<br>' +
+          '<strong>Ward/Bed:</strong> ' + e(adm ? (adm.row[7] + " / " + adm.row[8]) : "") +
+          ' &nbsp;|&nbsp; <strong>Consultant:</strong> ' + e(adm ? adm.row[9] : "") + '<br>' +
+          '<strong>Working diagnosis:</strong> ' + e(adm ? adm.row[10] : "") + '<br>' +
+          '<span style="font-size:.78rem;color:#555;">' + rows.length + ' note(s)' +
+          (from || to ? ', filtered by date' : ', whole stay') + '. Printed ' +
+          e(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd-MMM-yyyy hh:mm a")) + '.</span>' +
+        '</div>' + body +
+      '</div></body></html>';
+
+    return { success: true, html: html, noteCount: rows.length };
+  } catch (err) {
+    return { success: false, message: err.toString() };
+  }
+}
+
+// ── 15. LAB CATALOGUE FOR IP NOTES ────────────────────────
+
+/**
+ * The same catalogue the OP module and the IP casesheet order from, so an
+ * investigation ordered on a ward round carries a real catalog ID and is
+ * billable and resultable. IP Notes previously took free-typed test names,
+ * which the lab module could neither price nor match to a panel.
+ */
+function getIPNotesLabCatalog(sessionToken) {
+  try {
+    var gate = resolveIPRead_(sessionToken, null);
+    if (!gate.ok) return { success: false, message: gate.message, panels: [], tests: [], packages: [] };
+    return getOPDOrderableTests();
+  } catch (e) {
+    return { success: false, message: e.message, panels: [], tests: [], packages: [] };
   }
 }

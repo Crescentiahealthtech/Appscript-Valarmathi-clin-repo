@@ -740,6 +740,32 @@ function checkRxSafety(patientId, meds, sessionToken) {
       });
     });
 
+    // ---- the same drug listed twice --------------------------------------
+    // The generic check above only fires when BOTH rows carry a Generic name
+    // in Pharmacy_Inventory. The commonest mistake — the identical brand added
+    // twice, usually from a double-click on a slow save — has to be caught on
+    // the name itself, whatever the formulary knows.
+    var byName = {};
+    meds.forEach(function (md) {
+      var name = dc_str_(md.drugName);
+      if (!name) return;
+      var k = name.toLowerCase().replace(/\s+/g, " ");
+      byName[k] = (byName[k] || 0) + 1;
+    });
+    Object.keys(byName).forEach(function (k) {
+      if (byName[k] < 2) return;
+      alerts.push({
+        level: "DANGER", type: "SAME_DRUG",
+        message: "\u201c" + k + "\u201d appears " + byName[k] +
+                 " times on this list. Remove the extra line unless two " +
+                 "different strengths are genuinely intended."
+      });
+    });
+
+    // ---- drug-drug interactions ------------------------------------------
+    var inter = checkDrugInteractions(meds, gm);
+    inter.alerts.forEach(function (a) { alerts.push(a); });
+
     // Honest about how much of the formulary this can actually check.
     var coveragePct = gm.total ? Math.round((gm.withGeneric / gm.total) * 100) : 0;
 
@@ -751,10 +777,21 @@ function checkRxSafety(patientId, meds, sessionToken) {
         drugsInMaster: gm.total,
         withGenericName: gm.withGeneric,
         percent: coveragePct,
-        note: coveragePct < 90
-          ? "Duplicate-therapy checking only covers drugs with a Generic name in Pharmacy_Inventory (" +
-            coveragePct + "% of your formulary)."
-          : ""
+        interactionRules: inter.rulesLoaded,
+        note: (function () {
+          var notes = [];
+          if (coveragePct < 90) {
+            notes.push("Duplicate-therapy checking only covers drugs with a Generic name in " +
+                       "Pharmacy_Inventory (" + coveragePct + "% of your formulary).");
+          }
+          // An empty interaction table must never read as a clean prescription.
+          notes.push(inter.rulesLoaded
+            ? ("Interaction checking against " + inter.rulesLoaded +
+               " curated pairs — a safety net, not a full reference.")
+            : "No drug interaction pairs are loaded. Run setupDrugInteractions() " +
+              "to seed the sheet; until then NO interaction checking is happening.");
+          return notes.join(" ");
+        })()
       }
     };
   } catch (e) {

@@ -105,17 +105,27 @@
      the only one allowed to absorb slack, so long patient names ellipsize
      instead of pushing the Save button off the row. The right track reserves
      space for the shell's floating user badge. */
-  .ipc-hdr-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-  .ipc-hdr-left { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
-  .ipc-hdr-ident { display: flex; align-items: center; gap: 0.5rem; flex: 1 1 240px; min-width: 0; overflow: hidden; }
-  .ipc-hdr-right { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; margin-left: auto; }
-  .ipc-ward-select { width: 300px; max-width: 38vw; min-width: 170px; }
+  .ipc-hdr-row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; row-gap: 0.35rem; }
+  .ipc-hdr-row + .ipc-hdr-row { margin-top: 0.35rem; }
+  .ipc-hdr-left { display: flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; }
+  .ipc-hdr-ident { display: flex; align-items: center; gap: 0.35rem; flex: 1 1 220px; min-width: 0; overflow: hidden; }
+  .ipc-hdr-right { display: flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; margin-left: auto; }
+  .ipc-ward-select { width: 260px; max-width: 30vw; min-width: 160px; }
+
+  /* The header is navigation, not content: keep it tight so the chart starts
+     high on the screen. Every control here is one line tall. */
+  #emr-workspace-ip-casesheet .ipc-hdr-row .badge,
+  #emr-workspace-ip-casesheet .ipc-hdr-row .btn,
+  #emr-workspace-ip-casesheet .ipc-hdr-row .form-select { padding-top: .2rem; padding-bottom: .2rem; }
+  #emr-workspace-ip-casesheet .ipc-hdr-row .badge { font-size: .68rem; }
+  #emr-workspace-ip-casesheet .ipc-hdr-row .hd-label { white-space: nowrap; }
+  #emr-workspace-ip-casesheet > .mb-3.pb-2 { margin-bottom: .6rem !important; padding-bottom: .4rem !important; }
+  .ipc-care-chip { font-size: .62rem !important; padding: .12rem .4rem !important; }
 
   /* Row 1 clears the floating "signed in as" badge the shell overlays. */
-  #emr-workspace-ip-casesheet .ipc-hdr-row:first-of-type .ipc-hdr-right { padding-right: 15rem; }
-  @media (max-width: 1400px) {
+  #emr-workspace-ip-casesheet .ipc-hdr-row:first-of-type .ipc-hdr-right { padding-right: 14rem; }
+  @media (max-width: 1500px) {
     #emr-workspace-ip-casesheet .ipc-hdr-row:first-of-type .ipc-hdr-right { padding-right: 0; }
-    .ipc-hdr-ident { flex-basis: 100%; }
   }
 </style>
 
@@ -158,7 +168,9 @@
       </div>
 
       <div class="ipc-hdr-right">
-        <span class="text-muted small">Date: <span id="ipc-hd-current-date" class="text-warning fw-bold"></span></span>
+        <span class="text-muted" style="font-size:.7rem;">
+          <span id="ipc-hd-current-date" class="text-warning fw-bold"></span>
+        </span>
       </div>
     </div>
 
@@ -1101,7 +1113,7 @@ function ipcRenderCareTeam(team) {
         ? team.map(function (t) {
             const cls = colour[t.teamRole] || 'bg-secondary';
             const mine = (t.doctorId === window.ipcDoctorId) ? ' border border-warning' : '';
-            return '<span class="badge ' + cls + mine + ' px-2 py-1" style="font-size:.66rem;">' +
+            return '<span class="badge ipc-care-chip ' + cls + mine + '">' +
                    ipcEsc(t.name) + ' <span style="opacity:.75;">' +
                    ipcEsc(String(t.teamRole || '').replace(/_/g, ' ')) + '</span></span>';
           }).join('')
@@ -1803,9 +1815,15 @@ function ipcUseConsultTemplate(id) {
                     if (t.exam[s]) ipcSetVal('ipc-se-' + s + '-text', t.exam[s]);
                 });
 
-                if (t.diagnosis)     ipcSetVal('ipc-diagnosis', t.diagnosis);
+                // Additive, like the complaint and history rows above.
+                if (t.diagnosis)     ipcAddDx(t.diagnosis);
                 if (t.diagnosisType) ipcSetVal('ipc-diagnosis-type', t.diagnosisType);
-                if (t.advice)        ipcSetVal('ipc-advice-free', t.advice);
+                if (t.advice) {
+                    const adv = document.getElementById('ipc-advice-free');
+                    if (adv) adv.value = adv.value.trim()
+                        ? (adv.value.trim().replace(/[.\s]+$/, '') + '. ' + t.advice)
+                        : t.advice;
+                }
 
                 if (t.reviewDays) {
                     const d = new Date();
@@ -1850,14 +1868,39 @@ function ipcSetVal(id, val) {
 function ipcFillRows(tbodyId, type, pipeText) {
     const tb = document.getElementById(tbodyId);
     if (!tb) { console.warn('ipcFillRows: #' + tbodyId + ' is not in the DOM.'); return; }
-    tb.innerHTML = '';
+
+    // ADDITIVE. A template is a starting point layered onto what the doctor
+    // has already written, not a replacement for it — wiping entered
+    // complaints because a template was clicked loses real clinical work.
+    // Blank starter rows are cleared; anything typed is kept, and duplicates
+    // are skipped so applying the same template twice is a no-op.
+    const existing = [];
+    tb.querySelectorAll('tr').forEach(function (tr) {
+        const el = tr.querySelector('.ipc-array-text');
+        const v = el ? el.value.trim() : '';
+        if (v) existing.push(v.toLowerCase());
+        else tr.remove();
+    });
+
     String(pipeText).split('|').forEach(function (v) {
-        if (!v.trim()) return;
+        const text = v.trim();
+        if (!text) return;
+        const bare = text.replace(/\s*\([^)]*\)\s*$/, '').trim();
+        if (existing.indexOf(bare.toLowerCase()) !== -1) return;
+        existing.push(bare.toLowerCase());
+
         ipcAddIPCDynamicRow(tbodyId, type);
         const rows = tb.querySelectorAll('tr');
-        const input = rows[rows.length - 1] && rows[rows.length - 1].querySelector('.ipc-array-text');
-        if (input) input.value = v.trim();
+        const row = rows[rows.length - 1];
+        if (!row) return;
+        const input = row.querySelector('.ipc-array-text');
+        const dur = row.querySelector('.ipc-array-dur');
+        // "Fever (3 Days)" splits back into text and duration.
+        const m = text.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+        if (input) input.value = m ? m[1].trim() : text;
+        if (dur && m) dur.value = m[2].trim();
     });
+
     if (!tb.querySelectorAll('tr').length) ipcAddIPCDynamicRow(tbodyId, type);
 }
 
@@ -3006,10 +3049,19 @@ function ipcSubmitConfirmed() {
             btn.disabled = false;
             btn.innerHTML = original;
             if (!res || !res.success) {
-                ipcToast((res && res.message) || 'Save failed.', 'err');
+                // An admission carries one casesheet. A second Save is an
+                // amendment, and amendments are made from IP Records so they
+                // carry a reason and keep the superseded version.
+                if (res && res.alreadyExists) {
+                    ipc_alert(res.message, 'warn', 'Casesheet already recorded');
+                    ipcLoadWard();
+                } else {
+                    ipcToast((res && res.message) || 'Save failed.', 'err');
+                }
                 return;
             }
             activeIpcEncounterId = res.encounterId;
+            ipcLoadWard();   // the bed leaves the picker now it has a casesheet
             try { localStorage.removeItem(ipcDraftKey()); } catch (e) {}
 
             ipcToast(res.message, res.warnings && res.warnings.length ? 'warn' : 'ok');
