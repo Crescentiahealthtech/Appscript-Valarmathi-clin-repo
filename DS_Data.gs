@@ -420,9 +420,12 @@ var DSX_CONFIG_DEFAULTS = {
   // Signing credential. Passwords are clear text today (Discovery §5), so the
   // password fallback is a deliberate, switchable compromise.
   DS_SIGN_ALLOW_PASSWORD: 'true',
-  // Facility identity for the printed document. Empty means "fall back to
-  // IPP_CLINIC", so nothing changes until the clinic supplies these.
-  DS_FACILITY_ADDRESS: '',
+  // Facility identity for the printed document, confirmed by the CEO. The
+  // phone already prints from IPP_CLINIC, so it is not repeated here. Both are
+  // overridable per tenant through Script Properties.
+  DS_FACILITY_ADDRESS: 'Crescentia Healthtech, Tamil Nadu, India',
+  // No facility registration or licence number has been supplied yet. Empty
+  // prints nothing rather than a placeholder.
   DS_FACILITY_REG_LINE: ''
 };
 

@@ -1084,8 +1084,8 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
     if (!t0.ok) return dsx_err_('INVALID_STATE', t0.message);
 
     // ---- 3. consultant-of-record rule -------------------------------------
-    var consultantId = dsx_consultantOfRecord_(dsx_str_(header0.IP_Number));
-    var isConsultant = consultantId && dsx_upper_(consultantId) === dsx_upper_(actor.doctorId);
+    var cor = dsx_consultantsOfRecord_(dsx_str_(header0.IP_Number));
+    var isConsultant = cor.ids.indexOf(dsx_upper_(actor.doctorId)) !== -1;
     var reason = dsx_str_(onBehalfReason);
 
     if (!isConsultant) {
@@ -1195,7 +1195,13 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
                     credentialMethod: cred.method,
                     onBehalfReason: reason,
                     withoutPreparerReview: (signAction === 'SIGN_FAST'),
-                    softAcknowledged: readiness.soft.length
+                    softAcknowledged: readiness.soft.length,
+                    consultantOfRecord: isConsultant,
+                    consultantIds: cor.ids,
+                    // Empty unless IP_Admissions.Consultant names somebody the
+                    // Doctors master does not know. When it is set, a doctor may
+                    // have been asked for a reason only because of stale data.
+                    unresolvedConsultantName: cor.unresolvedConsultant
                   });
     dsx_audit_(actor, 'DS_SIGN', summaryId, {
       ipNumber: dsx_str_(header.IP_Number),
@@ -1246,21 +1252,46 @@ function dsx_doctorProfile_(doctorId) {
 }
 
 /**
- * The consultant of record. Discovery §13 Q5: Primary_Doctor_ID is treated as
- * authoritative; the Consultant display string is a fallback only, because the
- * two disagree on live rows.
+ * Every doctor who counts as a consultant of record for this admission, and
+ * may therefore sign without giving an on-behalf reason.
+ *
+ * IP_Admissions carries TWO consultant fields and they disagree on live rows:
+ * `Consultant` is a display string ("Dr. Logavignesh") and `Primary_Doctor_ID`
+ * is an ID (DOC001). Confirmed with the CEO: BOTH are legitimate — whichever
+ * of them a doctor matches, they are signing their own patient's summary, not
+ * somebody else's.
+ *
+ * Resolving the display name can fail (the string may name nobody in the
+ * Doctors master). That is reported in `unresolved` rather than swallowed, so
+ * the signing log records why a doctor was asked for a reason.
+ *
+ * @return {{ids:Array<string>, unresolvedConsultant:string}}
  */
-function dsx_consultantOfRecord_(ipNumber) {
+function dsx_consultantsOfRecord_(ipNumber) {
+  var out = { ids: [], unresolvedConsultant: '' };
   var adm = dsx_admissionRow_(ipNumber);
-  if (!adm) return '';
-  var id = dsx_str_(adm.Primary_Doctor_ID);
-  if (id) return id;
-  try {
-    if (typeof ipc_doctorIdByName_ === 'function') {
-      return dsx_str_(ipc_doctorIdByName_(dsx_str_(adm.Consultant)));
-    }
-  } catch (e) {}
-  return '';
+  if (!adm) return out;
+
+  var add = function (id) {
+    var v = dsx_upper_(id);
+    if (v && out.ids.indexOf(v) === -1) out.ids.push(v);
+  };
+
+  add(adm.Primary_Doctor_ID);
+
+  var consultantName = dsx_str_(adm.Consultant);
+  if (consultantName) {
+    var resolved = '';
+    try {
+      if (typeof ipc_doctorIdByName_ === 'function') {
+        resolved = dsx_str_(ipc_doctorIdByName_(consultantName));
+      }
+    } catch (e) { resolved = ''; }
+    if (resolved) add(resolved);
+    else out.unresolvedConsultant = consultantName;
+  }
+
+  return out;
 }
 
 /**

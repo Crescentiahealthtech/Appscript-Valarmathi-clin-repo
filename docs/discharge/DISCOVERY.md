@@ -444,6 +444,7 @@ Properties, ad hoc, with no accessor of its own — `ACC_CFG.LOCK_PROP` (`Accoun
 | No drug ID or generic name anywhere in the IP note path | Medication replay keys on normalised **brand** text via `_normDrug_()`. Generic is resolved by an optional pharmacy-inventory lookup and left **empty** when unknown — never guessed. The keying strategy is returned in the payload and shown in the UI. |
 | `IP_Pharmacy_Queue.Encounter_Note_ID` empty | Replay is driven from `IP_Timeline_DB` DOCTOR notes; the queue is a cross-check that raises a SOFT warning on disagreement, not a source. |
 | `getIPLabResults` reads a dead sheet | Assembly reads `LAB_ORDERS`(`AdmissionID`) → `LAB_ORDER_TESTS` → `LAB_RESULTS` directly, filtered to `IsLatest` ∧ `VerifiedAt` ∧ ¬`IsDraft`. |
+| `IP_Admissions` carries both `Consultant` (display string) and `Primary_Doctor_ID`, and they disagree on live rows | **Answered (§13 Q5): both count.** A doctor matching either field is a consultant of record and signs without an on-behalf reason. `dsx_consultantsOfRecord_()` returns the set. When the `Consultant` string names nobody in the Doctors master, that is recorded in the signing log as `unresolvedConsultantName` rather than silently costing a doctor a reason. |
 | Two discharge paths, neither authenticated | The Phase 8 gate must patch **both** `processPatientDischarge` and `settleDischarge`. Because neither carries a token, the gate reads DS status by IP number and logs the override against the client-supplied user — a known weakness, recorded, not silently accepted. |
 | `settleDischarge` writes by index | The gate patch must not add, remove or reorder any `IP_Admissions` column. The module adds **no** columns to existing sheets. |
 | Casesheet/notes header order differs from the declared constants | **Every read is header-mapped.** No positional access anywhere in this module. |
@@ -465,23 +466,29 @@ Properties, ad hoc, with no accessor of its own — `ACC_CFG.LOCK_PROP` (`Accoun
 
 ## 13. Blocking questions — only what the code cannot answer
 
-1. **Facility identity for the printed document.** A discharge summary should carry the clinic's
-   postal address and registration/licence number. Neither exists anywhere in the workbook or in
-   Script Properties. Please supply the exact address block and registration line to print, or
-   confirm that the summary prints name + phone only (the `IPP_CLINIC` values) for now.
+1. ~~**Facility identity for the printed document.**~~ **Answered.** The address block is
+   *Crescentia Healthtech, Tamil Nadu, India*, phone *+91 88387 23513* (already the `IPP_CLINIC`
+   value, so it is not duplicated). Set as the `DS_FACILITY_ADDRESS` default and overridable per
+   tenant. **Still open:** no facility registration or licence number has been supplied —
+   `DS_FACILITY_REG_LINE` stays empty and prints nothing rather than a placeholder. Supply it when
+   you have it.
 2. **Doctor signature images.** Confirm: v1 prints the typed `Signature_Line`
    (e.g. "Dr. Meivasagam T, MBBS") plus a wet-ink box, with **no** scanned signature image.
    If you want scanned signatures, that needs a new `Signature_Image_File_ID` column on `Doctors`
    and a Drive folder — proposed, not applied.
-3. **`Reg_No` for DOC002 (Dr. Duty MO) and DOC003 (Dr. Nagamanikandan).** Signing will be refused
-   until these are filled. Please confirm the numbers, and confirm whether "Dr. Duty MO" is a real
-   registered person or a shared account — a shared login must not be allowed to sign.
-4. **`DOC003` name mismatch**: `Display_Name` "Dr. Nagamanikandan" vs `Signature_Line`
-   "Dr. Logavignesh". Which is correct? A signed document will print one of them.
-5. **Who is "the consultant of record"?** `IP_Admissions` carries both `Consultant` (a display
-   string, e.g. "Dr. Logavignesh") and `Primary_Doctor_ID` (e.g. `DOC001`), and they currently
-   disagree on live row `IP2609-0002`. Confirm that **`Primary_Doctor_ID` is authoritative** and
-   `Consultant` is display-only, or say otherwise.
+3. **`Reg_No` for DOC002 (Dr. Duty MO) and DOC003 (Dr. Nagamanikandan).** Confirmed: "Dr. Duty MO"
+   is a real registered person, not a shared account, so they may sign. **Still open:** both rows
+   still have a blank `Reg_No`, and signing is refused without one. Fill them in the `Doctors`
+   sheet — this is a data fix, not a code change.
+4. ~~**`DOC003` name mismatch**~~ **Answered and fixed at source.** `Signature_Line` was entered in
+   error and has been corrected in the `Doctors` sheet. No code change: the renderer prints whatever
+   `Signature_Line` holds.
+5. ~~**Who is "the consultant of record"?**~~ **Answered: both are.** A doctor matching either
+   `Primary_Doctor_ID` or the `Consultant` display name signs without an on-behalf reason; any
+   other doctor still needs one. Implemented in `dsx_consultantsOfRecord_()`.
+   **Residual data risk:** on live row `IP2609-0002` the `Consultant` string "Dr. Logavignesh"
+   matches no `Display_Name` in the Doctors master, so today it resolves to nobody and only
+   `DOC001` counts. That is logged, not hidden — see the design-impact table.
 6. **Password-based signing.** Passwords are clear text today. Options: (a) TOTP only — the
    doctor must enrol MFA before they can sign; (b) TOTP with password fallback, accepting the
    weakness until Slice A ships. Recommendation: **(b) with the fallback off by default per
