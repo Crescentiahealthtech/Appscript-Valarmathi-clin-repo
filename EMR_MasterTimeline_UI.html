@@ -28,7 +28,7 @@
 
         <div class="flex-grow-1 overflow-auto border border-secondary rounded bg-black">
             <table class="table table-dark table-hover m-0 align-middle text-nowrap">
-                <thead style="position: sticky; top: 0; z-index: 10; background-color: var(--surface-2);">
+                <thead style="position: sticky; top: 0; z-index: 10;">
                     <tr class="text-muted small">
                         <th class="sno-col">S.No</th>
                         <th>Patient ID</th>
@@ -165,12 +165,12 @@
     let parts = [];
     
     // Icons restored and separated from the text span to guarantee visibility
-    if(v.bp) parts.push(`<i class="fa-solid fa-droplet text-danger me-1"></i><span style="color:var(--text-muted);">BP:</span> <strong style="color:var(--text-main) !important;">${v.bp}</strong>`);
-    if(v.hr) parts.push(`<i class="fa-solid fa-heart-pulse text-danger me-1"></i><span style="color:var(--text-muted);">HR:</span> <strong style="color:var(--text-main) !important;">${v.hr} bpm</strong>`);
-    if(v.spo2) parts.push(`<i class="fa-solid fa-wind text-info me-1"></i><span style="color:var(--text-muted);">SpO2:</span> <strong style="color:var(--text-main) !important;">${v.spo2}%</strong>`);
-    if(v.temp) parts.push(`<i class="fa-solid fa-temperature-half text-warning me-1"></i><span style="color:var(--text-muted);">Temp:</span> <strong style="color:var(--text-main) !important;">${v.temp}°F</strong>`);
-    if(v.weight) parts.push(`<i class="fa-solid fa-weight-scale text-success me-1"></i><span style="color:var(--text-muted);">Wt:</span> <strong style="color:var(--text-main) !important;">${v.weight}kg</strong>`);
-    if(v.bmi) parts.push(`<i class="fa-solid fa-calculator text-primary me-1"></i><span style="color:var(--text-muted);">BMI:</span> <strong style="color:var(--text-main) !important;">${v.bmi}</strong>`);
+    if(v.bp) parts.push(`<i class="fa-solid fa-droplet text-muted me-1"></i><span style="color:var(--text-muted);">BP:</span> <strong style="color:var(--text-main) !important;">${v.bp}</strong>`);
+    if(v.hr) parts.push(`<i class="fa-solid fa-heart-pulse text-muted me-1"></i><span style="color:var(--text-muted);">HR:</span> <strong style="color:var(--text-main) !important;">${v.hr} bpm</strong>`);
+    if(v.spo2) parts.push(`<i class="fa-solid fa-wind text-muted me-1"></i><span style="color:var(--text-muted);">SpO2:</span> <strong style="color:var(--text-main) !important;">${v.spo2}%</strong>`);
+    if(v.temp) parts.push(`<i class="fa-solid fa-temperature-half text-muted me-1"></i><span style="color:var(--text-muted);">Temp:</span> <strong style="color:var(--text-main) !important;">${v.temp}°F</strong>`);
+    if(v.weight) parts.push(`<i class="fa-solid fa-weight-scale text-muted me-1"></i><span style="color:var(--text-muted);">Wt:</span> <strong style="color:var(--text-main) !important;">${v.weight}kg</strong>`);
+    if(v.bmi) parts.push(`<i class="fa-solid fa-calculator text-muted me-1"></i><span style="color:var(--text-muted);">BMI:</span> <strong style="color:var(--text-main) !important;">${v.bmi}</strong>`);
     
     return parts.length > 0 ? parts.join(' <span style="color:var(--text-faint); margin: 0 8px;">|</span> ') : '<span style="color:var(--text-muted) !important; font-style:italic;">No vitals recorded.</span>';
   }
@@ -214,7 +214,7 @@
       let days = (rx.duration || '').trim();
       let durationText = days ? ` X ${days} DAYS` : '';
       let sigText = sig ? `${sig}${durationText}` : (days ? `${durationText}` : '');
-      html += `<li style="margin-bottom:6px;"><strong style="color:var(--warning-fg) !important; font-size: 1.05em;">${drugName}</strong> <span style="color:var(--text-secondary);">${sigText}</span></li>`;
+      html += `<li style="margin-bottom:6px;"><strong style="color:var(--text-main) !important; font-size: 1.05em;">${drugName}</strong> <span style="color:var(--text-secondary);">${sigText}</span></li>`;
     });
     return html + '</ul>';
   }
@@ -259,15 +259,15 @@ function buildOPCard(ev) {
             <div class="row g-3">
               <div class="col-md-7 border-end border-secondary">
                 <div class="mb-3">
-                  <span style="color: var(--gold-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-clipboard-list me-1 text-muted"></i> Complaints</span>
+                  <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-clipboard-list me-1 text-muted"></i> Complaints</span>
                   <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 2px; font-weight: 500;">${ev.complaints}</p>
                 </div>
                 <div class="mb-3">
-                  <span style="color: var(--gold-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-clock-rotate-left me-1" style="color: var(--gold-fg);"></i> History</span>
+                  <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-clock-rotate-left me-1" style="color: var(--accent-fg);"></i> History</span>
                   <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 2px; font-weight: 500;">${ev.history}</p>
                 </div>
                 <div class="mb-3">
-                  <span style="color: var(--gold-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-microscope me-1" style="color: var(--gold-fg);"></i> Examinations</span>
+                  <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-microscope me-1" style="color: var(--accent-fg);"></i> Examinations</span>
                   <div style="color: var(--text-main) !important; font-size: 0.95em;">Gen: ${formatExams(ev.genExam, false)}</div>
                   <div style="color: var(--text-main) !important; font-size: 0.95em; margin-top: 4px;">Sys: ${formatExams(ev.sysExam, true)}</div>
                 </div>
@@ -280,14 +280,14 @@ function buildOPCard(ev) {
 
               <div class="col-md-5 ps-md-3">
                 <div class="mb-3">
-                  <span style="color: var(--gold-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 8px; letter-spacing: 0.5px;"><i class="fa-solid fa-prescription me-1" style="color: var(--gold-fg);"></i> Rx</span>
+                  <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 8px; letter-spacing: 0.5px;"><i class="fa-solid fa-prescription me-1" style="color: var(--accent-fg);"></i> Rx</span>
                   ${formatRx(ev.rx)}
                 </div>
                 
                 <div style="background-color: var(--surface); border: 1px solid var(--border-hover); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                  <span style="color: var(--gold-fg); font-size: 0.8em; font-weight: bold; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fa-solid fa-flask-vial me-1" style="color: var(--gold-fg);"></i> Labs & Advice</span>
-                  <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 4px;"><strong style="color: var(--gold-fg);">Labs:</strong> ${formatLabs(ev.labs)}</p>
-                  <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 0;"><strong style="color: var(--gold-fg);">Advice:</strong> ${ev.advice}</p>
+                  <span style="color: var(--accent-fg); font-size: 0.8em; font-weight: bold; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fa-solid fa-flask-vial me-1" style="color: var(--accent-fg);"></i> Labs & Advice</span>
+                  <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 4px;"><strong style="color: var(--accent-fg);">Labs:</strong> ${formatLabs(ev.labs)}</p>
+                  <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 0;"><strong style="color: var(--accent-fg);">Advice:</strong> ${ev.advice}</p>
                 </div>
 
                 <div class="text-end mt-3">

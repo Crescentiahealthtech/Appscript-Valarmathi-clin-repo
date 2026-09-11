@@ -55,7 +55,7 @@
    --danger:         #ef4444;  --danger-bg:  rgba(239, 68, 68, 0.15);   --danger-fg:  #f87171;
    --info:           #0ea5e9;  --info-bg:    rgba(14, 165, 233, 0.15);  --info-fg:    #38bdf8;
    --blue:           #3b82f6;  --blue-bg:    rgba(59, 130, 246, 0.15);  --blue-fg:    #60a5fa;
-   --teal:           #06b6d4;  --teal-bg:    rgba(6, 182, 212, 0.15);   --teal-fg:    #22d3ee;
+   --teal:           #14b8a6;  --teal-bg:    rgba(20, 184, 166, 0.15);  --teal-fg:    #2dd4bf;
    --violet:         #a855f7;  --violet-bg:  rgba(168, 85, 247, 0.15);  --violet-fg:  #c084fc;
 
    /* *-solid = the same hue darkened just enough that WHITE text on it meets
@@ -66,9 +66,9 @@
    --warning-deep:   #92400e;
    --violet-deep:    #4c1d95;
    --success-deep:   #065f46;
+   --danger-solid:   #dc2626;
    --warning-solid:  #b0620a;
    --violet-solid:   #9333ea;
-   --gold:           #c19a6b;  --gold-bg:    rgba(193, 154, 107, 0.15); --gold-fg:    #d4af7a;
    --pink:           #ec4899;  --pink-bg:    rgba(236, 72, 153, 0.15);  --pink-fg:    #f472b6;
 
    /* --- Elevation --- */
@@ -133,16 +133,16 @@
    --danger:         #dc2626;  --danger-bg:  rgba(239, 68, 68, 0.12);   --danger-fg:  #b91c1c;
    --info:           #0284c7;  --info-bg:    rgba(14, 165, 233, 0.12);  --info-fg:    #0369a1;
    --blue:           #2563eb;  --blue-bg:    rgba(59, 130, 246, 0.12);  --blue-fg:    #1d4ed8;
-   --teal:           #0891b2;  --teal-bg:    rgba(6, 182, 212, 0.12);   --teal-fg:    #0e7490;
+   --teal:           #0d9488;  --teal-bg:    rgba(20, 184, 166, 0.12);  --teal-fg:    #0f766e;
    --violet:         #9333ea;  --violet-bg:  rgba(168, 85, 247, 0.12);  --violet-fg:  #7e22ce;
    --success-solid:  #047857;
    --info-solid:     #0369a1;
    --warning-deep:   #9a3412;
    --violet-deep:    #5b21b6;
    --success-deep:   #065f46;
+   --danger-solid:   #b91c1c;
    --warning-solid:  #b45309;
    --violet-solid:   #7e22ce;
-   --gold:           #a1793f;  --gold-bg:    rgba(193, 154, 107, 0.16); --gold-fg:    #8a6529;
    --pink:           #db2777;  --pink-bg:    rgba(236, 72, 153, 0.12);  --pink-fg:    #be185d;
 
    --shadow-rgb:     15, 23, 42;
@@ -471,6 +471,40 @@
     --bs-table-border-color: var(--border-color);
  }
 
+ /* 11.7b - ONE table-header treatment for the whole app. Modules previously
+    each rolled their own (.table-active, .text-secondary, .text-muted,
+    .bg-body-tertiary, or an inline background), which is why headers looked
+    different - and sometimes unreadable - from screen to screen. */
+ thead th, .table > thead > tr > th {
+    background-color: var(--surface-2);
+    color: var(--text-label);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-hover);
+ }
+ /* A header cell is chrome, not data: it never carries a semantic accent. */
+ thead th.text-info, thead th.text-warning, thead th.text-success,
+ thead th.text-danger, thead th.text-primary, thead th.text-secondary {
+    color: var(--text-label) !important;
+ }
+
+ /* 11.7c - Badges. Bootstrap's .bg-* utilities set only a background, so a
+    badge could end up pale-on-pale (the ward/bed chips). Pair each with a
+    readable foreground. */
+ .badge { font-weight: 600; }
+ .badge.bg-secondary, .badge.text-bg-secondary,
+ .badge.bg-light, .badge.text-bg-light,
+ .badge.bg-dark, .badge.text-bg-dark {
+    background-color: var(--surface-3) !important;
+    color: var(--text-label) !important;
+    border: 1px solid var(--border-color);
+ }
+ .badge.bg-success, .badge.text-bg-success { background-color: var(--success-solid) !important; color: var(--text-on-accent) !important; }
+ .badge.bg-danger,  .badge.text-bg-danger  { background-color: var(--danger-solid)  !important; color: var(--text-on-accent) !important; }
+ .badge.bg-info,    .badge.text-bg-info    { background-color: var(--info-solid)    !important; color: var(--text-on-accent) !important; }
+ .badge.bg-primary, .badge.text-bg-primary { background-color: var(--accent-purple) !important; color: var(--text-on-accent) !important; }
+ /* Amber is too light to carry white text, so it takes dark ink in both themes. */
+ .badge.bg-warning, .badge.text-bg-warning { background-color: var(--warning)       !important; color: #1f1300 !important; }
+
  /* 11.8 - Text / background / border utilities resolved to tokens.        */
  /* Bootstrap hardcodes these to fixed greys; re-point them at the theme   */
  /* so a single definition serves both modes.                             */
@@ -486,9 +520,14 @@
  .btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-info,
  .bg-primary, .bg-success, .bg-danger, .bg-warning, .bg-info,
  .nav-link.active, .fab-action, .toast-solid, .on-accent,
- .btn-primary *, .btn-success *, .btn-danger *, .btn-warning *, .btn-info *,
- .bg-primary *, .bg-success *, .bg-danger *, .bg-warning *, .bg-info *,
- .nav-link.active *, .fab-action *, .toast-solid *, .on-accent * {
+ .btn-primary *:not(.badge):not(.badge *), .btn-success *:not(.badge):not(.badge *),
+ .btn-danger *:not(.badge):not(.badge *),  .btn-warning *:not(.badge):not(.badge *),
+ .btn-info *:not(.badge):not(.badge *),
+ .bg-primary *:not(.badge):not(.badge *),  .bg-success *:not(.badge):not(.badge *),
+ .bg-danger *:not(.badge):not(.badge *),   .bg-warning *:not(.badge):not(.badge *),
+ .bg-info *:not(.badge):not(.badge *),
+ .nav-link.active *:not(.badge):not(.badge *), .fab-action *:not(.badge):not(.badge *),
+ .toast-solid *:not(.badge):not(.badge *),  .on-accent *:not(.badge):not(.badge *) {
     --text-main: var(--text-on-accent);
     --text-secondary: var(--text-on-accent);
  }

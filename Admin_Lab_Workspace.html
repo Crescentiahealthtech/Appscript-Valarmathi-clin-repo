@@ -691,10 +691,16 @@ var LabCatalog = (function () {
   }
 
   /* ─── PANELS ─── */
+  // Department tints are CATEGORICAL, so they are drawn only from the brand
+  // hue families - never from the status colours. Amber and red are reserved
+  // for caution and critical, and a department chip must not read as an alert.
+  // Each hue is used once; the last two take a neutral rather than repeating one.
   var _DEPT_COLORS = {
-    HAEMATOLOGY:'var(--pink-fg)',    BIOCHEMISTRY:'var(--blue-fg)',   MICROBIOLOGY:'var(--success-fg)',
-    SEROLOGY:'var(--violet-fg)',     URINE_ANALYSIS:'var(--warning-fg)', HISTOPATHOLOGY:'var(--danger-fg)',
-    CYTOLOGY:'var(--warning-fg)',    ENDOCRINOLOGY:'var(--teal-fg)',  CLINICAL_PATH:'var(--success-fg)',
+    HAEMATOLOGY:'var(--pink-fg)',      BIOCHEMISTRY:'var(--blue-fg)',
+    MICROBIOLOGY:'var(--success-fg)',  SEROLOGY:'var(--violet-fg)',
+    URINE_ANALYSIS:'var(--info-fg)',   HISTOPATHOLOGY:'var(--accent-fg)',
+    ENDOCRINOLOGY:'var(--teal-fg)',    CYTOLOGY:'var(--text-secondary)',
+    CLINICAL_PATH:'var(--text-secondary)',
     GENERAL:'var(--text-muted)'
   };
   function _deptColor(d) { return _DEPT_COLORS[d] || 'var(--text-muted)'; }
