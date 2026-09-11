@@ -601,18 +601,29 @@
 
   // ---- discharge ----------------------------------------------------------
 
-  function confirmDischarge(ipNumber, bedId) {
-    if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
+  function confirmDischarge(ipNumber, bedId, dsOverrideReason) {
+    if (!dsOverrideReason &&
+        !confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
                  ', closes the admission, and moves it to the IP Ledger.')) return;
     message('<div class="spinner-border text-primary"></div><br>Processing discharge...');
 
     google.script.run
       .withSuccessHandler(function (res) {
+        // The discharge-summary gate refuses once, names the summary's state,
+        // and completes on a second call carrying a reason. With the gate off
+        // this branch never runs.
+        if (res && res.success === false && res.code === 'DS_NOT_SIGNED') {
+          var reason = prompt(res.message + '\n\nWhy is this patient being discharged ' +
+                              'without a signed discharge summary?');
+          if (reason && reason.trim()) { confirmDischarge(ipNumber, bedId, reason.trim()); return; }
+          loadIPLedger();
+          return;
+        }
         if (!res || res.success === false) alert((res && res.message) || 'Discharge failed.');
         loadIPLedger();
       })
       .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPLedger(); })
-      .processPatientDischarge(ipNumber, bedId);
+      .processPatientDischarge(ipNumber, bedId, dsOverrideReason || '');
   }
 
   // ---- consultants --------------------------------------------------------
