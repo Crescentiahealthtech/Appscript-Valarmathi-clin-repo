@@ -56,6 +56,11 @@
             <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('records')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-medical fa-2xl" style="color: var(--warning-fg);"></i></div><h5 class="text-white fw-bold mt-2">Patient Records</h5></div></div>
             
             <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records'); fetchIPRecordsLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: var(--pink-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
+
+            <!-- Discharge Summary Engine. Lives here rather than behind a new
+                 top-level nav item because applyRBAC() grants a nurse only the
+                 Dashboard and EMR tabs, and the nurse is the preparer. -->
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ds-desk-view'); dsOpenDesk();"><div class="emr-icon-wrap"><i class="fa-solid fa-file-circle-check fa-2xl" style="color: var(--teal-fg);"></i></div><h5 class="text-white fw-bold mt-2">Discharge Desk</h5></div></div>
         </div>
     </div>
     

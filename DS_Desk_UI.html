@@ -1,0 +1,383 @@
+<!-- =====================================================================
+     DS_Desk_UI.html — CresRx · IP Discharge Summary Engine (Phase 5 + 6)
+
+     Register in Index.html inside <div class="main-content">:
+       <?!= include('DS_Desk_UI'); ?>
+     and the script file after ScriptsMV:
+       <?!= include('DS_Desk_Scripts'); ?>
+
+     Opened by: switchTab('ds-desk-view'); dsOpenDesk();
+     Every element ID here is declared in DS_IDS at the top of
+     DS_Desk_Scripts.html. The HTML contains exactly those IDs and the JS
+     uses only them — nothing addresses an element by a string literal.
+     ===================================================================== -->
+
+<style>
+  /* Theme variables only. Verified in Light and Dark. */
+  #ds-desk-view .ds-tab           { border:1px solid var(--border-color); background:transparent;
+                                    color:var(--text-secondary); border-radius:8px; padding:.35rem .8rem;
+                                    font-size:.82rem; font-weight:600; }
+  #ds-desk-view .ds-tab.active    { background:var(--accent); color:var(--text-on-accent);
+                                    border-color:var(--accent); }
+  #ds-desk-view .ds-tab .badge    { background:var(--surface-3); color:var(--text-main); }
+  #ds-desk-view .ds-tab.active .badge { background:rgba(255,255,255,.22); color:var(--text-on-accent); }
+
+  .ds-chip        { display:inline-block; font-size:.68rem; font-weight:700; letter-spacing:.03em;
+                    padding:.12rem .5rem; border-radius:999px; text-transform:uppercase; }
+  .ds-chip-GENERATED             { background:var(--info-bg);    color:var(--info-fg); }
+  .ds-chip-IN_PREPARATION        { background:var(--blue-bg);    color:var(--blue-fg); }
+  .ds-chip-PENDING_SIGNATURE     { background:var(--warning-bg); color:var(--warning-fg); }
+  .ds-chip-RETURNED              { background:var(--danger-bg);  color:var(--danger-fg); }
+  .ds-chip-SIGNED                { background:var(--success-bg); color:var(--success-fg); }
+  .ds-chip-AMENDMENT_IN_PROGRESS { background:var(--violet-bg);  color:var(--violet-fg); }
+  .ds-chip-CANCELLED             { background:var(--surface-3);  color:var(--text-muted); }
+
+  .ds-tat-ok    { color:var(--text-muted); }
+  .ds-tat-amber { color:var(--warning-fg); font-weight:700; }
+  .ds-tat-red   { color:var(--danger-fg);  font-weight:700; }
+  .ds-tat-done  { color:var(--success-fg); }
+
+  /* ---- editor shell: three panels, one column below 992px ---- */
+  #ds-editor-view .ds-grid { display:grid; grid-template-columns:230px minmax(0,1fr) 320px;
+                             gap:1rem; align-items:start; }
+  @media (max-width: 991.98px) { #ds-editor-view .ds-grid { grid-template-columns:1fr; } }
+
+  .ds-panel      { background:var(--bg-card); border:1px solid var(--border-color);
+                   border-radius:12px; padding:.9rem; }
+  .ds-navitem    { display:flex; align-items:center; gap:.5rem; width:100%; text-align:left;
+                   background:transparent; border:0; border-radius:8px; padding:.4rem .55rem;
+                   color:var(--text-secondary); font-size:.83rem; }
+  .ds-navitem:hover  { background:var(--surface-hover); color:var(--text-main); }
+  .ds-navitem.active { background:var(--accent-glow); color:var(--text-main); font-weight:600; }
+  .ds-navitem .ds-state { margin-left:auto; font-size:.7rem; }
+
+  .ds-section    { border:1px solid var(--border-color); border-radius:10px;
+                   padding:.85rem; margin-bottom:.9rem; background:var(--bg-card); }
+  .ds-section h6 { font-size:.9rem; font-weight:700; margin:0; color:var(--text-main); }
+  .ds-section textarea,
+  .ds-section input,
+  .ds-section select { background:var(--bg-input); color:var(--text-main);
+                       border:1px solid var(--border-color); border-radius:7px;
+                       padding:.35rem .5rem; font-size:.85rem; width:100%; }
+  .ds-section textarea { resize:vertical; min-height:80px; }
+  .ds-section table    { width:100%; font-size:.8rem; border-collapse:collapse; }
+  .ds-section table th { color:var(--text-muted); font-weight:600; font-size:.72rem;
+                         text-transform:uppercase; letter-spacing:.03em;
+                         border-bottom:1px solid var(--border-color); padding:.3rem .35rem; }
+  .ds-section table td { border-bottom:1px solid var(--border-soft); padding:.2rem .25rem;
+                         vertical-align:top; }
+
+  .ds-srcchip    { display:inline-block; font-size:.65rem; padding:.05rem .4rem; border-radius:6px;
+                   background:var(--surface-3); color:var(--text-muted); border:0;
+                   margin:.1rem .2rem .1rem 0; cursor:pointer; }
+  .ds-srcchip:hover { background:var(--accent-glow); color:var(--text-main); }
+
+  .ds-ready-hard { background:var(--danger-bg);  color:var(--danger-fg);
+                   border-left:3px solid var(--danger); }
+  .ds-ready-soft { background:var(--warning-bg); color:var(--warning-fg);
+                   border-left:3px solid var(--warning); }
+  .ds-ready-item { border-radius:6px; padding:.35rem .5rem; margin-bottom:.35rem; font-size:.78rem; }
+
+  .ds-diff-add   { background:var(--success-bg); color:var(--success-fg); border-radius:3px; }
+  .ds-diff-del   { background:var(--danger-bg);  color:var(--danger-fg);  border-radius:3px;
+                   text-decoration:line-through; }
+  .ds-diff-row-changed { background:var(--warning-bg); }
+
+  .ds-pin        { font-size:.75rem; background:var(--danger-bg); color:var(--danger-fg);
+                   border-left:3px solid var(--danger); border-radius:6px;
+                   padding:.3rem .5rem; margin-bottom:.4rem; }
+  .ds-muted      { color:var(--text-muted); font-size:.78rem; }
+</style>
+
+
+<!-- ===================================================================
+     SCREEN 1 — THE DISCHARGE DESK
+     =================================================================== -->
+<div id="ds-desk-view" class="page-section">
+
+  <div class="d-flex justify-content-between align-items-center mb-3 mt-4 border-bottom pb-3">
+    <div>
+      <h4 class="m-0 fw-bold">
+        <i class="fa-solid fa-file-circle-check me-2 text-primary"></i> Discharge Desk
+      </h4>
+      <small class="text-body-secondary">
+        Generated &rarr; prepared &rarr; verified and signed &rarr; printed and filed
+      </small>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary fw-bold px-3" id="ds-desk-refresh">
+        <i class="fa-solid fa-rotate me-2"></i> Refresh
+      </button>
+      <button class="btn btn-outline-light fw-bold shadow px-4" id="ds-desk-back">
+        <i class="fa-solid fa-arrow-left me-2"></i> Go Back
+      </button>
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3" id="ds-desk-tabs"></div>
+
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <input type="text" class="form-control form-control-sm" style="max-width:280px"
+           id="ds-desk-search" placeholder="Search patient name or IP number">
+    <span class="ds-muted align-self-center" id="ds-desk-meta"></span>
+  </div>
+
+  <div id="ds-desk-spinner" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div class="ds-muted mt-2">Loading the discharge queue…</div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr class="ds-muted">
+          <th>Patient</th><th>IP No</th><th>Ward / Bed</th><th>Consultant</th>
+          <th>Type</th><th>Status</th><th>TAT</th><th>Last action</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="ds-desk-rows"></tbody>
+    </table>
+  </div>
+
+  <div id="ds-desk-empty" class="text-center py-5 d-none ds-muted"></div>
+
+  <div class="mt-4" id="ds-desk-awaiting-wrap">
+    <h6 class="fw-bold mb-2">
+      <i class="fa-solid fa-bed-pulse me-2"></i> In the ward, no discharge summary started
+    </h6>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr class="ds-muted">
+            <th>Patient</th><th>IP No</th><th>Ward / Bed</th><th>Admitted</th>
+            <th>Working diagnosis</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="ds-desk-awaiting"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===================================================================
+     SCREEN 2 — THE EDITOR
+     =================================================================== -->
+<div id="ds-editor-view" class="page-section">
+
+  <div class="d-flex justify-content-between align-items-start mb-3 mt-4 border-bottom pb-3 flex-wrap gap-2">
+    <div>
+      <h4 class="m-0 fw-bold" id="ds-ed-title">Discharge Summary</h4>
+      <div class="ds-muted" id="ds-ed-banner"></div>
+      <div class="mt-1" id="ds-ed-statusline"></div>
+    </div>
+    <div class="d-flex flex-wrap gap-2" id="ds-ed-actions"></div>
+  </div>
+
+  <div id="ds-ed-presence" class="alert alert-warning py-2 px-3 d-none" role="status"></div>
+  <div id="ds-ed-notice"   class="alert py-2 px-3 d-none" role="status"></div>
+
+  <div id="ds-ed-spinner" class="text-center py-5 d-none">
+    <div class="spinner-border text-primary" role="status"></div>
+    <div class="ds-muted mt-2">Loading the summary…</div>
+  </div>
+
+  <div class="ds-grid" id="ds-ed-grid">
+
+    <!-- LEFT: section navigator -->
+    <div class="ds-panel">
+      <div class="fw-bold mb-2" style="font-size:.85rem">Sections</div>
+      <div id="ds-ed-nav" class="d-flex flex-column gap-1"></div>
+    </div>
+
+    <!-- CENTRE: editors -->
+    <div>
+      <div id="ds-ed-sections"></div>
+    </div>
+
+    <!-- RIGHT: readiness, timeline -->
+    <div class="d-flex flex-column gap-3">
+      <div class="ds-panel">
+        <div class="fw-bold mb-2" style="font-size:.85rem">
+          <i class="fa-solid fa-clipboard-check me-1"></i> Readiness
+        </div>
+        <div id="ds-ed-readiness"></div>
+      </div>
+      <div class="ds-panel">
+        <div class="fw-bold mb-2" style="font-size:.85rem">
+          <i class="fa-solid fa-clock-rotate-left me-1"></i> Workflow
+        </div>
+        <div id="ds-ed-timeline" style="max-height:340px; overflow:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===================================================================
+     MODALS AND DRAWERS
+     =================================================================== -->
+
+<!-- Initiate -->
+<div class="modal fade" id="ds-modal-initiate" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Initiate discharge</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-3 ds-muted" id="ds-init-patient"></div>
+      <label class="form-label fw-semibold">Discharge type</label>
+      <select class="form-select mb-3" id="ds-init-type">
+        <option value="NORMAL">Normal discharge</option>
+        <option value="LAMA">LAMA — left against medical advice</option>
+        <option value="DAMA">DAMA — discharged against medical advice</option>
+        <option value="REFERRED">Referred to another facility</option>
+        <option value="DEATH">Death</option>
+        <option value="ABSCONDED">Absconded</option>
+      </select>
+      <label class="form-label fw-semibold">Planned discharge date and time</label>
+      <input type="datetime-local" class="form-control" id="ds-init-planned">
+      <div class="ds-muted mt-2">
+        The summary is assembled from this admission's records. Nothing is written
+        to the clinical record, and billing is not affected.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary fw-bold" id="ds-init-go">Generate summary</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Return for correction -->
+<div class="modal fade" id="ds-modal-return" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Return for correction</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <label class="form-label fw-semibold">What needs correcting?</label>
+      <textarea class="form-control" rows="3" id="ds-ret-comment"
+                placeholder="The preparer sees this on the summary until they resubmit."></textarea>
+      <div class="mt-3">
+        <label class="form-label fw-semibold">Pin a comment to a section (optional)</label>
+        <div id="ds-ret-sections" style="max-height:220px; overflow:auto"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-warning fw-bold" id="ds-ret-go">Return to preparer</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Verify and sign -->
+<div class="modal fade" id="ds-modal-sign" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Verify and sign</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="mb-3" id="ds-sign-who"></div>
+
+      <div class="mb-3">
+        <div class="fw-bold mb-2" style="font-size:.9rem">Confirm each block before signing</div>
+        <div id="ds-sign-attest"></div>
+      </div>
+
+      <div class="mb-3 d-none" id="ds-sign-softwrap">
+        <div class="fw-bold mb-2" style="font-size:.9rem">Acknowledge these warnings</div>
+        <div id="ds-sign-soft"></div>
+      </div>
+
+      <div class="mb-3 d-none" id="ds-sign-behalfwrap">
+        <label class="form-label fw-semibold">
+          You are not the consultant of record — reason for signing on their behalf
+        </label>
+        <input type="text" class="form-control" id="ds-sign-behalf"
+               placeholder="e.g. Consultant on leave; patient reviewed by me on the ward round">
+        <div class="ds-muted mt-1">This reason is logged and printed on the summary.</div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold" id="ds-sign-credlabel">Signing credential</label>
+        <input type="password" class="form-control" id="ds-sign-cred" autocomplete="one-time-code">
+      </div>
+
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="ds-sign-attestation">
+        <label class="form-check-label fw-semibold" for="ds-sign-attestation">
+          I have reviewed this discharge summary and confirm it is accurate.
+        </label>
+      </div>
+
+      <div class="alert alert-danger py-2 px-3 mt-3 d-none" id="ds-sign-error"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-success fw-bold" id="ds-sign-go">
+        <i class="fa-solid fa-signature me-2"></i> Sign
+      </button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Reason prompt: amend / cancel -->
+<div class="modal fade" id="ds-modal-reason" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="ds-reason-title">Reason</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="ds-muted mb-2" id="ds-reason-help"></div>
+      <textarea class="form-control" rows="3" id="ds-reason-text"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button class="btn btn-primary fw-bold" id="ds-reason-go">Confirm</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Version conflict -->
+<div class="modal fade" id="ds-modal-conflict" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title text-warning">
+      <i class="fa-solid fa-triangle-exclamation me-2"></i> Someone else saved first</h5></div>
+    <div class="modal-body">
+      <div id="ds-conflict-msg" class="mb-3"></div>
+      <div class="ds-muted mb-2">
+        Nothing is merged automatically — a discharge summary is not a document
+        two people may half-write. Copy anything you still need, then reload.
+      </div>
+      <div id="ds-conflict-mine" class="d-none">
+        <label class="form-label fw-semibold">Your unsaved text</label>
+        <textarea class="form-control" rows="8" id="ds-conflict-text" readonly></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline-secondary" id="ds-conflict-copy">Show my text</button>
+      <button class="btn btn-primary fw-bold" id="ds-conflict-reload">Reload latest</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Source look-through drawer -->
+<div class="modal fade" id="ds-modal-source" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Source record</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body" id="ds-source-body"></div>
+  </div></div>
+</div>
+
+<!-- Diff -->
+<div class="modal fade" id="ds-modal-diff" tabindex="-1">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Changes</h5>
+      <div class="btn-group btn-group-sm ms-3">
+        <button class="btn btn-outline-primary active" id="ds-diff-mode-staff">Changes by staff</button>
+        <button class="btn btn-outline-primary" id="ds-diff-mode-review">Since last review</button>
+      </div>
+      <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body" id="ds-diff-body"></div>
+  </div></div>
+</div>
