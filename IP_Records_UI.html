@@ -1,350 +1,668 @@
 <div id="emr-workspace-ip-records" class="d-none hd-workspace mt-3 app-view h-100 flex-column px-2">
-  
+
+  <!-- ======================= LEDGER ======================= -->
   <div id="ip-records-ledger-view" class="h-100 flex-column">
-    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2 pb-2 border-bottom border-secondary">
       <div class="d-flex align-items-center">
         <button class="btn btn-outline-secondary btn-sm py-1 px-3 me-3" onclick="returnToEMRMenu()">
           <i class="fa-solid fa-arrow-left"></i> Back
         </button>
         <h5 class="m-0 text-white fw-bold"><i class="fa-solid fa-folder-tree text-info"></i> IP Master Records</h5>
+        <span class="badge bg-dark border border-secondary text-secondary ms-3" id="ip-records-count">--</span>
       </div>
-      
-      <div class="input-group input-group-sm" style="width: 300px;">
-        <span class="input-group-text bg-dark border-secondary text-secondary"><i class="fa-solid fa-magnifying-glass"></i></span>
-        <input type="text" class="form-control bg-dark border-secondary text-white" id="ip-record-search" placeholder="Search Name, ID, or IP No..." onkeyup="filterIPRecords()">
-        <button class="btn btn-outline-secondary" onclick="fetchIPRecordsLedger()"><i class="fa-solid fa-rotate-right"></i></button>
+
+      <div class="d-flex align-items-center gap-2">
+        <div class="btn-group btn-group-sm" role="group" id="ip-records-status-filter">
+          <button type="button" class="btn btn-outline-secondary active" data-status="ALL"        onclick="setIPRecordFilter('ALL', this)">All</button>
+          <button type="button" class="btn btn-outline-secondary"        data-status="ACTIVE"     onclick="setIPRecordFilter('ACTIVE', this)">Active</button>
+          <button type="button" class="btn btn-outline-secondary"        data-status="DISCHARGED" onclick="setIPRecordFilter('DISCHARGED', this)">Discharged</button>
+          <button type="button" class="btn btn-outline-warning"          data-status="GAPS"       onclick="setIPRecordFilter('GAPS', this)"
+                  title="Records missing a casesheet or overdue a progress note">
+            <i class="fa-solid fa-triangle-exclamation"></i> Needs attention
+          </button>
+        </div>
+
+        <div class="input-group input-group-sm" style="width: 280px;">
+          <span class="input-group-text bg-dark border-secondary text-secondary"><i class="fa-solid fa-magnifying-glass"></i></span>
+          <input type="text" class="form-control bg-dark border-secondary text-white" id="ip-record-search"
+                 placeholder="Name, PID, IP no, ward, diagnosis..." onkeyup="filterIPRecords()">
+          <button class="btn btn-outline-secondary" onclick="fetchIPRecordsLedger()" title="Refresh">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="hd-panel flex-grow-1 overflow-auto" style="max-height: calc(100vh - 120px);">
+    <div class="hd-panel flex-grow-1 overflow-auto" style="max-height: calc(100vh - 130px);">
       <table class="table table-dark table-hover table-tight align-middle">
         <thead style="position: sticky; top: 0; z-index: 10;">
           <tr>
-            <th>Date / Time</th>
-            <th>Patient Details</th>
-            <th>IP Number</th>
-            <th>Ward & Bed</th>
-            <th class="text-end">Action</th>
+            <th style="width:16%;">Admitted</th>
+            <th style="width:26%;">Patient</th>
+            <th style="width:13%;">IP Number</th>
+            <th style="width:14%;">Ward &amp; Bed</th>
+            <th style="width:19%;">Record</th>
+            <th class="text-end" style="width:12%;">Action</th>
           </tr>
         </thead>
         <tbody id="ip-records-tbody">
-          <tr><td colspan="5" class="text-center text-secondary py-4">Loading records...</td></tr>
+          <tr><td colspan="6" class="text-center text-secondary py-4">Loading records...</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
+  <!-- ======================= DETAIL ======================= -->
   <div id="ip-records-detail-view" class="d-none h-100 flex-column">
-    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary">
-      <div class="d-flex align-items-center">
-        <button class="btn btn-outline-secondary btn-sm py-1 px-3 me-3" onclick="closeIPRecordDetail()">
-          <i class="fa-solid fa-arrow-left"></i> Back to Ledger
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2 pb-2 border-bottom border-secondary">
+      <div class="d-flex align-items-center flex-wrap gap-2">
+        <button class="btn btn-outline-secondary btn-sm py-1 px-3 me-2" onclick="closeIPRecordDetail()">
+          <i class="fa-solid fa-arrow-left"></i> Ledger
         </button>
-        <span class="fs-5 fw-bold text-white me-3" id="ip-det-name">Patient Name</span>
-        <span class="badge bg-dark border border-secondary text-light me-2" id="ip-det-id">ID: --</span>
+        <span class="fs-5 fw-bold text-white" id="ip-det-name">Patient Name</span>
+        <span class="badge bg-dark border border-secondary text-light" id="ip-det-agesex">--</span>
+        <span class="badge bg-dark border border-secondary text-light" id="ip-det-id">PID: --</span>
         <span class="badge bg-info text-dark fw-bold" id="ip-det-ipno">IP: --</span>
+        <span class="badge bg-dark border border-secondary text-light" id="ip-det-bed">--</span>
       </div>
-      
-      <ul class="nav nav-pills" id="ip-record-tabs" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link active py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-casesheet" type="button" style="font-size: 0.8rem;">Admission</button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-notes" type="button" style="font-size: 0.8rem;">Progress Notes</button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-discharge" type="button" style="font-size: 0.8rem;">Discharge</button>
-        </li>
-      </ul>
+
+      <div class="d-flex align-items-center gap-2">
+        <ul class="nav nav-pills" id="ip-record-tabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-casesheet" type="button" style="font-size: 0.8rem;">Casesheet</button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-notes" type="button" style="font-size: 0.8rem;">
+              Progress Notes <span class="badge bg-secondary ms-1" id="ip-det-notecount">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-discharge" type="button" style="font-size: 0.8rem;">Discharge</button>
+          </li>
+        </ul>
+
+        <div class="dropdown">
+          <button class="btn btn-info btn-sm fw-bold dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="fa-solid fa-print"></i> Print
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
+            <li><a class="dropdown-item" href="#" onclick="printIPRecord('full'); return false;">
+              <i class="fa-solid fa-folder-open me-2 text-info"></i> Complete file</a></li>
+            <li><a class="dropdown-item" href="#" onclick="printIPRecord('casesheet'); return false;">
+              <i class="fa-solid fa-file-medical me-2 text-info"></i> Admission casesheet</a></li>
+            <li><a class="dropdown-item" href="#" onclick="printIPRecord('notes'); return false;">
+              <i class="fa-solid fa-clipboard-list me-2 text-success"></i> Progress notes</a></li>
+          </ul>
+        </div>
+      </div>
     </div>
 
-    <div class="tab-content flex-grow-1 overflow-auto pe-2" id="ip-record-tabContent" style="max-height: calc(100vh - 120px);">
-      
+    <div id="ip-det-gaps" class="mb-2"></div>
+
+    <div class="tab-content flex-grow-1 overflow-auto pe-2" id="ip-record-tabContent" style="max-height: calc(100vh - 150px);">
       <div class="tab-pane fade show active" id="tab-casesheet" role="tabpanel">
-        <div class="hd-panel border-info">
-          <h6 class="text-info fw-bold mb-3 border-bottom border-secondary pb-2">
-            <i class="fa-solid fa-file-medical"></i> Admission Summary
-          </h6>
-          
-          <div class="row g-3 text-light small">
-            <div class="col-md-6"><strong>Primary Diagnosis:</strong> <span class="text-warning" id="det-cs-dx">--</span></div>
-            <div class="col-md-6"><strong>Admitting Doctor:</strong> <span class="text-white" id="det-cs-doc">--</span></div>
-            <div class="col-md-12 bg-dark p-2 rounded border border-secondary">
-              <strong>Admission Vitals:</strong> <span class="text-white" id="det-cs-vitals">--</span>
-            </div>
-
-            <div class="col-md-12 mt-3 border-top pt-3" style="border-color: var(--border-hover) !important;">
-              <h6 class="text-info fw-bold mb-2">Clinical Details</h6>
-            </div>
-            
-            <div class="col-md-12 mb-2">
-              <div class="p-2 bg-dark rounded border" style="border-color: var(--border-hover) !important;">
-                <strong class="text-info">Chief Complaints:</strong> 
-                <div id="det-cs-cc" class="text-white mt-1 small" style="white-space: pre-wrap;">--</div>
-              </div>
-            </div>
-            
-            <div class="col-md-12 mb-2">
-              <div class="p-2 bg-dark rounded border" style="border-color: var(--border-hover) !important;">
-                <strong class="text-info">History / Comorbidities:</strong> 
-                <div id="det-cs-hx" class="text-white mt-1 small" style="white-space: pre-wrap;">--</div>
-              </div>
-            </div>
-            
-            <div class="col-md-6 mt-2">
-              <strong class="text-info">General Exam:</strong> <br><span id="det-cs-ge" class="text-white small">--</span>
-            </div>
-            <div class="col-md-6 mt-2">
-              <strong class="text-info">Systemic Exam:</strong> <br><span id="det-cs-se" class="text-white small">--</span>
-            </div>
-            
-            <div class="col-md-12 mt-2">
-              <strong class="text-info">Advice / Notes:</strong> <br><span id="det-cs-advice" class="text-white small">--</span>
-            </div>
-
-            <div class="col-md-12 mt-3 border-top pt-3" style="border-color: var(--border-hover) !important;">
-              <h6 class="text-info fw-bold mb-2">Orders & Prescriptions</h6>
-            </div>
-            
-            <div class="col-md-12">
-              <strong class="text-white">Rx Prescribed:</strong>
-              <div id="det-cs-rx" class="mt-1 table-responsive">
-                </div>
-            </div>
-            
-            <div class="col-md-12 mt-2">
-              <strong class="text-white">Lab Requests:</strong>
-              <div id="det-cs-labs" class="mt-1 p-2 bg-dark rounded border text-white small" style="border-color: var(--border-hover) !important; min-height: 40px;">--</div>
-            </div>
-
-            <div class="col-12 mt-4 text-center border-top border-secondary pt-3">
-               <button class="btn btn-info btn-sm fw-bold">
-                 <i class="fa-solid fa-print"></i> Print Full Casesheet
-               </button>
-            </div>
-          </div>
+        <div class="hd-panel border-info" id="det-casesheet-body">
+          <div class="text-center text-secondary py-5">Loading...</div>
         </div>
       </div>
 
       <div class="tab-pane fade" id="tab-notes" role="tabpanel">
         <div class="hd-panel border-success">
-          <h6 class="text-success fw-bold mb-3 border-bottom border-secondary pb-2"><i class="fa-solid fa-clipboard-list"></i> Daily Progress Notes</h6>
-          <div id="det-notes-timeline" class="d-flex flex-column gap-3">
-             </div>
+          <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
+            <h6 class="text-success fw-bold m-0"><i class="fa-solid fa-clipboard-list"></i> Progress Notes</h6>
+            <select class="form-select form-select-sm bg-dark border-secondary text-white" style="width:190px;"
+                    id="ip-note-role-filter" onchange="renderIPRecordNotes()">
+              <option value="">All note types</option>
+              <option value="DOCTOR">Progress notes</option>
+              <option value="NURSE">Nursing notes</option>
+              <option value="CONSULTANT">Consultant opinions</option>
+              <option value="PROCEDURE">Procedure notes</option>
+              <option value="HANDOVER">Handovers</option>
+              <option value="QUICK">Quick notes</option>
+            </select>
+          </div>
+          <div id="det-notes-timeline" class="d-flex flex-column gap-3"></div>
         </div>
       </div>
 
       <div class="tab-pane fade" id="tab-discharge" role="tabpanel">
         <div class="hd-panel border-warning">
-          <h6 class="text-warning fw-bold mb-3 border-bottom border-secondary pb-2"><i class="fa-solid fa-house-medical"></i> Discharge Summary</h6>
-          <div id="det-ds-content" class="text-light small">
-             <div class="text-center text-secondary py-5">
-               <i class="fa-solid fa-lock fa-2xl mb-3"></i><br>No discharge summary generated yet. Patient is currently active.
-             </div>
-          </div>
+          <h6 class="text-warning fw-bold mb-3 border-bottom border-secondary pb-2">
+            <i class="fa-solid fa-house-medical"></i> Discharge
+          </h6>
+          <div id="det-ds-content" class="text-light small"></div>
         </div>
       </div>
-
     </div>
   </div>
 </div>
 
 <script>
-  let rawIPRecordsData = [];
+(function () {
+  'use strict';
 
-  function fetchIPRecordsLedger() {
-    document.getElementById('ip-records-tbody').innerHTML = '<tr><td colspan="5" class="text-center text-info py-4">Fetching records...</td></tr>';
-    
-    google.script.run.withSuccessHandler(res => {
-      rawIPRecordsData = JSON.parse(res);
-      renderIPRecordsTable(rawIPRecordsData);
-    }).fetchIPRecordsLedger();
+  var IPRec = {
+    ledger:   [],
+    filter:   'ALL',
+    file:     null,
+    loadingKey: null
+  };
+
+  // ---- small helpers -----------------------------------------------------
+
+  /** Every value from the sheet reaches the DOM through this. Patient names
+   *  and clinical free text are user input and routinely contain "<" and "&". */
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function escLines(v) { return esc(v).replace(/\r\n|\r|\n/g, '<br>'); }
+  function s(v) { return String(v === null || v === undefined ? '' : v).trim(); }
+
+  function toast(msg, kind) {
+    if (typeof ipnToast === 'function') { ipnToast(msg, kind); return; }
+    if (kind === 'err') { console.error(msg); } else { console.log(msg); }
+    alert(msg);
   }
 
-  function renderIPRecordsTable(data) {
-    const tbody = document.getElementById('ip-records-tbody');
-    tbody.innerHTML = "";
+  function setText(id, txt) {
+    var el = document.getElementById(id);
+    if (el) el.innerText = txt;
+  }
+  function setHtml(id, html) {
+    var el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
 
-    if (!data || data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary py-4">No IP Records Found.</td></tr>';
-      return;
+  /** A label/value pair, or "" so empty fields leave no blank row. */
+  function kv(label, valueHtml, opts) {
+    opts = opts || {};
+    var v = s(valueHtml);
+    if (!v && !opts.keepEmpty) return '';
+    return '<div class="' + (opts.cls || 'col-md-6') + ' mb-2">' +
+             '<span class="text-info small d-block">' + esc(label) + '</span>' +
+             '<span class="text-white small" style="white-space:pre-wrap;">' +
+               (v || '<span class="text-secondary">--</span>') + '</span>' +
+           '</div>';
+  }
+
+  function panel(title, innerHtml, opts) {
+    opts = opts || {};
+    if (!s(innerHtml) && !opts.keepEmpty) return '';
+    return '<div class="mb-3">' +
+             '<h6 class="text-info fw-bold mb-2 border-bottom border-secondary pb-1" style="font-size:0.85rem;">' +
+               esc(title) + '</h6>' +
+             '<div class="row g-0">' + innerHtml + '</div>' +
+           '</div>';
+  }
+
+  /** Structured complaint/history entries: {prefix, condition, duration}. */
+  function clinicalList(arr) {
+    if (!Array.isArray(arr) || !arr.length) return '';
+    return arr.map(function (item) {
+      if (typeof item === 'string') return esc(item);
+      var t = esc(item.condition || item.text || '');
+      if (!t) return '';
+      if (item.prefix)   t = esc(item.prefix) + ' ' + t;
+      if (item.duration) t += ' <span class="text-secondary">(' + esc(item.duration) + ')</span>';
+      return t;
+    }).filter(Boolean).join('<br>');
+  }
+
+  // ---- ledger ------------------------------------------------------------
+
+  function fetchIPRecordsLedger() {
+    setHtml('ip-records-tbody',
+      '<tr><td colspan="6" class="text-center text-info py-4">' +
+      '<i class="fa-solid fa-spinner fa-spin me-2"></i>Fetching records...</td></tr>');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          IPRec.ledger = [];
+          setHtml('ip-records-tbody',
+            '<tr><td colspan="6" class="text-center text-danger py-4">' +
+            esc((res && res.message) || 'Could not load the records ledger.') + '</td></tr>');
+          setText('ip-records-count', '--');
+          return;
+        }
+        IPRec.ledger = res.data || [];
+        filterIPRecords();
+      })
+      .withFailureHandler(function (e) {
+        setHtml('ip-records-tbody',
+          '<tr><td colspan="6" class="text-center text-danger py-4">' + esc(e.message) + '</td></tr>');
+      })
+      .getIPRecordsLedger(window.sessionToken);
+  }
+
+  function setIPRecordFilter(status, btn) {
+    IPRec.filter = status;
+    var group = document.getElementById('ip-records-status-filter');
+    if (group) {
+      group.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
     }
-
-    data.forEach(p => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="text-light" style="font-size:0.8rem;">${p.date}</td>
-        <td>
-          <div class="fw-bold text-info">${p.name}</div>
-          <div class="text-secondary" style="font-size:0.7rem;">ID: ${p.patientId} | ${p.ageSex}</div>
-        </td>
-        <td class="text-warning fw-bold" style="font-size:0.8rem;">${p.ipNumber}</td>
-        <td class="text-light" style="font-size:0.8rem;">${p.ward} - ${p.bed}</td>
-        <td class="text-end">
-          <button class="btn btn-outline-info btn-sm py-1 px-3" style="font-size:0.75rem;" onclick="viewIPRecordDetail('${p.encounterId}')">
-            View File
-          </button>
-        </td>
-      `;
-      tbody.appendChild(tr);
-    });
+    if (btn) btn.classList.add('active');
+    filterIPRecords();
   }
 
   function filterIPRecords() {
-    const term = document.getElementById('ip-record-search').value.toLowerCase();
-    const filtered = rawIPRecordsData.filter(p => 
-      p.name.toLowerCase().includes(term) || 
-      p.patientId.toLowerCase().includes(term) || 
-      p.ipNumber.toLowerCase().includes(term)
-    );
-    renderIPRecordsTable(filtered);
+    var input = document.getElementById('ip-record-search');
+    var term = (input ? input.value : '').toLowerCase().trim();
+
+    var rows = IPRec.ledger.filter(function (p) {
+      if (IPRec.filter === 'ACTIVE'     && p.status !== 'ACTIVE')     return false;
+      if (IPRec.filter === 'DISCHARGED' && p.status !== 'DISCHARGED') return false;
+      if (IPRec.filter === 'GAPS'       && !(p.gaps && p.gaps.length)) return false;
+      if (!term) return true;
+      // Numeric IDs arrive as numbers; the old filter called .toLowerCase()
+      // on them and threw, blanking the whole table.
+      return [p.name, p.patientId, p.ipNumber, p.ward, p.bed, p.diagnosis, p.consultant]
+        .map(function (v) { return String(v === null || v === undefined ? '' : v).toLowerCase(); })
+        .some(function (v) { return v.indexOf(term) !== -1; });
+    });
+
+    renderIPRecordsTable(rows);
+    setText('ip-records-count', rows.length + (rows.length === IPRec.ledger.length ? '' : ' of ' + IPRec.ledger.length));
   }
 
-  function viewIPRecordDetail(encounterId) {
+  function renderIPRecordsTable(data) {
+    if (!data || !data.length) {
+      setHtml('ip-records-tbody',
+        '<tr><td colspan="6" class="text-center text-secondary py-4">No IP records match this view.</td></tr>');
+      return;
+    }
+
+    // One innerHTML write; the old loop reparsed the whole table per row.
+    setHtml('ip-records-tbody', data.map(function (p) {
+      var statusBadge = p.status === 'ACTIVE'
+        ? '<span class="badge bg-success-subtle text-success border border-success">Active</span>'
+        : (p.status === 'DISCHARGED'
+            ? '<span class="badge bg-dark border border-secondary text-secondary">Discharged</span>'
+            : '<span class="badge bg-dark border border-secondary text-secondary">' + esc(p.status || '--') + '</span>');
+
+      var gaps = (p.gaps || []).map(function (g) {
+        return '<span class="badge bg-warning-subtle text-warning border border-warning me-1" ' +
+               'style="font-size:0.62rem;">' + esc(g) + '</span>';
+      }).join('');
+
+      var notes = p.noteCount
+        ? '<span class="text-light">' + esc(p.noteCount) + ' note' + (p.noteCount === 1 ? '' : 's') + '</span>' +
+          (p.lastNoteOn ? '<span class="text-secondary"> &middot; last ' + esc(p.lastNoteOn) + '</span>' : '')
+        : '<span class="text-secondary">No notes</span>';
+
+      var version = (p.version > 1)
+        ? '<span class="badge bg-dark border border-info text-info ms-1" style="font-size:0.62rem;" ' +
+          'title="This casesheet has been amended">v' + esc(p.version) + '</span>' : '';
+
+      return '<tr>' +
+        '<td class="text-light" style="font-size:0.78rem;">' + esc(p.admittedOn || '--') +
+          (p.dischargedOn ? '<div class="text-secondary" style="font-size:0.68rem;">Discharged ' + esc(p.dischargedOn) + '</div>' : '') +
+        '</td>' +
+        '<td>' +
+          '<div class="fw-bold text-info">' + esc(p.name) + '</div>' +
+          '<div class="text-secondary" style="font-size:0.7rem;">' +
+            esc(p.patientId || '--') + (p.ageSex ? ' | ' + esc(p.ageSex) : '') + '</div>' +
+          (p.diagnosis ? '<div class="text-warning" style="font-size:0.7rem;">' + esc(p.diagnosis) + '</div>' : '') +
+        '</td>' +
+        '<td class="text-warning fw-bold" style="font-size:0.78rem;">' + esc(p.ipNumber) + version + '</td>' +
+        '<td class="text-light" style="font-size:0.78rem;">' +
+          esc([p.ward, p.bed].filter(Boolean).join(' - ') || '--') +
+          '<div class="mt-1">' + statusBadge + '</div>' +
+        '</td>' +
+        '<td style="font-size:0.7rem;">' + notes + (gaps ? '<div class="mt-1">' + gaps + '</div>' : '') + '</td>' +
+        '<td class="text-end">' +
+          '<button class="btn btn-outline-info btn-sm py-1 px-3" style="font-size:0.72rem;" ' +
+            'data-record-key="' + esc(p.encounterId || p.ipNumber) + '">View File</button>' +
+        '</td>' +
+      '</tr>';
+    }).join(''));
+
+    // Bound here rather than inlined in onclick, so an apostrophe in a record
+    // key can never break out of the attribute.
+    var tbody = document.getElementById('ip-records-tbody');
+    if (tbody) {
+      tbody.querySelectorAll('button[data-record-key]').forEach(function (b) {
+        b.addEventListener('click', function () { viewIPRecordDetail(b.dataset.recordKey); });
+      });
+    }
+  }
+
+  // ---- detail ------------------------------------------------------------
+
+  function viewIPRecordDetail(recordKey) {
+    if (!recordKey) return;
+    IPRec.loadingKey = recordKey;
+
     document.getElementById('ip-records-ledger-view').classList.add('d-none');
     document.getElementById('ip-records-detail-view').classList.remove('d-none');
-    
-    // Reset contents
-    document.getElementById('det-cs-dx').innerText = "Loading...";
-    document.getElementById('det-notes-timeline').innerHTML = '<div class="text-center text-secondary">Fetching timeline...</div>';
-    
-    google.script.run.withSuccessHandler(res => {
-      const data = JSON.parse(res);
-      
-      // Populate Header
-      if (data.casesheet) {
-        document.getElementById('ip-det-name').innerText = data.casesheet.name;
-        document.getElementById('ip-det-id').innerText = "ID: " + data.casesheet.patientId;
-        document.getElementById('ip-det-ipno').innerText = "IP: " + data.casesheet.ipNumber;
-        
-        // Populate Casesheet Tab - Basic Text Fields
-        document.getElementById('det-cs-dx').innerText = data.casesheet.diagnosis || "--";
-        document.getElementById('det-cs-doc').innerText = data.casesheet.doctor || "--";
-        document.getElementById('det-cs-vitals').innerText = data.casesheet.vitals || "--";
-        document.getElementById('det-cs-ge').innerText = data.casesheet.generalExam || "--";
-        document.getElementById('det-cs-se').innerText = data.casesheet.systemicExam || "--";
-        document.getElementById('det-cs-advice').innerText = data.casesheet.advice || "--";
 
-        // --- THE PERFECT JSON UNWRAPPER ---
-        function safeParseArray(str) {
-            if (!str || str === "--" || str === "[]") return [];
-            if (typeof str === 'object') return Array.isArray(str) ? str : [str];
-            try { 
-                let parsed = JSON.parse(str); 
-                // Unwrap the double-stringify from Google Sheets
-                if (typeof parsed === 'string') parsed = JSON.parse(parsed);
-                return Array.isArray(parsed) ? parsed : [];
-            } catch (e) { 
-                return []; 
-            }
+    setHtml('det-casesheet-body', '<div class="text-center text-secondary py-5">' +
+      '<i class="fa-solid fa-spinner fa-spin me-2"></i>Loading the file...</div>');
+    setHtml('det-notes-timeline', '<div class="text-center text-secondary py-3">Fetching timeline...</div>');
+    setHtml('det-ds-content', '');
+    setHtml('ip-det-gaps', '');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (IPRec.loadingKey !== recordKey) return;   // a later click won
+        if (!res || !res.success) {
+          var msg = esc((res && res.message) || 'Could not open this record.');
+          setHtml('det-casesheet-body', '<div class="text-danger text-center py-5">' + msg + '</div>');
+          setHtml('det-notes-timeline', '');
+          return;
         }
+        IPRec.file = res;
+        renderIPRecordHeader(res);
+        renderIPRecordCasesheet(res);
+        renderIPRecordNotes();
+        renderIPRecordDischarge(res);
+      })
+      .withFailureHandler(function (e) {
+        setHtml('det-casesheet-body', '<div class="text-danger text-center py-5">' + esc(e.message) + '</div>');
+      })
+      .getIPRecordFile(recordKey, window.sessionToken);
+  }
 
-        // --- FORMAT CHIEF COMPLAINTS & HISTORY ---
-        function formatClinicalText(rawStr) {
-            let arr = safeParseArray(rawStr);
-            if (arr.length === 0) return "--";
+  function renderIPRecordHeader(f) {
+    var p = f.patient || {};
+    setText('ip-det-name',   p.name || 'Unknown');
+    setText('ip-det-agesex', p.ageSex || '--');
+    setText('ip-det-id',     'PID: ' + (p.pid || '--'));
+    setText('ip-det-ipno',   'IP: ' + (p.ipNumber || '--'));
+    setText('ip-det-bed',    p.wardBed || '--');
+    setText('ip-det-notecount', String((f.notes || []).length));
 
-            return arr.map(item => {
-                if (typeof item === 'string') return item;
-                // Maps perfectly to your IP_Casesheet buildIPPayload keys
-                let prefix = item.prefix ? item.prefix + ' ' : '';
-                let condition = item.condition || '';
-                let duration = item.duration ? ` (${item.duration})` : '';
-                return `${prefix}${condition}${duration}`.trim();
-            }).join('<br>');
-        }
+    setHtml('ip-det-gaps', (f.gaps && f.gaps.length)
+      ? '<div class="alert alert-warning py-1 px-3 mb-0 d-flex align-items-center gap-2" style="font-size:0.78rem;">' +
+        '<i class="fa-solid fa-triangle-exclamation"></i><span>Record incomplete: ' +
+        esc(f.gaps.join(' · ')) + '</span></div>'
+      : '');
+  }
 
-        document.getElementById('det-cs-cc').innerHTML = formatClinicalText(data.casesheet.chiefComplaints);
-        document.getElementById('det-cs-hx').innerHTML = formatClinicalText(data.casesheet.history);
+  function renderIPRecordCasesheet(f) {
+    var c = f.casesheet;
+    if (!c) {
+      setHtml('det-casesheet-body',
+        '<div class="text-center text-secondary py-5">' +
+        '<i class="fa-solid fa-file-circle-xmark fa-2xl mb-3"></i><br>' +
+        'No admission casesheet has been recorded for this admission.</div>');
+      return;
+    }
 
-        // --- RENDER RX TABLE ---
-        let rxArr = safeParseArray(data.casesheet.prescriptions);
-        let rxHtml = "";
-        
-        if (rxArr.length > 0) {
-            rxHtml = `
-              <table class="table table-sm table-dark table-bordered mb-0" style="font-size: 0.8rem; border-color: var(--border-hover);">
-                <thead>
-                  <tr>
-                    <th class="text-info">Drug Name</th>
-                    <th class="text-info" style="text-align: center;">Dosage</th>
-                    <th class="text-info" style="text-align: center;">Duration</th>
-                  </tr>
-                </thead>
-                <tbody>
-            `;
-            rxArr.forEach(rx => {
-                // Formatting based on your IP_Casesheet payload keys: type, name, sig, days, comment
-                let typeBadge = rx.type ? `<span class="text-secondary" style="font-size: 0.7rem;">[${rx.type}]</span> ` : "";
-                let drugName = rx.name || "--";
-                let notes = rx.comment ? `<br><small class="text-secondary">${rx.comment}</small>` : "";
-                
-                rxHtml += `
-                  <tr>
-                    <td class="text-white fw-bold">${typeBadge}${drugName}${notes}</td>
-                    <td class="text-white text-center align-middle">${rx.sig || "-"}</td>
-                    <td class="text-white text-center align-middle">${rx.days || "-"}</td>
-                  </tr>
-                `;
-            });
-            rxHtml += `</tbody></table>`;
-        } else {
-            rxHtml = `<div class='text-white'>No medications prescribed.</div>`;
-        }
-        document.getElementById('det-cs-rx').innerHTML = rxHtml;
+    var v = c.vitals || {};
+    var vitals = [
+      (v.sys || v.dia) ? kv('Blood Pressure', esc((v.sys || '--') + '/' + (v.dia || '--') + ' mmHg'), { cls: 'col-6 col-md-3' }) : '',
+      v.pr     ? kv('Pulse',  esc(v.pr) + ' bpm',   { cls: 'col-6 col-md-3' }) : '',
+      v.spo2   ? kv('SpO2',   esc(v.spo2) + ' %',   { cls: 'col-6 col-md-3' }) : '',
+      v.temp   ? kv('Temp',   esc(v.temp) + ' °F',  { cls: 'col-6 col-md-3' }) : '',
+      v.height ? kv('Height', esc(v.height) + ' cm',{ cls: 'col-6 col-md-3' }) : '',
+      v.weight ? kv('Weight', esc(v.weight) + ' kg',{ cls: 'col-6 col-md-3' }) : ''
+    ].join('');
 
-        // --- RENDER LABS LIST ---
-        let labsArr = safeParseArray(data.casesheet.labOrders);
-        let labsHtml = "";
+    var ge = c.genExam || {};
+    var geHtml = [
+      ge.positive && ge.positive.length
+        ? kv('Positive findings', '<span class="text-warning fw-bold">' + esc(ge.positive.join(', ')) + '</span>') : '',
+      ge.negative && ge.negative.length
+        ? kv('Negative', '<span class="text-secondary">' + esc(ge.negative.join(', ')) + '</span>') : '',
+      kv('Notes', escLines(ge.notes), { cls: 'col-12' })
+    ].join('');
 
-        if (labsArr.length > 0) {
-            labsHtml = "<ul class='mb-0 ps-3 text-white'>";
-            labsArr.forEach(lab => {
-                // From your payload, labs is just a direct array of strings like ["CBC", "RFT"]
-                labsHtml += `<li>${lab}</li>`; 
-            });
-            labsHtml += "</ul>";
-        } else {
-            labsHtml = `<span class='text-white'>No labs requested.</span>`;
-        }
-        document.getElementById('det-cs-labs').innerHTML = labsHtml;
+    var se = c.sysExam || {};
+    var seHtml = [
+      kv('CVS', esc(se.cvs), { cls: 'col-md-3' }),
+      kv('RS',  esc(se.rs),  { cls: 'col-md-3' }),
+      kv('P/A', esc(se.pa),  { cls: 'col-md-3' }),
+      kv('CNS', esc(se.cns), { cls: 'col-md-3' })
+    ].join('');
+
+    var medsHtml = (c.meds && c.meds.length)
+      ? '<div class="col-12 table-responsive"><table class="table table-sm table-dark table-bordered mb-0" ' +
+        'style="font-size:0.78rem; border-color: var(--border-hover);"><thead><tr>' +
+        '<th class="text-info" style="width:5%;">#</th><th class="text-info">Drug</th>' +
+        '<th class="text-info text-center" style="width:22%;">Dose / Frequency</th>' +
+        '<th class="text-info text-center" style="width:13%;">Route</th>' +
+        '<th class="text-info text-center" style="width:14%;">Duration</th></tr></thead><tbody>' +
+        c.meds.map(function (m, i) {
+          var name = [m.type, m.drugName || m.name, m.strength].map(s).filter(Boolean).join(' ');
+          var note = s(m.comment || m.instructions);
+          return '<tr>' +
+            '<td class="text-secondary">' + (i + 1) + '</td>' +
+            '<td class="text-white fw-bold">' + esc(name || '--') +
+              (note ? '<br><small class="text-secondary fw-normal">' + esc(note) + '</small>' : '') + '</td>' +
+            '<td class="text-white text-center align-middle">' +
+              esc([m.dose, m.freq || m.sig].map(s).filter(Boolean).join(' ') || '-') + '</td>' +
+            '<td class="text-white text-center align-middle">' + esc(m.route || 'Oral') + '</td>' +
+            '<td class="text-white text-center align-middle">' + esc(m.duration || m.days || '-') + '</td>' +
+          '</tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<div class="col-12 text-secondary small">No admission medication ordered.</div>';
+
+    var orderedLabs = (c.labs || [])
+      .filter(function (l) { return String(l.type || '').toUpperCase() === 'ORDER'; })
+      .map(function (l) { return s(l.testName); }).filter(Boolean);
+    var outside = (c.outsideLabs || []).map(function (l) {
+      return s(l.test) ? esc(l.test) + ': <span class="text-white">' + esc(l.val || '--') + '</span>' : '';
+    }).filter(Boolean).join('<br>');
+
+    var provenance = (c.version > 1 || s(c.amendReason))
+      ? panel('Record Provenance', [
+          kv('Version', 'v' + esc(c.version), { cls: 'col-md-3' }),
+          kv('Status',  esc(c.status),        { cls: 'col-md-3' }),
+          kv('Amended', esc([c.amendedAt, c.amendedBy].filter(Boolean).join(' by ')), { cls: 'col-md-6' }),
+          kv('Reason',  escLines(c.amendReason), { cls: 'col-12' })
+        ].join(''))
+      : '';
+
+    setHtml('det-casesheet-body',
+      '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3 border-bottom border-secondary pb-2">' +
+        '<h6 class="text-info fw-bold m-0"><i class="fa-solid fa-file-medical"></i> Admission Casesheet</h6>' +
+        '<span class="text-secondary" style="font-size:0.72rem;">' +
+          esc(c.recordedOn || '--') + (c.doctor ? ' &middot; ' + esc(c.doctor) : '') + '</span>' +
+      '</div>' +
+      panel('Provisional Diagnosis',
+        kv('Primary Diagnosis',
+           '<span class="text-warning fw-bold" style="font-size:0.95rem;">' + esc(c.diagnosis || '--') + '</span>',
+           { cls: 'col-12', keepEmpty: true })) +
+      panel('Vitals on Admission', vitals) +
+      panel('Presenting Complaints & History', [
+        kv('Chief Complaints', clinicalList(c.complaints), { cls: 'col-md-6', keepEmpty: true }),
+        kv('History / Comorbidities', clinicalList(c.history), { cls: 'col-md-6', keepEmpty: true })
+      ].join('')) +
+      panel('General Examination', geHtml) +
+      panel('Systemic Examination', seHtml) +
+      panel('Admission Medication Orders', medsHtml, { keepEmpty: true }) +
+      panel('Investigations', [
+        kv('Lab Orders', esc(orderedLabs.join(', ')), { cls: 'col-md-6' }),
+        kv('External Lab Results', outside, { cls: 'col-md-6' }),
+        kv('Radiology / Scans', escLines(c.radiology), { cls: 'col-12' })
+      ].join('')) +
+      panel('Advice / Plan', kv('Advice', escLines(c.advice), { cls: 'col-12', keepEmpty: true })) +
+      provenance);
+  }
+
+  function renderIPRecordNotes() {
+    var f = IPRec.file;
+    var container = document.getElementById('det-notes-timeline');
+    if (!f || !container) return;
+
+    var sel = document.getElementById('ip-note-role-filter');
+    var wanted = sel ? sel.value : '';
+    var notes = (f.notes || []).filter(function (n) { return !wanted || n.roleType === wanted; });
+
+    if (!notes.length) {
+      container.innerHTML = '<div class="text-center text-secondary py-4">' +
+        (wanted ? 'No notes of this type.' : 'No progress notes recorded for this admission.') + '</div>';
+      return;
+    }
+
+    var roleColour = {
+      DOCTOR: 'info', NURSE: 'success', CONSULTANT: 'warning',
+      PROCEDURE: 'danger', HANDOVER: 'secondary', QUICK: 'secondary'
+    };
+
+    container.innerHTML = notes.map(function (n) {
+      var d = n.noteData || {};
+      var colour = roleColour[n.roleType] || 'secondary';
+      var parts = [];
+
+      var add = function (label, html, cls) {
+        if (!s(html)) return;
+        parts.push('<div class="' + (cls || 'col-12') + ' mb-1">' +
+          '<span class="text-secondary" style="font-size:0.68rem;">' + esc(label) + '</span>' +
+          '<div class="text-white small" style="white-space:pre-wrap;">' + html + '</div></div>');
+      };
+
+      add('Subjective / Objective', escLines(d.subjectiveObjective));
+
+      if (d.vitals) {
+        var vit = [
+          s(d.vitals.bp)    ? 'BP ' + esc(d.vitals.bp) : '',
+          s(d.vitals.pulse) ? 'Pulse ' + esc(d.vitals.pulse) : '',
+          s(d.vitals.spo2)  ? 'SpO2 ' + esc(d.vitals.spo2) + '%' : '',
+          s(d.vitals.temp)  ? 'Temp ' + esc(d.vitals.temp) + '°F' : ''
+        ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+        add('Vitals', vit);
       }
 
-      // Populate Notes Timeline 
-      const notesContainer = document.getElementById('det-notes-timeline');
-      notesContainer.innerHTML = "";
-      if (data.notes && data.notes.length > 0) {
-        data.notes.forEach(note => {
-          notesContainer.innerHTML += `
-            <div class="p-2 border border-secondary rounded" style="background-color: var(--surface-2);">
-               <div class="d-flex justify-content-between border-bottom border-dark pb-1 mb-2">
-                 <span class="text-success fw-bold" style="font-size:0.75rem;">${note.date}</span>
-                 <span class="text-secondary" style="font-size:0.7rem;">Dr. ${note.doctor}</span>
-               </div>
-               <div class="text-light small mb-1"><strong>Vitals:</strong> ${note.vitals}</div>
-               <div class="text-white small"><strong>Note:</strong> ${note.note}</div>
-            </div>
-          `;
-        });
-      } else {
-        notesContainer.innerHTML = '<div class="text-center text-secondary py-3">No progress notes recorded yet.</div>';
+      // Systemic exam. Notes signed before the section name was canonicalised
+      // still carry the old key, so both are read.
+      var se = d.sysExam || d.systemExam;
+      if (se) {
+        var exam = [
+          s(se.cvs) ? 'CVS: ' + esc(se.cvs) : '',
+          s(se.rs)  ? 'RS: '  + esc(se.rs)  : '',
+          s(se.pa)  ? 'P/A: ' + esc(se.pa)  : '',
+          s(se.cns) ? 'CNS: ' + esc(se.cns) : ''
+        ].filter(Boolean);
+        if (exam.length) add('Systemic Examination', exam.join('<br>'));
       }
 
-      // Populate Discharge Tab
-      const dsContainer = document.getElementById('det-ds-content');
-      if (data.discharge) {
-        dsContainer.innerHTML = `
-           <div class="mb-2"><strong>Discharge Date:</strong> <span class="text-white">${data.discharge.date}</span></div>
-           <div class="mb-2"><strong>Outcome:</strong> <span class="text-warning">${data.discharge.outcome}</span></div>
-           <div class="mt-3 p-2 bg-dark border rounded text-white" style="border-color: var(--border-hover) !important;">${data.discharge.summary}</div>
-        `;
+      add('Assessment',      escLines(d.assessment));
+      add('Diagnosis',       escLines(d.diagnosis));
+      add('Plan',            escLines(d.plan));
+      add('Advice',          escLines(d.adviceText));
+      add('Intervention',    escLines(d.intervention));
+      add('Observations',    escLines(d.observations));
+      add('Consultant',      esc(d.consultantName));
+      add('Specialty',       esc(d.specialty));
+      add('Findings',        escLines(d.findings));
+      add('Recommendations', escLines(d.recommendations));
+      add('Procedure',       esc(d.procedureName));
+      add('Operator',        esc(d.operator));
+      add('Complications',   escLines(d.complications));
+      add('Note',            escLines(d.text));
+      add('Handover',        escLines(d.handoverText));
+
+      if (d.medOrders && d.medOrders.length) {
+        add('Medication Orders', d.medOrders.map(function (m) {
+          return esc((m.action || 'NEW') + ' — ' +
+                     [m.drugName || m.newDrugName, m.dose, m.freq, m.route]
+                       .map(s).filter(Boolean).join(' '));
+        }).join('<br>'));
+      }
+      if (d.investigationOrders && d.investigationOrders.length) {
+        add('Investigations', esc(d.investigationOrders.map(function (o) { return s(o.testName); })
+          .filter(Boolean).join(', ')));
       }
 
-    }).fetchFullIPRecord(encounterId);
+      if (!parts.length) parts.push('<div class="col-12 text-secondary small">No content recorded.</div>');
+
+      return '<div class="p-2 border border-secondary rounded" style="background-color: var(--surface-2);">' +
+        '<div class="d-flex justify-content-between align-items-center flex-wrap gap-1 border-bottom border-dark pb-1 mb-2">' +
+          '<span><span class="badge bg-' + colour + '-subtle text-' + colour + ' border border-' + colour +
+            ' me-2" style="font-size:0.62rem;">' + esc(n.label) + '</span>' +
+            '<span class="text-light" style="font-size:0.75rem;">' + esc(n.author || '--') + '</span>' +
+            (n.signature && n.signature !== n.author
+              ? '<span class="text-secondary" style="font-size:0.68rem;"> (' + esc(n.signature) + ')</span>' : '') +
+          '</span>' +
+          '<span class="text-secondary" style="font-size:0.7rem;">' + esc(n.timestamp) +
+            (n.shift ? ' &middot; ' + esc(n.shift) : '') + '</span>' +
+        '</div>' +
+        '<div class="row g-0">' + parts.join('') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderIPRecordDischarge(f) {
+    var ds = f.discharge;
+    if (!ds) {
+      setHtml('det-ds-content',
+        '<div class="text-center text-secondary py-5">' +
+        '<i class="fa-solid fa-lock fa-2xl mb-3"></i><br>' +
+        'No discharge record. This admission is still open.</div>');
+      return;
+    }
+    setHtml('det-ds-content',
+      (ds.source === 'admission'
+        ? '<div class="alert alert-secondary py-1 px-3 small mb-3">' +
+          'Taken from the admission record — no written discharge summary has been filed.</div>'
+        : '') +
+      '<div class="row g-0">' +
+        kv('Discharge Date',   esc(ds.date),      { cls: 'col-md-4', keepEmpty: true }) +
+        kv('Outcome',          '<span class="text-warning">' + esc(ds.outcome) + '</span>', { cls: 'col-md-4', keepEmpty: true }) +
+        kv('Final Diagnosis',  esc(ds.diagnosis), { cls: 'col-md-4' }) +
+        kv('Summary',          escLines(ds.summary), { cls: 'col-12' }) +
+      '</div>');
   }
 
   function closeIPRecordDetail() {
+    IPRec.loadingKey = null;
     document.getElementById('ip-records-detail-view').classList.add('d-none');
     document.getElementById('ip-records-ledger-view').classList.remove('d-none');
   }
+
+  // ---- print -------------------------------------------------------------
+
+  /**
+   * @param {'full'|'casesheet'|'notes'} scope
+   * Rendered server-side, so the printed sheet is the stored record rather
+   * than a screenshot of the screen.
+   */
+  function printIPRecord(scope) {
+    var f = IPRec.file;
+    if (!f || !f.success) { toast('Open a record first.', 'warn'); return; }
+
+    if (scope === 'casesheet' && !f.casesheet) {
+      toast('There is no casesheet on this admission to print.', 'warn');
+      return;
+    }
+
+    var w = window.open('', '_blank', 'width=900,height=1100');
+    if (!w) { toast('Pop-up blocked. Allow pop-ups for this site, then retry.', 'warn'); return; }
+    w.document.write('<p style="font:14px sans-serif;padding:24px;">Preparing the record...</p>');
+
+    var opts = (scope === 'casesheet') ? { notes: false, trend: false, discharge: false }
+             : (scope === 'notes')     ? { casesheet: false }
+             : {};
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          w.close();
+          toast((res && res.message) || 'Could not build the record.', 'err');
+          return;
+        }
+        w.document.open();
+        w.document.write(res.html);
+        w.document.close();
+        w.focus();
+        setTimeout(function () { try { w.print(); } catch (e) {} }, 500);
+      })
+      .withFailureHandler(function (e) { w.close(); toast('Print failed: ' + e.message, 'err'); })
+      .getIPRecordPrintHtml(f.encounterId || f.ipNumber, window.sessionToken, opts);
+  }
+
+  // Exported: EMR_Cockpit and IP_Notes_UI call fetchIPRecordsLedger() by name,
+  // and the markup above binds to the rest.
+  window.fetchIPRecordsLedger  = fetchIPRecordsLedger;
+  window.filterIPRecords       = filterIPRecords;
+  window.setIPRecordFilter     = setIPRecordFilter;
+  window.viewIPRecordDetail    = viewIPRecordDetail;
+  window.closeIPRecordDetail   = closeIPRecordDetail;
+  window.renderIPRecordNotes   = renderIPRecordNotes;
+  window.printIPRecord         = printIPRecord;
+})();
 </script>
