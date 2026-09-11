@@ -79,10 +79,13 @@
     const source = (__anStream === 'ip') ? f.ip : f.op;
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-    const accent = getComputedStyle(document.body).getPropertyValue('--accent-purple').trim();
-    const muted  = getComputedStyle(document.body).getPropertyValue('--text-muted').trim();
-    const grid   = getComputedStyle(document.body).getPropertyValue('--border-color').trim();
-    const palette = ['#94a3b8', '#64748b', '#475569'];
+    // Read the resolved token values: a canvas cannot use var().
+    const accent = cssVar('--accent-purple');
+    const muted  = cssVar('--chart-tick');
+    const grid   = cssVar('--chart-grid');
+    // Non-highlighted years step down in emphasis; these read correctly on
+    // a light or a dark plot area because they come from the theme.
+    const palette = [cssVar('--text-muted'), cssVar('--text-faint'), cssVar('--border-strong')];
 
     const datasets = f.years.map(function (yr, idx) {
       const isHi = (yr === highlight);
@@ -119,10 +122,17 @@
     document.getElementById('an-tbody').innerHTML = f.years.slice().reverse().map(function (yr) {
       const row = source[yr] || new Array(12).fill(0);
       const total = row.reduce(function (a, b) { return a + b; }, 0);
-      const hi = (yr === highlight) ? ' style="color:var(--accent-purple);font-weight:700;"' : '';
+      const hi = (yr === highlight) ? ' style="color: var(--accent-fg);font-weight:700;"' : '';
       return '<tr' + hi + '><td class="fw-bold">' + yr + '</td>' +
         row.map(function (v) { return '<td class="text-center">' + (v || '–') + '</td>'; }).join('') +
         '<td class="text-center fw-bold">' + total + '</td></tr>';
     }).join('');
+  }
+
+  // Redraw the analytics chart with freshly resolved tokens on theme switch.
+  if (window.onThemeChange) {
+    window.onThemeChange(function () {
+      if (__anChart) renderAnalyticsPage();
+    });
   }
 </script>

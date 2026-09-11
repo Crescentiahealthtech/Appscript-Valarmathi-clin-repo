@@ -3,50 +3,161 @@
  /* 1. PREMIUM THEME VARIABLES                */
  /* ========================================= */
 
+ /* Single source of truth for every colour in the application.            */
+ /* Components must consume these tokens - never raw hex values - so that  */
+ /* a theme switch is a pure variable swap with no per-module overrides.   */
+
  :root {
-   /* Premium Dark Theme (Default) */
-   --bg-sidebar: #09090b;       
-   --bg-main: #020617;          
-   --bg-card: #0f172a;          
-   --bg-input: #1e293b;         
-   
-   --text-main: #f8fafc;        
-   --text-muted: #94a3b8;       
-   --text-label: #cbd5e1;       
-   
-   --border-color: #1e293b;     
-   --border-hover: #334155;     
-   
-   --accent-purple: #6366f1;    
-   --accent-glow: rgba(99, 102, 241, 0.25);
-   
-   /* Semantic Triage Colors */
-   --success: #10b981; 
-   --success-bg: rgba(16, 185, 129, 0.15);
-   --warning: #f59e0b; 
-   --warning-bg: rgba(245, 158, 11, 0.15);
-   --danger: #ef4444;  
-   --danger-bg: rgba(239, 68, 68, 0.15);
-   --info: #0ea5e9;
-   --info-bg: rgba(14, 165, 233, 0.15);
+   color-scheme: dark;
+
+   /* --- Surfaces (ascending elevation) --- */
+   --bg-main:        #020617;
+   --bg-sidebar:     #09090b;
+   --bg-card:        #0f172a;
+   --bg-input:       #1e293b;
+   --bg-elevated:    #131c31;   /* modals / popovers stacked above a card */
+   --surface:        #111418;   /* full-bleed workspace canvas            */
+   --surface-2:      #181c22;   /* headers & rails inside a workspace     */
+   --surface-3:      #1e293b;   /* raised rows / chips inside a workspace  */
+   --surface-hover:  rgba(255,255,255,0.06);
+   --surface-active: rgba(255,255,255,0.10);
+
+   /* --- Text --- */
+   --text-main:      #f8fafc;
+   --text-secondary: #cbd5e1;
+   --text-label:     #cbd5e1;
+   --text-muted:     #94a3b8;
+   --text-faint:     #8291a8;
+   --text-on-accent: #ffffff;   /* text sitting on a saturated fill       */
+
+   /* --- Lines --- */
+   --border-color:   #1e293b;
+   --border-hover:   #334155;
+   --border-strong:  #475569;
+   --border-soft:    rgba(255,255,255,0.06);
+   --border-mid:     rgba(255,255,255,0.10);
+   --divider-color:  #1e293b;
+
+   /* --- Accent --- */
+   --accent-purple:  #6164ef;
+   --accent:         #6164ef;
+   --accent-hover:   #818cf8;
+   --accent-fg:      #a5b4fc;   /* accent text on a dim surface           */
+   --accent-glow:    rgba(99, 102, 241, 0.25);
+
+   /* --- Semantic triage -------------------------------------------------
+      *      = saturated fill (badges, bars, dots)
+      *-bg   = translucent tint behind *-fg text
+      *-fg   = the ONLY value safe for text; flips light-tint <-> deep-shade
+      ------------------------------------------------------------------ */
+   --success:        #10b981;  --success-bg: rgba(16, 185, 129, 0.15);  --success-fg: #34d399;
+   --warning:        #f59e0b;  --warning-bg: rgba(245, 158, 11, 0.15);  --warning-fg: #fbbf24;
+   --danger:         #ef4444;  --danger-bg:  rgba(239, 68, 68, 0.15);   --danger-fg:  #f87171;
+   --info:           #0ea5e9;  --info-bg:    rgba(14, 165, 233, 0.15);  --info-fg:    #38bdf8;
+   --blue:           #3b82f6;  --blue-bg:    rgba(59, 130, 246, 0.15);  --blue-fg:    #60a5fa;
+   --teal:           #06b6d4;  --teal-bg:    rgba(6, 182, 212, 0.15);   --teal-fg:    #22d3ee;
+   --violet:         #a855f7;  --violet-bg:  rgba(168, 85, 247, 0.15);  --violet-fg:  #c084fc;
+
+   /* *-solid = the same hue darkened just enough that WHITE text on it meets
+      AA. Use these only for filled controls that carry white text; the plain
+      tokens above stay untouched so dots, bars and borders keep their hue. */
+   --success-solid:  #0a8058;
+   --info-solid:     #0978aa;
+   --warning-deep:   #92400e;
+   --violet-deep:    #4c1d95;
+   --success-deep:   #065f46;
+   --warning-solid:  #b0620a;
+   --violet-solid:   #9333ea;
+   --gold:           #c19a6b;  --gold-bg:    rgba(193, 154, 107, 0.15); --gold-fg:    #d4af7a;
+   --pink:           #ec4899;  --pink-bg:    rgba(236, 72, 153, 0.15);  --pink-fg:    #f472b6;
+
+   /* --- Elevation --- */
+   /* Shadow hue as raw channels so components keep their own alpha values
+      while the colour still follows the theme: rgba(var(--shadow-rgb), .4) */
+   --shadow-rgb:     0, 0, 0;
+   --shadow-sm:      0 1px 3px rgba(0,0,0,0.40);
+   --shadow:         0 4px 20px rgba(0,0,0,0.30);
+   --shadow-lg:      0 8px 30px rgba(0,0,0,0.45);
+   --overlay-scrim:  rgba(0,0,0,0.80);
+
+   /* --- Scrollbars --- */
+   --scrollbar-thumb: #334155;
+   --scrollbar-track: transparent;
+
+   /* --- Data visualisation (Chart.js reads these via cssVar) --- */
+   --chart-grid: #1e293b;
+   --chart-tick: #94a3b8;
+   --chart-1: #6366f1;  --chart-2: #0ea5e9;  --chart-3: #f59e0b;
+   --chart-4: #10b981;  --chart-5: #ef4444;  --chart-6: #a855f7;
  }
 
- body.light-theme {
-   /* Premium Light Theme */
-   --bg-sidebar: #ffffff;
-   --bg-main: #f8fafc;
-   --bg-card: #ffffff;
-   --bg-input: #f1f5f9;
-   
-   --text-main: #0f172a;        
-   --text-muted: #64748b;       
-   --text-label: #475569;
-   
-   --border-color: #e2e8f0;
-   --border-hover: #cbd5e1;
-   
-   --accent-purple: #4f46e5;    
-   --accent-glow: rgba(79, 70, 229, 0.15);
+ body.light-theme,
+ html.light-theme {
+   color-scheme: light;
+
+   --bg-main:        #f8fafc;
+   --bg-sidebar:     #ffffff;
+   --bg-card:        #ffffff;
+   --bg-input:       #f1f5f9;
+   --bg-elevated:    #ffffff;
+   --surface:        #f8fafc;
+   --surface-2:      #ffffff;
+   --surface-3:      #f1f5f9;
+   --surface-hover:  rgba(15,23,42,0.04);
+   --surface-active: rgba(15,23,42,0.08);
+
+   --text-main:      #0f172a;
+   --text-secondary: #334155;
+   --text-label:     #475569;
+   --text-muted:     #5f6d82;
+   --text-faint:     #667488;
+   --text-on-accent: #ffffff;
+
+   --border-color:   #e2e8f0;
+   --border-hover:   #cbd5e1;
+   --border-strong:  #94a3b8;
+   --border-soft:    rgba(15,23,42,0.08);
+   --border-mid:     rgba(15,23,42,0.12);
+   --divider-color:  #e2e8f0;
+
+   --accent-purple:  #4f46e5;
+   --accent:         #4f46e5;
+   --accent-hover:   #4338ca;
+   --accent-fg:      #4338ca;
+   --accent-glow:    rgba(79, 70, 229, 0.15);
+
+   /* Saturated fills stay; only the *-fg text values darken so they keep  */
+   /* a >=4.5:1 ratio against white instead of washing out.               */
+   --success:        #059669;  --success-bg: rgba(16, 185, 129, 0.12);  --success-fg: #047857;
+   --warning:        #d97706;  --warning-bg: rgba(245, 158, 11, 0.14);  --warning-fg: #b45309;
+   --danger:         #dc2626;  --danger-bg:  rgba(239, 68, 68, 0.12);   --danger-fg:  #b91c1c;
+   --info:           #0284c7;  --info-bg:    rgba(14, 165, 233, 0.12);  --info-fg:    #0369a1;
+   --blue:           #2563eb;  --blue-bg:    rgba(59, 130, 246, 0.12);  --blue-fg:    #1d4ed8;
+   --teal:           #0891b2;  --teal-bg:    rgba(6, 182, 212, 0.12);   --teal-fg:    #0e7490;
+   --violet:         #9333ea;  --violet-bg:  rgba(168, 85, 247, 0.12);  --violet-fg:  #7e22ce;
+   --success-solid:  #047857;
+   --info-solid:     #0369a1;
+   --warning-deep:   #9a3412;
+   --violet-deep:    #5b21b6;
+   --success-deep:   #065f46;
+   --warning-solid:  #b45309;
+   --violet-solid:   #7e22ce;
+   --gold:           #a1793f;  --gold-bg:    rgba(193, 154, 107, 0.16); --gold-fg:    #8a6529;
+   --pink:           #db2777;  --pink-bg:    rgba(236, 72, 153, 0.12);  --pink-fg:    #be185d;
+
+   --shadow-rgb:     15, 23, 42;
+   --shadow-sm:      0 1px 3px rgba(15,23,42,0.08);
+   --shadow:         0 4px 20px rgba(15,23,42,0.10);
+   --shadow-lg:      0 8px 30px rgba(15,23,42,0.14);
+   --overlay-scrim:  rgba(15,23,42,0.45);
+
+   --scrollbar-thumb: #cbd5e1;
+   --scrollbar-track: transparent;
+
+   --chart-grid: #e2e8f0;
+   --chart-tick: #64748b;
+   --chart-1: #4f46e5;  --chart-2: #0284c7;  --chart-3: #d97706;
+   --chart-4: #059669;  --chart-5: #dc2626;  --chart-6: #9333ea;
  }
 
  /* ========================================= */
@@ -64,11 +175,11 @@
  .dr-badge { position: fixed; top: 20px; right: 25px; color: var(--text-muted); font-weight: 500; z-index: 1050; background: var(--bg-card); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(5px);}
  .card { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 20px; transition: 0.3s; }
  .soft-glow { box-shadow: 0 10px 30px -10px var(--accent-glow); border: 1px solid var(--accent-glow); }
- .status-chip { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; background: rgba(150,150,150,0.1); backdrop-filter: blur(4px); margin-right: 8px; margin-bottom: 8px; }
+ .status-chip { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; background: var(--surface-hover); backdrop-filter: blur(4px); margin-right: 8px; margin-bottom: 8px; }
  
- .text-normal { color: var(--success) !important; } 
- .text-border { color: var(--warning) !important; } 
- .text-abnormal { color: var(--danger) !important; }
+ .text-normal { color: var(--success-fg) !important; } 
+ .text-border { color: var(--warning-fg) !important; } 
+ .text-abnormal { color: var(--danger-fg) !important; }
  .label-bright { color: var(--text-label) !important; } 
  .text-white-force { color: var(--text-main) !important; }
  
@@ -86,7 +197,7 @@
  /* 3. DESKTOP SIDEBAR                        */
  /* ========================================= */
  .sidebar { width: 260px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: width 0.3s ease, background-color 0.3s ease; z-index: 1000; height: 100vh; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; }
- .sidebar::-webkit-scrollbar { width: 4px; } .sidebar::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 4px; }
+ .sidebar::-webkit-scrollbar { width: 4px; } .sidebar::-webkit-scrollbar-thumb { background-color: var(--scrollbar-thumb); border-radius: 4px; }
  .sidebar.collapsed { width: 85px; }
  .sidebar.collapsed .sidebar-text, .sidebar.collapsed .label-bright { display: none; }
  .sidebar.collapsed .nav-link { justify-content: center; padding: 12px 0; margin: 4px 8px; }
@@ -94,7 +205,7 @@
  .sidebar.collapsed .profile-details { display: none; }
  .sidebar-toggle { cursor: pointer; color: var(--text-muted); font-size: 1.2rem; transition: 0.2s; } .sidebar-toggle:hover { color: var(--text-main); }
  .nav-link { color: var(--text-muted); border-radius: 8px; padding: 12px 20px; margin: 4px 12px; font-weight: 500; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; white-space: nowrap; }
- .nav-link.active { background-color: var(--accent-purple); color: #ffffff !important; }
+ .nav-link.active { background-color: var(--accent-purple); color: var(--text-on-accent) !important; }
  
  .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; background-color: var(--bg-main); display: flex; flex-direction: column; transition: background-color 0.3s ease;}
  .page-section { display: none; } .active-section { display: block; animation: fadeIn 0.3s; }
@@ -125,13 +236,13 @@
  /* Fix Calendar Text Colors */
  .date-card span { display: block; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; color: var(--text-muted); transition: 0.2s; }
  .date-card strong { display: block; font-size: 1.4rem; margin-top: 4px; font-weight: 700; color: var(--text-main); transition: 0.2s; }
- .date-card.active span, .date-card.active strong { color: #ffffff !important; }
+ .date-card.active span, .date-card.active strong { color: var(--text-on-accent) !important; }
 
  .time-category-title { color: var(--text-label); font-size: 0.9rem; margin-top: 20px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: 0.5px; }
  .time-slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
  .time-btn { padding: 10px; background-color: transparent !important; border: 1px solid var(--border-color) !important; color: var(--text-muted) !important; border-radius: 20px; text-align: center; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: all 0.2s; }
  .time-btn:hover { border-color: var(--border-hover) !important; color: var(--text-main) !important; }
- .time-btn.selected { background-color: var(--accent-purple) !important; border-color: var(--accent-purple) !important; color: #ffffff !important; }
+ .time-btn.selected { background-color: var(--accent-purple) !important; border-color: var(--accent-purple) !important; color: var(--text-on-accent) !important; }
  .time-btn.booked { background-color: var(--bg-card) !important; border-color: transparent !important; color: var(--text-muted) !important; cursor: not-allowed; text-decoration: line-through; opacity: 0.5; }
 
  /* ========================================= */
@@ -141,10 +252,10 @@
  .table-ledger td { vertical-align: middle; border-bottom: 1px solid var(--border-color) !important; font-size: 0.95rem; color: var(--text-main) !important; white-space: nowrap; }
  
  .badge-token { background-color: var(--bg-input); color: var(--text-main); font-weight: bold; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; border: 1px solid var(--border-color);}
- .badge-booked { background-color: var(--info-bg) !important; color: var(--info) !important; }
- .badge-arrived { background-color: var(--warning-bg) !important; color: var(--warning) !important; }
- .badge-completed { background-color: var(--success-bg) !important; color: var(--success) !important; }
- .badge-progress { background-color: rgba(168, 85, 247, 0.15) !important; color: #a855f7 !important; }
+ .badge-booked { background-color: var(--info-bg) !important; color: var(--info-fg) !important; }
+ .badge-arrived { background-color: var(--warning-bg) !important; color: var(--warning-fg) !important; }
+ .badge-completed { background-color: var(--success-bg) !important; color: var(--success-fg) !important; }
+ .badge-progress { background-color: var(--violet-bg) !important; color: var(--violet-fg) !important; }
 
  .select-badge { appearance: none; -webkit-appearance: none; padding: 6px 25px 6px 12px; border-radius: 12px; font-weight: 700; font-size: 0.85rem; border: 1px solid transparent; outline: none; background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 8px center; background-size: 12px; transition: all 0.2s ease; }
 
@@ -152,11 +263,12 @@
  /* 7. HORIZONTAL FAB LAYOUT                  */
  /* ========================================= */
  .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: row; gap: 15px; z-index: 1050; }
- .fab-action { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 8px 20px rgba(0,0,0,0.4); cursor: pointer; transition: transform 0.2s ease; text-decoration: none; border: none; }
- .fab-whatsapp { background-color: #25D366; color: white; }
- .fab-whatsapp:hover { transform: scale(1.1); color: white; }
- .fab-emergency { background-color: #ef4444; color: white; animation: pulse-red 2s infinite; }
- .fab-emergency:hover { transform: scale(1.1); color: white; }
+ .fab-action { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: var(--shadow-lg); cursor: pointer; transition: transform 0.2s ease; text-decoration: none; border: none; }
+  /* #25D366 is the WhatsApp brand colour and is deliberately NOT themed. */
+ .fab-whatsapp { background-color: #25D366; color: var(--text-on-accent); }
+ .fab-whatsapp:hover { transform: scale(1.1); color: var(--text-on-accent); }
+ .fab-emergency { background-color: var(--danger); color: var(--text-on-accent); animation: pulse-red 2s infinite; }
+ .fab-emergency:hover { transform: scale(1.1); color: var(--text-on-accent); }
 
  @keyframes pulse-red {
    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
@@ -164,7 +276,7 @@
    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
  }
 
- .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+ .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: var(--overlay-scrim); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
  .hidden { display: none !important; }
 
  /* ========================================= */
@@ -173,7 +285,7 @@
  @media (max-width: 768px) {
    .dr-badge { display: none; }
   
-   .sidebar { position: fixed; top: 0; left: 0; z-index: 9999; height: 100vh; transition: width 0.3s ease; box-shadow: 5px 0 15px rgba(0,0,0,0.5); width: 65px; overflow-x: hidden; }
+   .sidebar { position: fixed; top: 0; left: 0; z-index: 9999; height: 100vh; transition: width 0.3s ease; box-shadow: var(--shadow-lg); width: 65px; overflow-x: hidden; }
    .sidebar:not(.mobile-open) .sidebar-text, .sidebar:not(.mobile-open) .label-bright, .sidebar:not(.mobile-open) .profile-details { display: none; }
    .sidebar:not(.mobile-open) .nav-link, .sidebar:not(.mobile-open) .theme-toggle-btn { justify-content: center; padding: 12px 0; margin: 4px 8px; }
    .sidebar:not(.mobile-open) .nav-link i, .sidebar:not(.mobile-open) .theme-toggle-btn i { margin: 0; font-size: 1.2rem; }
@@ -240,7 +352,7 @@
  .badge-ip { background-color: var(--accent-purple); } 
   
  .timeline-card {
-   background-color: var(--bg-input);
+   background-color: var(--surface-3);
    border: 1px solid var(--border-color);
    color: var(--text-main);
    border-radius: 0.5rem;
@@ -253,74 +365,233 @@
  }
  .sno-col { width: 60px; text-align: center; }
 
-/* ========================================= */
- /* 11. THEME COMPATIBILITY LAYER             */
  /* ========================================= */
- /* Centralised overrides so hardcoded Bootstrap utilities AND inline colors */
- /* stay readable in BOTH themes without editing individual module files.    */
- /* Compatibility layer — long-term fix is to purge hardcoded colors.        */
+ /* 11. GLOBAL ELEMENT & VENDOR THEMING       */
+ /* ========================================= */
+ /* Everything below themes elements we do not author markup for: native  */
+ /* browser controls, scrollbars, and Bootstrap's own components. These   */
+ /* are token-driven, so they follow the theme automatically. Application */
+ /* components must NOT be patched here - fix them at their source.       */
 
- /* 11.1 — Component surfaces themed in BOTH light & dark (vars auto-adapt) */
- .modal-content, .dropdown-menu, .dropdown-item, .offcanvas,
- .list-group-item, .accordion-item, .accordion-button, .popover, .toast {
+ /* 11.1 - Scrollbars (app-wide, both engines) */
+ * { scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track); scrollbar-width: thin; }
+ ::-webkit-scrollbar { width: 10px; height: 10px; }
+ ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+ ::-webkit-scrollbar-thumb { background-color: var(--scrollbar-thumb); border-radius: 6px; border: 2px solid transparent; background-clip: content-box; }
+ ::-webkit-scrollbar-thumb:hover { background-color: var(--border-strong); }
+ ::-webkit-scrollbar-corner { background: transparent; }
+
+ /* 11.2 - Native controls: checkboxes, radios, ranges, progress, selection */
+ input[type="checkbox"], input[type="radio"], input[type="range"], progress { accent-color: var(--accent-purple); }
+ ::selection { background: var(--accent-purple); color: var(--text-on-accent); }
+ .form-check-input { background-color: var(--bg-input); border-color: var(--border-hover); }
+ .form-check-input:checked { background-color: var(--accent-purple); border-color: var(--accent-purple); }
+ .form-check-input:focus { border-color: var(--accent-purple); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+ /* 11.3 - Focus visibility (keyboard accessibility, both themes) */
+ :focus-visible { outline: 2px solid var(--accent-purple); outline-offset: 2px; }
+ .btn:focus-visible, .nav-link:focus-visible { box-shadow: 0 0 0 3px var(--accent-glow); }
+
+ /* 11.4 - Disabled states stay perceptible in BOTH themes */
+ .form-control:disabled, .form-select:disabled, .form-control[readonly],
+ input:disabled, select:disabled, textarea:disabled {
+    background-color: var(--surface-3) !important;
+    color: var(--text-muted) !important;
+    border-color: var(--border-color) !important;
+    opacity: 1;          /* rely on colour, not opacity, so text stays legible */
+    cursor: not-allowed;
+ }
+ .btn:disabled, .btn.disabled { opacity: 0.55; cursor: not-allowed; }
+
+ /* 11.5 - Icons & SVG inherit the themed text colour */
+ svg { fill: currentColor; }
+ svg[stroke]:not([stroke="none"]) { stroke: currentColor; }
+ svg [fill]:not([fill="none"]):not([fill^="url"]) { fill: currentColor; }
+ .fa, .fas, .far, .fal, .fab, .fa-solid, .fa-regular, .fa-brands, i[class*="fa-"] { color: inherit; }
+
+ /* 11.6 - Bootstrap component surfaces (third-party markup we cannot edit) */
+ .modal-content, .offcanvas, .popover, .toast, .accordion-item, .accordion-button {
+    background-color: var(--bg-elevated) !important;
+    color: var(--text-main) !important;
+    border-color: var(--border-color) !important;
+ }
+ .modal-header, .modal-footer, .offcanvas-header, .popover-header, .toast-header {
+    background-color: transparent !important;
+    border-color: var(--divider-color) !important;
+    color: var(--text-main) !important;
+ }
+ .modal-backdrop.show { background-color: var(--overlay-scrim); opacity: 1; }
+ .dropdown-menu {
+    background-color: var(--bg-elevated) !important;
+    border-color: var(--border-color) !important;
+    box-shadow: var(--shadow-lg);
+ }
+ .dropdown-item { color: var(--text-main) !important; background-color: transparent !important; }
+ .dropdown-item:hover, .dropdown-item:focus { background-color: var(--surface-hover) !important; color: var(--text-main) !important; }
+ .dropdown-item.active, .dropdown-item:active { background-color: var(--accent-purple) !important; color: var(--text-on-accent) !important; }
+ .dropdown-divider { border-color: var(--divider-color) !important; }
+ .list-group-item {
     background-color: var(--bg-card) !important;
     color: var(--text-main) !important;
     border-color: var(--border-color) !important;
  }
- .text-muted, .text-white-50 { color: var(--text-muted) !important; }
+ .list-group-item.active { background-color: var(--accent-purple) !important; border-color: var(--accent-purple) !important; color: var(--text-on-accent) !important; }
+ .accordion-button::after { filter: var(--icon-invert, none); }
+ .accordion-button:not(.collapsed) { background-color: var(--surface-hover) !important; color: var(--accent-fg) !important; }
+ .nav-tabs { border-bottom-color: var(--divider-color) !important; }
+ .nav-tabs .nav-link { color: var(--text-muted) !important; border-color: transparent !important; background: transparent !important; }
+ .nav-tabs .nav-link:hover { color: var(--text-main) !important; border-bottom-color: var(--border-hover) !important; }
+ .nav-tabs .nav-link.active { color: var(--accent-fg) !important; background-color: transparent !important; border-color: var(--divider-color) var(--divider-color) transparent !important; }
+ .tooltip-inner { background-color: var(--bg-elevated) !important; color: var(--text-main) !important; border: 1px solid var(--border-color); box-shadow: var(--shadow); }
+ .tooltip .tooltip-arrow::before { border-top-color: var(--bg-elevated) !important; border-bottom-color: var(--bg-elevated) !important; }
+ .popover-body { color: var(--text-main) !important; }
+ .card-header, .card-footer { background-color: transparent !important; border-color: var(--divider-color) !important; color: var(--text-main) !important; }
+ .progress { background-color: var(--surface-3) !important; }
+ .spinner-border, .spinner-grow { color: var(--accent-purple); }
 
- /* 11.2 — Bootstrap text utilities forced to theme in Light Mode.         */
- /* Skips buttons, badges, alerts, active nav, FABs and any element that   */
- /* sets its own background (intentional coloured surfaces keep light text).*/
- body.light-theme .text-white:not(.btn):not(.btn *):not(.badge):not(.badge *):not(.alert):not(.alert *):not(.time-btn.selected):not(.nav-link.active):not(.nav-link.active *):not(.fab-action):not(.fab-action *):not(.rounded-circle *):not([style*="background"]) {
-    color: var(--text-main) !important;
+ /* 11.7 - Tables: drive Bootstrap through its own variables so striping, */
+ /*        hover and bordered variants all follow the theme.              */
+ .table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--text-main);
+    --bs-table-border-color: var(--border-color);
+    --bs-table-striped-bg: var(--surface-hover);
+    --bs-table-striped-color: var(--text-main);
+    --bs-table-hover-bg: var(--surface-hover);
+    --bs-table-hover-color: var(--text-main);
+    --bs-table-accent-bg: transparent;
+    color: var(--text-main);
+    border-color: var(--border-color);
  }
- body.light-theme .text-light:not(.btn):not(.btn *):not(.badge):not(.badge *):not(.time-btn.selected):not([style*="background"]) {
-    color: var(--text-label) !important;
- }
-
- /* 11.3 — Bootstrap background / border utilities in Light Mode */
- body.light-theme .bg-dark, body.light-theme .bg-black { background-color: var(--bg-card) !important; }
- body.light-theme .bg-secondary { background-color: var(--bg-input) !important; }
- body.light-theme .border-secondary,
- body.light-theme .border-dark,
- body.light-theme .border-light { border-color: var(--border-color) !important; }
-
- /* 11.4 — Dark close-button & dark tables in Light Mode */
- body.light-theme .btn-close-white { filter: none !important; }
- body.light-theme .table-dark {
+ .table > :not(caption) > * > * { background-color: transparent; color: inherit; border-bottom-color: var(--border-color); }
+ .table thead th { color: var(--text-label); border-bottom-color: var(--border-hover); }
+ .table-dark, .table-light {
     --bs-table-bg: var(--bg-card);
     --bs-table-color: var(--text-main);
     --bs-table-border-color: var(--border-color);
-    background-color: var(--bg-card) !important;
-    color: var(--text-main) !important;
  }
 
- /* 11.5 — Inline white text (no class hook). Inline styles carry no        */
- /* !important so this wins. Skips elements that set their own background.  */
- body.light-theme [style*="color:#fff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
- body.light-theme [style*="color: #fff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
- body.light-theme [style*="color:#ffffff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
- body.light-theme [style*="color: #ffffff"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
- body.light-theme [style*="color:white"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action),
- body.light-theme [style*="color: white"]:not([style*="background"]):not(.btn):not(.badge):not(.fab-action) {
-    color: var(--text-main) !important;
+ /* 11.8 - Text / background / border utilities resolved to tokens.        */
+ /* Bootstrap hardcodes these to fixed greys; re-point them at the theme   */
+ /* so a single definition serves both modes.                             */
+ /* Bootstrap's .text-white / .text-light are used throughout this codebase to
+    mean "primary/secondary text", not literally white - they were written when
+    only the dark theme existed. So they resolve to theme tokens by default...  */
+ .text-white { color: var(--text-main) !important; }
+ .text-light { color: var(--text-secondary) !important; }
+
+ /* ...except on a saturated fill, where white is correct in BOTH themes.
+    Listing the fill contexts semantically avoids the brittle :not() chains and
+    [style*=...] attribute matching this file used to rely on. */
+ .btn-primary, .btn-success, .btn-danger, .btn-warning, .btn-info,
+ .bg-primary, .bg-success, .bg-danger, .bg-warning, .bg-info,
+ .nav-link.active, .fab-action, .toast-solid, .on-accent,
+ .btn-primary *, .btn-success *, .btn-danger *, .btn-warning *, .btn-info *,
+ .bg-primary *, .bg-success *, .bg-danger *, .bg-warning *, .bg-info *,
+ .nav-link.active *, .fab-action *, .toast-solid *, .on-accent * {
+    --text-main: var(--text-on-accent);
+    --text-secondary: var(--text-on-accent);
+ }
+ .btn-primary.text-white, .btn-success.text-white, .btn-danger.text-white,
+ .btn-warning.text-white, .btn-info.text-white,
+ .bg-primary.text-white, .bg-success.text-white, .bg-danger.text-white,
+ .bg-warning.text-white, .bg-info.text-white,
+ .nav-link.active.text-white, .fab-action.text-white, .toast-solid.text-white,
+ .on-accent.text-white,
+ .btn-primary .text-white, .btn-success .text-white, .btn-danger .text-white,
+ .btn-warning .text-white, .btn-info .text-white,
+ .bg-primary .text-white, .bg-success .text-white, .bg-danger .text-white,
+ .bg-warning .text-white, .bg-info .text-white,
+ .nav-link.active .text-white, .fab-action .text-white, .toast-solid .text-white,
+ .on-accent .text-white {
+    color: var(--text-on-accent) !important;
  }
 
- /* 11.6 — Inline hardcoded DARK backgrounds -> themed surface in Light Mode.*/
- /* Anchored to the background property so var(--x,#hex) fallbacks are NOT   */
- /* matched (those already resolve correctly).                              */
- body.light-theme [style*="background:#1a1d21"],
- body.light-theme [style*="background: #1a1d21"],
- body.light-theme [style*="background-color:#1a1d21"],
- body.light-theme [style*="background-color: #1a1d21"],
- body.light-theme [style*="background:#1e293b"],
- body.light-theme [style*="background: #1e293b"],
- body.light-theme [style*="background-color:#1e293b"],
- body.light-theme [style*="background-color: #1e293b"],
- body.light-theme [style*="background:#020617"],
- body.light-theme [style*="background: #020617"] {
-    background-color: var(--bg-card) !important;
-    color: var(--text-main) !important;
+ .text-muted, .text-white-50, .text-black-50 { color: var(--text-muted) !important; }
+ .text-secondary { color: var(--text-secondary) !important; }
+ .text-success { color: var(--success-fg) !important; }
+ .text-warning { color: var(--warning-fg) !important; }
+ .text-danger  { color: var(--danger-fg)  !important; }
+ .text-info    { color: var(--info-fg)    !important; }
+ .text-primary { color: var(--accent-fg)  !important; }
+ .bg-dark, .bg-black, .bg-body-tertiary { background-color: var(--bg-card) !important; }
+ .bg-secondary { background-color: var(--surface-3) !important; }
+ .bg-light { background-color: var(--surface-3) !important; color: var(--text-main) !important; }
+ .border, .border-top, .border-bottom, .border-start, .border-end,
+ .border-secondary, .border-dark, .border-light { border-color: var(--border-color) !important; }
+ hr, .dropdown-divider { border-color: var(--divider-color); opacity: 1; }
+
+ /* 11.9 - Code / preformatted blocks */
+ pre, code, kbd, samp {
+    background-color: var(--surface-3);
+    color: var(--text-secondary);
+    border-radius: 6px;
+ }
+ pre { padding: 12px; border: 1px solid var(--border-color); overflow-x: auto; }
+
+ /* 11.10 - Close button: invert the glyph only in dark mode */
+ .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+ body.light-theme .btn-close { filter: none; }
+ body.light-theme .btn-close-white { filter: none !important; }
+
+ /* 11.11 - Bootstrap alerts rebuilt on tokens (default palette is         */
+ /*         light-only and turns unreadable on dark surfaces).            */
+ .alert { border-width: 1px; border-style: solid; }
+ .alert-success { background-color: var(--success-bg) !important; color: var(--success-fg) !important; border-color: var(--success) !important; }
+ .alert-warning { background-color: var(--warning-bg) !important; color: var(--warning-fg) !important; border-color: var(--warning) !important; }
+ .alert-danger  { background-color: var(--danger-bg)  !important; color: var(--danger-fg)  !important; border-color: var(--danger)  !important; }
+ .alert-info    { background-color: var(--info-bg)    !important; color: var(--info-fg)    !important; border-color: var(--info)    !important; }
+ .alert-secondary, .alert-light, .alert-dark { background-color: var(--surface-3) !important; color: var(--text-main) !important; border-color: var(--border-color) !important; }
+
+ /* 11.12 - Outline buttons: Bootstrap's greys vanish against dark cards */
+ .btn-outline-secondary { color: var(--text-secondary) !important; border-color: var(--border-hover) !important; }
+ .btn-outline-secondary:hover { background-color: var(--surface-hover) !important; color: var(--text-main) !important; border-color: var(--border-strong) !important; }
+ .btn-outline-light { color: var(--text-secondary) !important; border-color: var(--border-hover) !important; }
+ .btn-outline-light:hover { background-color: var(--surface-hover) !important; color: var(--text-main) !important; }
+ .btn-outline-dark { color: var(--text-main) !important; border-color: var(--border-hover) !important; }
+ .btn-outline-dark:hover { background-color: var(--surface-hover) !important; color: var(--text-main) !important; }
+ .btn-light { background-color: var(--surface-3) !important; color: var(--text-main) !important; border-color: var(--border-color) !important; }
+ .btn-dark { background-color: var(--bg-input) !important; color: var(--text-main) !important; border-color: var(--border-hover) !important; }
+ .btn-secondary { background-color: var(--surface-3) !important; color: var(--text-main) !important; border-color: var(--border-hover) !important; }
+
+ /* 11.13 - Native date/time picker glyphs follow the theme */
+ input[type="date"]::-webkit-calendar-picker-indicator,
+ input[type="time"]::-webkit-calendar-picker-indicator,
+ input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+ input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+ body.light-theme input[type="date"]::-webkit-calendar-picker-indicator,
+ body.light-theme input[type="time"]::-webkit-calendar-picker-indicator,
+ body.light-theme input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+ body.light-theme input[type="month"]::-webkit-calendar-picker-indicator { filter: none; }
+
+ /* 11.14 - Theme transition. Scoped to colour properties only so layout, */
+ /*         transforms and existing animations are untouched.             */
+ body.theme-switching, body.theme-switching * {
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease !important;
+ }
+
+ /* ========================================= */
+ /* 12. PRINT                                 */
+ /* ========================================= */
+ /* Printed output is always ink on paper. Re-pointing the tokens here fixes
+    every module's print view at once: without this, printing while the dark
+    theme is active produced dark backgrounds and near-white text. */
+ @media print {
+   :root, html, body, body.light-theme, html.light-theme {
+     color-scheme: light;
+     --bg-main: #ffffff;    --bg-sidebar: #ffffff;  --bg-card: #ffffff;
+     --bg-input: #ffffff;   --bg-elevated: #ffffff;
+     --surface: #ffffff;    --surface-2: #ffffff;   --surface-3: #f4f4f4;
+     --surface-hover: transparent; --surface-active: transparent;
+     --text-main: #000000;  --text-secondary: #222222; --text-label: #222222;
+     --text-muted: #555555; --text-faint: #666666;  --text-on-accent: #ffffff;
+     --border-color: #cccccc; --border-hover: #aaaaaa; --border-strong: #888888;
+     --border-soft: #dddddd;  --border-mid: #cccccc; --divider-color: #cccccc;
+     --shadow-sm: none; --shadow: none; --shadow-lg: none;
+     --success-fg: #056839; --warning-fg: #8a5300; --danger-fg: #a11212;
+     --info-fg: #04557f;    --accent-fg: #3730a3;
+   }
+   body { background: #ffffff !important; color: #000000 !important; }
+   .fab-container, .dr-badge, .sidebar { display: none !important; }
  }
 </style>

@@ -18,13 +18,13 @@
 
   <!-- ============ LOADING OVERLAY ============ -->
   <div id="dash-loading" class="card p-5 text-center">
-    <div class="spinner-border mx-auto mb-3" style="color: var(--accent-purple);" role="status"></div>
+    <div class="spinner-border mx-auto mb-3" style="color: var(--accent-fg);" role="status"></div>
     <div class="label-bright">Loading live metrics…</div>
   </div>
 
   <!-- ============ ERROR STATE ============ -->
   <div id="dash-error" class="card p-4 d-none" style="border-color: var(--danger) !important;">
-    <div class="d-flex align-items-center gap-2" style="color: var(--danger);">
+    <div class="d-flex align-items-center gap-2" style="color: var(--danger-fg);">
       <i class="fa-solid fa-triangle-exclamation"></i>
       <span id="dash-error-msg">Could not load dashboard.</span>
     </div>
@@ -50,7 +50,7 @@
                 <span class="label-bright">unavailable</span>
               </div>
             </div>
-            <i class="fa-solid fa-bed-pulse" style="font-size:1.6rem; color: var(--accent-purple);"></i>
+            <i class="fa-solid fa-bed-pulse" style="font-size:1.6rem; color: var(--accent-fg);"></i>
           </div>
           
           <!-- Multi-color Stacked Capacity Bar -->
@@ -62,7 +62,7 @@
           
           <div class="d-flex justify-content-between mt-2 small label-bright position-relative">
             <span><span id="kpi-occ-used">0</span> / <span id="kpi-occ-total">0</span> beds in use</span>
-            <a href="#" onclick="gotoBedMap(event)" style="color: var(--accent-purple); text-decoration:none;">View bed map →</a>
+            <a href="#" onclick="gotoBedMap(event)" style="color: var(--accent-fg); text-decoration:none;">View bed map →</a>
           </div>
 
           <!-- Dynamic Actionable Insight String -->
@@ -85,7 +85,7 @@
                  onmouseout="this.classList.remove('soft-glow'); this.style.transform='translateY(0)';">
               
               <div class="d-flex justify-content-between align-items-start">
-                <i class="fa-solid fa-hospital-user mb-2" style="color: var(--info); font-size: 1.2rem;"></i>
+                <i class="fa-solid fa-hospital-user mb-2" style="color: var(--info-fg); font-size: 1.2rem;"></i>
                 <i class="fa-solid fa-arrow-up-right-from-square small text-muted" style="opacity: 0.5;"></i>
               </div>
               <div class="fw-bold" style="font-size:1.8rem;" id="kpi-inpatients">—</div>
@@ -102,7 +102,7 @@
                  onmouseout="this.classList.remove('soft-glow'); this.style.transform='translateY(0)';">
               
               <div class="d-flex justify-content-between align-items-start">
-                <i class="fa-solid fa-calendar-check mb-2" style="color: var(--success); font-size: 1.2rem;"></i>
+                <i class="fa-solid fa-calendar-check mb-2" style="color: var(--success-fg); font-size: 1.2rem;"></i>
                 <i class="fa-solid fa-arrow-up-right-from-square small text-muted" style="opacity: 0.5;"></i>
               </div>
               <div class="fw-bold" style="font-size:1.8rem;" id="kpi-appt-today">—</div>
@@ -114,17 +114,17 @@
           <!-- FINANCIAL: hidden for non-finance roles via applyRBAC -->
           <div class="col-6 col-xl-3" id="dash-card-revenue">
             <div class="card p-3 h-100">
-              <i class="fa-solid fa-indian-rupee-sign mb-2" style="color: var(--accent-purple);"></i>
+              <i class="fa-solid fa-indian-rupee-sign mb-2" style="color: var(--accent-fg);"></i>
               <div class="fw-bold" style="font-size:1.6rem;" id="kpi-revenue">—</div>
               <div class="label-bright small">Revenue Today</div>
-              <div class="small mt-1"><a href="#" onclick="gotoAccounts(event)" style="color: var(--accent-purple); text-decoration:none;">Breakdown →</a></div>
+              <div class="small mt-1"><a href="#" onclick="gotoAccounts(event)" style="color: var(--accent-fg); text-decoration:none;">Breakdown →</a></div>
             </div>
           </div>
 
           <!-- FINANCIAL: pending credit -->
           <div class="col-6 col-xl-3" id="dash-card-credit">
             <div class="card p-3 h-100">
-              <i class="fa-solid fa-file-invoice-dollar mb-2" style="color: var(--warning);"></i>
+              <i class="fa-solid fa-file-invoice-dollar mb-2" style="color: var(--warning-fg);"></i>
               <div class="fw-bold" style="font-size:1.6rem;" id="kpi-credit">—</div>
               <div class="label-bright small">Pending Credit</div>
             </div>
@@ -191,9 +191,11 @@
   var __dashBusy = false;
   const __MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  function cssVar(name) {
+  // cssVar() is provided globally (see Index.html head); keep a local alias
+  // so this module works even if loaded in isolation.
+  const cssVar = window.cssVar || function (name) {
     return getComputedStyle(document.body).getPropertyValue(name).trim() || '#6366f1';
-  }
+  };
   function fmtMoney(n) {
     return '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
   }
@@ -273,20 +275,20 @@
 
     // Build the string dynamically based on actual counts
     if (c.occupied > 0) {
-      insights.push(`<span style="color: var(--danger);"><i class="fa-solid fa-bed me-1"></i> ${c.occupied} Occupied</span>`);
+      insights.push(`<span style="color: var(--danger-fg);"><i class="fa-solid fa-bed me-1"></i> ${c.occupied} Occupied</span>`);
     }
     if (c.reserved > 0) {
-      insights.push(`<span style="color: var(--warning);"><i class="fa-solid fa-bookmark me-1"></i> ${c.reserved} Reserved</span>`);
+      insights.push(`<span style="color: var(--warning-fg);"><i class="fa-solid fa-bookmark me-1"></i> ${c.reserved} Reserved</span>`);
     }
     if (c.cleaning > 0) {
-      insights.push(`<span style="color: var(--info);"><i class="fa-solid fa-broom me-1"></i> ${c.cleaning} Cleaning</span>`);
+      insights.push(`<span style="color: var(--info-fg);"><i class="fa-solid fa-broom me-1"></i> ${c.cleaning} Cleaning</span>`);
     }
 
     // Join them together with a subtle divider, or show the critical capacity warning
     if (insights.length > 0) {
       insightEl.innerHTML = insights.join('<span class="text-muted mx-2">|</span>');
     } else if (c.occupancyPct >= 85) {
-      insightEl.innerHTML = `<span style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation me-1"></i> Approaching critical capacity.</span>`;
+      insightEl.innerHTML = `<span style="color: var(--danger-fg);"><i class="fa-solid fa-triangle-exclamation me-1"></i> Approaching critical capacity.</span>`;
     } else {
       insightEl.innerText = '';
     }
@@ -343,7 +345,7 @@
     }
     
     wrap.innerHTML = items.length ? items.join('')
-      : '<span class="label-bright small"><i class="fa-solid fa-check me-1" style="color:var(--success);"></i>No operational alerts.</span>';
+      : '<span class="label-bright small"><i class="fa-solid fa-check me-1" style="color:var(--success-fg);"></i>No operational alerts.</span>';
   }
 
   function alertChip(icon, text, color, handler) {
@@ -382,7 +384,8 @@
     note.classList.toggle('d-none', f.years.length > 1);
 
     const source = (__ffStream === 'ip') ? f.ip : f.op;
-    const palette = [cssVar('--accent-purple'), cssVar('--info'), cssVar('--warning'), cssVar('--success'), cssVar('--danger')];
+    const palette = window.chartPalette ? window.chartPalette()
+      : [cssVar('--chart-1'), cssVar('--chart-2'), cssVar('--chart-3'), cssVar('--chart-4'), cssVar('--chart-5')];
     const recent = f.years.slice(-4); // show up to 4 years
     const datasets = recent.map(function (yr, idx) {
       const color = palette[idx % palette.length];
@@ -395,8 +398,8 @@
       };
     });
 
-    const grid = cssVar('--border-color');
-    const text = cssVar('--text-muted');
+    const grid = cssVar('--chart-grid');
+    const text = cssVar('--chart-tick');
 
     if (__ffChart) __ffChart.destroy();
     __ffChart = new Chart(canvas.getContext('2d'), {
@@ -420,6 +423,14 @@
   // ============================================================
   // GATEWAY HUBS (Updated to use dedicated fn wrappers)
   // ============================================================
+  // The footfall chart is canvas-painted, so redraw it with the new tokens
+  // whenever the theme flips.
+  if (window.onThemeChange) {
+    window.onThemeChange(function () {
+      if (__ffChart) renderFootfall();
+    });
+  }
+
   function paintGateway(d) {
     const hubs = [
       { id:'', icon:'calendar-check', title:'Appointments', sub:(d.operations.apptToday||0)+' today', fn:'gotoApptsLedg' },
@@ -442,7 +453,7 @@
           '<div class="d-flex align-items-center gap-3">' +
             '<div class="rounded-circle d-flex justify-content-center align-items-center" ' +
               'style="width:42px;height:42px;background:var(--accent-glow);">' +
-              '<i class="fa-solid fa-' + h.icon + '" style="color:var(--accent-purple);"></i>' +
+              '<i class="fa-solid fa-' + h.icon + '" style="color: var(--accent-fg);"></i>' +
             '</div>' +
             '<div>' +
               '<div class="fw-bold text-white-force">' + h.title + '</div>' +

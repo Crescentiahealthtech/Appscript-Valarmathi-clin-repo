@@ -44,14 +44,14 @@
     }
     .ph-table td { padding: 0.4rem; vertical-align: middle; border-bottom: 1px solid var(--border-color); }
     .ph-table tr.fefo-child .drug-name { font-style: italic; }
-    .ph-total-text { font-size: 1.5rem; font-weight: 700; color: var(--success); }
+    .ph-total-text { font-size: 1.5rem; font-weight: 700; color: var(--success-fg); }
     .s-no { width: 40px; text-align: center; color: var(--text-muted); font-weight: bold; }
-    .ph-subtotal { color: var(--success) !important; font-weight: bold; }
+    .ph-subtotal { color: var(--success-fg) !important; font-weight: bold; }
     .ph-money-line { color: var(--text-muted); }
     .ph-money-val  { color: var(--text-main); }
     .ph-expiry-flag { font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
-    .ph-flag-ok   { background: var(--success-bg); color: var(--success); }
-    .ph-flag-near { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .ph-flag-ok   { background: var(--success-bg); color: var(--success-fg); }
+    .ph-flag-near { background: var(--warning-bg); color: var(--warning-fg); }
 
     /* Pending prescriptions */
     #phRxHeader { cursor: pointer; user-select: none; }
@@ -65,15 +65,15 @@
     }
     .rx-chip .rx-meta { font-size: 0.7rem; color: var(--text-muted); }
     .rx-src { font-size: 0.6rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
-    .rx-src.OPD          { background: rgba(99,102,241,0.15); color: var(--accent-purple); }
-    .rx-src.IP-ADMISSION { background: rgba(16,185,129,0.15); color: var(--success); }
-    .rx-src.IP-WARD      { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .rx-src.OPD          { background: var(--accent-glow); color: var(--accent-purple); }
+    .rx-src.IP-ADMISSION { background: var(--success-bg); color: var(--success-fg); }
+    .rx-src.IP-WARD      { background: var(--warning-bg); color: var(--warning-fg); }
 
     /* Autocomplete */
     .autocomplete-items {
       position: absolute; z-index: 9999; top: 100%; left: 0; right: 0;
       background-color: var(--bg-card); max-height: 280px; overflow-y: auto;
-      border: 1px solid var(--accent-purple); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      border: 1px solid var(--accent-purple); border-radius: 6px; box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.25);
     }
     .autocomplete-items div { padding: 9px 11px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.82rem; }
     .autocomplete-items div:hover { background-color: var(--border-hover); }
@@ -82,12 +82,12 @@
     .ac-meta   { font-size: 0.68rem; color: var(--text-muted); }
 
     /* Overlay + credit panel */
-    #ph-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 20000; display: none; align-items: center; justify-content: center; }
+    #ph-overlay { position: fixed; inset: 0; background: var(--overlay-scrim); z-index: 20000; display: none; align-items: center; justify-content: center; }
     #ph-overlay .box { background: var(--bg-card); color: var(--text-main); padding: 22px 30px; border-radius: 12px; border: 1px solid var(--border-color); font-weight: 600; }
-    #ph-credit-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 19000; display: none; align-items: flex-start; justify-content: center; padding-top: 6vh; }
+    #ph-credit-modal { position: fixed; inset: 0; background: var(--overlay-scrim); z-index: 19000; display: none; align-items: flex-start; justify-content: center; padding-top: 6vh; }
     #ph-credit-modal .cm-card { background: var(--bg-card); color: var(--text-main); width: 92%; max-width: 720px; border: 1px solid var(--border-color); border-radius: 14px; max-height: 80vh; overflow-y: auto; }
     .cm-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border-color); }
-    .cm-row .cm-net { color: var(--success); font-weight: 700; }
+    .cm-row .cm-net { color: var(--success-fg); font-weight: 700; }
 
     /* ===== PRINT ===== */
     #ph-invoice-print { display: none; }
@@ -96,7 +96,7 @@
       body * { visibility: hidden !important; }
       #ph-invoice-print, #ph-invoice-print * { visibility: visible !important; }
       #ph-invoice-print { display: block !important; position: absolute; left: 0; top: 0; width: 100%;
-        background: #fff !important; color: #000 !important; padding: 10px 4px; font-family: 'Segoe UI', Arial, sans-serif; }
+        background: var(--bg-card) !important; color: var(--text-main) !important; padding: 10px 4px; font-family: 'Segoe UI', Arial, sans-serif; }
     }
   </style>
 
@@ -258,9 +258,9 @@
     </div>
   </div>
 
-  <div id="ph-dispatch-modal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 21000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px);">
-    <div style="background: var(--bg-card); color: var(--text-main); width: 90%; max-width: 400px; padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
-      <div style="font-size: 3rem; color: var(--success); margin-bottom: 10px;"><i class="fa-solid fa-circle-check"></i></div>
+  <div id="ph-dispatch-modal" style="position: fixed; inset: 0; background: var(--overlay-scrim); z-index: 21000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px);">
+    <div style="background: var(--bg-card); color: var(--text-main); width: 90%; max-width: 400px; padding: 24px; border-radius: 16px; border: 1px solid var(--border-color); text-align: center; box-shadow: 0 10px 30px rgba(var(--shadow-rgb), 0.3);">
+      <div style="font-size: 3rem; color: var(--success-fg); margin-bottom: 10px;"><i class="fa-solid fa-circle-check"></i></div>
       <h4 style="margin-bottom: 5px;">Bill Saved Successfully!</h4>
       <div class="text-muted mb-4">Invoice No: <strong id="dh-invoice-no" style="color: var(--text-main);"></strong></div>
 
@@ -426,7 +426,7 @@
       applyFEFO(tr, 1);
     } else {
       // No confident stock match — DO NOT substitute. Force a manual pick.
-      nameInput.style.borderLeft = '3px solid #dc2626';
+      nameInput.style.borderLeft = '3px solid var(--danger)';
       nameInput.title = 'No confident stock match — pick the correct medicine from the dropdown.';
       tr.dataset.unmatched = '1';
     }
@@ -780,7 +780,7 @@
           document.getElementById('ph-invoice-print').innerHTML = rawHtml;
           
           // 3. Store full doc in memory for backend Dispatch
-          currentDispatchHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{padding:20px; color:#000; background:#fff; font-family:sans-serif;}</style></head><body>${rawHtml}</body></html>`;
+          currentDispatchHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{padding:20px; color:var(--text-main); background:var(--bg-card); font-family:sans-serif;}</style></head><body>${rawHtml}</body></html>`;
           
           // 4. Trigger the Interceptor Hub (Success Modal)
           document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
@@ -813,18 +813,18 @@
     // 2. Generate the dynamic rows for dispensed medicines
     const rows = d.items.map((it, i) => `
       <tr>
-        <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; vertical-align:top;">${i + 1}</td>
-        <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; vertical-align:top;">
-          <strong style="color:#111827;">${_esc(it.drug)}</strong>
-          ${it.generic ? `<br><span style="font-size:10px;color:#6b7280;">${_esc(it.generic)}</span>` : ''}
+        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); vertical-align:top;">${i + 1}</td>
+        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); vertical-align:top;">
+          <strong style="color:var(--text-main);">${_esc(it.drug)}</strong>
+          ${it.generic ? `<br><span style="font-size:10px;color:var(--text-faint);">${_esc(it.generic)}</span>` : ''}
         </td>
-        <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:12px; vertical-align:top; color:#374151;">
-          ${_esc(it.batch)}<br><span style="font-size:10px;color:#6b7280;">Exp: ${_esc(it.expiry)}</span>
+        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); font-size:12px; vertical-align:top; color:var(--text-faint);">
+          ${_esc(it.batch)}<br><span style="font-size:10px;color:var(--text-faint);">Exp: ${_esc(it.expiry)}</span>
         </td>
-        <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:top;">${it.qty}</td>
-        <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:top;">₹${it.mrp.toFixed(2)}</td>
-        <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:top; color:#4b5563;">${it.gst}%</td>
-        <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; text-align:right; vertical-align:top; font-weight:600;">₹${it.lineTotal.toFixed(2)}</td>
+        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top;">${it.qty}</td>
+        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top;">₹${it.mrp.toFixed(2)}</td>
+        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top; color:var(--text-faint);">${it.gst}%</td>
+        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top; font-weight:600;">₹${it.lineTotal.toFixed(2)}</td>
       </tr>`).join('');
       
     // 3. Generate GST Summary Rows
@@ -832,11 +832,11 @@
       const half = slabs[k].gst / 2;
       return `
         <tr>
-          <td style="padding:4px 10px; border-bottom:1px solid #e5e7eb;">${k}%</td>
-          <td style="padding:4px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">₹${slabs[k].taxable.toFixed(2)}</td>
-          <td style="padding:4px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">₹${half.toFixed(2)}</td>
-          <td style="padding:4px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">₹${half.toFixed(2)}</td>
-          <td style="padding:4px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">₹${slabs[k].gst.toFixed(2)}</td>
+          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color);">${k}%</td>
+          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${slabs[k].taxable.toFixed(2)}</td>
+          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${half.toFixed(2)}</td>
+          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${half.toFixed(2)}</td>
+          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${slabs[k].gst.toFixed(2)}</td>
         </tr>`;
     }).join('');
 
@@ -849,8 +849,8 @@
     const isIp = (d.billType === 'IPD' || d.billType === 'IP_ACCOUNT');
     
     const payLine = isIp
-      ? `<div style="font-weight:700;color:#0369a1;">Posted to IP Account &bull; Settled at discharge</div>`
-      : `<div>Payment: <strong>${_esc(d.payMode)}</strong> &bull; Status: <strong style="${d.payStatus === 'PAID' ? 'color:#10b981;' : 'color:#dc2626;'}">${_esc(d.payStatus)}</strong></div>`;
+      ? `<div style="font-weight:700;color:var(--info-fg);">Posted to IP Account &bull; Settled at discharge</div>`
+      : `<div>Payment: <strong>${_esc(d.payMode)}</strong> &bull; Status: <strong style="${d.payStatus === 'PAID' ? 'color:var(--success-fg);' : 'color:var(--danger-fg);'}">${_esc(d.payStatus)}</strong></div>`;
 
     // Constructing Demographic String dynamically
     let patientInfo = `<strong>${_esc(d.patientName || 'Walk-in Patient')}</strong>`;
@@ -859,43 +859,43 @@
     if (d.age) demo.push(`${d.age}y`);
     if (d.sex) demo.push(d.sex);
     if (d.mobile) demo.push(d.mobile);
-    if (demo.length > 0) patientInfo += ` <span style="color:#6b7280;font-size:12px;margin-left:6px;">(${demo.join(' / ')})</span>`;
+    if (demo.length > 0) patientInfo += ` <span style="color:var(--text-faint);font-size:12px;margin-left:6px;">(${demo.join(' / ')})</span>`;
 
     // Returning the Premium Template HTML (Inline styling preserves formatting during Google Blob PDF rendering)
     return `
-      <div style="max-width:760px;margin:18px auto;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-family:'Helvetica Neue',Arial,sans-serif;color:#111827;background:#fff;box-sizing:border-box;">
+      <div style="max-width:760px;margin:18px auto;border:1px solid var(--border-color);border-radius:10px;overflow:hidden;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text-main);background:var(--bg-card);box-sizing:border-box;">
         
-        <div style="padding:18px 24px;border-bottom:2px solid #0369a1;display:flex;justify-content:space-between;align-items:flex-start;">
+        <div style="padding:18px 24px;border-bottom:2px solid var(--info);display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <div style="font-size:20px;font-weight:800;color:#0369a1;text-transform:uppercase;">${_esc(clinicName)}</div>
-            ${clinicAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;">${_esc(clinicAddress)}</div>` : ''}
-            ${clinicPhone ? `<div style="font-size:12px;color:#6b7280;">Phone: ${_esc(clinicPhone)}</div>` : ''}
-            ${gstNumber ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">GSTIN: ${_esc(gstNumber)}</div>` : ''}
+            <div style="font-size:20px;font-weight:800;color:var(--info-fg);text-transform:uppercase;">${_esc(clinicName)}</div>
+            ${clinicAddress ? `<div style="font-size:12px;color:var(--text-faint);margin-top:4px;">${_esc(clinicAddress)}</div>` : ''}
+            ${clinicPhone ? `<div style="font-size:12px;color:var(--text-faint);">Phone: ${_esc(clinicPhone)}</div>` : ''}
+            ${gstNumber ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">GSTIN: ${_esc(gstNumber)}</div>` : ''}
           </div>
           <div style="text-align:right;">
-            <div style="font-size:16px;font-weight:800;letter-spacing:1px;color:#111827;">PHARMACY INVOICE</div>
-            <div style="font-size:12px;color:#4b5563;margin-top:4px;">Inv: <strong>${_esc(d.invoiceNo)}</strong></div>
-            <div style="font-size:11px;color:#6b7280;">Date: ${_esc(d.date)}</div>
+            <div style="font-size:16px;font-weight:800;letter-spacing:1px;color:var(--text-main);">PHARMACY INVOICE</div>
+            <div style="font-size:12px;color:var(--text-faint);margin-top:4px;">Inv: <strong>${_esc(d.invoiceNo)}</strong></div>
+            <div style="font-size:11px;color:var(--text-faint);">Date: ${_esc(d.date)}</div>
           </div>
         </div>
 
-        <div style="padding:12px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:13px;">
-          <div><span style="color:#6b7280;">Patient:</span> ${patientInfo}</div>
-          <div><span style="color:#6b7280;">Doctor:</span> ${_esc(d.doctor)}</div>
+        <div style="padding:12px 24px;background:var(--bg-card);border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;font-size:13px;">
+          <div><span style="color:var(--text-faint);">Patient:</span> ${patientInfo}</div>
+          <div><span style="color:var(--text-faint);">Doctor:</span> ${_esc(d.doctor)}</div>
         </div>
-        ${d.address ? `<div style="padding:6px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:12px;color:#4b5563;">${_esc(d.address)}</div>` : ''}
+        ${d.address ? `<div style="padding:6px 24px;background:var(--bg-card);border-bottom:1px solid var(--border-color);font-size:12px;color:var(--text-faint);">${_esc(d.address)}</div>` : ''}
 
         <div style="padding:16px 24px;">
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <thead>
-              <tr style="background:#f3f4f6;">
-                <th style="padding:8px 10px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;">#</th>
-                <th style="padding:8px 10px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;">Medicine</th>
-                <th style="padding:8px 10px;text-align:left;color:#374151;font-size:11px;text-transform:uppercase;">Batch / Exp</th>
-                <th style="padding:8px 10px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;">Qty</th>
-                <th style="padding:8px 10px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;">MRP</th>
-                <th style="padding:8px 10px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;">GST</th>
-                <th style="padding:8px 10px;text-align:right;color:#374151;font-size:11px;text-transform:uppercase;">Amount</th>
+              <tr style="background:var(--bg-input);">
+                <th style="padding:8px 10px;text-align:left;color:var(--text-faint);font-size:11px;text-transform:uppercase;">#</th>
+                <th style="padding:8px 10px;text-align:left;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Medicine</th>
+                <th style="padding:8px 10px;text-align:left;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Batch / Exp</th>
+                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Qty</th>
+                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">MRP</th>
+                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">GST</th>
+                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -908,10 +908,10 @@
           
           <div style="width:50%;">
             ${Object.keys(slabs).length > 0 ? `
-              <div style="font-size:11px;color:#4b5563;margin-bottom:6px;font-weight:700;text-transform:uppercase;">GST Summary</div>
-              <table style="width:100%;border-collapse:collapse;font-size:11px;color:#4b5563;">
+              <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;font-weight:700;text-transform:uppercase;">GST Summary</div>
+              <table style="width:100%;border-collapse:collapse;font-size:11px;color:var(--text-faint);">
                 <thead>
-                  <tr style="background:#f9fafb;">
+                  <tr style="background:var(--bg-card);">
                     <th style="padding:4px 10px;text-align:left;font-weight:600;">Slab</th>
                     <th style="padding:4px 10px;text-align:right;font-weight:600;">Taxable</th>
                     <th style="padding:4px 10px;text-align:right;font-weight:600;">CGST</th>
@@ -929,29 +929,29 @@
           <div style="width:40%;">
             <table style="width:100%;font-size:13px;border-collapse:collapse;">
               <tr>
-                <td style="padding:4px 10px;color:#6b7280;">Gross Amount</td>
+                <td style="padding:4px 10px;color:var(--text-faint);">Gross Amount</td>
                 <td style="padding:4px 10px;text-align:right;">₹${d.gross.toFixed(2)}</td>
               </tr>
               <tr>
-                <td style="padding:0px 10px 4px;color:#9ca3af;font-size:10px;">(Includes GST: ₹${d.totalGst.toFixed(2)})</td>
+                <td style="padding:0px 10px 4px;color:var(--text-muted);font-size:10px;">(Includes GST: ₹${d.totalGst.toFixed(2)})</td>
                 <td style="padding:0px 10px 4px;"></td>
               </tr>
               ${d.discount > 0 ? `
               <tr>
-                <td style="padding:4px 10px;color:#10b981;">Discount</td>
-                <td style="padding:4px 10px;text-align:right;color:#10b981;">- ₹${d.discount.toFixed(2)}</td>
+                <td style="padding:4px 10px;color:var(--success-fg);">Discount</td>
+                <td style="padding:4px 10px;text-align:right;color:var(--success-fg);">- ₹${d.discount.toFixed(2)}</td>
               </tr>` : ''}
-              <tr style="border-top:2px solid #111827;">
-                <td style="padding:8px 10px;font-weight:800;font-size:15px;color:#111827;">Net Payable</td>
-                <td style="padding:8px 10px;text-align:right;font-weight:800;font-size:16px;color:#0369a1;">₹${d.net.toFixed(2)}</td>
+              <tr style="border-top:2px solid var(--border-color);">
+                <td style="padding:8px 10px;font-weight:800;font-size:15px;color:var(--text-main);">Net Payable</td>
+                <td style="padding:8px 10px;text-align:right;font-weight:800;font-size:16px;color:var(--info-fg);">₹${d.net.toFixed(2)}</td>
               </tr>
             </table>
           </div>
         </div>
 
-        <div style="padding:12px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#374151;display:flex;justify-content:space-between;align-items:center;">
+        <div style="padding:12px 24px;background:var(--bg-card);border-top:1px solid var(--border-color);font-size:12px;color:var(--text-faint);display:flex;justify-content:space-between;align-items:center;">
           ${payLine}
-          <div style="color:#9ca3af;text-align:right;font-size:11px;">
+          <div style="color:var(--text-muted);text-align:right;font-size:11px;">
             This is a computer-generated invoice.<br>
             <span style="font-size:9px;">Medicines once sold are not returnable except as per policy.</span>
           </div>

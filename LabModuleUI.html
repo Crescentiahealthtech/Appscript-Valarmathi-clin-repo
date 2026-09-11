@@ -1,8 +1,8 @@
 <div id="lab-workspace-view" class="page-section d-none position-relative">
 
   <div id="lx-loader" class="position-absolute top-0 start-0 w-100 h-100 align-items-center justify-content-center flex-column d-none"
-       style="background:rgba(2,6,23,.8);z-index:1060;border-radius:.5rem;">
-    <div class="spinner-border mb-2" style="color:#f59e0b;"></div>
+       style="background:var(--overlay-scrim);z-index:1060;border-radius:.5rem;">
+    <div class="spinner-border mb-2" style="color:var(--warning-fg);"></div>
     <span class="label-bright small" id="lx-loader-txt">Working…</span>
   </div>
 
@@ -18,7 +18,7 @@
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-sm btn-outline-secondary" onclick="LabX.load();" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
-      <button class="btn btn-sm fw-semibold" style="background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d;" onclick="LabX.openWalkin();">
+      <button class="btn btn-sm fw-semibold" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);" onclick="LabX.openWalkin();">
         <i class="fa-solid fa-user-plus me-1"></i>New Walk-in Order
       </button>
     </div>
@@ -59,7 +59,7 @@
             <label class="form-label small label-bright">Patient ID <span class="label-bright" style="font-size:.68rem;">(optional)</span></label>
             <div class="input-group input-group-sm">
               <input type="text" id="lx-wi-pid" class="form-control form-control-sm" placeholder="LMTVS0001" onkeydown="if(event.key==='Enter')LabX.wiLookup();">
-              <button class="btn" style="background:rgba(34,211,238,.15);border:1px solid #22d3ee;color:#67e8f9;" onclick="LabX.wiLookup();" title="Fetch patient">
+              <button class="btn" style="background:var(--teal-bg);border:1px solid var(--teal);color:var(--teal-fg);" onclick="LabX.wiLookup();" title="Fetch patient">
                 <i class="fa-solid fa-magnifying-glass"></i>
               </button>
             </div>
@@ -67,7 +67,7 @@
             <label class="form-label small label-bright mb-1">Mobile (search)</label>
             <div class="d-flex gap-2">
                 <input id="lxWiMob" class="form-control form-control-sm" placeholder="Search patient by mobile…">
-                <button class="btn btn-sm" style="background:rgba(34,211,238,.12);border:1px solid #22d3ee;color:#67e8f9;" onclick="LabX.wiMobile()"><i class="fa-solid fa-magnifying-glass"></i></button>
+                <button class="btn btn-sm" style="background:var(--teal-bg);border:1px solid var(--teal);color:var(--teal-fg);" onclick="LabX.wiMobile()"><i class="fa-solid fa-magnifying-glass"></i></button>
               </div>
               <div id="lxWiMobRes" class="mt-1"></div>
             </div>
@@ -89,13 +89,13 @@
         <div id="lx-wi-tests" class="lx-pickbox"><div class="text-center label-bright small py-3">Loading catalog…</div></div>
         <div class="mt-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div class="d-flex flex-wrap gap-1" id="lx-wi-chips"></div>
-          <div class="text-white-force fw-bold" id="lx-wi-total" style="font-size:1.05rem;color:#22d3ee!important;">₹0.00</div>
+          <div class="text-white-force fw-bold" id="lx-wi-total" style="font-size:1.05rem;color:var(--teal-fg)!important;">₹0.00</div>
         </div>
         <div id="lx-wi-consent" class="mt-2"></div>
       </div>
       <div class="modal-footer" style="border-color:var(--border-color);">
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-sm fw-semibold" style="background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d;" onclick="LabX.wiSubmit();">
+        <button type="button" class="btn btn-sm fw-semibold" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);" onclick="LabX.wiSubmit();">
           <i class="fa-solid fa-paper-plane me-1"></i>Create Order
         </button>
       </div>
@@ -124,9 +124,9 @@
 <!-- Critical Value Modal -->
 <div class="modal fade" id="lx-crit-modal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" style="z-index:1080;">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content" style="background:var(--bg-card);border:2px solid #f87171;border-radius:16px;box-shadow:0 0 60px rgba(248,113,113,.35);">
+    <div class="modal-content" style="background:var(--bg-card);border:2px solid var(--danger);border-radius:16px;box-shadow:0 0 60px rgba(248,113,113,.35);">
       <div class="modal-body text-center p-4">
-        <div class="lx-pulse mb-3"><i class="fa-solid fa-heart-pulse fa-3x" style="color:#f87171;"></i></div>
+        <div class="lx-pulse mb-3"><i class="fa-solid fa-heart-pulse fa-3x" style="color:var(--danger-fg);"></i></div>
         <h4 class="text-white-force fw-bold">CRITICAL VALUE</h4>
         <div id="lx-crit-list" class="my-3 text-start"></div>
         <p class="label-bright small mb-3">NABL ISO 15189: critical values must be communicated to the ordering clinician immediately. A communication log entry is created automatically on submission.</p>
@@ -139,11 +139,11 @@
 <!-- Report Viewer Modal — iframe srcdoc for correct isolated printing -->
 <div class="modal fade" id="lx-report-modal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content" style="background:#020617;border:1px solid var(--border-color);border-radius:12px;">
+    <div class="modal-content" style="background:var(--bg-main);border:1px solid var(--border-color);border-radius:12px;">
       <div class="modal-header" style="border-color:var(--border-color);">
-        <h5 class="modal-title text-white-force fw-bold"><i class="fa-solid fa-file-medical me-2" style="color:#22d3ee;"></i>Lab Report</h5>
+        <h5 class="modal-title text-white-force fw-bold"><i class="fa-solid fa-file-medical me-2" style="color:var(--teal-fg);"></i>Lab Report</h5>
         <div class="d-flex gap-2 ms-auto me-3">
-          <button class="btn btn-sm fw-semibold" style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;" onclick="LabX.printRpt();">
+          <button class="btn btn-sm fw-semibold" style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabX.printRpt();">
             <i class="fa-solid fa-print me-1"></i>Print / Save PDF
           </button>
         </div>
@@ -171,36 +171,39 @@
 .lx-kpi:hover { border-color:var(--border-hover);transform:translateY(-2px); }
 .lx-kpi-num { font-size:1.7rem;font-weight:800;color:var(--text-main);line-height:1; }
 .lx-kpi-lbl { font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:6px; }
-.lx-kpi-warn .lx-kpi-num { color:#fbbf24; }
-.lx-kpi-crit { border-color:rgba(248,113,113,.4); }
-.lx-kpi-crit .lx-kpi-num { color:#f87171; }
+.lx-kpi-warn .lx-kpi-num { color:var(--warning-fg); }
+.lx-kpi-crit { border-color:var(--danger-bg); }
+.lx-kpi-crit .lx-kpi-num { color:var(--danger-fg); }
 .lx-kpi-crit.lx-has-crit { animation:lxGlow 2s infinite; }
 @keyframes lxGlow { 0%,100%{box-shadow:0 0 0 rgba(248,113,113,0);} 50%{box-shadow:0 0 18px rgba(248,113,113,.35);} }
 
 /* tabs */
 .lx-tab { background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:.78rem;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px; }
 .lx-tab:hover { border-color:var(--border-hover);color:var(--text-main); }
-.lx-tab.on { background:var(--accent-purple);border-color:var(--accent-purple);color:#fff; }
-.lx-tab .lx-count { background:rgba(255,255,255,.14);border-radius:10px;padding:0 7px;font-size:.68rem;font-weight:700; }
+.lx-tab.on { background:var(--accent-purple);border-color:var(--accent-purple);color:var(--text-on-accent); }
+.lx-tab .lx-count { background:var(--surface-active);border-radius:10px;padding:0 7px;font-size:.68rem;font-weight:700; }
+/* On the active tab the chip sits on a saturated accent fill, so it keeps a
+   white tint in both themes for contrast against that fill. */
+.lx-tab.on .lx-count { background:rgba(255,255,255,.22); }
 
 /* order cards */
 .lx-card { background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;transition:.18s;cursor:pointer; }
 .lx-card:hover { border-color:var(--border-hover);transform:translateX(3px); }
-.lx-card.lx-overdue { border-color:rgba(248,113,113,.55);background:linear-gradient(90deg,rgba(248,113,113,.07),var(--bg-card) 40%); }
-.lx-card.lx-stat { border-left:4px solid #f87171; }
-.lx-avatar { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;flex-shrink:0;color:#fff; }
+.lx-card.lx-overdue { border-color:var(--danger-bg);background:linear-gradient(90deg,var(--danger-bg),var(--bg-card) 40%); }
+.lx-card.lx-stat { border-left:4px solid var(--danger); }
+.lx-avatar { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;flex-shrink:0;color:var(--text-main); }
 .lx-dots { display:flex;gap:4px;align-items:center; }
 .lx-dot { width:9px;height:9px;border-radius:50%;background:var(--bg-input);border:1px solid var(--border-color); }
-.lx-dot.done { background:#10b981;border-color:#10b981; }
-.lx-dot.cur  { background:#f59e0b;border-color:#f59e0b;box-shadow:0 0 8px rgba(245,158,11,.55); }
+.lx-dot.done { background:var(--success);border-color:var(--success); }
+.lx-dot.cur  { background:var(--warning);border-color:var(--warning);box-shadow:0 0 8px rgba(245,158,11,.55); }
 .lx-tatbar { height:4px;border-radius:3px;background:var(--bg-input);overflow:hidden;width:90px; }
-.lx-tatbar > div { height:100%;border-radius:3px;background:#10b981;transition:width .3s; }
-.lx-tatbar.warn > div { background:#f59e0b; } .lx-tatbar.over > div { background:#f87171; }
+.lx-tatbar > div { height:100%;border-radius:3px;background:var(--success);transition:width .3s; }
+.lx-tatbar.warn > div { background:var(--warning); } .lx-tatbar.over > div { background:var(--danger); }
 
 /* badges & pills */
 .lx-badge { font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.3px;white-space:nowrap; }
-.lx-b-STAT   { background:rgba(248,113,113,.18);color:#fca5a5;border:1px solid #f87171; }
-.lx-b-URGENT { background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid #f59e0b; }
+.lx-b-STAT   { background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger); }
+.lx-b-URGENT { background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning); }
 .lx-b-ROUTINE{ background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color); }
 .lx-stage-pill { font-size:.68rem;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--bg-input);color:var(--text-label);border:1px solid var(--border-color); }
 
@@ -208,30 +211,30 @@
 .lx-stepper { display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:4px; }
 .lx-step { display:flex;align-items:center;flex-shrink:0; }
 .lx-step-node { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;background:var(--bg-input);border:2px solid var(--border-color);color:var(--text-muted); }
-.lx-step.done .lx-step-node { background:#10b981;border-color:#10b981;color:#fff; }
-.lx-step.cur  .lx-step-node { background:#f59e0b;border-color:#f59e0b;color:#0f172a;box-shadow:0 0 10px rgba(245,158,11,.5); }
+.lx-step.done .lx-step-node { background:var(--success-solid);border-color:var(--success);color:var(--text-on-accent); }
+.lx-step.cur  .lx-step-node { background:var(--warning);border-color:var(--warning);color: var(--text-on-accent);box-shadow:0 0 10px rgba(245,158,11,.5); }
 .lx-step-lbl { font-size:.64rem;color:var(--text-muted);margin:0 8px 0 6px;white-space:nowrap; }
 .lx-step.done .lx-step-lbl,.lx-step.cur .lx-step-lbl { color:var(--text-main); }
 .lx-step-line { width:26px;height:2px;background:var(--border-color);margin-right:8px; }
-.lx-step.done .lx-step-line { background:#10b981; }
+.lx-step.done .lx-step-line { background:var(--success); }
 
 /* pick box & result table */
 .lx-pickbox { background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:10px;max-height:250px;overflow-y:auto; }
 .lx-pick { display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;font-size:.83rem; }
 .lx-pick:hover { background:var(--bg-card); }
-.lx-pick.sel { background:rgba(245,158,11,.1);border-color:#f59e0b; }
-.lx-chip { display:inline-flex;align-items:center;gap:5px;font-size:.74rem;padding:3px 10px;border-radius:20px;background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d; }
+.lx-pick.sel { background:var(--warning-bg);border-color:var(--warning); }
+.lx-chip { display:inline-flex;align-items:center;gap:5px;font-size:.74rem;padding:3px 10px;border-radius:20px;background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg); }
 .lx-rtable { width:100%;border-collapse:separate;border-spacing:0; }
 .lx-rtable th { color:var(--text-muted);font-weight:500;font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;padding:7px 8px;background:var(--bg-input); }
 .lx-rtable th:first-child{border-radius:8px 0 0 8px;} .lx-rtable th:last-child{border-radius:0 8px 8px 0;}
 .lx-rtable td { padding:7px 8px;border-bottom:1px solid var(--border-color);font-size:.83rem;vertical-align:middle; }
 .lx-rin { background:var(--bg-input)!important;border:1px solid var(--border-color)!important;color:var(--text-main)!important;border-radius:7px;padding:5px 9px;font-size:.85rem;width:120px;transition:.15s; }
 .lx-rin:focus { outline:none;border-color:var(--accent-purple)!important; }
-.lx-rin.crit { border-color:#f87171!important;color:#fca5a5!important;font-weight:700;background:rgba(248,113,113,.08)!important; }
-.lx-rin.high { border-color:#fb923c!important;color:#fdba74!important; }
-.lx-rin.low  { border-color:#60a5fa!important;color:#93c5fd!important; }
-.lx-f-C { color:#f87171;font-weight:800; } .lx-f-H { color:#fb923c;font-weight:600; }
-.lx-f-L { color:#60a5fa;font-weight:600; } .lx-f-N { color:#10b981; }
+.lx-rin.crit { border-color:var(--danger)!important;color:var(--danger-fg)!important;font-weight:700;background:var(--danger-bg)!important; }
+.lx-rin.high { border-color:var(--warning)!important;color:var(--warning-fg)!important; }
+.lx-rin.low  { border-color:var(--blue)!important;color:var(--blue-fg)!important; }
+.lx-f-C { color:var(--danger-fg);font-weight:800; } .lx-f-H { color:var(--warning-fg);font-weight:600; }
+.lx-f-L { color:var(--blue-fg);font-weight:600; } .lx-f-N { color:var(--success-fg); }
 .lx-pulse { animation:lxPulse 1.2s infinite; }
 @keyframes lxPulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.12);} }
 .lx-rec-card { background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;margin-bottom:12px;overflow:hidden; }
@@ -241,9 +244,9 @@
 .lx-bill-wrap { border:1px solid var(--border-color); border-radius:12px; overflow:hidden; }
 .lx-bill-line { display:flex; justify-content:space-between; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border-color); }
 .lx-bill-line:last-of-type { border-bottom:none; }
-.lx-bill-total { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:rgba(16,185,129,.06); border-top:2px solid #10b981; }
+.lx-bill-total { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:var(--success-bg); border-top:2px solid var(--success); }
 .lx-pm { background:var(--bg-input); border:1px solid var(--border-color); color:var(--text-muted); border-radius:8px; padding:6px 12px; font-size:.8rem; cursor:pointer; }
-.lx-pm.on { background:rgba(16,185,129,.15); border-color:#10b981; color:#6ee7b7; }
+.lx-pm.on { background:var(--success-bg); border-color:var(--success); color:var(--success-fg); }
 
 </style>
 
@@ -269,7 +272,9 @@ var LabX = (function () {
   ];
 
   var STEPS = ['Ordered','Billed','Collected','Bench','Results','Verified','Dispatched'];
-  var AV_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#a855f7','#f472b6','#22d3ee'];
+  // Avatar tints are painted into the DOM (not a canvas), so the tokens
+  // resolve live and follow the theme.
+  var AV_COLORS = ['var(--chart-1)','var(--chart-2)','var(--chart-4)','var(--chart-3)','var(--chart-6)','var(--pink)','var(--teal)'];
   var TUBES = [
     'BLOOD_EDTA|Blood — EDTA (Purple)',
     'BLOOD_PLAIN|Blood — Plain (Red)',
@@ -289,7 +294,7 @@ var LabX = (function () {
   function stop(){ var e=$('lx-loader'); if(e){e.classList.add('d-none');e.classList.remove('d-flex');} }
   function flash(m, ok){
     var b=$('lx-msg'); if(!b) return;
-    b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'rgba(16,185,129,.4)':'rgba(248,113,113,.5)')+';">'+
+    b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'var(--success)':'var(--danger)')+';">'+
       '<i class="fa-solid '+(ok?'fa-circle-check text-success':'fa-circle-exclamation text-danger')+'"></i>'+
       '<span class="text-white-force flex-grow-1">'+esc(m)+'</span>'+
       '<span style="cursor:pointer;color:var(--text-muted);" onclick="this.parentNode.remove();">×</span></div>';
@@ -404,7 +409,7 @@ var LabX = (function () {
     var o=_cur;
     $('lx-am-head').innerHTML=
       '<div class="d-flex align-items-center gap-3">'+
-        '<div class="lx-avatar" style="background:#6366f1;">'+esc((o.patientName||'?').trim().split(/\\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('').toUpperCase())+'</div>'+
+        '<div class="lx-avatar" style="background:var(--accent-purple);">'+esc((o.patientName||'?').trim().split(/\\s+/).map(function(w){return w.charAt(0);}).slice(0,2).join('').toUpperCase())+'</div>'+
         '<div>'+
           '<div class="text-white-force fw-bold" style="font-size:1.05rem;">'+esc(o.patientName||o.patientId)+
             ' <span class="lx-badge lx-b-'+esc(o.priority)+' ms-1">'+esc(o.priority)+'</span></div>'+
@@ -467,9 +472,9 @@ var LabX = (function () {
     var lineRows=items.map(function(it){
       var meta=(it.sampleType?it.sampleType.replace(/_/g,' '):'')+(it.tat?(it.sampleType?' · ':'')+'TAT '+it.tat+'m':'');
       return '<div class="lx-bill-line">'+
-        '<span class="text-white-force"><i class="fa-solid fa-flask me-2" style="color:#67e8f9;font-size:.74rem;"></i>'+esc(it.name)+
+        '<span class="text-white-force"><i class="fa-solid fa-flask me-2" style="color:var(--teal-fg);font-size:.74rem;"></i>'+esc(it.name)+
           (meta?' <span class="label-bright" style="font-size:.68rem;">'+esc(meta)+'</span>':'')+'</span>'+
-        '<span style="color:#22d3ee;font-weight:600;">₹'+it.price.toFixed(2)+'</span>'+
+        '<span style="color:var(--teal-fg);font-weight:600;">₹'+it.price.toFixed(2)+'</span>'+
       '</div>';
     }).join('');
 
@@ -479,13 +484,13 @@ var LabX = (function () {
       return header+
         '<div class="lx-bill-total">'+
           '<span class="text-white-force fw-bold">Total → IP Account</span>'+
-          '<span style="color:#6ee7b7;font-size:1.15rem;font-weight:800;">₹'+gross.toFixed(2)+'</span>'+
+          '<span style="color:var(--success-fg);font-size:1.15rem;font-weight:800;">₹'+gross.toFixed(2)+'</span>'+
         '</div></div>'+
-        '<div class="mt-3 p-3 rounded" style="background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.35);">'+
+        '<div class="mt-3 p-3 rounded" style="background:var(--info-bg);border:1px solid var(--info-bg);">'+
           '<div class="text-white-force mb-2"><i class="fa-solid fa-bed me-2"></i>Inpatient — charges post to the IP account, settled at discharge.</div>'+
           '<div class="d-flex gap-2">'+
-            '<button class="btn btn-sm fw-semibold" style="background:rgba(14,165,233,.15);border:1px solid #0ea5e9;color:#7dd3fc;" onclick="LabX.doBill(true);"><i class="fa-solid fa-file-invoice me-1"></i>Post ₹'+gross.toFixed(2)+' to IP Account</button>'+
-            '<button class="btn btn-sm" style="border:1px solid #0ea5e9;color:#7dd3fc;background:rgba(14,165,233,.08);" onclick="LabX.printInvoice();"><i class="fa-solid fa-print me-1"></i>Print Invoice</button>'+
+            '<button class="btn btn-sm fw-semibold" style="background:var(--info-bg);border:1px solid var(--info);color:var(--info-fg);" onclick="LabX.doBill(true);"><i class="fa-solid fa-file-invoice me-1"></i>Post ₹'+gross.toFixed(2)+' to IP Account</button>'+
+            '<button class="btn btn-sm" style="border:1px solid var(--info);color:var(--info-fg);background:var(--info-bg);" onclick="LabX.printInvoice();"><i class="fa-solid fa-print me-1"></i>Print Invoice</button>'+
           '</div>'+
         '</div>';
     }
@@ -508,9 +513,9 @@ var LabX = (function () {
       '<div class="lx-bill-total">'+
         '<span class="text-white-force fw-bold">Net Payable</span>'+
         '<div class="d-flex align-items-center gap-3">'+
-          '<span id="lx-bl-net" style="color:#6ee7b7;font-size:1.25rem;font-weight:800;">₹'+gross.toFixed(2)+'</span>'+
-          '<button class="btn btn-sm" style="border:1px solid #0ea5e9;color:#7dd3fc;background:rgba(14,165,233,.08);" onclick="LabX.printInvoice();"><i class="fa-solid fa-print me-1"></i>Print Invoice</button>'+
-          '<button class="btn btn-sm fw-bold px-3" style="background:#10b981;color:#fff;border:none;" onclick="LabX.doBill(false);"><i class="fa-solid fa-receipt me-1"></i>Collect & Bill</button>'+
+          '<span id="lx-bl-net" style="color:var(--success-fg);font-size:1.25rem;font-weight:800;">₹'+gross.toFixed(2)+'</span>'+
+          '<button class="btn btn-sm" style="border:1px solid var(--info);color:var(--info-fg);background:var(--info-bg);" onclick="LabX.printInvoice();"><i class="fa-solid fa-print me-1"></i>Print Invoice</button>'+
+          '<button class="btn btn-sm fw-bold px-3" style="background:var(--success-solid);color:var(--text-on-accent);border:none;" onclick="LabX.doBill(false);"><i class="fa-solid fa-receipt me-1"></i>Collect & Bill</button>'+
         '</div>'+
       '</div></div>';
   }
@@ -546,17 +551,17 @@ var LabX = (function () {
   /* ════════ PANEL: COLLECTION ════════ */
   function _uiCollect(isRec){
   _sampN=0;
-  return(isRec?'<div class="alert py-2 px-3 small mb-3" style="background:rgba(248,113,113,.1);border:1px solid #f87171;color:#fca5a5;"><i class="fa-solid fa-rotate-left me-1"></i>RECOLLECTION — previous tube(s) rejected. Fresh collection restarts TAT clock.</div>':'')+
-    '<div class="alert py-2 px-3 small mb-3" style="background:rgba(245,158,11,.08);border:1px solid #f59e0b;color:#fcd34d;"><i class="fa-solid fa-id-card me-1"></i><strong>Two-point ID:</strong> Patient states name + DOB. Confirm against <strong>'+esc(_cur.patientName)+' · '+esc(_cur.patientId)+'</strong></div>'+
-    '<div class="p-3 rounded" style="background:var(--bg-input);"><div class="d-flex justify-content-between align-items-center mb-3"><span class="text-white-force fw-semibold">Tubes <span class="label-bright fw-normal ms-1" style="font-size:.73rem;">Auto-suggested from ordered tests — add, delete or change as needed</span></span><button class="btn btn-sm" style="background:rgba(168,85,247,.12);border:1px solid #a855f7;color:#c4b5fd;font-size:.78rem;" onclick="LabX.addTube()"><i class="fa-solid fa-plus me-1"></i>Add Tube</button></div>'+
+  return(isRec?'<div class="alert py-2 px-3 small mb-3" style="background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger-fg);"><i class="fa-solid fa-rotate-left me-1"></i>RECOLLECTION — previous tube(s) rejected. Fresh collection restarts TAT clock.</div>':'')+
+    '<div class="alert py-2 px-3 small mb-3" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);"><i class="fa-solid fa-id-card me-1"></i><strong>Two-point ID:</strong> Patient states name + DOB. Confirm against <strong>'+esc(_cur.patientName)+' · '+esc(_cur.patientId)+'</strong></div>'+
+    '<div class="p-3 rounded" style="background:var(--bg-input);"><div class="d-flex justify-content-between align-items-center mb-3"><span class="text-white-force fw-semibold">Tubes <span class="label-bright fw-normal ms-1" style="font-size:.73rem;">Auto-suggested from ordered tests — add, delete or change as needed</span></span><button class="btn btn-sm" style="background:var(--violet-bg);border:1px solid var(--violet);color:var(--violet-fg);font-size:.78rem;" onclick="LabX.addTube()"><i class="fa-solid fa-plus me-1"></i>Add Tube</button></div>'+
     '<div id="lxTubes"></div>'+
-    '<button class="btn btn-sm fw-semibold mt-2" style="background:rgba(168,85,247,.15);border:1px solid #a855f7;color:#c4b5fd;" onclick="LabX.doCollect()"><i class="fa-solid fa-vial me-1"></i>Confirm Collection</button></div>';
+    '<button class="btn btn-sm fw-semibold mt-2" style="background:var(--violet-bg);border:1px solid var(--violet);color:var(--violet-fg);" onclick="LabX.doCollect()"><i class="fa-solid fa-vial me-1"></i>Confirm Collection</button></div>';
   }
 
   function _loadTubes(){run('getSuggestedTubes',[_cur.orderId],function(res){var h=$('lxTubes');if(!h)return;h.innerHTML='';_sampN=0;if(res&&res.success&&res.tubes&&res.tubes.length){res.tubes.forEach(function(t){addTube(t.sampleType);});}else{addTube();}},'');
   }
 
-  function addTube(preType){var n=++_sampN;var h=$('lxTubes');if(!h)return;var sel=String(preType||'');h.insertAdjacentHTML('beforeend','<div class="lxTube" id="lxT-'+n+'"><span class="label-bright fw-semibold" style="width:20px;flex-shrink:0;">'+n+'.</span><select class="form-select form-select-sm lxTT" style="max-width:270px;">'+TUBES.map(function(o){var p=o.split('|');return'<option value="'+p[0]+'"'+(p[0]===sel?' selected':'')+'>'+p[1]+'</option>';}).join('')+'</select><span class="label-bright flex-grow-1 text-center" style="font-size:.7rem;" id="lxBC-'+n+'"></span><button class="btn btn-sm ms-auto" style="border:1px solid var(--border-color);color:#f87171;background:transparent;" onclick="document.getElementById(\'lxT-'+n+'\').remove()"><i class="fa-solid fa-trash"></i></button></div>');}
+  function addTube(preType){var n=++_sampN;var h=$('lxTubes');if(!h)return;var sel=String(preType||'');h.insertAdjacentHTML('beforeend','<div class="lxTube" id="lxT-'+n+'"><span class="label-bright fw-semibold" style="width:20px;flex-shrink:0;">'+n+'.</span><select class="form-select form-select-sm lxTT" style="max-width:270px;">'+TUBES.map(function(o){var p=o.split('|');return'<option value="'+p[0]+'"'+(p[0]===sel?' selected':'')+'>'+p[1]+'</option>';}).join('')+'</select><span class="label-bright flex-grow-1 text-center" style="font-size:.7rem;" id="lxBC-'+n+'"></span><button class="btn btn-sm ms-auto" style="border:1px solid var(--border-color);color:var(--danger-fg);background:transparent;" onclick="document.getElementById(\'lxT-'+n+'\').remove()"><i class="fa-solid fa-trash"></i></button></div>');}
 
   function doCollect(){
     var tubes=[]; document.querySelectorAll('#lxTubes .lxTT').forEach(function(s){tubes.push({sampleType:s.value});});
@@ -570,15 +575,15 @@ var LabX = (function () {
   function _uiReceive(){
     var samps=(_cur._samples||[]).map(function(s){
       return '<div class="d-flex justify-content-between align-items-center px-3 py-2 rounded mb-1" style="background:var(--bg-card);border:1px solid var(--border-color);">'+
-        '<span class="text-white-force small"><i class="fa-solid fa-vial me-2" style="color:#a855f7;"></i>'+esc(s.sampleType.replace(/_/g,' '))+'</span>'+
+        '<span class="text-white-force small"><i class="fa-solid fa-vial me-2" style="color:var(--violet-fg);"></i>'+esc(s.sampleType.replace(/_/g,' '))+'</span>'+
         '<span class="d-flex gap-3 align-items-center"><code class="label-bright" style="font-size:.7rem;">'+esc(s.barcode)+'</code>'+
         '<span class="lx-stage-pill">'+esc(s.status)+'</span></span></div>';
     }).join('');
     return '<div class="p-3 rounded" style="background:var(--bg-input);">'+
       '<div class="label-bright small mb-2">SAMPLES IN TRANSIT</div>'+samps+
       '<div class="d-flex gap-2 mt-3 flex-wrap">'+
-        '<button class="btn btn-sm fw-semibold" style="background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#fcd34d;" onclick="LabX.doReceive();"><i class="fa-solid fa-flask me-1"></i>Receive at Bench & Start Processing</button>'+
-        '<button class="btn btn-sm" style="border:1px solid #f87171;color:#fca5a5;background:transparent;" onclick="var w=document.getElementById(\'lx-rej\');if(w)w.classList.toggle(\'d-none\');"><i class="fa-solid fa-ban me-1"></i>Reject Sample</button>'+
+        '<button class="btn btn-sm fw-semibold" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);" onclick="LabX.doReceive();"><i class="fa-solid fa-flask me-1"></i>Receive at Bench & Start Processing</button>'+
+        '<button class="btn btn-sm" style="border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" onclick="var w=document.getElementById(\'lx-rej\');if(w)w.classList.toggle(\'d-none\');"><i class="fa-solid fa-ban me-1"></i>Reject Sample</button>'+
       '</div>'+
       '<div id="lx-rej" class="mt-3 d-none d-flex gap-2 align-items-center flex-wrap">'+
         '<select id="lx-rej-reason" class="form-select form-select-sm" style="max-width:230px;">'+
@@ -644,13 +649,13 @@ var LabX = (function () {
           '<div class="col-md-5"><label class="form-label small label-bright">Verifier (Pathologist) *</label><input id="lx-vf-name" class="form-control form-control-sm" placeholder="Dr. name"><div class="label-bright mt-1" style="font-size:.68rem;"><i class="fa-solid fa-fingerprint me-1"></i>Signing generates a SHA-256 attestation hash and locks these results.</div></div>'+
         '</div>'+
         '<div class="d-flex gap-2 mt-3">'+
-          '<button class="btn btn-sm fw-semibold" style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;" onclick="LabX.doVerify();"><i class="fa-solid fa-signature me-1"></i>Verify & Digitally Sign</button>'+
+          '<button class="btn btn-sm fw-semibold" style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabX.doVerify();"><i class="fa-solid fa-signature me-1"></i>Verify & Digitally Sign</button>'+
           '<button class="btn btn-sm" style="border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" onclick="LabX.sendBack();"><i class="fa-solid fa-rotate-left me-1"></i>Send Back for Re-entry</button>'+
         '</div></div>';
     } else {
       html+='<div class="d-flex gap-2 mt-3">'+
         '<button class="btn btn-sm" style="border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" onclick="LabX.saveDraft();"><i class="fa-solid fa-floppy-disk me-1"></i>Save Draft</button>'+
-        '<button class="btn btn-sm fw-semibold" style="background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;" onclick="LabX.submitResults();"><i class="fa-solid fa-paper-plane me-1"></i>Submit for Verification</button>'+
+        '<button class="btn btn-sm fw-semibold" style="background:var(--accent-glow);border:1px solid var(--accent-purple);color:var(--accent-fg);" onclick="LabX.submitResults();"><i class="fa-solid fa-paper-plane me-1"></i>Submit for Verification</button>'+
       '</div>';
     }
     return html;
@@ -695,7 +700,7 @@ var LabX = (function () {
     var items=[];
     _resRows.forEach(function(r,i){
       var f=$('lx-fl-'+i);
-      if(f&&f.textContent==='C'){ var v=$('lx-rv-'+i); items.push('<div class="d-flex justify-content-between px-3 py-2 rounded mb-1" style="background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);"><span class="text-white-force fw-semibold">'+esc(r.parameterName)+'</span><span class="lx-f-C">'+esc(v?v.value:'')+' '+esc(r.unit||'')+'</span></div>'); }
+      if(f&&f.textContent==='C'){ var v=$('lx-rv-'+i); items.push('<div class="d-flex justify-content-between px-3 py-2 rounded mb-1" style="background:var(--danger-bg);border:1px solid var(--danger-bg);"><span class="text-white-force fw-semibold">'+esc(r.parameterName)+'</span><span class="lx-f-C">'+esc(v?v.value:'')+' '+esc(r.unit||'')+'</span></div>'); }
     });
     $('lx-crit-list').innerHTML=items.join('')||'<div class="label-bright small">Critical values were flagged in the saved results.</div>';
     modal('lx-crit-modal').show();
@@ -719,17 +724,17 @@ var LabX = (function () {
     var s=_cur.status;
     var isDispatched=(s==='REPORT_DISPATCHED'||s==='AMENDED');
     return '<div class="text-center py-4">'+
-      '<i class="fa-solid fa-circle-check fa-3x mb-3" style="color:#10b981;"></i>'+
+      '<i class="fa-solid fa-circle-check fa-3x mb-3" style="color:var(--success-fg);"></i>'+
       '<h5 class="text-white-force fw-bold">Verified & Digitally Signed</h5>'+
       '<p class="label-bright small mb-3">Results are locked under an SHA-256 attestation.</p>'+
       (bill?'<div class="mb-4"><span class="lx-stage-pill">'+esc(bill.category)+' · ₹'+Number(bill.net).toFixed(2)+(bill.receiptNumber?' · '+esc(bill.receiptNumber):'')+' </span></div>':'')+
       '<div class="d-flex gap-3 justify-content-center mt-3 flex-wrap">'+
         (!isDispatched?
-          '<button class="btn btn-sm fw-semibold" style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;" onclick="LabX.dispatchReport();"><i class="fa-solid fa-paper-plane me-1"></i>Dispatch Report to EMR</button>':
-          '<button class="btn btn-sm fw-semibold" style="background:rgba(59,130,246,.15);border:1px solid #3b82f6;color:#93c5fd;" onclick="LabX.printRpt();"><i class="fa-solid fa-print me-1"></i>Print / View Report</button>'
+          '<button class="btn btn-sm fw-semibold" style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabX.dispatchReport();"><i class="fa-solid fa-paper-plane me-1"></i>Dispatch Report to EMR</button>':
+          '<button class="btn btn-sm fw-semibold" style="background:var(--blue-bg);border:1px solid var(--blue);color:var(--blue-fg);" onclick="LabX.printRpt();"><i class="fa-solid fa-print me-1"></i>Print / View Report</button>'
         )+
-        (isDispatched?'':'<button class="btn btn-sm" style="border:1px solid #3b82f6;color:#93c5fd;background:rgba(59,130,246,.08);" onclick="LabX.printRpt();"><i class="fa-solid fa-print me-1"></i>Print Report</button>')+
-        '<button class="btn btn-sm" style="border:1px solid #0ea5e9;color:#7dd3fc;background:rgba(14,165,233,.08);" onclick="LabX.printInvoice();"><i class="fa-solid fa-file-invoice me-1"></i>Print Invoice</button>'+
+        (isDispatched?'':'<button class="btn btn-sm" style="border:1px solid var(--blue);color:var(--blue-fg);background:var(--blue-bg);" onclick="LabX.printRpt();"><i class="fa-solid fa-print me-1"></i>Print Report</button>')+
+        '<button class="btn btn-sm" style="border:1px solid var(--info);color:var(--info-fg);background:var(--info-bg);" onclick="LabX.printInvoice();"><i class="fa-solid fa-file-invoice me-1"></i>Print Invoice</button>'+
       '</div>'+
     '</div>';
   }
@@ -802,7 +807,7 @@ var LabX = (function () {
         $('lx-wi-gender').value=res.patient.gender==='F'?'F':(res.patient.gender==='O'?'O':'M');
         $('lx-wi-lookup-msg').innerHTML='<span class="text-success"><i class="fa-solid fa-circle-check me-1"></i>'+esc(res.patient.name)+' found'+(res.patient.mobile?' · '+esc(res.patient.mobile):'')+' </span>';
       } else {
-        $('lx-wi-lookup-msg').innerHTML='<span style="color:#fcd34d;"><i class="fa-solid fa-circle-info me-1"></i>'+esc((res&&res.message)||'Not found')+' — enter details manually.</span>';
+        $('lx-wi-lookup-msg').innerHTML='<span style="color:var(--warning-fg);"><i class="fa-solid fa-circle-info me-1"></i>'+esc((res&&res.message)||'Not found')+' — enter details manually.</span>';
       }
     },'Looking up patient…');
   }
@@ -812,7 +817,7 @@ var LabX = (function () {
     if(mob.length<4){ $('lxWiMobRes').innerHTML='<span class="text-danger small">Enter at least 4 digits.</span>'; return; }
     $('lxWiMobRes').innerHTML='<span class="label-bright small"><div class="spinner-border spinner-border-sm me-1" style="width:11px;height:11px;"></div>Searching…</span>';
     run('searchPatientByMobile',[mob],function(res){
-      if(!res||!res.success){ $('lxWiMobRes').innerHTML='<span style="color:#fcd34d;" class="small"><i class="fa-solid fa-info-circle me-1"></i>'+esc((res&&res.message)||'None found')+'</span>'; return; }
+      if(!res||!res.success){ $('lxWiMobRes').innerHTML='<span style="color:var(--warning-fg);" class="small"><i class="fa-solid fa-info-circle me-1"></i>'+esc((res&&res.message)||'None found')+'</span>'; return; }
       $('lxWiMobRes').innerHTML=res.patients.map(function(p){
         return '<div class="lx-pick" onclick="LabX.wiPick(\''+esc(p.patientId)+'\',\''+esc(String(p.name)).replace(/'/g,"\\'")+'\',\''+esc(p.age)+'\',\''+esc(p.gender)+'\')"><span class="text-white-force">'+esc(p.name)+' <span class="label-bright" style="font-size:.7rem;">'+esc(p.patientId)+' · '+esc(p.mobile)+'</span></span><i class="fa-solid fa-arrow-right label-bright"></i></div>';
       }).join('');
@@ -837,8 +842,8 @@ var LabX = (function () {
       var sel=!!_wiSel[t.testId];
       var ic=t.testType==='PACKAGE'?'fa-box-open':t.testType==='PANEL'?'fa-layer-group':'fa-flask';
       return '<div class="lx-pick'+(sel?' sel':'')+'" onclick="LabX.wiToggle(\''+t.testId+'\');">'+
-        '<span class="text-white-force"><i class="fa-solid '+ic+' me-2" style="color:#67e8f9;font-size:.74rem;"></i>'+esc(t.testName)+' <span class="label-bright" style="font-size:.68rem;">'+esc(t.testCode)+'</span>'+(t.requiresConsent?' <span class="lx-badge lx-b-URGENT">Consent</span>':'')+' </span>'+
-        '<span class="d-flex gap-2 align-items-center"><span style="color:#22d3ee;font-size:.8rem;">₹'+Number(t.price).toFixed(0)+'</span>'+(sel?'<i class="fa-solid fa-circle-check text-success"></i>':'<i class="fa-regular fa-circle label-bright"></i>')+' </span>'+
+        '<span class="text-white-force"><i class="fa-solid '+ic+' me-2" style="color:var(--teal-fg);font-size:.74rem;"></i>'+esc(t.testName)+' <span class="label-bright" style="font-size:.68rem;">'+esc(t.testCode)+'</span>'+(t.requiresConsent?' <span class="lx-badge lx-b-URGENT">Consent</span>':'')+' </span>'+
+        '<span class="d-flex gap-2 align-items-center"><span style="color:var(--teal-fg);font-size:.8rem;">₹'+Number(t.price).toFixed(0)+'</span>'+(sel?'<i class="fa-solid fa-circle-check text-success"></i>':'<i class="fa-regular fa-circle label-bright"></i>')+' </span>'+
       '</div>';
     }).join('');
   }
@@ -850,7 +855,7 @@ var LabX = (function () {
     ids.forEach(function(k){ total+=Number(_wiSel[k].price); if(_wiSel[k].requiresConsent)consent.push(_wiSel[k].testName); });
     $('lx-wi-total').textContent='₹'+total.toFixed(2);
     $('lx-wi-chips').innerHTML=ids.map(function(k){return '<span class="lx-chip">'+esc(_wiSel[k].testName)+' <span style="cursor:pointer;opacity:.7;" onclick="event.stopPropagation();LabX.wiToggle(\''+k+'\');">×</span></span>';}).join('');
-    $('lx-wi-consent').innerHTML=consent.length?'<div class="small" style="color:#fcd34d;"><i class="fa-solid fa-file-signature me-1"></i>Written consent required before collection: '+esc(consent.join(', '))+'</div>':'';
+    $('lx-wi-consent').innerHTML=consent.length?'<div class="small" style="color:var(--warning-fg);"><i class="fa-solid fa-file-signature me-1"></i>Written consent required before collection: '+esc(consent.join(', '))+'</div>':'';
   }
   function wiSubmit(){
     var pid=($('lx-wi-pid').value||'').trim();

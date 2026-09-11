@@ -35,9 +35,9 @@
     .pdash-table th { color: var(--text-label); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left; }
     .pdash-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.85rem; }
     .pdash-pill { font-size: 0.62rem; font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; }
-    .pdash-pill.active { background: rgba(16,185,129,0.15); color: var(--success); }
-    .pdash-pill.partial { background: rgba(245,158,11,0.15); color: #f59e0b; }
-    .pdash-pill.returned { background: rgba(220,38,38,0.15); color: #dc2626; }
+    .pdash-pill.active { background: var(--success-bg); color: var(--success-fg); }
+    .pdash-pill.partial { background: var(--warning-bg); color: var(--warning-fg); }
+    .pdash-pill.returned { background: var(--danger-bg); color: var(--danger-fg); }
 
     #phs-print { display: none; }
     
@@ -57,8 +57,8 @@
         left: 0; 
         top: 0; 
         width: 100%; 
-        background: #fff !important; 
-        color: #000 !important; 
+        background: var(--bg-card) !important; 
+        color: var(--text-main) !important; 
         /* Increased padding to compensate for the 0mm page margin */
         padding: 15mm 10px; 
         font-family: 'Segoe UI', Arial, sans-serif; 
@@ -82,7 +82,7 @@
 
     <div class="row g-3 mb-3">
       <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Bills</div><div class="pdash-kpi" id="kBills">0</div></div></div>
-      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Refunds</div><div class="pdash-kpi" style="color:#dc2626;" id="kRefunds">0</div></div></div>
+      <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Refunds</div><div class="pdash-kpi" style="color:var(--danger-fg);" id="kRefunds">0</div></div></div>
       <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Cash</div><div class="pdash-kpi" id="kCash">₹0</div></div></div>
       <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">UPI</div><div class="pdash-kpi" id="kUpi">₹0</div></div></div>
       <div class="col"><div class="pdash-card"><div class="pdash-kpi-lbl">Card</div><div class="pdash-kpi" id="kCard">₹0</div></div></div>
@@ -121,7 +121,7 @@
     </div>
   </div>
 
-  <div id="pdash-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:20000;display:none;align-items:center;justify-content:center;">
+  <div id="pdash-overlay" style="position:fixed;inset:0;background:var(--overlay-scrim);z-index:20000;display:none;align-items:center;justify-content:center;">
     <div style="background:var(--bg-card);color:var(--text-main);padding:22px 30px;border-radius:12px;border:1px solid var(--border-color);font-weight:600;">
       <span class="spinner-border spinner-border-sm me-2"></span><span id="pdash-overlay-text">Working…</span>
     </div>
@@ -218,7 +218,7 @@
 
   function pdashRefundCell(b) {
     return (b.refunded && b.refunded > 0)
-      ? `<span style="color:#dc2626;">- ₹${b.refunded.toFixed(2)}</span><br><span style="font-size:0.68rem;color:var(--text-muted);">${b.returnCount} return(s)</span>`
+      ? `<span style="color:var(--danger-fg);">- ₹${b.refunded.toFixed(2)}</span><br><span style="font-size:0.68rem;color:var(--text-muted);">${b.returnCount} return(s)</span>`
       : '<span style="color:var(--text-muted);">—</span>';
   }
 
@@ -295,7 +295,7 @@
   function pdashBuildListPrint(bills, totals, range) {
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
     const t = totals || {};
-    const sCell = (lbl, val) => `<td style="padding:8px 10px;border:1px solid #e5e7eb;text-align:center;"><div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.4px;">${lbl}</div><div style="font-size:15px;font-weight:800;color:#111827;">${val}</div></td>`;
+    const sCell = (lbl, val) => `<td style="padding:8px 10px;border:1px solid var(--border-color);text-align:center;"><div style="font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.4px;">${lbl}</div><div style="font-size:15px;font-weight:800;color:var(--text-main);">${val}</div></td>`;
     const summary = `
       <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
         <tr>
@@ -309,24 +309,24 @@
       </table>`;
     const rows = bills.map((b, i) => `
       <tr>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.invoiceNo)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.date)} ${esc(b.time)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.patientName || 'Walk-in')}${b.patientId ? ' (' + esc(b.patientId) + ')' : ''}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.payMode)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">${esc(b.status)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">₹${(b.net || 0).toFixed(2)}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;text-align:right;color:#dc2626;">${(b.refunded && b.refunded > 0) ? ('- ₹' + b.refunded.toFixed(2)) : '—'}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);">${i + 1}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);">${esc(b.invoiceNo)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);">${esc(b.date)} ${esc(b.time)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);">${esc(b.patientName || 'Walk-in')}${b.patientId ? ' (' + esc(b.patientId) + ')' : ''}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);">${esc(b.payMode)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);">${esc(b.status)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);text-align:right;">₹${(b.net || 0).toFixed(2)}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--border-color);text-align:right;color:var(--danger-fg);">${(b.refunded && b.refunded > 0) ? ('- ₹' + b.refunded.toFixed(2)) : '—'}</td>
       </tr>`).join('');
     return `
-      <div style="max-width:840px;margin:14px auto;font-family:'Helvetica Neue',Arial,sans-serif;color:#111827;">
-        <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0369a1;padding-bottom:10px;margin-bottom:12px;">
-          <div><div style="font-size:18px;font-weight:800;color:#0369a1;">CRESCENTIA HEALTHTECH</div><div style="font-size:12px;color:#6b7280;">Pharmacy — Bills Report</div></div>
-          <div style="text-align:right;font-size:12px;color:#4b5563;">${esc(range ? range.from : '')} to ${esc(range ? range.to : '')}<br>Net ₹${(t.net || 0).toFixed(2)} · Refunds ₹${(t.refundAmt || 0).toFixed(2)} · Realised ₹${(t.netRealised || 0).toFixed(2)}</div>
+      <div style="max-width:840px;margin:14px auto;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text-main);">
+        <div style="display:flex;justify-content:space-between;border-bottom:2px solid var(--info);padding-bottom:10px;margin-bottom:12px;">
+          <div><div style="font-size:18px;font-weight:800;color:var(--info-fg);">CRESCENTIA HEALTHTECH</div><div style="font-size:12px;color:var(--text-faint);">Pharmacy — Bills Report</div></div>
+          <div style="text-align:right;font-size:12px;color:var(--text-faint);">${esc(range ? range.from : '')} to ${esc(range ? range.to : '')}<br>Net ₹${(t.net || 0).toFixed(2)} · Refunds ₹${(t.refundAmt || 0).toFixed(2)} · Realised ₹${(t.netRealised || 0).toFixed(2)}</div>
         </div>
         ${summary}
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <thead><tr style="background:#f3f4f6;">
+          <thead><tr style="background:var(--bg-input);">
             <th style="padding:6px 8px;text-align:left;">#</th><th style="padding:6px 8px;text-align:left;">Invoice</th>
             <th style="padding:6px 8px;text-align:left;">Date/Time</th><th style="padding:6px 8px;text-align:left;">Patient</th>
             <th style="padding:6px 8px;text-align:left;">Mode</th><th style="padding:6px 8px;text-align:left;">Status</th>

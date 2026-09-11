@@ -15,7 +15,7 @@ const AccPay = (function () {
   const val = (id) => { const e = $(id); return e ? e.value : ''; };
   let FILTER = 'ALL';
 
-  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white'; t.style.zIndex = 4000; t.style.background = ok ? '#198754' : '#dc3545'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
+  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid'; t.style.zIndex = 4000; t.style.background = ok ? 'var(--success)' : 'var(--danger)'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
 
   function load() {
     const root = $('acc-pay-root'); if (!root) return;
@@ -111,7 +111,7 @@ const AccPay = (function () {
   }
 
   function payModal(id, name, pending) {
-    $('acc-pay-modal').innerHTML = '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,.5);z-index:3500" onclick="if(event.target===this)AccPay.closeModal()">' +
+    $('acc-pay-modal').innerHTML = '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:var(--overlay-scrim);z-index:3500" onclick="if(event.target===this)AccPay.closeModal()">' +
       '<div class="card bg-body border shadow" style="width:min(420px,92vw)"><div class="card-body">' +
       '<div class="d-flex justify-content-between mb-2"><h5 class="fw-bold mb-0 text-body">Pay · ' + esc(name) + '</h5><button class="btn-close" onclick="AccPay.closeModal()"></button></div>' +
       '<label class="form-label small text-body-secondary mb-1">Amount (pending ' + inr(pending) + ')</label>' +

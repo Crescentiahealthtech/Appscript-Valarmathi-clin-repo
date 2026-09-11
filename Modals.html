@@ -1,11 +1,11 @@
 <style>
-  .slot-pill { cursor: pointer; border: 1px solid #334155; border-radius: 8px; padding: 6px 4px;
+  .slot-pill { cursor: pointer; border: 1px solid var(--border-hover); border-radius: 8px; padding: 6px 4px;
                text-align: center; font-size: 0.72rem; transition: all .15s ease; }
-  .slot-pill.free   { border-color: #22c55e; color: #22c55e; }
-  .slot-pill.free:hover { background: rgba(34,197,94,.18); }
-  .slot-pill.taken  { border-color: #475569; color: #64748b; cursor: not-allowed; opacity: .55; }
-  .slot-pill.chosen { background: #22c55e; color: #0f172a; font-weight: 700; }
-  .wh-day-row { border-bottom: 1px solid var(--border-color, #334155); }
+  .slot-pill.free   { border-color: var(--success); color: var(--success-fg); }
+  .slot-pill.free:hover { background: var(--success-bg); }
+  .slot-pill.taken  { border-color: var(--border-strong); color: var(--text-faint); cursor: not-allowed; opacity: .55; }
+  .slot-pill.chosen { background: var(--success-solid); color: var(--text-on-accent); font-weight: 700; }
+  .wh-day-row { border-bottom: 1px solid var(--border-color); }
 </style>
 
 <!-- ==========================================================================
@@ -13,7 +13,7 @@
      Slots are generated per doctor per date by getDoctorSlotsForDate().
      Free text time entry is only permitted via the off-schedule switch.
 ========================================================================== -->
-<div id="admin-book-modal" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1050; display: flex; align-items: center; justify-content: center;">
+<div id="admin-book-modal" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--overlay-scrim); z-index: 1050; display: flex; align-items: center; justify-content: center;">
   <div class="card p-4 border-secondary shadow-lg" style="width: 92%; max-width: 640px; background-color: var(--bg-card); max-height: 92vh; overflow-y: auto;">
 
     <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
@@ -103,8 +103,8 @@
      CLINIC WORKING HOURS MODAL
      Now reads the real Doctor_Schedules template instead of hardcoded text.
 ========================================================================== -->
-<div id="workingHoursModal" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1050; display: flex; align-items: center; justify-content: center;">
-  <div class="card p-4 border-secondary shadow-lg" style="width: 92%; max-width: 560px; background-color: #1a1d21; max-height: 90vh; overflow-y: auto;">
+<div id="workingHoursModal" class="d-none" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--overlay-scrim); z-index: 1050; display: flex; align-items: center; justify-content: center;">
+  <div class="card p-4 border-secondary shadow-lg" style="width: 92%; max-width: 560px; background-color: var(--surface-2); max-height: 90vh; overflow-y: auto;">
 
     <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-3">
       <h5 class="fw-bold text-white m-0"><i class="fa-solid fa-clock text-warning me-2"></i> Clinic Working Hours</h5>
@@ -411,7 +411,7 @@ function renderWorkingHours(collected) {
       inner = Object.keys(byDay).sort(function (a, b) { return a - b; }).map(function (wd) {
         return '<div class="d-flex justify-content-between align-items-center wh-day-row py-2">' +
                  '<span class="text-white small fw-bold">' + WH_WEEKDAYS[wd] + '</span>' +
-                 '<span class="badge" style="background-color: rgba(56,189,248,.18); color:#38bdf8; font-size:.78rem;">' +
+                 '<span class="badge" style="background-color: var(--info-bg); color:var(--info-fg); font-size:.78rem;">' +
                    window.crescEsc(byDay[wd].join('  |  ')) +
                  '</span>' +
                '</div>';
@@ -424,7 +424,7 @@ function renderWorkingHours(collected) {
       if (offDays.length > 0) {
         inner += '<div class="d-flex justify-content-between align-items-center py-2">' +
                    '<span class="text-white small fw-bold"><i class="fa-solid fa-calendar-xmark text-danger me-2"></i>No clinic</span>' +
-                   '<span class="badge" style="background-color: rgba(239,68,68,.18); color:#ef4444; font-size:.78rem;">' +
+                   '<span class="badge" style="background-color: var(--danger-bg); color:var(--danger-fg); font-size:.78rem;">' +
                      window.crescEsc(offDays.join(', ')) +
                    '</span>' +
                  '</div>';

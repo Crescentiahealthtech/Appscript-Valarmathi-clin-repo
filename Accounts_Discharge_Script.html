@@ -15,7 +15,7 @@ const AccDischarge = (function () {
   const RATE = { ROOM: 1500, NURSING: 400, RMO: 300, CONSULTANT: 500, SURGEON: 0, ANESTHETIST: 0, OT: 0, PROCEDURE: 0, OTHER: 0 };
   let IP = null, TAB = null, ROWS = [], PKGS = [], INSURERS = [], INS = [], INS_ON = false, RID = 0;
 
-  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white'; t.style.zIndex = 4000; t.style.background = ok ? '#198754' : '#dc3545'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3800); }
+  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid'; t.style.zIndex = 4000; t.style.background = ok ? 'var(--success)' : 'var(--danger)'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3800); }
   const num = (id) => { const e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; };
   const amt = (r) => r.kind === 'AUTO' ? r.amount : (Number(r.count) || 0) * (Number(r.rate) || 0);
 
@@ -202,7 +202,7 @@ const AccDischarge = (function () {
   // ---- visits modal ----
   function visits() {
     const host = $('acc-dis-modal');
-    host.innerHTML = '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,.5);z-index:3500" onclick="if(event.target===this)AccDischarge.closeVisits()">' +
+    host.innerHTML = '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:var(--overlay-scrim);z-index:3500" onclick="if(event.target===this)AccDischarge.closeVisits()">' +
       '<div class="card bg-body border shadow" style="width:min(620px,92vw);max-height:86vh;overflow:auto"><div class="card-body">' +
       '<div class="d-flex justify-content-between mb-2"><h5 class="fw-bold mb-0 text-body">Clinical Visits · ' + esc(IP) + '</h5><button class="btn-close" onclick="AccDischarge.closeVisits()"></button></div>' +
       '<div id="acc-vis-list" class="mb-3"><div class="text-body-secondary small py-3 text-center"><i class="fas fa-circle-notch fa-spin me-1"></i>Loading…</div></div>' +
@@ -256,7 +256,7 @@ const AccDischarge = (function () {
     const body = rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(r[0]) + '</td><td style="text-align:center">' + (r[1] || '') + '</td><td style="text-align:right">' + (r[2] ? inr(r[2]) : '') + '</td><td style="text-align:right">' + inr(r[3]) + '</td></tr>').join('');
     const ins = insLines.map(x => '<tr><td colspan="4" style="text-align:right">Insurance · ' + esc(x.name) + (x.network ? ' (Network)' : ' (Other)') + '</td><td style="text-align:right">' + inr(x.amount) + '</td></tr>').join('');
     const win = window.open('', '_blank', 'width=820,height=900');
-    win.document.write('<html><head><title>' + (isFinal ? 'Final Bill' : 'Provisional') + ' ' + esc(a.ipNumber) + '</title><style>body{font-family:Arial,sans-serif;color:#111;padding:28px;font-size:13px}h1{font-size:20px;margin:0}h2{font-size:14px;margin:2px 0 14px;font-weight:normal;color:#444}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border-bottom:1px solid #ddd;padding:6px 8px}th{text-align:left;background:#f4f4f4}.tot td{border:none;padding:3px 8px}.tot .g{font-weight:bold;font-size:15px}.stamp{color:#c00;border:2px solid #c00;display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;transform:rotate(-3deg);margin-top:8px}.meta{display:flex;justify-content:space-between;margin-bottom:8px}@media print{button{display:none}}</style></head><body>' +
+    win.document.write('<html><head><title>' + (isFinal ? 'Final Bill' : 'Provisional') + ' ' + esc(a.ipNumber) + '</title><style>/* Print window: standalone document, no app stylesheet - paper colours are intentional. */body{background:#fff;font-family:Arial,sans-serif;color:#000;padding:28px;font-size:13px}h1{font-size:20px;margin:0}h2{font-size:14px;margin:2px 0 14px;font-weight:normal;color:#555}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{border-bottom:1px solid #ccc;padding:6px 8px}th{text-align:left;background:#f1f1f1}.tot td{border:none;padding:3px 8px}.tot .g{font-weight:bold;font-size:15px}.stamp{color:#b91c1c;border:2px solid #b91c1c;display:inline-block;padding:3px 10px;border-radius:4px;font-weight:bold;transform:rotate(-3deg);margin-top:8px}.meta{display:flex;justify-content:space-between;margin-bottom:8px}@media print{button{display:none}}</style></head><body>' +
       '<h1>CRESCENTIA HEALTHTECH</h1><h2>' + (isFinal ? 'Final Discharge Bill' : 'Provisional Estimate') + '</h2>' +
       '<div class="meta"><div><b>' + esc(a.patientName) + '</b><br>' + esc(a.ipNumber) + ' · ' + esc(a.bed || '') + '</div><div style="text-align:right">Admitted: ' + esc(a.doaFmt || '') + '<br>Stay: ' + a.lengthOfStay + ' day(s)<br>Date: ' + new Date().toLocaleDateString('en-IN') + '</div></div>' +
       '<table><thead><tr><th>#</th><th>Particular</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +

@@ -1,21 +1,21 @@
 <div id="lab-billing-workspace" class="page-section d-none">
 
-  <div id="lbOv" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center flex-column" style="background:rgba(2,6,23,.88);z-index:2000;">
-    <div class="spinner-border mb-3" style="color:#34d399;width:3rem;height:3rem;"></div>
-    <div class="fw-semibold" id="lbOvMsg" style="color:#6ee7b7;">Loading…</div>
+  <div id="lbOv" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center flex-column" style="background:var(--overlay-scrim);z-index:2000;">
+    <div class="spinner-border mb-3" style="color:var(--success-fg);width:3rem;height:3rem;"></div>
+    <div class="fw-semibold" id="lbOvMsg" style="color:var(--success-fg);">Loading…</div>
   </div>
 
   <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-3">
       <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('lab-workspace-view');"><i class="fa-solid fa-arrow-left me-1"></i>Back to Lab</button>
       <div>
-        <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-receipt me-2" style="color:#34d399;"></i>Lab Billing Desk</h3>
+        <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-receipt me-2" style="color:var(--success-fg);"></i>Lab Billing Desk</h3>
         <div class="label-bright small" id="lbSub">Loading today's collections…</div>
       </div>
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-sm btn-outline-secondary" onclick="LabBill.load();" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
-      <button class="btn btn-sm" style="background:rgba(52,211,153,.12);border:1px solid #34d399;color:#6ee7b7;" onclick="LabBill.generateAndPrintDayReport();"><i class="fa-solid fa-print me-1"></i>Print Day Report</button>
+      <button class="btn btn-sm" style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabBill.generateAndPrintDayReport();"><i class="fa-solid fa-print me-1"></i>Print Day Report</button>
     </div>
   </div>
 
@@ -25,25 +25,25 @@
     <div class="col-md-3 col-6">
       <div class="lbKpi">
         <div class="lbKn" id="lbKpending">–</div>
-        <div class="lbKl"><i class="fa-solid fa-hourglass-half me-1" style="color:#f59e0b;"></i>Pending Bills</div>
+        <div class="lbKl"><i class="fa-solid fa-hourglass-half me-1" style="color:var(--warning-fg);"></i>Pending Bills</div>
       </div>
     </div>
     <div class="col-md-3 col-6">
       <div class="lbKpi">
-        <div class="lbKn" id="lbKtoday" style="color:#34d399;">₹0</div>
-        <div class="lbKl"><i class="fa-solid fa-coins me-1" style="color:#34d399;"></i>Today Collection</div>
+        <div class="lbKn" id="lbKtoday" style="color:var(--success-fg);">₹0</div>
+        <div class="lbKl"><i class="fa-solid fa-coins me-1" style="color:var(--success-fg);"></i>Today Collection</div>
       </div>
     </div>
     <div class="col-md-3 col-6">
       <div class="lbKpi">
         <div class="lbKn" id="lbKcount">0</div>
-        <div class="lbKl"><i class="fa-solid fa-receipt me-1" style="color:#22d3ee;"></i>Bills Raised Today</div>
+        <div class="lbKl"><i class="fa-solid fa-receipt me-1" style="color:var(--teal-fg);"></i>Bills Raised Today</div>
       </div>
     </div>
     <div class="col-md-3 col-6">
       <div class="lbKpi">
-        <div class="lbKn" id="lbKip" style="color:#a5b4fc;">–</div>
-        <div class="lbKl"><i class="fa-solid fa-bed me-1" style="color:#a5b4fc;"></i>IP On-Account</div>
+        <div class="lbKn" id="lbKip" style="color:var(--accent-fg);">–</div>
+        <div class="lbKl"><i class="fa-solid fa-bed me-1" style="color:var(--accent-fg);"></i>IP On-Account</div>
       </div>
     </div>
   </div>
@@ -69,13 +69,13 @@
 .lbKl{font-size:.67rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
 .lbTab{background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:.78rem;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
 .lbTab:hover{border-color:var(--border-hover);color:var(--text-main);}
-.lbTab.on{background:rgba(52,211,153,.2);border-color:#34d399;color:#6ee7b7;}
-.lbTN{background:rgba(255,255,255,.12);border-radius:10px;padding:0 7px;font-size:.67rem;font-weight:700;}
+.lbTab.on{background:var(--success-bg);border-color:var(--success);color:var(--success-fg);}
+.lbTN{background:var(--surface-active);border-radius:10px;padding:0 7px;font-size:.67rem;font-weight:700;}
 .lbCard{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:.18s;}
 .lbCard:hover{border-color:var(--border-hover);}
-.lbCard.PAID{border-left:3px solid #10b981;}
-.lbCard.PENDING{border-left:3px solid #f59e0b;}
-.lbCard.IP{border-left:3px solid #6366f1;}
+.lbCard.PAID{border-left:3px solid var(--success);}
+.lbCard.PENDING{border-left:3px solid var(--warning);}
+.lbCard.IP{border-left:3px solid var(--accent-purple);}
 </style>
 
 <script>
@@ -91,7 +91,7 @@ var LabBill=(function(){
   function stop(){var el=g('lbOv');if(el){el.classList.add('d-none');el.classList.remove('d-flex');}}
   function flash(msg,ok){
     var b=g('lbFlash');if(!b)return;
-    b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'rgba(52,211,153,.4)':'rgba(248,113,113,.5)')+'"><i class="fa-solid '+(ok?'fa-circle-check text-success':'fa-circle-exclamation text-danger')+'"></i><span class="text-white-force flex-grow-1">'+e(msg)+'</span><span style="cursor:pointer;color:var(--text-muted);" onclick="this.parentNode.remove()">×</span></div>';
+    b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'var(--success)':'var(--danger)')+'"><i class="fa-solid '+(ok?'fa-circle-check text-success':'fa-circle-exclamation text-danger')+'"></i><span class="text-white-force flex-grow-1">'+e(msg)+'</span><span style="cursor:pointer;color:var(--text-muted);" onclick="this.parentNode.remove()">×</span></div>';
     if(ok)setTimeout(function(){if(g('lbFlash'))g('lbFlash').innerHTML='';},4000);
   }
   
@@ -167,18 +167,18 @@ var LabBill=(function(){
   function _card(b){
     var payIcon=b.paymentMode==='CASH'?'💵':b.paymentMode==='UPI'?'📱':b.paymentMode==='CARD'?'💳':b.paymentMode==='IP_ACCOUNT'?'🏥':'💰';
     var statusBadge=b.tabType==='PENDING'
-      ?'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid #f59e0b;">PENDING</span>'
+      ?'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning);">PENDING</span>'
       :b.tabType==='IP'
-      ?'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid #6366f1;">IP ACCOUNT</span>'
-      :'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid #10b981;">PAID</span>';
+      ?'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:var(--accent-glow);color:var(--accent-fg);border:1px solid var(--accent-purple);">IP ACCOUNT</span>'
+      :'<span style="font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:12px;background:var(--success-bg);color:var(--success-fg);border:1px solid var(--success);">PAID</span>';
 
     var actions='';
     if(b.tabType==='PENDING'){
-      actions='<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:rgba(52,211,153,.15);border:1px solid #34d399;color:#6ee7b7;" onclick="LabBill.openOrder(\''+e(b.orderId)+'\')"><i class="fa-solid fa-arrow-right me-1"></i>Process</button>';
+      actions='<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabBill.openOrder(\''+e(b.orderId)+'\')"><i class="fa-solid fa-arrow-right me-1"></i>Process</button>';
     } else {
       actions=
-        '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid #10b981;color:#6ee7b7;background:rgba(16,185,129,.1);" onclick="event.stopPropagation(); LabBill.waInvoice(\''+e(b.billId)+'\', \''+e(b.patientName).replace(/'/g,"\\'")+'\')" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>' +
-        '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid #3b82f6;color:#93c5fd;background:rgba(59,130,246,.1);" onclick="event.stopPropagation(); LabBill.emailInvoice(\''+e(b.billId)+'\')" title="Email Invoice"><i class="fa-solid fa-envelope"></i></button>' +
+        '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--success);color:var(--success-fg);background:var(--success-bg);" onclick="event.stopPropagation(); LabBill.waInvoice(\''+e(b.billId)+'\', \''+e(b.patientName).replace(/'/g,"\\'")+'\')" title="Send via WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>' +
+        '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--blue);color:var(--blue-fg);background:var(--blue-bg);" onclick="event.stopPropagation(); LabBill.emailInvoice(\''+e(b.billId)+'\')" title="Email Invoice"><i class="fa-solid fa-envelope"></i></button>' +
         '<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" onclick="event.stopPropagation(); LabBill.printReceiptDirectly(\''+e(b.billId)+'\')"><i class="fa-solid fa-print me-1"></i>Receipt</button>';
     }
 
@@ -198,7 +198,7 @@ var LabBill=(function(){
         +'</div>'
       +'</div>'
       +'<div class="text-end flex-shrink-0">'
-        +'<div style="font-size:1.1rem;font-weight:800;color:'+(b.tabType==='IP'?'#a5b4fc':b.tabType==='PAID'?'#34d399':'#fcd34d')+';">₹'+Number(b.net).toFixed(2)+'</div>'
+        +'<div style="font-size:1.1rem;font-weight:800;color:'+(b.tabType==='IP'?'var(--accent-fg)':b.tabType==='PAID'?'var(--success-fg)':'var(--warning-fg)')+';">₹'+Number(b.net).toFixed(2)+'</div>'
         +(b.discount>0?'<div class="label-bright" style="font-size:.67rem;">Disc: ₹'+Number(b.discount).toFixed(0)+'</div>':'')
         +actions
       +'</div>'
@@ -278,13 +278,13 @@ var LabBill=(function(){
     var rows = bills.map(function(b, index){
       return `
         <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #64748b;">${index + 1}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; font-family: monospace;">${b.receiptNumber || b.billId}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 600;">${b.patientName}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; color: #475569;">${b.testNames}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; text-align: center;">${b.paymentMode}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; text-align: right;">${b.billedAt ? new Date(b.billedAt).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'}) : ''}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 14px; font-weight: bold; text-align: right;">₹${Number(b.net).toFixed(2)}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; color: var(--text-faint);">${index + 1}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; font-family: monospace;">${b.receiptNumber || b.billId}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; font-weight: 600;">${b.patientName}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; color: var(--text-faint);">${b.testNames}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; text-align: center;">${b.paymentMode}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; text-align: right;">${b.billedAt ? new Date(b.billedAt).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'}) : ''}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 14px; font-weight: bold; text-align: right;">₹${Number(b.net).toFixed(2)}</td>
         </tr>
       `;
     }).join('');
@@ -296,17 +296,17 @@ var LabBill=(function(){
         <meta charset="UTF-8">
         <title>Daily Collection Report</title>
         <style>
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; padding: 30px; margin: 0; background: #fff; }
-          .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 30px; }
-          .title { font-size: 24px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
-          .subtitle { font-size: 14px; color: #64748b; margin-top: 5px; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: var(--text-main); padding: 30px; margin: 0; background: var(--bg-card); }
+          .header { text-align: center; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; margin-bottom: 30px; }
+          .title { font-size: 24px; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 1px; }
+          .subtitle { font-size: 14px; color: var(--text-faint); margin-top: 5px; }
           .kpi-grid { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 30px; }
-          .kpi-box { flex: 1; padding: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; }
-          .kpi-box .val { font-size: 20px; font-weight: bold; color: #0f172a; }
-          .kpi-box .lbl { font-size: 11px; color: #64748b; text-transform: uppercase; margin-top: 5px; font-weight: 600; }
+          .kpi-box { flex: 1; padding: 15px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; text-align: center; }
+          .kpi-box .val { font-size: 20px; font-weight: bold; color: var(--text-main); }
+          .kpi-box .lbl { font-size: 11px; color: var(--text-faint); text-transform: uppercase; margin-top: 5px; font-weight: 600; }
           table { width: 100%; border-collapse: collapse; }
-          th { background: #f1f5f9; padding: 10px 8px; text-align: left; font-size: 12px; text-transform: uppercase; color: #475569; border-bottom: 2px solid #cbd5e1; }
-          .footer { margin-top: 50px; font-size: 12px; color: #94a3b8; display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+          th { background: var(--bg-input); padding: 10px 8px; text-align: left; font-size: 12px; text-transform: uppercase; color: var(--text-faint); border-bottom: 2px solid var(--border-color); }
+          .footer { margin-top: 50px; font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 15px; }
           @media print { body { padding: 0; margin: 0; } @page { size: A4 portrait; margin: 1cm; } }
         </style>
       </head>
@@ -319,8 +319,8 @@ var LabBill=(function(){
           <div class="kpi-box"><div class="val">₹${cashTotal.toFixed(2)}</div><div class="lbl">CASH IN DRAWER</div></div>
           <div class="kpi-box"><div class="val">₹${upiTotal.toFixed(2)}</div><div class="lbl">UPI PAYMENTS</div></div>
           <div class="kpi-box"><div class="val">₹${cardTotal.toFixed(2)}</div><div class="lbl">CARD PAYMENTS</div></div>
-          <div class="kpi-box"><div class="val" style="color:#6366f1;">₹${ipTotal.toFixed(2)}</div><div class="lbl">IP ON-ACCOUNT</div></div>
-          <div class="kpi-box" style="background:#f0fdf4; border-color:#bbf7d0;"><div class="val" style="color:#16a34a;">₹${Number(res.totalNet).toFixed(2)}</div><div class="lbl">TOTAL OP REVENUE</div></div>
+          <div class="kpi-box"><div class="val" style="color:var(--accent-fg);">₹${ipTotal.toFixed(2)}</div><div class="lbl">IP ON-ACCOUNT</div></div>
+          <div class="kpi-box" style="background:var(--success); border-color:var(--success);"><div class="val" style="color:var(--success-fg);">₹${Number(res.totalNet).toFixed(2)}</div><div class="lbl">TOTAL OP REVENUE</div></div>
         </div>
         <table>
           <thead>
