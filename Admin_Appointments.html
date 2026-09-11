@@ -220,9 +220,12 @@ function renderLedger(rows) {
 
 function changeAppointmentStatus(apptId, newStatus) {
   google.script.run
-    .withSuccessHandler(function () { loadAdminLedger(); })
+    .withSuccessHandler(function (msg) {
+      if (msg && msg !== 'Status updated!') alert(msg);
+      loadAdminLedger();
+    })
     .withFailureHandler(function (err) { alert('Could not update status: ' + err.message); })
-    .updateAppointmentStatus(apptId, newStatus);
+    .updateAppointmentStatus(apptId, newStatus, window.sessionToken);
 }
 
 function cycleStatus(apptId, action, refresh) {
@@ -230,8 +233,11 @@ function cycleStatus(apptId, action, refresh) {
   if (!confirm('Delete this appointment?')) return;
 
   google.script.run
-    .withSuccessHandler(function () { if (refresh) loadAdminLedger(); })
+    .withSuccessHandler(function (msg) {
+      if (msg && msg !== 'Status updated!') alert(msg);
+      if (refresh) loadAdminLedger();
+    })
     .withFailureHandler(function (err) { alert('Could not delete: ' + err.message); })
-    .updateAppointmentStatus(apptId, 'DELETE');
+    .updateAppointmentStatus(apptId, 'DELETE', window.sessionToken);
 }
 </script>

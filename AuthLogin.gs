@@ -103,10 +103,23 @@ function verifyLogin(credentials) {
 
       // Validate Password
       if (passwordInput.trim().toLowerCase() === expectedPassword.toLowerCase()) {
+        // Patients get a real session token too. Without one the portal had no
+        // way to prove who it was, so getUserProfile() could not be session-
+        // checked. The session username IS the patient ID, which is what
+        // getUserProfile() compares against to keep a patient to their own row.
+        const patientKey = patientID.toString().trim().toUpperCase();
+        const patientToken = issueSession_({
+          username: patientKey,
+          role: 'patient',
+          doctorId: "",
+          name: rawName
+        });
         return {
           success: true,
           role: 'patient',
           portal: 'patient',
+          username: patientKey,
+          sessionToken: patientToken,
           message: "Welcome Patient"
         };
       } else {

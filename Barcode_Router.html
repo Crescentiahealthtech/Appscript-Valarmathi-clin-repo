@@ -1,0 +1,663 @@
+<!-- ==========================================================================
+     Barcode_Router.html — Crescentia HealthTech / CresRx — BARCODE PHASE 1
+     Global scan router + scanned-patient panel.
+     Include in Index.html AFTER ScriptsMV (needs switchTab, routeToEMRTimeline).
+     Started by executeUIRouting() in Auth.html, stopped by performSignOut().
+     ========================================================================== -->
+<style>
+  #bc-panel { background: var(--bg-card); color: var(--text-main); border-left: 1px solid var(--border-color); width: 380px; }
+  #bc-panel .offcanvas-header { border-bottom: 1px solid var(--border-color); }
+  #bc-panel .bc-muted { color: var(--text-muted); }
+  #bc-panel .bc-name { font-size: 1.15rem; font-weight: 700; color: var(--text-main); line-height: 1.3; }
+  #bc-panel .bc-id { font-family: ui-monospace, Consolas, monospace; color: var(--text-label); font-size: .85rem; }
+  #bc-panel .bc-section-title { font-size: .78rem; font-weight: 600; color: var(--text-muted); margin: 1rem 0 .4rem; }
+  #bc-panel .bc-appt { border: 1px solid var(--border-color); border-radius: 8px; padding: .55rem .7rem; margin-bottom: .4rem; background: var(--bg-input); }
+  #bc-panel .bc-chip-ip { display: inline-block; background: var(--info-bg); color: var(--info); border-radius: 6px; padding: .3rem .55rem; font-size: .8rem; font-weight: 600; margin-top: .5rem; }
+  #bc-panel .bc-status { font-size: .72rem; font-weight: 600; border-radius: 4px; padding: .1rem .4rem; background: var(--bg-card); color: var(--text-label); border: 1px solid var(--border-color); }
+  #bc-panel .bc-actions .btn { width: 100%; text-align: left; margin-bottom: .45rem; }
+  #bc-panel .bc-empty { color: var(--text-muted); font-size: .85rem; padding: .5rem 0; }
+  #bc-toast-host { position: fixed; right: 16px; bottom: 16px; z-index: 1090; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+  .bc-toast { background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-left: 4px solid var(--info); border-radius: 8px; padding: .6rem .8rem; font-size: .85rem; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+  .bc-toast.bc-ok { border-left-color: var(--success); }
+  .bc-toast.bc-warn { border-left-color: var(--warning); }
+  .bc-toast.bc-err { border-left-color: var(--danger); }
+</style>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="bc-panel" data-bs-scroll="true" data-bs-backdrop="false" aria-labelledby="bc-panel-title">
+  <div class="offcanvas-header">
+    <h6 class="offcanvas-title m-0" id="bc-panel-title"><i class="fa-solid fa-barcode me-2"></i>Scanned patient</h6>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div id="bc-panel-status" class="bc-muted small"></div>
+    <div id="bc-panel-patient" class="d-none"></div>
+    <div id="bc-panel-appts" class="d-none"></div>
+    <div id="bc-panel-actions" class="bc-actions d-none"></div>
+  </div>
+</div>
+<div id="bc-toast-host" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // STATE
+  // ---------------------------------------------------------------------------
+  var enabled = false;
+  var cfg = null;
+  var buf = '', gaps = [], lastTs = 0, idleTimer = null, snapshot = null;
+  var lastScan = { value: '', at: 0 };
+  var swallowEnterUntil = 0;
+  var reqSeq = 0;
+  var audioCtx = null;
+  var panel = null;
+  var claimFn = null, claimName = '', claimContext = '';
+
+  var DEDUPE_MS = 1500;
+  var IDLE_COMMIT_MS = 150;
+  var ACTION_LABELS = {
+    PRINT_CARD: 'Print patient card',
+    START_CONSULT: 'Start OP consultation',
+    TIMELINE: 'Clinical timeline',
+    PHARMACY_BILL: 'Pharmacy bill',
+    LAB_ORDERS: 'Lab orders',
+    LAB_WALKIN: 'New lab order'
+  };
+  var STATUS_LABELS = { 'Booked': 'Booked', 'Arrived': 'Arrived / Queue', 'In-Progress': 'In consultation', 'Completed': 'Completed' };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------------------------------------------------------------------------
+  // LIFECYCLE
+  // ---------------------------------------------------------------------------
+  function start() {
+    var role = String(window.loggedInRole || '').toLowerCase();
+    if (!window.sessionToken || role === 'patient') { stop(); return; }
+
+    setPanelStatus('spinner', 'Connecting scanner…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          enabled = false; cfg = null;
+          setPanelStatus('error', (res && res.message) || 'Scanner could not start.');
+          return;
+        }
+        cfg = res.config;
+        enabled = true;
+        setPanelStatus('', '');
+      })
+      .withFailureHandler(function (err) {
+        enabled = false; cfg = null;
+        setPanelStatus('error', 'Scanner could not start: ' + (err && err.message ? err.message : err));
+      })
+      .getScanRouterConfig(window.sessionToken);
+  }
+
+  function stop() {
+    claimFn = null; claimName = ''; claimContext = '';
+    enabled = false;
+    cfg = null;
+    resetBurst();
+    lastScan = { value: '', at: 0 };
+    reqSeq++;
+    clearPanel();
+    try { if (panel) panel.hide(); } catch (e) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // DETECTION — scanner keystroke bursts, and clipboard pastes on the page
+  // ---------------------------------------------------------------------------
+  function isEditable(el) {
+    if (!el) return false;
+    var tag = (el.tagName || '').toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    if (tag === 'INPUT') {
+      var t = String(el.type || 'text').toLowerCase();
+      return ['text', 'search', 'tel', 'number', 'email', 'url', ''].indexOf(t) !== -1;
+    }
+    return el.isContentEditable === true;
+  }
+
+  function resetBurst() {
+    buf = ''; gaps = []; lastTs = 0; snapshot = null;
+    clearTimeout(idleTimer); idleTimer = null;
+  }
+
+  function onKeyDown(e) {
+    if (!enabled || !cfg || !window.sessionToken || e.isComposing) return;
+    if (e.target && e.target.closest && e.target.closest('[data-scan="native"]')) return;
+
+    var now = performance.now();
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      // A scanner whose Enter arrives just after an idle commit must not
+      // submit the field the scan was typed into.
+      if (!buf && now < swallowEnterUntil) {
+        e.preventDefault(); e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        swallowEnterUntil = 0;
+        return;
+      }
+      if (buf && commit()) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      } else {
+        resetBurst();
+      }
+      return;
+    }
+    if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+
+    var breakMs = Math.max(150, cfg.maxGapMs * 3);
+    if (lastTs && (now - lastTs) > breakMs) resetBurst();
+
+    if (!buf) {
+      var t = e.target;
+      snapshot = null;
+      if (isEditable(t) && typeof t.value === 'string') {
+        var ss = null, se = null;
+        try { ss = t.selectionStart; se = t.selectionEnd; } catch (err) { /* number inputs */ }
+        snapshot = { el: t, value: t.value, s: ss, e: se };
+      }
+    } else {
+      gaps.push(now - lastTs);
+    }
+    buf += e.key;
+    lastTs = now;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () { commit(); }, IDLE_COMMIT_MS);
+  }
+
+  /** Decides whether the finished burst was a scan. Returns true if handled. */
+  function commit() {
+    var text = buf, g = gaps.slice(), snap = snapshot;
+    resetBurst();
+    if (!cfg || text.length < cfg.minLen || !g.length) return false;
+
+    var avg = g.reduce(function (a, b) { return a + b; }, 0) / g.length;
+    if (avg > cfg.maxGapMs) return false;          // human typing
+
+    var cls = classify(text);
+    if (cls.type === 'UNKNOWN') return false;       // not ours: leave the keystrokes alone
+
+    // The scanner typed into whatever field had focus. Put that field back.
+    if (snap && snap.el && typeof snap.el.value === 'string') {
+      snap.el.value = snap.value;
+      if (snap.s !== null) { try { snap.el.setSelectionRange(snap.s, snap.e); } catch (err) {} }
+      snap.el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    swallowEnterUntil = performance.now() + 300;
+    handleScan(text, 'SCANNER');
+    return true;
+  }
+
+  function onPaste(e) {
+    if (!enabled || !cfg || !window.sessionToken) return;
+    if (isEditable(e.target)) return;               // normal pastes into fields are untouched
+    var text = ((e.clipboardData || window.clipboardData).getData('text') || '').trim();
+    if (classify(text).type === 'UNKNOWN') return;
+    e.preventDefault();
+    handleScan(text, 'PASTE');
+  }
+
+  document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('paste', onPaste, true);
+
+  // ---------------------------------------------------------------------------
+  // CLASSIFICATION (display only — the server re-classifies and decides)
+  // ---------------------------------------------------------------------------
+  function classify(raw) {
+    var s = String(raw || '').toUpperCase().replace(/\s+/g, '');
+    if (!cfg || !s || s.length > 64) return { type: 'UNKNOWN', value: '' };
+    var prefix = String(cfg.patientPrefix || '').replace(/[^A-Z]/g, '');
+    var m = s.match(new RegExp('^(?:P-)?(' + prefix + '\\d{4,})$'));
+    if (prefix && m) return { type: 'PATIENT', value: m[1] };
+    if (/^BC\d{8}[0-9A-F]{5}$/.test(s)) return { type: 'LAB_SAMPLE', value: s };
+    if (/^LAB-ORD-\d{8}-[0-9A-F]{4}$/.test(s)) return { type: 'LAB_ORDER', value: s };
+    return { type: 'UNKNOWN', value: '' };
+  }
+
+  // ---------------------------------------------------------------------------
+  // ROUTING
+  // ---------------------------------------------------------------------------
+  function handleScan(raw, source) {
+    var cls = classify(raw);
+    if (cls.type === 'UNKNOWN') return;
+
+    var now = Date.now();
+    if (cls.value === lastScan.value && (now - lastScan.at) < DEDUPE_MS) return;
+    lastScan = { value: cls.value, at: now };
+    beep();
+
+    var context = activeContext();
+
+    // A module that owns the current task takes the scan first — lab specimen
+    // collection, bench receiving. Without this a scan at the bench would open
+    // the patient panel instead of matching the tube in the tech's hand.
+    // A claim belongs to the screen that made it. If the user has navigated
+    // away with that screen still open underneath, the claim is stale and the
+    // scan must not be delivered to it — drop it rather than trust the module
+    // to have cleaned up.
+    if (claimFn && claimContext && claimContext !== context) {
+      claimFn = null; claimName = ''; claimContext = '';
+    }
+
+    if (claimFn) {
+      var handled = false;
+      try { handled = claimFn(cls, raw) !== false; } catch (e) { handled = false; }
+      auditScan(cls.value, cls.type, claimName || context);
+      if (handled) return;
+    }
+
+    if (cls.type !== 'PATIENT') {
+      toast('Lab barcode recognised. Lab tube scanning arrives in a later phase.', 'warn');
+      auditScan(cls.value, cls.type, context);
+      return;
+    }
+
+    var pid = cls.value;
+
+    // An open walk-in lab order dialog takes the patient directly.
+    var walkin = $('lx-walkin-modal');
+    if (walkin && walkin.classList.contains('show') && can('LAB_WALKIN') && $('lx-wi-pid')) {
+      $('lx-wi-pid').value = pid;
+      if (window.LabX && typeof LabX.wiLookup === 'function') LabX.wiLookup();
+      auditScan(pid, 'PATIENT', 'lab-walkin-modal');
+      return;
+    }
+    if (document.querySelector('.modal.show')) {
+      toast('Close the open dialog, then scan again.', 'warn');
+      return;
+    }
+
+    // Zero-click routes: the screen you are on decides what the scan means.
+    if (context === 'emr-op-consult' && can('START_CONSULT')) {
+      goOP(pid); toast('Loading ' + pid + ' into the consultation.', 'ok');
+      auditScan(pid, 'PATIENT', context);
+      return;
+    }
+    if (context === 'pharmacy-billing-workspace' && can('PHARMACY_BILL')) {
+      goPharmacy(pid); toast('Loading ' + pid + ' into the pharmacy bill.', 'ok');
+      auditScan(pid, 'PATIENT', context);
+      return;
+    }
+    if (context === 'lab-workspace-view' && can('LAB_ORDERS')) {
+      goLabOrders(pid); toast('Showing lab orders for ' + pid + '.', 'ok');
+      auditScan(pid, 'PATIENT', context);
+      return;
+    }
+
+    openPanel(pid, context);
+  }
+
+  function can(action) { return !!(cfg && cfg.actions && cfg.actions.indexOf(action) !== -1); }
+
+  function activeContext() {
+    var sec = document.querySelector('.page-section.active-section');
+    var id = sec ? sec.id : '';
+    if (id === 'tab-admin-emr') {
+      var op = $('emr-workspace-op-consult');
+      if (op && !op.classList.contains('d-none')) return 'emr-op-consult';
+    }
+    return id || 'none';
+  }
+
+  function isSectionActive(id) {
+    var el = $(id);
+    return !!(el && el.classList.contains('active-section'));
+  }
+
+  // ---------------------------------------------------------------------------
+  // PANEL
+  // ---------------------------------------------------------------------------
+  function getPanel() {
+    if (!panel && window.bootstrap && $('bc-panel')) panel = bootstrap.Offcanvas.getOrCreateInstance($('bc-panel'));
+    return panel;
+  }
+
+  function clearPanel() {
+    ['bc-panel-patient', 'bc-panel-appts', 'bc-panel-actions'].forEach(function (id) {
+      var el = $(id); if (el) { el.innerHTML = ''; el.classList.add('d-none'); }
+    });
+    setPanelStatus('', '');
+  }
+
+  function setPanelStatus(kind, msg) {
+    var el = $('bc-panel-status');
+    if (!el) return;
+    el.innerHTML = '';
+    el.className = 'small ' + (kind === 'error' ? 'text-danger' : 'bc-muted');
+    if (!msg) return;
+    if (kind === 'spinner') {
+      var sp = document.createElement('span');
+      sp.className = 'spinner-border spinner-border-sm me-2';
+      sp.setAttribute('role', 'status');
+      el.appendChild(sp);
+    }
+    el.appendChild(document.createTextNode(msg));
+  }
+
+  function openPanel(pid, context) {
+    var p = getPanel();
+    clearPanel();
+    setPanelStatus('spinner', 'Looking up ' + pid + '…');
+    if (p) p.show();
+
+    var mySeq = ++reqSeq;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (mySeq !== reqSeq) return;                 // a newer scan replaced this one
+        if (!res || !res.success) {
+          setPanelStatus('error', (res && res.message) || 'Lookup failed.');
+          return;
+        }
+        if (!res.found) {
+          setPanelStatus('', res.message || ('No patient registered with ID ' + pid + '.'));
+          return;
+        }
+        renderPatient(res);
+      })
+      .withFailureHandler(function (err) {
+        if (mySeq !== reqSeq) return;
+        setPanelStatus('error', 'Network error: ' + (err && err.message ? err.message : err));
+      })
+      .resolveScan(pid, context, window.sessionToken);
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+
+  function renderPatient(res) {
+    setPanelStatus('', '');
+    var pt = res.patient || {};
+
+    var pBox = $('bc-panel-patient');
+    pBox.innerHTML = '';
+    pBox.appendChild(el('div', 'bc-name', pt.name || 'Unnamed patient'));
+    pBox.appendChild(el('div', 'bc-id', pt.id + '  ·  ' + (pt.age || '-') + ' Y  ·  ' + (pt.gender || '-')));
+    if (res.admission) {
+      var a = res.admission;
+      pBox.appendChild(el('div', 'bc-chip-ip',
+        'Admitted  ' + a.ipNumber + (a.bed ? '  ·  ' + (a.ward ? a.ward + ' / ' : '') + a.bed : '') +
+        (a.consultant ? '  ·  ' + a.consultant : '')));
+    }
+    pBox.classList.remove('d-none');
+
+    renderAppointments(res);
+    renderActions(res);
+  }
+
+  function renderAppointments(res) {
+    var box = $('bc-panel-appts');
+    box.innerHTML = '';
+    box.appendChild(el('div', 'bc-section-title', "Today's appointments"));
+    var list = res.appointments || [];
+    if (!list.length) {
+      box.appendChild(el('div', 'bc-empty', 'No appointment today.'));
+    } else {
+      list.forEach(function (ap) {
+        var card = el('div', 'bc-appt');
+        var top = el('div', 'd-flex justify-content-between align-items-center');
+        top.appendChild(el('span', 'fw-semibold', ap.time12 || '--'));
+        top.appendChild(el('span', 'bc-status', STATUS_LABELS[ap.status] || ap.status));
+        card.appendChild(top);
+        card.appendChild(el('div', 'small bc-muted', (ap.doctorName || ap.doctorId) + (ap.purpose ? '  ·  ' + ap.purpose : '')));
+        box.appendChild(card);
+      });
+    }
+    box.classList.remove('d-none');
+  }
+
+  function renderActions(res) {
+    var box = $('bc-panel-actions');
+    box.innerHTML = '';
+    box.appendChild(el('div', 'bc-section-title', 'Actions'));
+    var actions = res.actions || [];
+    var pid = res.id;
+    var appts = res.appointments || [];
+    var added = 0;
+
+    if (actions.indexOf('CHECK_IN') !== -1) {
+      appts.filter(function (ap) { return ap.status === 'Booked'; }).forEach(function (ap) {
+        addButton(box, 'btn btn-sm btn-success', 'fa-solid fa-user-check',
+          'Mark arrived (' + (ap.time12 || 'today') + ')',
+          function (btn) { markStatus(btn, ap, 'Arrived', res); });
+        added++;
+      });
+    }
+    if (actions.indexOf('START_CONSULT') !== -1) {
+      addButton(box, 'btn btn-sm btn-primary', 'fa-solid fa-stethoscope', ACTION_LABELS.START_CONSULT,
+        function (btn) { startConsult(btn, pid, appts); });
+      added++;
+    }
+    if (actions.indexOf('PRINT_CARD') !== -1) {
+      addButton(box, 'btn btn-sm btn-outline-secondary', 'fa-solid fa-id-card', ACTION_LABELS.PRINT_CARD,
+        function (btn) { printCard(btn, pid); });
+      added++;
+    }
+    [['TIMELINE', 'fa-solid fa-timeline', goTimeline],
+     ['PHARMACY_BILL', 'fa-solid fa-pills', goPharmacy],
+     ['LAB_ORDERS', 'fa-solid fa-flask-vial', goLabOrders],
+     ['LAB_WALKIN', 'fa-solid fa-vial-circle-check', goLabWalkin]].forEach(function (def) {
+      if (actions.indexOf(def[0]) === -1) return;
+      addButton(box, 'btn btn-sm btn-outline-secondary', def[1], ACTION_LABELS[def[0]],
+        function () { hidePanel(); def[2](pid); });
+      added++;
+    });
+
+    if (!added) box.appendChild(el('div', 'bc-empty', 'No actions are available for your role.'));
+    box.classList.remove('d-none');
+  }
+
+  function addButton(box, cls, icon, label, onClick) {
+    var b = el('button', cls);
+    b.type = 'button';
+    var i = el('i', icon + ' me-2');
+    b.appendChild(i);
+    b.appendChild(document.createTextNode(label));
+    b.addEventListener('click', function () { onClick(b); });
+    box.appendChild(b);
+    return b;
+  }
+
+  function setBusy(btn, busy, label) {
+    if (!btn) return;
+    if (busy) {
+      btn.dataset.label = btn.textContent;
+      btn.disabled = true;
+      btn.innerHTML = '';
+      btn.appendChild(el('span', 'spinner-border spinner-border-sm me-2'));
+      btn.appendChild(document.createTextNode(label || 'Working…'));
+    } else {
+      btn.disabled = false;
+    }
+  }
+
+  function hidePanel() { var p = getPanel(); if (p) p.hide(); }
+
+  // ---------------------------------------------------------------------------
+  // ACTIONS — each drives the module's own existing entry point
+  // ---------------------------------------------------------------------------
+  function markStatus(btn, ap, target, res) {
+    setBusy(btn, true, 'Updating…');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        if (!r || !r.success) {
+          setBusy(btn, false);
+          btn.textContent = btn.dataset.label || 'Retry';
+          toast((r && r.message) || 'Could not update the appointment.', 'err');
+          return;
+        }
+        ap.status = r.status || target;
+        renderAppointments(res);
+        renderActions(res);
+        toast(r.message || ('Marked ' + target + '.'), 'ok');
+        if (isSectionActive('tab-admin-appt') && typeof loadAdminLedger === 'function') loadAdminLedger();
+      })
+      .withFailureHandler(function (err) {
+        setBusy(btn, false);
+        btn.textContent = btn.dataset.label || 'Retry';
+        toast('Network error: ' + (err && err.message ? err.message : err), 'err');
+      })
+      .barcodeUpdateAppointment(ap.apptId, target, window.sessionToken);
+  }
+
+  function startConsult(btn, pid, appts) {
+    var ap = null;
+    for (var i = 0; i < appts.length; i++) {
+      if (appts[i].status === 'Booked' || appts[i].status === 'Arrived') { ap = appts[i]; break; }
+    }
+    if (!ap) { hidePanel(); goOP(pid); return; }
+
+    setBusy(btn, true, 'Starting…');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        if (!r || !r.success) toast(((r && r.message) || 'Status not updated') + ' Opening the consultation anyway.', 'warn');
+        hidePanel();
+        goOP(pid);
+      })
+      .withFailureHandler(function () {
+        toast('Status not updated (network). Opening the consultation anyway.', 'warn');
+        hidePanel();
+        goOP(pid);
+      })
+      .barcodeUpdateAppointment(ap.apptId, 'In-Progress', window.sessionToken);
+  }
+
+  function printCard(btn, pid) {
+    if (!window.CrescLabel) { toast('Label engine is not loaded.', 'err'); return; }
+    setBusy(btn, true, 'Preparing…');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        setBusy(btn, false);
+        btn.textContent = ACTION_LABELS.PRINT_CARD;
+        if (!r || !r.success) { toast((r && r.message) || 'Could not build the card.', 'err'); return; }
+        CrescLabel.printPatientCard(r.patient);
+      })
+      .withFailureHandler(function (err) {
+        setBusy(btn, false);
+        btn.textContent = ACTION_LABELS.PRINT_CARD;
+        toast('Network error: ' + (err && err.message ? err.message : err), 'err');
+      })
+      .getPatientLabelData(pid, window.sessionToken);
+  }
+
+  function goOP(pid) {
+    var op = $('emr-workspace-op-consult');
+    var opOpen = isSectionActive('tab-admin-emr') && op && !op.classList.contains('d-none');
+    if (!opOpen) {
+      if (typeof switchTab === 'function') switchTab('tab-admin-emr', $('nav-tab-emr'));
+      if (typeof openEMRWorkspace === 'function') openEMRWorkspace('op-consult');
+    }
+    var input = $('op-search-pat-id');
+    if (!input || typeof searchEMRPatient !== 'function') { toast('OP consultation screen is not available.', 'err'); return; }
+    input.value = pid;
+    searchEMRPatient();   // keeps its own "unsaved consultation" confirmation
+  }
+
+  function goTimeline(pid) {
+    if (typeof routeToEMRTimeline === 'function') routeToEMRTimeline(pid);
+    else toast('Clinical timeline is not available.', 'err');
+  }
+
+  function goPharmacy(pid) {
+    if (!isSectionActive('pharmacy-billing-workspace') && typeof switchTab === 'function') {
+      switchTab('pharmacy-billing-workspace', $('nav-tab-pharmacy'));
+    }
+    var input = $('phSearchQuery');
+    if (!input || typeof fetchPatientForPharmacy !== 'function') { toast('Pharmacy billing is not available.', 'err'); return; }
+    input.value = pid;
+    fetchPatientForPharmacy();   // keeps its own "unsaved bill" confirmation
+  }
+
+  function goLabOrders(pid) {
+    var search = $('lx-search');
+    if (!search) { toast('Lab workspace is not available.', 'err'); return; }
+    search.value = pid;
+    if (isSectionActive('lab-workspace-view')) {
+      if (window.LabX && typeof LabX.render === 'function') LabX.render();
+    } else if (typeof switchTab === 'function') {
+      switchTab('lab-workspace-view', $('nav-tab-lab'));   // router hook runs LabX.load(), which applies the filter
+    }
+  }
+
+  function goLabWalkin(pid) {
+    if (!window.LabX || typeof LabX.openWalkin !== 'function') { toast('Lab walk-in orders are not available.', 'err'); return; }
+    if (!isSectionActive('lab-workspace-view') && typeof switchTab === 'function') {
+      switchTab('lab-workspace-view', $('nav-tab-lab'));
+    }
+    LabX.openWalkin();
+    var input = $('lx-wi-pid');
+    if (input) { input.value = pid; LabX.wiLookup(); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // AUDIT — the SERVER writes the ledger (resolveScan audits itself).
+  // The zero-click routes below go straight to their module, so they call
+  // resolveScan alongside it, concurrently: the audit costs no extra wait.
+  // ---------------------------------------------------------------------------
+  function auditScan(pid, type, context) {
+    if (!window.sessionToken) return;
+    google.script.run
+      .withSuccessHandler(function () {})
+      .withFailureHandler(function () {})
+      .resolveScan(pid, context, window.sessionToken);
+  }
+
+  // ---------------------------------------------------------------------------
+  // FEEDBACK
+  // ---------------------------------------------------------------------------
+  function beep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = 1400;
+      g.gain.value = 0.06;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.07);
+    } catch (e) { /* sound is optional */ }
+  }
+
+  function toast(msg, kind) {
+    var host = $('bc-toast-host');
+    if (!host) return;
+    var t = el('div', 'bc-toast bc-' + (kind || 'info'), msg);
+    host.appendChild(t);
+    setTimeout(function () { t.remove(); }, kind === 'err' ? 8000 : 3500);
+  }
+
+  // ---------------------------------------------------------------------------
+  // PUBLIC
+  // ---------------------------------------------------------------------------
+  window.CrescScan = {
+    start: start,
+    stop: stop,
+    /**
+     * Take over scan routing while a screen owns the task.
+     *   CrescScan.claim('lab-collect', function (cls, raw) { ... });
+     * Return false from the handler to let normal routing continue.
+     * ALWAYS pair with release() when the screen closes.
+     */
+    claim: function (name, fn) {
+      claimName = String(name || '');
+      claimFn = (typeof fn === 'function') ? fn : null;
+      claimContext = activeContext();        // auto-released when the user leaves
+    },
+    release: function (name) {
+      if (!name || name === claimName) { claimFn = null; claimName = ''; claimContext = ''; }
+    },
+    claimed: function () { return claimName; },
+    /** Testing without hardware: CrescScan.simulate('LMTVS0001') in the browser console. */
+    simulate: function (text) {
+      if (!enabled) { console.warn('Scanner is not active. Sign in as staff first.'); return; }
+      handleScan(String(text || ''), 'SIMULATED');
+    }
+  };
+})();
+</script>

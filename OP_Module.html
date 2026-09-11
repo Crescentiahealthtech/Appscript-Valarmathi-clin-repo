@@ -1412,7 +1412,7 @@ function doSearchEMRPatient(pId, isSwitch) {
     }).withFailureHandler(function (err) {
         document.getElementById('hd-pat-name').innerText = "Search Failed";
         opToast("Backend Network Error: " + err.message, 'err');
-    }).getUserProfile(pId);
+    }).getUserProfile(pId, window.sessionToken);
 }
 
 function loadAllergies(pId) {
@@ -3039,7 +3039,7 @@ function dispatchOPWhatsApp() {
   }).withFailureHandler(function () {
     restore();
     opToast("Could not verify patient contact details.", 'err');
-  }).getUserProfile(patientId);
+  }).getUserProfile(patientId, window.sessionToken);
 }
 
 function sendOPWhatsAppTo(mobileNumber, btn, originalHtml) {
@@ -3092,7 +3092,7 @@ function dispatchOPEmail() {
   }).withFailureHandler(function () {
     btn.innerHTML = originalHtml; btn.disabled = false;
     opToast("Could not verify patient contact details.", 'err');
-  }).getUserProfile(patientId);
+  }).getUserProfile(patientId, window.sessionToken);
 }
 
 function sendOPEmailTo(patientEmail, btn, originalHtml) {

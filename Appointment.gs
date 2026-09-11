@@ -1,3 +1,6 @@
+var APPT_ALLOWED_STATUSES = ['Booked', 'Arrived', 'In-Progress', 'Completed', 'Cancelled'];
+var APPT_STATUS_WRITERS   = ['admin', 'doctor', 'receptionist', 'reception', 'nurse'];
+
 // ==========================================
 // 🚀 APPOINTMENT MODULE ENGINE
 // ==========================================
@@ -180,22 +183,82 @@ function submitNewAppointment(apptObj) {
 }
 
 // 5. UPDATE APPOINTMENT STATUS (Queue advancement / Deletion)
-function updateAppointmentStatus(apptId, newStatus) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('Appointments');
-  const data = sheet.getDataRange().getValues();
-  for(let i = 1; i < data.length; i++) {
-    if(data[i][0] == apptId) {
-      if(newStatus === "DELETE") {
-        sheet.deleteRow(i + 1);
-      } else {
-        sheet.getRange(i + 1, 7).setValue(newStatus);
-      }
-      SpreadsheetApp.flush(); 
-      return "Status updated!";
+/**
+ * Appointment ledger status writer. SESSION REQUIRED.
+ *
+ * Previously this ran with no lock, no session check and no scope check: any
+ * caller with the /exec URL could rewrite — or permanently delete — any
+ * appointment row. It now matches the guarantees the scan check-in path
+ * already had (Barcode_Engine.gs), so both writers are equally safe.
+ *
+ * DELETE still removes the row, because that is what the ledger's delete
+ * button has always meant. It is now audited WITH a snapshot of the deleted
+ * row, so a mistaken delete is recoverable from Audit_Log.
+ */
+function updateAppointmentStatus(apptId, newStatus, sessionToken) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    const sess = dc_validateSession_(sessionToken);
+    if (!sess) return "Your session has expired. Please sign in again.";
+
+    const role = dc_str_(sess.role).toLowerCase();
+    if (APPT_STATUS_WRITERS.indexOf(role) === -1) {
+      return "Your role cannot change appointment status.";
     }
+
+    const id = dc_str_(apptId);
+    const target = dc_str_(newStatus);
+    if (!id) return "Appointment ID is missing.";
+    if (target !== "DELETE" && APPT_ALLOWED_STATUSES.indexOf(target) === -1) {
+      return "Unknown status: " + target;
+    }
+    if (target === "DELETE" && role !== "admin" && role !== "receptionist" && role !== "reception") {
+      return "Your role cannot delete appointments.";
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
+    if (!sheet || sheet.getLastRow() < 2) return "Appointments sheet is missing.";
+
+    const cell = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1)
+      .createTextFinder(id).matchEntireCell(true).findNext();
+    if (!cell) return "Error updating.";
+
+    const rowNum = cell.getRow();
+    const lastCol = sheet.getLastColumn();
+    const row = sheet.getRange(rowNum, 1, 1, lastCol).getValues()[0];
+
+    // Doctors may only touch their own column of the ledger.
+    const m = dc_headerMap_(sheet);
+    const docIdx = (m['Doctor_ID'] === undefined) ? -1 : m['Doctor_ID'];
+    const rowDoc = (docIdx === -1) ? DC_DEFAULT_DOCTOR : (dc_str_(row[docIdx]) || DC_DEFAULT_DOCTOR);
+    const scope = resolveScope_(sessionToken, null);
+    if (!dc_inScope_(scope, rowDoc)) return "This appointment belongs to another doctor.";
+
+    const previous = dc_str_(row[6]);
+
+    if (target === "DELETE") {
+      // Snapshot first: once the row is gone the audit entry is the only record.
+      logAudit_(sess, 'APPOINTMENT_DELETED', 'Appointment', id, {
+        patientId: dc_upper_(row[1]),
+        status: previous,
+        row: row.map(function (v) { return (v instanceof Date) ? v.toISOString() : String(v); })
+      });
+      sheet.deleteRow(rowNum);
+    } else {
+      sheet.getRange(rowNum, 7).setValue(target);
+      logAudit_(sess, 'APPOINTMENT_STATUS', 'Appointment', id,
+                { from: previous, to: target, patientId: dc_upper_(row[1]) });
+    }
+
+    SpreadsheetApp.flush();
+    return "Status updated!";
+  } catch (e) {
+    return "Error updating: " + e.message;
+  } finally {
+    try { lock.releaseLock(); } catch (e2) {}
   }
-  return "Error updating.";
 }
 
 // 6. BATCH OPTIMIZED AVAILABILITY SAVER

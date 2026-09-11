@@ -101,6 +101,7 @@
   }
 
   function logoutUser(message) {
+    if (window.CrescScan) window.CrescScan.stop();   // before the token is cleared
     clearInterval(sessionInterval);
     clearStoredSession();
 
@@ -438,6 +439,11 @@
 
     if (typeof applyRBAC === 'function') applyRBAC(window.loggedInRole);
 
+    // Barcode scanner (Barcode_Router.html): staff only.
+    if (window.CrescScan) {
+      if (isPatient) window.CrescScan.stop(); else window.CrescScan.start();
+    }
+
     // Warm the doctor cache for clinical roles so the first picker paints fast.
     if (!isPatient && window.sessionToken && typeof window.loadDoctorContext === 'function') {
       window.loadDoctorContext(function () {});
@@ -474,6 +480,7 @@
   // 7. CENTRAL SIGN-OUT / SESSION TEARDOWN
   // ==========================================
   function performSignOut() {
+    if (window.CrescScan) window.CrescScan.stop();   // before the token is cleared
     clearInterval(sessionInterval);
 
     try {

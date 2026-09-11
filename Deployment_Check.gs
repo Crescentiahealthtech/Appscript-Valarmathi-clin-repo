@@ -66,7 +66,12 @@ var DEP_MAP = {
   "OP_Database_Engine.gs":  ["fetchOPDrugMaster", "fetchUniversalDrugs", "saveOPEncounter"],
   "Lab_OPD_Bridge.gs":      ["getOPDOrderableTests", "createOPDLabOrder"],
   "LabIntegrationEngine.gs":["createLabRequest", "getOrderableTests"],
-  "IP_Admissions_Logic.gs": ["getActiveIPWard", "saveNewAdmissionLedger"]
+  "IP_Admissions_Logic.gs": ["getActiveIPWard", "saveNewAdmissionLedger"],
+  "Barcode_Engine.gs":      ["bc_nextPatientId_", "bc_nextDailyId_", "getScanRouterConfig",
+                             "resolveScan", "barcodeUpdateAppointment", "bc_auditScan_",
+                             "auditDuplicatePatientIds", "getPatientLabelData",
+                             "getSampleLabelData", "verifyCollectionIdentity",
+                             "receiveLabSampleByBarcode"]
 };
 
 /**

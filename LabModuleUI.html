@@ -435,6 +435,7 @@ var LabX = (function () {
   /* ════════ STAGE BODY ROUTER ════════ */
   function _renderStageBody(){
     var b=$('lx-am-body'), s=_cur.status;
+    _scanClaim(s);
     if(s==='PENDING')                   b.innerHTML=_uiBilling();
     else if(s==='BILLED'||s==='RECOLLECT'){ b.innerHTML=_uiCollect(s==='RECOLLECT'); setTimeout(function(){ _loadTubes(); },50); }
     else if(s==='SAMPLE_COLLECTED')     b.innerHTML=_uiReceive();
@@ -549,10 +550,90 @@ var LabX = (function () {
   
 
   /* ════════ PANEL: COLLECTION ════════ */
+  /* Barcode identity gate. The tube cannot be recorded until the patient's own
+     code has been scanned and matched against this order on the server. This is
+     the control against wrong-blood-in-tube: a verbal name check happens at the
+     bedside, but the tube is labelled at the trolley, which is where the swap
+     occurs. _idOk is reset for every order and every re-render. */
+  var _idOk=false, _idOrder='';
+
+  function _idVerified(){ return _idOk && _idOrder===(_cur&&_cur.orderId); }
+
+  function _uiIdGate(){
+    if(_idVerified()){
+      return '<div class="alert py-2 px-3 small mb-3" style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);">'+
+        '<i class="fa-solid fa-shield-check me-1"></i><strong>Identity confirmed by barcode</strong> — '+
+        esc(_cur.patientName)+' · '+esc(_cur.patientId)+'</div>';
+    }
+    return '<div class="alert py-2 px-3 small mb-3" id="lx-idgate" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);">'+
+      '<div><i class="fa-solid fa-barcode me-1"></i><strong>Scan the patient\'s card or wristband to unlock collection.</strong></div>'+
+      '<div class="mt-1" style="font-size:.78rem;">This order belongs to <strong>'+esc(_cur.patientName)+' · '+esc(_cur.patientId)+'</strong>. '+
+      'Tubes cannot be recorded until the scan matches.</div>'+
+      '<div class="d-flex gap-2 mt-2 align-items-center flex-wrap">'+
+        '<input id="lx-id-manual" data-scan="native" class="form-control form-control-sm" style="max-width:190px;" placeholder="or type the patient ID">'+
+        '<button class="btn btn-sm" style="border:1px solid var(--warning);color:var(--warning-fg);background:transparent;" onclick="LabX.verifyId(document.getElementById(\'lx-id-manual\').value)">Verify</button>'+
+        '<span id="lx-id-msg" style="font-size:.78rem;"></span>'+
+      '</div></div>';
+  }
+
+  /* Routes a scan made anywhere on this screen into the identity check or,
+     once identity is settled, into bench receiving. */
+  function _scanClaim(stage){
+    if(!window.CrescScan||!CrescScan.claim) return;
+    if(stage==='BILLED'||stage==='RECOLLECT'){
+      CrescScan.claim('lab-collect', function(cls){
+        if(document.querySelector('.modal.show')) return false;   // a dialog owns the scan
+        if(cls.type!=='PATIENT'){ flash('Scan the patient\'s card, not a tube.',false); return true; }
+        verifyId(cls.value); return true;
+      });
+    } else if(stage==='SAMPLE_COLLECTED'){
+      CrescScan.claim('lab-receive', function(cls){
+        if(document.querySelector('.modal.show')) return false;
+        if(cls.type!=='LAB_SAMPLE'){ flash('Scan a tube barcode.',false); return true; }
+        receiveScan(cls.value); return true;
+      });
+    } else {
+      CrescScan.release();
+    }
+  }
+
+  function verifyId(code){
+    var c=String(code||'').trim();
+    if(!c){ flash('Scan or type the patient ID.',false); return; }
+    var msg=$('lx-id-msg'); if(msg) msg.textContent='Checking…';
+    run('verifyCollectionIdentity',[_cur.orderId,c,window.sessionToken],function(res){
+      if(!res||!res.success){ flash((res&&res.message)||'Identity check failed.',false); if(msg)msg.textContent=''; return; }
+      if(res.match){
+        _idOk=true; _idOrder=_cur.orderId;
+        flash(res.message,true);
+        _renderStageBody(); setTimeout(function(){ _loadTubes(); },50);
+      } else {
+        _idOk=false; _idOrder='';
+        if(msg){ msg.textContent=''; }
+        _idAlert(res);
+      }
+    },'Verifying identity…');
+  }
+
+  /* A mismatch is a full-width stop, not a toast: it must not be possible to
+     scroll past it and carry on drawing the tube. */
+  function _idAlert(res){
+    var g=$('lx-idgate'); if(!g){ flash(res.message,false); return; }
+    g.style.background='var(--danger-bg)'; g.style.borderColor='var(--danger)'; g.style.color='var(--danger-fg)';
+    g.innerHTML='<div class="fw-bold"><i class="fa-solid fa-triangle-exclamation me-1"></i>STOP — WRONG PATIENT</div>'+
+      '<div class="mt-1" style="font-size:.8rem;">This order belongs to <strong>'+esc(res.expected&&res.expected.name)+' · '+esc(res.expected&&res.expected.id)+'</strong>.</div>'+
+      '<div style="font-size:.8rem;">You scanned <strong>'+esc((res.scanned&&res.scanned.name)||'an unknown patient')+
+        (res.scanned&&res.scanned.id?' · '+esc(res.scanned.id):'')+'</strong>.</div>'+
+      '<div class="mt-1" style="font-size:.78rem;">Do not draw this tube. Confirm the patient, then scan again. This near miss has been recorded.</div>'+
+      '<button class="btn btn-sm mt-2" style="border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" onclick="LabX.rescan()">Scan again</button>';
+  }
+
+  function rescan(){ _idOk=false; _idOrder=''; _renderStageBody(); setTimeout(function(){ _loadTubes(); },50); }
+
   function _uiCollect(isRec){
   _sampN=0;
   return(isRec?'<div class="alert py-2 px-3 small mb-3" style="background:var(--danger-bg);border:1px solid var(--danger);color:var(--danger-fg);"><i class="fa-solid fa-rotate-left me-1"></i>RECOLLECTION — previous tube(s) rejected. Fresh collection restarts TAT clock.</div>':'')+
-    '<div class="alert py-2 px-3 small mb-3" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);"><i class="fa-solid fa-id-card me-1"></i><strong>Two-point ID:</strong> Patient states name + DOB. Confirm against <strong>'+esc(_cur.patientName)+' · '+esc(_cur.patientId)+'</strong></div>'+
+    _uiIdGate()+
     '<div class="p-3 rounded" style="background:var(--bg-input);"><div class="d-flex justify-content-between align-items-center mb-3"><span class="text-white-force fw-semibold">Tubes <span class="label-bright fw-normal ms-1" style="font-size:.73rem;">Auto-suggested from ordered tests — add, delete or change as needed</span></span><button class="btn btn-sm" style="background:var(--violet-bg);border:1px solid var(--violet);color:var(--violet-fg);font-size:.78rem;" onclick="LabX.addTube()"><i class="fa-solid fa-plus me-1"></i>Add Tube</button></div>'+
     '<div id="lxTubes"></div>'+
     '<button class="btn btn-sm fw-semibold mt-2" style="background:var(--violet-bg);border:1px solid var(--violet);color:var(--violet-fg);" onclick="LabX.doCollect()"><i class="fa-solid fa-vial me-1"></i>Confirm Collection</button></div>';
@@ -564,22 +645,85 @@ var LabX = (function () {
   function addTube(preType){var n=++_sampN;var h=$('lxTubes');if(!h)return;var sel=String(preType||'');h.insertAdjacentHTML('beforeend','<div class="lxTube" id="lxT-'+n+'"><span class="label-bright fw-semibold" style="width:20px;flex-shrink:0;">'+n+'.</span><select class="form-select form-select-sm lxTT" style="max-width:270px;">'+TUBES.map(function(o){var p=o.split('|');return'<option value="'+p[0]+'"'+(p[0]===sel?' selected':'')+'>'+p[1]+'</option>';}).join('')+'</select><span class="label-bright flex-grow-1 text-center" style="font-size:.7rem;" id="lxBC-'+n+'"></span><button class="btn btn-sm ms-auto" style="border:1px solid var(--border-color);color:var(--danger-fg);background:transparent;" onclick="document.getElementById(\'lxT-'+n+'\').remove()"><i class="fa-solid fa-trash"></i></button></div>');}
 
   function doCollect(){
+    if(!_idVerified()){ flash('Scan the patient\'s card first — identity is not confirmed.',false); return; }
     var tubes=[]; document.querySelectorAll('#lxTubes .lxTT').forEach(function(s){tubes.push({sampleType:s.value});});
     if(!tubes.length){ flash('Add at least one tube.',false); return; }
-    run('collectLabSample',[{orderId:_cur.orderId,samples:tubes}],function(res){
-      if(res&&res.success){ flash(res.message,true); _refreshPanel(); } else flash((res&&res.message)||'Collection failed.',false);
+    var oid=_cur.orderId;
+    run('collectLabSample',[{orderId:oid,samples:tubes}],function(res){
+      if(res&&res.success){
+        flash(res.message,true);
+        _idOk=false; _idOrder='';           // identity is proven per collection, never carried over
+        printTubeLabels(oid);               // labels while the tubes are still in hand
+        _refreshPanel();
+      } else flash((res&&res.message)||'Collection failed.',false);
     },'Recording collection…');
   }
 
+  /* Tube labels are fetched and printed straight after collection, because a
+     tube that leaves the room unlabelled is the same failure the identity gate
+     just prevented. */
+  function printTubeLabels(orderId){
+    if(!window.CrescLabel){ flash('Label engine is not loaded.',false); return; }
+    run('getSampleLabelData',[orderId||_cur.orderId,window.sessionToken],function(res){
+      if(!res||!res.success){ flash((res&&res.message)||'Could not build tube labels.',false); return; }
+      CrescLabel.printTubeLabels(res.tubes);
+    },'Building tube labels…');
+  }
+
   /* ════════ PANEL: RECEIVE / REJECT ════════ */
+  /* Tubes confirmed at the bench by scan, this visit. receiveLabSample(orderId)
+     receives a whole order at once, so a tube that never arrived is marked
+     received and starts a TAT clock against a specimen nobody has. Scanning
+     each tube makes the missing one visible here instead of at result entry. */
+  var _rcv={};
+
+  function receiveScan(code){
+    run('receiveLabSampleByBarcode',[code,window.sessionToken],function(res){
+      if(!res||!res.success){
+        _rcv[String(code).toUpperCase()]={bad:true,msg:(res&&res.message)||'Unknown tube.'};
+        flash((res&&res.message)||'Tube not recognised.',false);
+        _paintRcv();
+        return;
+      }
+      _rcv[String(res.barcode).toUpperCase()]={ok:true,dup:res.duplicate};
+      flash(res.message,!res.duplicate);
+      _paintRcv();
+      if(res.complete) _refreshPanel();
+    },'Receiving tube…');
+  }
+
+  function _paintRcv(){
+    (_cur._samples||[]).forEach(function(s){
+      var st=_rcv[String(s.barcode).toUpperCase()];
+      var el=$('lx-rcv-'+s.barcode);
+      if(!el) return;
+      if(st&&st.ok){ el.textContent=st.dup?'ALREADY IN':'RECEIVED'; el.style.color='var(--success-fg)'; el.style.borderColor='var(--success)'; }
+      else if(st&&st.bad){ el.textContent='NOT RECOGNISED'; el.style.color='var(--danger-fg)'; el.style.borderColor='var(--danger)'; }
+    });
+    var out=(_cur._samples||[]).filter(function(s){ var st=_rcv[String(s.barcode).toUpperCase()]; return !(st&&st.ok); }).length;
+    var c=$('lx-rcv-count');
+    if(c) c.textContent = out ? (out+' tube(s) not yet scanned in') : 'All tubes scanned in';
+  }
+
   function _uiReceive(){
+    _rcv={};
     var samps=(_cur._samples||[]).map(function(s){
       return '<div class="d-flex justify-content-between align-items-center px-3 py-2 rounded mb-1" style="background:var(--bg-card);border:1px solid var(--border-color);">'+
         '<span class="text-white-force small"><i class="fa-solid fa-vial me-2" style="color:var(--violet-fg);"></i>'+esc(s.sampleType.replace(/_/g,' '))+'</span>'+
         '<span class="d-flex gap-3 align-items-center"><code class="label-bright" style="font-size:.7rem;">'+esc(s.barcode)+'</code>'+
-        '<span class="lx-stage-pill">'+esc(s.status)+'</span></span></div>';
+        '<span class="lx-stage-pill" id="lx-rcv-'+esc(s.barcode)+'">'+esc(s.status)+'</span></span></div>';
     }).join('');
     return '<div class="p-3 rounded" style="background:var(--bg-input);">'+
+      '<div class="alert py-2 px-3 small mb-3" style="background:var(--info-bg);border:1px solid var(--info);color:var(--info);">'+
+        '<i class="fa-solid fa-barcode me-1"></i><strong>Scan each tube as it reaches the bench.</strong> '+
+        '<span id="lx-rcv-count" class="ms-1"></span>'+
+        '<div class="d-flex gap-2 mt-2 align-items-center flex-wrap">'+
+          '<input id="lx-rcv-manual" data-scan="native" class="form-control form-control-sm" style="max-width:210px;" placeholder="or type a tube barcode">'+
+          '<button class="btn btn-sm" style="border:1px solid var(--info);color:var(--info);background:transparent;" '+
+            'onclick="LabX.receiveScan(document.getElementById(\'lx-rcv-manual\').value); document.getElementById(\'lx-rcv-manual\').value=\'\';">Receive tube</button>'+
+          '<button class="btn btn-sm" style="border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" '+
+            'onclick="LabX.printTubeLabels()"><i class="fa-solid fa-print me-1"></i>Reprint labels</button>'+
+        '</div></div>'+
       '<div class="label-bright small mb-2">SAMPLES IN TRANSIT</div>'+samps+
       '<div class="d-flex gap-2 mt-3 flex-wrap">'+
         '<button class="btn btn-sm fw-semibold" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);" onclick="LabX.doReceive();"><i class="fa-solid fa-flask me-1"></i>Receive at Bench & Start Processing</button>'+
@@ -876,6 +1020,7 @@ var LabX = (function () {
   /* ════════ public API ════════ */
   return{
     load:load, render:render, setTab:setTab,
+    verifyId:verifyId, rescan:rescan, receiveScan:receiveScan, printTubeLabels:printTubeLabels,
     openPanel:openPanel, doBill:doBill,pm:pm, bCalc:bCalc,
     addTube:addTube, doCollect:doCollect, doReceive:doReceive, doReject:doReject,
     onVal:onVal, saveDraft:saveDraft, submitResults:submitResults, doVerify:doVerify, sendBack:sendBack,

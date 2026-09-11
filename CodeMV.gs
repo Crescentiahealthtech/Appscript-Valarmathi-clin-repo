@@ -85,9 +85,10 @@ function registerPatient(data) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('Patients');
     
-    // 1. Generate Patient ID
-    // (If row is 1, it becomes LMTVS0001, etc.)
-    const newId = "LMTVS" + (sheet.getLastRow()).toString().padStart(4, '0');
+    // 1. Generate Patient ID — Barcode_Engine.gs
+    // Never reuses an ID after row deletion (the old getLastRow() scheme did,
+    // which would make a printed patient barcode open the wrong record).
+    const newId = bc_nextPatientId_(sheet);
     
     // 2. BACKEND PASSWORD GENERATOR (Name 3 char + YYYY)
     let namePart = data.name ? data.name.toString().trim().replace(/[^a-zA-Z]/g, '') : "UNK";
@@ -131,6 +132,7 @@ function registerPatient(data) {
     SpreadsheetApp.flush(); 
     return { 
       success: true, 
+      patientId: newId,          // so the registration screen can print the card
       message: `Patient Registered Successfully!\nID: ${newId}\nPassword: ${generatedPassword}` 
     };
     
@@ -224,45 +226,83 @@ function initializeDatabase() {
   });
 }
 
-function getUserProfile(patientId) {
+/**
+ * Internal patient-profile reader. NO session check — every caller must
+ * enforce its own access rule. The password column (B) is never read here,
+ * so no caller can leak it by accident.
+ */
+function pt_readProfile_(patientId) {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Patients");
-    const data = sheet.getDataRange().getValues();
-    
-    for (let i = 1; i < data.length; i++) {
-      // Find the row where Column A matches the Patient ID
-      if (data[i][0].toString().toUpperCase() === patientId.toUpperCase()) {
-        return {
-          id: data[i][0],             // A
-          password: data[i][1],       // B
-          name: data[i][2],           // C
-          age: data[i][3],            // D
-          gender: data[i][4],         // E
-          dob: (data[i][5] instanceof Date) ? Utilities.formatDate(data[i][5], Session.getScriptTimeZone(), "yyyy-MM-dd") : data[i][5].toString(), // F
-          mobile: data[i][6],         // G
-          whatsapp: data[i][7],       // H
-          address: data[i][8],        // I
-          comorb: data[i][9],         // J
-          
-          // === NEW EXTENDED FIELDS ===
-          regDate: data[i][10] ? data[i][10].toString() : "", // K
-          salutation: data[i][11] || "",                      // L
-          maritalStatus: data[i][12] || "",                   // M
-          bloodGroup: data[i][13] || "",                      // N
-          occupation: data[i][14] || "",                      // O
-          education: data[i][15] || "",                       // P
-          email: data[i][16] || "",                           // Q
-          relationType: data[i][17] || "",                    // R
-          relationName: data[i][18] || "",                    // S
-          emergencyName: data[i][19] || "",                   // T
-          emergencyNumber: data[i][20] || "",                 // U
-          referredBy: data[i][21] || ""                       // V
-        };
-      }
-    }
+    if (!sheet || sheet.getLastRow() < 2) return null;
+    const want = String(patientId || "").trim().toUpperCase();
+    if (!want) return null;
+
+    // TextFinder instead of getDataRange(): a 10,000-row patient master is not
+    // read into memory to answer a single-ID lookup.
+    const cell = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1)
+      .createTextFinder(want).matchEntireCell(true).matchCase(false).findNext();
+    if (!cell) return null;
+
+    const row = sheet.getRange(cell.getRow(), 1, 1, Math.max(22, sheet.getLastColumn())).getValues()[0];
+    return {
+      id: row[0],                 // A
+      // Column B is the patient portal password. Deliberately NOT returned.
+      name: row[2],               // C
+      age: row[3],                // D
+      gender: row[4],             // E
+      dob: (row[5] instanceof Date) ? Utilities.formatDate(row[5], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(row[5] || ""), // F
+      mobile: row[6],             // G
+      whatsapp: row[7],           // H
+      address: row[8],            // I
+      comorb: row[9],             // J
+      regDate: row[10] ? row[10].toString() : "", // K
+      salutation: row[11] || "",                  // L
+      maritalStatus: row[12] || "",               // M
+      bloodGroup: row[13] || "",                  // N
+      occupation: row[14] || "",                  // O
+      education: row[15] || "",                   // P
+      email: row[16] || "",                       // Q
+      relationType: row[17] || "",                // R
+      relationName: row[18] || "",                // S
+      emergencyName: row[19] || "",               // T
+      emergencyNumber: row[20] || "",             // U
+      referredBy: row[21] || ""                   // V
+    };
+  } catch (e) {
     return null;
-  } catch (e) { 
-    return null; 
+  }
+}
+
+/**
+ * Patient profile for the browser. SESSION REQUIRED.
+ *
+ * Previously this took only a patient ID, ran with no session check, and
+ * returned the portal password alongside DOB, mobile and address. With the web
+ * app deployed as "anyone, even anonymous" and patient IDs sequential, anyone
+ * holding the /exec URL could walk LMTVS0001, 0002 ... from the console and
+ * harvest credentials. Printed patient barcodes make those IDs public, so this
+ * is now closed:
+ *   - staff session   -> any patient, minus the password column
+ *   - patient session -> their own record only
+ *   - no valid session -> null
+ */
+function getUserProfile(patientId, sessionToken) {
+  try {
+    const sess = dc_validateSession_(sessionToken);
+    if (!sess) return null;
+
+    const role = String(sess.role || "").trim().toLowerCase();
+    const want = String(patientId || "").trim().toUpperCase();
+    if (!want) return null;
+
+    // A patient may read only themselves. Their session username IS their ID.
+    if (role === "patient" && String(sess.username || "").trim().toUpperCase() !== want) {
+      return null;
+    }
+    return pt_readProfile_(want);
+  } catch (e) {
+    return null;
   }
 }
 

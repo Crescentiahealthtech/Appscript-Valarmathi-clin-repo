@@ -141,6 +141,9 @@
 
     <!-- Status Message Area -->
     <div id="reg-status-msg" class="mb-3 small fw-bold d-none"></div>
+    <!-- Card printing lives outside the status banner: that banner self-hides
+         after 5 seconds, which is not long enough to print a patient card. -->
+    <div id="reg-card-actions" class="mb-3"></div>
 
     <button id="btn-admin-reg" class="btn text-white w-100 fw-bold py-3 mt-2 on-accent" style="background-color: var(--accent-purple); border-radius: 8px;" onclick="adminRegisterPatient()">
       <span id="btn-text">Create Patient ID</span>
@@ -218,6 +221,8 @@
     }
     
     // Loading State
+    const cardHost = document.getElementById('reg-card-actions');
+    if (cardHost) cardHost.innerHTML = '';
     btnText.innerText = "Generating ID...";
     btnSpinner.classList.remove('d-none');
     btn.disabled = true;
@@ -231,6 +236,9 @@
       
       if (res.success) { 
         showStatus(res.message || "Patient successfully registered!");
+        // Offer the barcode card straight away — the one moment the patient is
+        // still at the desk to receive it.
+        offerPatientCard(res.patientId);
         // Clear all inputs
         document.querySelectorAll('#tab-admin-reg input, #tab-admin-reg textarea, #tab-admin-reg select').forEach(el => {
           if(el.type !== 'button') el.value = '';
@@ -244,5 +252,62 @@
       btn.disabled = false;
       showStatus("An error occurred connecting to the server.", true);
     }).registerPatient(data); 
+  }
+
+  /**
+   * Post-registration card printing. The QR on the card carries the patient ID
+   * and nothing else — no name, date of birth or diagnosis ever goes into the
+   * code itself.
+   */
+  function offerPatientCard(patientId) {
+    if (!patientId) return;
+    const host = document.getElementById('reg-card-actions');
+    if (!host || !window.CrescLabel) return;
+    host.innerHTML = '';
+
+    const bar = document.createElement('div');
+    bar.className = 'd-flex gap-2 align-items-center flex-wrap';
+
+    const note = document.createElement('span');
+    note.className = 'small';
+    note.style.color = 'var(--text-muted)';
+    note.textContent = patientId + ' registered —';
+    bar.appendChild(note);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm fw-semibold';
+    btn.style.cssText = 'background:var(--accent-purple);border:none;color:#fff;';
+    btn.innerHTML = '<i class="fa-solid fa-id-card me-1"></i>Print patient card';
+    btn.onclick = function () { printCardFor(patientId, btn); };
+
+    const sticker = document.createElement('button');
+    sticker.type = 'button';
+    sticker.className = 'btn btn-sm';
+    sticker.style.cssText = 'border:1px solid var(--border-color);color:var(--text-main);background:transparent;';
+    sticker.innerHTML = '<i class="fa-solid fa-tag me-1"></i>Chart sticker';
+    sticker.onclick = function () { printCardFor(patientId, sticker, true); };
+
+    bar.appendChild(btn);
+    bar.appendChild(sticker);
+    host.appendChild(bar);
+  }
+
+  function printCardFor(patientId, btn, asSticker) {
+    const label = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Preparing…';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false; btn.innerHTML = label;
+        if (!r || !r.success) { alert((r && r.message) || 'Could not build the card.'); return; }
+        if (asSticker) CrescLabel.printPatientSticker(r.patient);
+        else CrescLabel.printPatientCard(r.patient);
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false; btn.innerHTML = label;
+        alert('Could not reach the server: ' + (err && err.message ? err.message : err));
+      })
+      .getPatientLabelData(patientId, window.sessionToken);
   }
 </script>

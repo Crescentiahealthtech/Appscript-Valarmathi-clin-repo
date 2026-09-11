@@ -54,7 +54,7 @@ function getDoctorSchedule(doctorId, sessionToken) {
 
     var doc = dc_getDoctorById_(target);
     var sh = ds_scheduleSheet_();
-    var data = dc_sheetValues_(sh);
+    var data = sh.getDataRange().getDisplayValues();
     var tenant = getTenantId_();
     var rows = [];
 
@@ -150,7 +150,7 @@ function saveDoctorSchedule(payload, sessionToken) {
 
     // --- swap: delete this doctor's rows, append the new set ---------------
     var sh = ds_scheduleSheet_();
-    var data = dc_sheetValues_(sh);
+    var data = sh.getDataRange().getDisplayValues();
     for (var d = data.length - 1; d >= 1; d--) {
       if (dc_upper_(data[d][2]) === dc_upper_(w.doctorId) && dc_str_(data[d][1]) === tenant) {
         sh.deleteRow(d + 1);
@@ -158,7 +158,6 @@ function saveDoctorSchedule(payload, sessionToken) {
     }
     if (clean.length > 0) {
       sh.getRange(sh.getLastRow() + 1, 1, clean.length, clean[0].length).setValues(clean);
-      dc_invalidate_(sh.getName());
     }
 
     SpreadsheetApp.flush();
@@ -252,7 +251,6 @@ function addScheduleException(payload, sessionToken) {
 
     var sh = ds_exceptionSheet_();
     sh.getRange(sh.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
-    dc_invalidate_(sh.getName());
     SpreadsheetApp.flush();
 
     logAudit_(w.sess, "SCHEDULE_EXCEPTION_ADD", "Doctor", w.doctorId,
@@ -281,7 +279,7 @@ function getScheduleExceptions(doctorId, fromDate, toDate, sessionToken) {
 
     var from = dc_dateKey_(fromDate), to = dc_dateKey_(toDate || fromDate);
     var sh = ds_exceptionSheet_();
-    var data = dc_sheetValues_(sh);
+    var data = sh.getDataRange().getDisplayValues();
     var rows = [];
 
     for (var i = 1; i < data.length; i++) {
@@ -314,7 +312,7 @@ function deleteScheduleException(exceptionId, sessionToken) {
     if (!sess) return { success: false, message: "Your session has expired." };
 
     var sh = ds_exceptionSheet_();
-    var data = dc_sheetValues_(sh);
+    var data = sh.getDataRange().getDisplayValues();
     var target = dc_upper_(exceptionId);
 
     for (var i = 1; i < data.length; i++) {
@@ -408,7 +406,7 @@ function ds_bookingsByTime_(doctorId, dateKey) {
   var out = {};
   if (!sh || sh.getLastRow() < 2) return out;
 
-  var data = dc_sheetValues_(sh);
+  var data = sh.getDataRange().getDisplayValues();
   var m = dc_headerMap_(sh);
   var docCol = (m["Doctor_ID"] === undefined) ? -1 : m["Doctor_ID"];
   var docU = dc_upper_(doctorId);
@@ -590,7 +588,7 @@ function bookAppointmentScoped(payload, sessionToken) {
       return { success: false, message: "Run runMultiDoctorMigration() before booking." };
     }
 
-    var data = dc_sheetValues_(sh);
+    var data = sh.getDataRange().getDisplayValues();
     var liveStatuses = ["Booked", "Arrived", "In-Progress"];
     var sameSlot = 0;
 
@@ -636,7 +634,6 @@ function bookAppointmentScoped(payload, sessionToken) {
     if (m["Attribution_Source"] !== undefined)   row[m["Attribution_Source"]] = "RECORDED";
 
     sh.appendRow(row);
-    dc_invalidate_(sh.getName());
     SpreadsheetApp.flush();
 
     logAudit_(sess, "APPOINTMENT_BOOK", "Appointment", newId,
@@ -678,28 +675,16 @@ function fetchDailyLedgerScoped(dateStr, doctorId, sessionToken) {
     var docCol  = (m["Doctor_ID"] === undefined) ? -1 : m["Doctor_ID"];
     var snapCol = (m["Doctor_Name_Snapshot"] === undefined) ? -1 : m["Doctor_Name_Snapshot"];
 
-    var data = dc_sheetValues_(apptSheet);
-
-    // Which patients actually appear on this date? Building the demographics
-    // map for the WHOLE Patients sheet, to decorate the dozen rows on one
-    // day's ledger, is most of what made this screen slow.
-    var needed = {};
-    for (var q = 1; q < data.length; q++) {
-      if (dc_dateKey_(data[q][3]) !== dateKey) continue;
-      var qp = dc_upper_(data[q][1]);
-      if (qp && qp !== "ADMIN") needed[qp] = true;
-    }
-
+    // Patient demographics map
     var patMap = {};
     if (patSheet && patSheet.getLastRow() > 1) {
-      var pd = dc_sheetValues_(patSheet);
+      var pd = patSheet.getDataRange().getDisplayValues();
       for (var p = 1; p < pd.length; p++) {
-        var pk = dc_upper_(pd[p][0]);
-        if (!needed[pk]) continue;
-        patMap[pk] = { age: dc_str_(pd[p][3]), sex: dc_str_(pd[p][4]) };
+        patMap[dc_upper_(pd[p][0])] = { age: dc_str_(pd[p][3]), sex: dc_str_(pd[p][4]) };
       }
     }
 
+    var data = apptSheet.getDataRange().getDisplayValues();
     var ledger = [];
 
     for (var i = 1; i < data.length; i++) {

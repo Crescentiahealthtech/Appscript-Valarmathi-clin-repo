@@ -4,8 +4,9 @@
 
 function searchPatientForEMR(patientId) {
   try {
-    // 🚀 ROUTED TO YOUR FLAWLESS MASTER FUNCTION: getUserProfile
-    const data = getUserProfile(patientId); 
+    // Server-side caller: uses the internal reader (CodeMV.gs). getUserProfile()
+    // is now session-checked and is for browser calls only.
+    const data = pt_readProfile_(patientId); 
     
     if (data) {
       return {

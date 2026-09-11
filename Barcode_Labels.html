@@ -1,0 +1,294 @@
+<!-- ==========================================================================
+     Barcode_Labels.html — Crescentia HealthTech / CresRx — BARCODE PHASE 2
+     Label renderer + thermal print pipeline.
+
+     Include AFTER Barcode_QR_Lib. Everything renders offline: Code 128 is
+     encoded here, QR by the vendored encoder. No CDN, no server round trip,
+     so a label prints as fast as the printer accepts it.
+
+     Printing goes through a hidden iframe rather than window.print(), so the
+     app itself is never sent to a 50mm label printer.
+
+     PUBLIC API (window.CrescLabel)
+       code128Svg(text, opts)          -> SVG string
+       qrSvg(text, opts)               -> SVG string
+       patientCardHtml(p)              -> one 86x54mm card
+       patientStickerHtml(p)           -> one 50x25mm chart sticker
+       tubeLabelHtml(t)                -> one 50x25mm specimen label
+       print(htmlLabels, w, h)         -> print at that label size
+       printPatientCard(p) / printPatientSticker(p) / printTubeLabels(list)
+     ========================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  // ===========================================================================
+  // CODE 128 (subset B)
+  // ---------------------------------------------------------------------------
+  // Subset B covers ASCII 32-126, which is every character our IDs use
+  // (LMTVS0005, LAB-SAMP-20260911-0001, BC2026091100001). Subset C would pack
+  // digit pairs more tightly, but a mis-encoded specimen label is a patient
+  // safety event and B is the form that stays correct for every input we have.
+  // Pattern table from JsBarcode (MIT, github.com/lindell/JsBarcode).
+  // ===========================================================================
+  var BARS = [
+    '11011001100','11001101100','11001100110','10010011000','10010001100','10001001100','10011001000','10011000100','10001100100','11001001000',
+    '11001000100','11000100100','10110011100','10011011100','10011001110','10111001100','10011101100','10011100110','11001110010','11001011100',
+    '11001001110','11011100100','11001110100','11101101110','11101001100','11100101100','11100100110','11101100100','11100110100','11100110010',
+    '11011011000','11011000110','11000110110','10100011000','10001011000','10001000110','10110001000','10001101000','10001100010','11010001000',
+    '11000101000','11000100010','10110111000','10110001110','10001101110','10111011000','10111000110','10001110110','11101110110','11010001110',
+    '11000101110','11011101000','11011100010','11011101110','11101011000','11101000110','11100010110','11101101000','11101100010','11100011010',
+    '11101111010','11001000010','11110001010','10100110000','10100001100','10010110000','10010000110','10000101100','10000100110','10110010000',
+    '10110000100','10011010000','10011000010','10000110100','10000110010','11000010010','11001010000','11110111010','11000010100','10001111010',
+    '10100111100','10010111100','10010011110','10111100100','10011110100','10011110010','11110100100','11110010100','11110010010','11011011110',
+    '11011110110','11110110110','10101111000','10100011110','10001011110','10111101000','10111100010','11110101000','11110100010','10111011110',
+    '10111101110','11101011110','11110101110','11010000100','11010010000','11010011100','1100011101011'
+  ];
+  var START_B = 104, STOP = 106, MODULO = 103;
+
+  /** @return {string} module string ("1" = bar, "0" = space), or '' if unencodable. */
+  function code128(text) {
+    var s = String(text == null ? '' : text);
+    if (!s) return '';
+    var values = [START_B];
+    for (var i = 0; i < s.length; i++) {
+      var code = s.charCodeAt(i);
+      if (code < 32 || code > 126) return '';      // not representable in subset B
+      values.push(code - 32);
+    }
+    // Checksum: start value + sum(position * value), position 1-based over data.
+    var sum = START_B;
+    for (var j = 1; j < values.length; j++) sum += j * values[j];
+    values.push(sum % MODULO);
+    values.push(STOP);
+
+    var out = '';
+    for (var k = 0; k < values.length; k++) out += BARS[values[k]];
+    return out;
+  }
+
+  function esc(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Code 128 as SVG. Width is driven by the module count so the bars stay
+   * crisp: at 203 dpi one printer dot is ~0.125mm, and a module narrower than
+   * two dots reads unreliably off a curved tube.
+   */
+  function code128Svg(text, opts) {
+    var o = opts || {};
+    var modules = code128(text);
+    if (!modules) return '';
+    var mw = o.moduleWidth || 0.33;                 // mm per module
+    var h  = o.height || 9;                         // mm, bars only
+    var quiet = (o.quiet == null ? 10 : o.quiet);   // modules of quiet zone
+    var w = (modules.length + quiet * 2) * mw;
+    var showText = o.text !== false;
+    var textH = showText ? 3.2 : 0;
+
+    var rects = '', run = 0;
+    for (var i = 0; i <= modules.length; i++) {
+      if (modules.charAt(i) === '1') { run++; continue; }
+      if (run) {
+        var x = (quiet + i - run) * mw;
+        rects += '<rect x="' + x.toFixed(3) + '" y="0" width="' + (run * mw).toFixed(3) +
+                 '" height="' + h + '" fill="#000"/>';
+        run = 0;
+      }
+    }
+    var label = showText
+      ? '<text x="' + (w / 2).toFixed(2) + '" y="' + (h + 2.8).toFixed(2) +
+        '" font-family="monospace" font-size="2.6" text-anchor="middle" fill="#000" ' +
+        'letter-spacing="0.15">' + esc(text) + '</text>'
+      : '';
+
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + w.toFixed(2) + 'mm" height="' +
+           (h + textH).toFixed(2) + 'mm" viewBox="0 0 ' + w.toFixed(2) + ' ' + (h + textH).toFixed(2) +
+           '" shape-rendering="crispEdges">' + rects + label + '</svg>';
+  }
+
+  // ===========================================================================
+  // QR
+  // ===========================================================================
+  /**
+   * QR as SVG. Error correction M (~15%) is the right trade for a label that
+   * may be smudged by an alcohol swab but is only ~12 characters long.
+   * The code carries the ID and nothing else — never a name, DOB or diagnosis.
+   */
+  function qrSvg(text, opts) {
+    var o = opts || {};
+    if (typeof qrcode !== 'function') return '';
+    var s = String(text == null ? '' : text);
+    if (!s) return '';
+    var qr;
+    try {
+      qr = qrcode(0, o.ecc || 'M');                 // 0 = smallest version that fits
+      qr.addData(s);
+      qr.make();
+    } catch (e) { return ''; }
+
+    var n = qr.getModuleCount();
+    var size = o.size || 18;                        // mm
+    var quiet = (o.quiet == null ? 4 : o.quiet);    // modules; 4 is the spec minimum
+    var total = n + quiet * 2;
+    var cell = size / total;
+
+    var rects = '';
+    for (var r = 0; r < n; r++) {
+      var run = 0;
+      for (var c = 0; c <= n; c++) {
+        if (c < n && qr.isDark(r, c)) { run++; continue; }
+        if (run) {
+          rects += '<rect x="' + ((quiet + c - run) * cell).toFixed(3) +
+                   '" y="' + ((quiet + r) * cell).toFixed(3) +
+                   '" width="' + (run * cell).toFixed(3) +
+                   '" height="' + cell.toFixed(3) + '" fill="#000"/>';
+          run = 0;
+        }
+      }
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + 'mm" height="' + size +
+           'mm" viewBox="0 0 ' + size + ' ' + size + '" shape-rendering="crispEdges">' +
+           '<rect width="' + size + '" height="' + size + '" fill="#fff"/>' + rects + '</svg>';
+  }
+
+  // ===========================================================================
+  // LABEL TEMPLATES
+  // Always black on white, never theme tokens: a label is ink on a substrate,
+  // not part of the app's dark mode.
+  // ===========================================================================
+  var CSS = [
+    '*{box-sizing:border-box;margin:0;padding:0;}',
+    'body{font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
+    '.lb{page-break-after:always;break-after:page;overflow:hidden;position:relative;background:#fff;}',
+    '.lb:last-child{page-break-after:auto;break-after:auto;}',
+    '.nm{font-weight:700;line-height:1.1;overflow:hidden;}',
+    '.mono{font-family:"Courier New",monospace;}',
+    '.mut{color:#000;}',
+    '.rule{border-top:1px solid #000;}'
+  ].join('');
+
+  /** 86 x 54 mm — CR80, the size of a bank card, so it fits a wallet. */
+  function patientCardHtml(p) {
+    p = p || {};
+    var qr = qrSvg('P-' + (p.id || ''), { size: 22 });
+    return '<div class="lb" style="width:86mm;height:54mm;padding:4mm;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+        '<div style="max-width:54mm;">' +
+          '<div style="font-size:8pt;font-weight:700;letter-spacing:.4px;">' + esc(p.clinic || 'CRESCENTIA HEALTHTECH') + '</div>' +
+          '<div style="font-size:5.5pt;margin-bottom:2.5mm;">PATIENT IDENTIFICATION CARD</div>' +
+          '<div class="nm" style="font-size:13pt;">' + esc(p.name || '-') + '</div>' +
+          '<div style="font-size:7.5pt;margin-top:.8mm;">' + esc(p.age || '-') + ' Y &nbsp;·&nbsp; ' + esc(p.gender || '-') +
+            (p.bloodGroup ? ' &nbsp;·&nbsp; <strong>' + esc(p.bloodGroup) + '</strong>' : '') + '</div>' +
+        '</div>' +
+        '<div style="text-align:center;">' + qr + '</div>' +
+      '</div>' +
+      '<div style="position:absolute;left:4mm;right:4mm;bottom:3.5mm;">' +
+        '<div class="rule" style="padding-top:1.5mm;display:flex;justify-content:space-between;align-items:flex-end;">' +
+          '<div><div style="font-size:5pt;">PATIENT ID</div>' +
+          '<div class="mono" style="font-size:11pt;font-weight:700;letter-spacing:1px;">' + esc(p.id || '') + '</div></div>' +
+          '<div style="font-size:5pt;text-align:right;">' + esc(p.footer || 'Present this card at every visit') + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /** 50 x 25 mm — chart / folder sticker. 1D reads better on a narrow strip. */
+  function patientStickerHtml(p) {
+    p = p || {};
+    return '<div class="lb" style="width:50mm;height:25mm;padding:1.5mm 2mm;">' +
+      '<div class="nm" style="font-size:9pt;">' + esc(p.name || '-') + '</div>' +
+      '<div style="font-size:6pt;margin-bottom:.5mm;">' + esc(p.age || '-') + ' Y · ' + esc(p.gender || '-') +
+        (p.regDate ? ' · Reg ' + esc(p.regDate) : '') + '</div>' +
+      '<div style="text-align:center;">' + code128Svg(p.id || '', { height: 7.5, moduleWidth: 0.28 }) + '</div>' +
+    '</div>';
+  }
+
+  /**
+   * 50 x 25 mm specimen label. The tube barcode is the only machine-readable
+   * field; the human-readable block exists so a tube is still identifiable
+   * when the barcode is smudged, which is exactly when it matters most.
+   */
+  function tubeLabelHtml(t) {
+    t = t || {};
+    return '<div class="lb" style="width:50mm;height:25mm;padding:1.2mm 2mm;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;">' +
+        '<div class="nm" style="font-size:8pt;max-width:33mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' +
+          esc(t.patientName || '-') + '</div>' +
+        '<div style="font-size:7pt;font-weight:700;">' + esc(t.sampleType || '') + '</div>' +
+      '</div>' +
+      '<div class="mono" style="font-size:6.5pt;">' + esc(t.patientId || '') +
+        (t.age ? ' · ' + esc(t.age) + esc(String(t.gender || '').charAt(0)) : '') +
+        (t.collectedAt ? ' · ' + esc(t.collectedAt) : '') + '</div>' +
+      '<div style="text-align:center;margin-top:.3mm;">' +
+        code128Svg(t.barcode || '', { height: 8, moduleWidth: 0.26 }) + '</div>' +
+    '</div>';
+  }
+
+  // ===========================================================================
+  // PRINT PIPELINE
+  // ===========================================================================
+  /**
+   * Print the given label HTML at an exact physical size.
+   * A hidden iframe is used so the running app is never what reaches the
+   * printer, and so @page can be set per label size without touching the
+   * app's own print styles.
+   */
+  function print(labelsHtml, widthMm, heightMm) {
+    if (!labelsHtml) { alert('Nothing to print.'); return; }
+    var old = document.getElementById('cresc-label-frame');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+
+    var f = document.createElement('iframe');
+    f.id = 'cresc-label-frame';
+    f.setAttribute('aria-hidden', 'true');
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(f);
+
+    var doc = f.contentWindow.document;
+    doc.open();
+    doc.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Labels</title><style>' +
+      '@page{size:' + widthMm + 'mm ' + heightMm + 'mm;margin:0;}' + CSS +
+      '</style></head><body>' + labelsHtml + '</body></html>');
+    doc.close();
+
+    var fire = function () {
+      try {
+        f.contentWindow.focus();
+        f.contentWindow.print();
+      } catch (e) {
+        alert('Could not open the print dialog: ' + e.message);
+      }
+      // Left in the DOM briefly: removing it during the print dialog cancels
+      // the job in Chrome.
+      setTimeout(function () { if (f.parentNode) f.parentNode.removeChild(f); }, 60000);
+    };
+    if (f.contentWindow.document.readyState === 'complete') setTimeout(fire, 60);
+    else f.onload = function () { setTimeout(fire, 60); };
+  }
+
+  function printPatientCard(p)    { print(patientCardHtml(p), 86, 54); }
+  function printPatientSticker(p) { print(patientStickerHtml(p), 50, 25); }
+  function printTubeLabels(list) {
+    var arr = Array.isArray(list) ? list : [list];
+    if (!arr.length) { alert('No tubes to label.'); return; }
+    print(arr.map(tubeLabelHtml).join(''), 50, 25);
+  }
+
+  window.CrescLabel = {
+    code128: code128,
+    code128Svg: code128Svg,
+    qrSvg: qrSvg,
+    patientCardHtml: patientCardHtml,
+    patientStickerHtml: patientStickerHtml,
+    tubeLabelHtml: tubeLabelHtml,
+    print: print,
+    printPatientCard: printPatientCard,
+    printPatientSticker: printPatientSticker,
+    printTubeLabels: printTubeLabels
+  };
+})();
+</script>

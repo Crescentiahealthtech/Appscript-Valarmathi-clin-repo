@@ -338,7 +338,10 @@ function createLabRequest(d) {
     lock.waitLock(10000);
     if (!d) return { success: false, message: 'No data received.' };
     if (!d.patientId || !String(d.patientId).trim()) {
-    d.patientId = 'WALKIN-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd') + '-' + Utilities.getUuid().substring(0,4).toUpperCase();
+    const wiSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.ORDERS);
+    const wiCol = wiSheet ? labHeaderMap(wiSheet)['PatientID'] : undefined;
+    d.patientId = bc_nextDailyId_('LAB_WALKIN', 'WALKIN-', '-', 4,
+                                  wiSheet, (wiCol === undefined) ? 0 : wiCol + 1);   // Barcode_Engine.gs
     }
 
     const source = String(d.sourceModule||'WALKIN').toUpperCase();
@@ -373,8 +376,7 @@ function createLabRequest(d) {
     const ncols = LAB_SCHEMA.LAB_ORDERS.length;
     const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     const by = Session.getActiveUser().getEmail() || 'SYSTEM';
-    const orderId = 'LAB-ORD-' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd')
-                    + '-' + Utilities.getUuid().substring(0,4).toUpperCase();
+    const orderId = bc_nextDailyId_('LAB_ORDER', 'LAB-ORD-', '-', 4, sheet, map['OrderID'] + 1);   // Barcode_Engine.gs
 
     const row = new Array(ncols).fill('');
     row[map['OrderID']]            = orderId;
@@ -772,8 +774,8 @@ function collectLabSample(d) {
     const sampleIds=[];
 
     d.samples.forEach(function(s){
-      const sampleId='LAB-SAMP-'+datePart+'-'+Utilities.getUuid().substring(0,4).toUpperCase();
-      const barcode='BC'+datePart+Utilities.getUuid().substring(0,5).toUpperCase();
+      const sampleId=bc_nextDailyId_('LAB_SAMPLE','LAB-SAMP-','-',4,sheet,map['SampleID']+1);   // Barcode_Engine.gs
+      const barcode=bc_nextDailyId_('LAB_BARCODE','BC','',5,sheet,map['BarcodeID']+1);
       const row=new Array(ncols).fill('');
       row[map['SampleID']]=sampleId; row[map['OrderID']]=order.orderId; row[map['PatientID']]=order.patientId;
       row[map['PatientName']]=order.patientName; row[map['SampleType']]=String(s.sampleType||'').toUpperCase();

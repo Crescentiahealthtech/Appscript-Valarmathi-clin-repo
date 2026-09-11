@@ -224,7 +224,7 @@
        document.getElementById('pAddress').value = "";
        alert("Backend Network Error: Could not connect to Google Servers. " + err.message);
      })
-     .getUserProfile(pId);
+     .getUserProfile(pId, window.sessionToken);
  }
 
   function addBillingRow() {

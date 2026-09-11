@@ -228,7 +228,7 @@
       document.getElementById('e-gender').value = data.gender || "Male"; document.getElementById('e-dob').value = data.dob || "";
       document.getElementById('e-mobile').value = data.mobile || ""; document.getElementById('e-whatsapp').value = data.whatsapp || "";
       document.getElementById('e-address').value = data.address || ""; document.getElementById('e-comorb').value = data.comorb || "";
-    }).getUserProfile(loggedInUser);
+    }).getUserProfile(loggedInUser, window.sessionToken);
   }
 
   let isEditingProfile = false;
