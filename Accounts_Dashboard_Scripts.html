@@ -14,8 +14,8 @@ const AccDash = (function () {
 
   const SCOPES = [['OVERALL', 'Overall'], ['MONTH', 'Monthly'], ['DAY', 'Day / Shift']];
   const COLOR = {
-    green: ['#198754', 'text-success'], red: ['#dc3545', 'text-danger'],
-    blue: ['#0d6efd', 'text-primary'], teal: ['#0dcaf0', 'text-info'], amber: ['#ffc107', 'text-warning']
+    green: ['var(--success)', 'text-success'], red: ['var(--danger)', 'text-danger'],
+    blue: ['var(--blue)', 'text-primary'], teal: ['var(--teal)', 'text-info'], amber: ['var(--warning)', 'text-warning']
   };
   let SCOPE = 'OVERALL', PERIOD = '', modalInjected = false;
 
@@ -30,8 +30,8 @@ const AccDash = (function () {
   }
   function toast(msg, ok) {
     const t = document.createElement('div');
-    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white';
-    t.style.zIndex = 3000; t.style.background = ok ? '#198754' : '#dc3545';
+    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid';
+    t.style.zIndex = 3000; t.style.background = ok ? 'var(--success)' : 'var(--danger)';
     t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
   }
   const num = (id) => parseFloat(($(id) || {}).value) || 0;
@@ -85,7 +85,7 @@ const AccDash = (function () {
     grid.innerHTML = kpis.map(function (k) {
       const c = COLOR[k.color] || COLOR.blue;
       return '<div class="col-md-6 col-lg-3">' + 
-               '<div class="p-3 rounded-3 h-100" style="border-left:3px solid ' + c[0] + ';background:rgba(255,255,255,0.03);">' +
+               '<div class="p-3 rounded-3 h-100" style="border-left:3px solid ' + c[0] + ';background:var(--surface-hover);">' +
                  '<div class="small fw-bold text-uppercase mb-1 ' + c[1] + '">' + esc(k.label) + '</div>' +
                  '<h5 class="mb-0 fw-bold text-main">' + inr(k.value) + '</h5>' + 
                '</div>' + 

@@ -7,7 +7,7 @@
     <h2 class="fw-bold mb-1">CresRx</h2>
     <p class="mb-4 small label-bright" style="letter-spacing: 1px;">Care • Compassion • Cure</p>
 
-    <button id="btn-google-login" class="btn w-100 py-2 mb-3 fw-bold text-dark border shadow-sm" style="background-color: #ffffff;" onclick="handleGoogleLogin()">
+    <button id="btn-google-login" class="btn w-100 py-2 mb-3 fw-bold text-dark border shadow-sm" style="background-color: var(--bg-card);" onclick="handleGoogleLogin()">
       <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" style="width: 18px; margin-right: 8px; margin-bottom: 2px;">
       Sign in with Google
     </button>
@@ -17,7 +17,7 @@
     <input type="text" id="in-username" class="form-control mb-3 py-2 text-white-force" placeholder="Patient ID / Admin">
     <input type="password" id="in-password" class="form-control mb-4 py-2 text-white-force" placeholder="Password">
 
-    <button id="btn-login" class="btn w-100 py-2 mb-3 text-white fw-bold" style="background-color: var(--accent-purple);" onclick="handleLogin()">Secure Login</button>
+    <button id="btn-login" class="btn w-100 py-2 mb-3 text-white fw-bold on-accent" style="background-color: var(--accent-purple);" onclick="handleLogin()">Secure Login</button>
   </div>
 </div>
 
@@ -185,13 +185,13 @@
       el = document.createElement('div');
       el.id = 'cresc-deploy-banner';
       el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;' +
-        'background:#7f1d1d;color:#fff;padding:10px 44px 10px 16px;font-size:0.85rem;' +
-        'font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.4);';
+        'background:var(--danger-bg);color:var(--danger-fg);border-bottom:1px solid var(--danger);padding:10px 44px 10px 16px;font-size:0.85rem;' +
+        'font-weight:600;box-shadow:0 2px 10px rgba(var(--shadow-rgb), .4);';
       var x = document.createElement('button');
       x.innerHTML = '&times;';
       x.setAttribute('aria-label', 'Dismiss');
       x.style.cssText = 'position:absolute;right:10px;top:6px;background:none;border:0;' +
-        'color:#fff;font-size:1.3rem;line-height:1;cursor:pointer;';
+        'color:var(--danger-fg);font-size:1.3rem;line-height:1;cursor:pointer;';
       x.onclick = function () { el.remove(); };
       el.appendChild(document.createElement('span'));
       el.appendChild(x);

@@ -6,7 +6,7 @@
         <i class="fa-solid fa-rotate-right"></i> Refresh
       </button>
       <button class="btn btn-info rounded-circle shadow-lg position-fixed bottom-0 end-0 m-4 d-flex align-items-center justify-content-center transition-all" 
-            style="width: 65px; height: 65px; z-index: 1040; border: 3px solid #1a1d20;"
+            style="width: 65px; height: 65px; z-index: 1040; border: 3px solid var(--border-color);"
             onclick="switchTab('pharmacy-inventory-view');">
       <i class="fa-solid fa-plus fs-3 text-dark"></i>
     </button>
@@ -22,7 +22,7 @@
         </div>
       </div>
       <div class="col-md-3 col-4">
-        <div class="card border-0 h-100" style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444 !important;">
+        <div class="card border-0 h-100" style="background: var(--danger-bg); border-left: 4px solid var(--danger) !important;">
           <div class="card-body py-2">
             <h6 class="text-danger fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation me-1"></i>Low Stock</h6>
             <h3 class="text-white m-0 fw-bold" id="kpi-low-stock">0</h3>
@@ -30,7 +30,7 @@
         </div>
       </div>
       <div class="col-md-3 col-4">
-        <div class="card border-0 h-100" style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid #f59e0b !important;">
+        <div class="card border-0 h-100" style="background: var(--warning-bg); border-left: 4px solid var(--warning) !important;">
           <div class="card-body py-2">
             <h6 class="text-warning fw-bold mb-1"><i class="fa-regular fa-clock me-1"></i>Expiring Soon</h6>
             <h3 class="text-white m-0 fw-bold" id="kpi-expiring">0</h3>
@@ -39,7 +39,7 @@
       </div>
       <!-- New Expired KPI Card -->
       <div class="col-md-3 col-4">
-        <div class="card border-0 h-100" style="background: rgba(220, 53, 69, 0.15); border-left: 4px solid #dc3545 !important;">
+        <div class="card border-0 h-100" style="background: var(--danger-bg); border-left: 4px solid var(--danger) !important;">
           <div class="card-body py-2">
             <h6 class="text-danger fw-bold mb-1"><i class="fa-solid fa-ban me-1"></i>Expired</h6>
             <h3 class="text-white m-0 fw-bold" id="kpi-expired">0</h3>
@@ -96,7 +96,7 @@
           
           <div class="row g-3">
             <div class="col-12">
-              <div class="p-3 rounded" style="background: #1a1d20;">
+              <div class="p-3 rounded" style="background: var(--surface-2);">
                 <h6 class="text-info fw-bold mb-1" id="displayEditBrand">Brand Name</h6>
                 <small class="text-secondary" id="displayEditBatch">Batch: XXXX</small>
               </div>

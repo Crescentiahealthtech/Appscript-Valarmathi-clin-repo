@@ -42,21 +42,21 @@
     .phd-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.85rem; vertical-align: middle; }
     .phd-table input { width: 100%; font-size: 0.85rem; padding: 0.3rem 0.4rem; text-align: center; }
     .phd-pill { font-size: 0.62rem; font-weight: 700; padding: 2px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
-    .phd-pill.active   { background: rgba(16,185,129,0.15); color: var(--success); }
-    .phd-pill.partial  { background: rgba(245,158,11,0.15); color: #f59e0b; }
-    .phd-pill.returned { background: rgba(220,38,38,0.15); color: #dc2626; }
-    .phd-pill.pending  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .phd-pill.active   { background: var(--success-bg); color: var(--success-fg); }
+    .phd-pill.partial  { background: var(--warning-bg); color: var(--warning-fg); }
+    .phd-pill.returned { background: var(--danger-bg); color: var(--danger-fg); }
+    .phd-pill.pending  { background: var(--warning-bg); color: var(--warning-fg); }
     .phd-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 18px; }
     .phd-kpi-val { font-size: 1.5rem; font-weight: 800; color: var(--text-main); }
     .phd-kpi-lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
-    .phd-refund-total { font-size: 1.6rem; font-weight: 800; color: #dc2626; }
+    .phd-refund-total { font-size: 1.6rem; font-weight: 800; color: var(--danger-fg); }
 
     #phd-print { display: none; }
     @media print {
       body.phd-printing * { visibility: hidden !important; }
       body.phd-printing #phd-print, body.phd-printing #phd-print * { visibility: visible !important; }
       body.phd-printing #phd-print { display: block !important; position: absolute; left: 0; top: 0; width: 100%;
-        background: #fff !important; color: #000 !important; padding: 10px 4px; font-family: 'Segoe UI', Arial, sans-serif; }
+        background: var(--bg-card) !important; color: var(--text-main) !important; padding: 10px 4px; font-family: 'Segoe UI', Arial, sans-serif; }
     }
   </style>
 
@@ -108,7 +108,7 @@
                   <option value="CARD">CARD</option>
                 </select>
                 <input type="text" id="phrRefundRef" class="hd-input w-100 p-2 mt-2 d-none" placeholder="UPI / Card refund reference">
-                <div id="phrCreditNote" class="mt-2 d-none" style="font-size:0.75rem;color:#f59e0b;">
+                <div id="phrCreditNote" class="mt-2 d-none" style="font-size:0.75rem;color:var(--warning-fg);">
                   Unsettled credit bill — this return reduces the outstanding amount (no cash refund).
                 </div>
               </div>
@@ -148,9 +148,9 @@
     <div id="phdFinanceOut" class="d-none">
       <div class="row g-3 mb-3">
         <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net Sales</div><div class="phd-kpi-val" id="fNetSales">₹0</div></div></div>
-        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Refunds</div><div class="phd-kpi-val" style="color:#dc2626;" id="fRefunds">₹0</div></div></div>
-        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net Realised</div><div class="phd-kpi-val" style="color:var(--success);" id="fNetReal">₹0</div></div></div>
-        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net GST Payable</div><div class="phd-kpi-val" style="color:#f59e0b;" id="fNetGst">₹0</div></div></div>
+        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Refunds</div><div class="phd-kpi-val" style="color:var(--danger-fg);" id="fRefunds">₹0</div></div></div>
+        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net Realised</div><div class="phd-kpi-val" style="color:var(--success-fg);" id="fNetReal">₹0</div></div></div>
+        <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net GST Payable</div><div class="phd-kpi-val" style="color:var(--warning-fg);" id="fNetGst">₹0</div></div></div>
       </div>
       <div class="row g-3">
         <div class="col-md-6"><div class="phd-card"><div class="hd-panel-title">Sales</div><div id="fSales" style="font-size:0.88rem;"></div></div></div>
@@ -159,7 +159,7 @@
     </div>
   </div>
 
-  <div id="phd-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:20000;display:none;align-items:center;justify-content:center;">
+  <div id="phd-overlay" style="position:fixed;inset:0;background:var(--overlay-scrim);z-index:20000;display:none;align-items:center;justify-content:center;">
     <div style="background:var(--bg-card);color:var(--text-main);padding:22px 30px;border-radius:12px;border:1px solid var(--border-color);font-weight:600;">
       <span class="spinner-border spinner-border-sm me-2"></span><span id="phd-overlay-text">Working…</span>
     </div>
@@ -368,35 +368,35 @@ function phdShowTab(name) {
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
     const rows = d.items.map((it, i) => `
       <tr>
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;"><strong>${esc(it.drug)}</strong>${it.generic ? `<br><span style="font-size:10px;color:#6b7280;">${esc(it.generic)}</span>` : ''}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#374151;">${esc(it.batch)}<br><span style="font-size:10px;color:#6b7280;">Exp: ${esc(it.expiry)}</span></td>
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">${it.qty}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">₹${it.mrp.toFixed(2)}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#4b5563;">${it.gst}%</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;">₹${it.refundLine.toFixed(2)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border-color);">${i + 1}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border-color);"><strong>${esc(it.drug)}</strong>${it.generic ? `<br><span style="font-size:10px;color:var(--text-faint);">${esc(it.generic)}</span>` : ''}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border-color);font-size:12px;color:var(--text-faint);">${esc(it.batch)}<br><span style="font-size:10px;color:var(--text-faint);">Exp: ${esc(it.expiry)}</span></td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border-color);text-align:right;">${it.qty}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border-color);text-align:right;">₹${it.mrp.toFixed(2)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border-color);text-align:right;color:var(--text-faint);">${it.gst}%</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--border-color);text-align:right;font-weight:600;">₹${it.refundLine.toFixed(2)}</td>
       </tr>`).join('');
     return `
-      <div style="max-width:760px;margin:18px auto;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-family:'Helvetica Neue',Arial,sans-serif;color:#111827;background:#fff;">
-        <div style="padding:18px 24px;border-bottom:2px solid #dc2626;display:flex;justify-content:space-between;align-items:flex-start;">
+      <div style="max-width:760px;margin:18px auto;border:1px solid var(--border-color);border-radius:10px;overflow:hidden;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text-main);background:var(--bg-card);">
+        <div style="padding:18px 24px;border-bottom:2px solid var(--danger);display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <div style="font-size:20px;font-weight:800;color:#dc2626;text-transform:uppercase;">Crescentia HealthTech</div>
-            <div style="font-size:12px;color:#6b7280;margin-top:4px;">Medical District, City</div>
+            <div style="font-size:20px;font-weight:800;color:var(--danger-fg);text-transform:uppercase;">Crescentia HealthTech</div>
+            <div style="font-size:12px;color:var(--text-faint);margin-top:4px;">Medical District, City</div>
           </div>
           <div style="text-align:right;">
             <div style="font-size:16px;font-weight:800;letter-spacing:1px;">CREDIT NOTE / REFUND</div>
-            <div style="font-size:12px;color:#4b5563;margin-top:4px;">Return: <strong>${esc(d.returnNo)}</strong></div>
-            <div style="font-size:11px;color:#6b7280;">Against Invoice: ${esc(d.invoiceNo)}</div>
-            <div style="font-size:11px;color:#6b7280;">Date: ${esc(d.date)}</div>
+            <div style="font-size:12px;color:var(--text-faint);margin-top:4px;">Return: <strong>${esc(d.returnNo)}</strong></div>
+            <div style="font-size:11px;color:var(--text-faint);">Against Invoice: ${esc(d.invoiceNo)}</div>
+            <div style="font-size:11px;color:var(--text-faint);">Date: ${esc(d.date)}</div>
           </div>
         </div>
-        <div style="padding:12px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:13px;">
-          <span style="color:#6b7280;">Patient:</span> <strong>${esc(d.patientName)}</strong>${d.patientId && d.patientId !== 'WALK-IN' ? ` &bull; ${esc(d.patientId)}` : ''}
-          ${d.reason ? `<br><span style="color:#6b7280;">Reason:</span> ${esc(d.reason)}` : ''}
+        <div style="padding:12px 24px;background:var(--bg-card);border-bottom:1px solid var(--border-color);font-size:13px;">
+          <span style="color:var(--text-faint);">Patient:</span> <strong>${esc(d.patientName)}</strong>${d.patientId && d.patientId !== 'WALK-IN' ? ` &bull; ${esc(d.patientId)}` : ''}
+          ${d.reason ? `<br><span style="color:var(--text-faint);">Reason:</span> ${esc(d.reason)}` : ''}
         </div>
         <div style="padding:16px 24px;">
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr style="background:#f3f4f6;">
+            <thead><tr style="background:var(--bg-input);">
               <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;">#</th>
               <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;">Medicine</th>
               <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;">Batch / Exp</th>
@@ -410,14 +410,14 @@ function phdShowTab(name) {
         </div>
         <div style="padding:8px 24px 18px;display:flex;justify-content:flex-end;">
           <table style="width:46%;font-size:13px;border-collapse:collapse;">
-            <tr><td style="padding:4px 10px;color:#6b7280;">Returned Gross</td><td style="padding:4px 10px;text-align:right;">₹${d.returnedGross.toFixed(2)}</td></tr>
-            <tr><td style="padding:0 10px 4px;color:#9ca3af;font-size:10px;">(GST reversed: ₹${d.returnedGst.toFixed(2)})</td><td></td></tr>
-            <tr style="border-top:2px solid #111827;"><td style="padding:8px 10px;font-weight:800;font-size:15px;">Total Refund</td><td style="padding:8px 10px;text-align:right;font-weight:800;font-size:16px;color:#dc2626;">₹${d.refund.toFixed(2)}</td></tr>
+            <tr><td style="padding:4px 10px;color:var(--text-faint);">Returned Gross</td><td style="padding:4px 10px;text-align:right;">₹${d.returnedGross.toFixed(2)}</td></tr>
+            <tr><td style="padding:0 10px 4px;color:var(--text-muted);font-size:10px;">(GST reversed: ₹${d.returnedGst.toFixed(2)})</td><td></td></tr>
+            <tr style="border-top:2px solid var(--border-color);"><td style="padding:8px 10px;font-weight:800;font-size:15px;">Total Refund</td><td style="padding:8px 10px;text-align:right;font-weight:800;font-size:16px;color:var(--danger-fg);">₹${d.refund.toFixed(2)}</td></tr>
           </table>
         </div>
-        <div style="padding:12px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#374151;display:flex;justify-content:space-between;">
+        <div style="padding:12px 24px;background:var(--bg-card);border-top:1px solid var(--border-color);font-size:12px;color:var(--text-faint);display:flex;justify-content:space-between;">
           <div>Refund: <strong>${esc(d.refundMode)}</strong>${d.refundRef ? ` &bull; Ref: ${esc(d.refundRef)}` : ''} &bull; Invoice now: <strong>${esc(d.newStatus)}</strong></div>
-          <div style="color:#9ca3af;font-size:11px;">Computer-generated credit note.</div>
+          <div style="color:var(--text-muted);font-size:11px;">Computer-generated credit note.</div>
         </div>
       </div>`;
   }
@@ -457,9 +457,9 @@ function phdShowTab(name) {
           `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Returns</span><span>${res.returns.count}</span></div>` +
           `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Returned gross</span><span>${r2(res.returns.gross)}</span></div>` +
           `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">GST reversed</span><span>${r2(res.returns.gst)}</span></div>` +
-          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Refunds paid</span><span style="color:#dc2626;">${r2(res.returns.refund)}</span></div>` +
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Refunds paid</span><span style="color:var(--danger-fg);">${r2(res.returns.refund)}</span></div>` +
           `<hr style="border-color:var(--border-color);margin:6px 0;">` +
-          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Credit outstanding</span><span style="color:#f59e0b;">${r2(res.creditOutstanding)} (${res.creditCount})</span></div>`;
+          `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Credit outstanding</span><span style="color:var(--warning-fg);">${r2(res.creditOutstanding)} (${res.creditCount})</span></div>`;
       })
       .withFailureHandler(() => { phdOverlay(false); alert("❌ Network error."); })
       .getPharmacyFinanceSummary(from, to);

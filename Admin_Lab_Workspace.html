@@ -18,7 +18,7 @@
   <div class="row g-4">
     <div class="col-md-3 col-6">
       <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('workspace-lab-catalog'); LabCatalog.init();">
-        <i class="fa-solid fa-list-check fa-2x mb-3" style="color:#22d3ee;"></i>
+        <i class="fa-solid fa-list-check fa-2x mb-3" style="color:var(--teal-fg);"></i>
         <h6 class="text-white-force fw-bold m-0">Test Catalog</h6>
         <small class="label-bright mt-1 d-block">Panels · Tests · Packages</small>
       </div>
@@ -32,7 +32,7 @@
     </div>
     <div class="col-md-3 col-6">
       <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('workspace-lab-records'); LabRecordsApp.init();">
-        <i class="fa-solid fa-folder-open fa-2x mb-3" style="color:#34d399;"></i>
+        <i class="fa-solid fa-folder-open fa-2x mb-3" style="color:var(--success-fg);"></i>
         <h6 class="text-white-force fw-bold m-0">Lab Records</h6>
         <small class="label-bright mt-1 d-block">Patient Results History</small>
       </div>
@@ -54,8 +54,8 @@
 
   <!-- scoped loading overlay -->
   <div id="lc-loader" class="position-absolute top-0 start-0 w-100 h-100 align-items-center justify-content-center flex-column d-none"
-       style="background:rgba(2,6,23,.75);z-index:1050;border-radius:.5rem;">
-    <div class="spinner-border mb-2" style="color:#22d3ee;" role="status"></div>
+       style="background:var(--overlay-scrim);z-index:1050;border-radius:.5rem;">
+    <div class="spinner-border mb-2" style="color:var(--teal-fg);" role="status"></div>
     <span class="label-bright small" id="lc-loader-txt">Loading…</span>
   </div>
 
@@ -68,7 +68,7 @@
       </button>
       <div>
         <h3 class="fw-bold m-0 text-white-force">
-          <i class="fa-solid fa-list-check me-2" style="color:#22d3ee;"></i>Test Catalog
+          <i class="fa-solid fa-list-check me-2" style="color:var(--teal-fg);"></i>Test Catalog
         </h3>
         <div id="lc-stat-bar" class="small label-bright mt-1">Loading catalog…</div>
       </div>
@@ -80,19 +80,19 @@
       <!-- Three distinct creation paths — no "Entry Type" dropdown needed -->
       <div class="btn-group">
         <button class="btn btn-sm fw-semibold"
-                style="background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;"
+                style="background:var(--accent-glow);border:1px solid var(--accent-purple);color:var(--accent-fg);"
                 onclick="LabCatalog.openCreate('PANEL');"
                 title="A named group of parameters (e.g. CBC, LFT)">
           <i class="fa-solid fa-layer-group me-1"></i>New Panel
         </button>
         <button class="btn btn-sm fw-semibold"
-                style="background:rgba(14,165,233,.12);border:1px solid #0ea5e9;color:#7dd3fc;"
+                style="background:var(--info-bg);border:1px solid var(--info);color:var(--info-fg);"
                 onclick="LabCatalog.openCreate('INDIVIDUAL');"
                 title="A single reportable test (e.g. HbA1c, TSH)">
           <i class="fa-solid fa-flask me-1"></i>New Test
         </button>
         <button class="btn btn-sm fw-semibold"
-                style="background:rgba(16,185,129,.12);border:1px solid #10b981;color:#6ee7b7;"
+                style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);"
                 onclick="LabCatalog.openCreate('PACKAGE');"
                 title="A bundled health-check package (e.g. Master Health Checkup)">
           <i class="fa-solid fa-box-open me-1"></i>New Package
@@ -222,7 +222,7 @@
               <small class="label-bright ms-2">Each row = one reportable value in this panel</small>
             </div>
             <button class="btn btn-sm"
-                    style="background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;font-size:.75rem;"
+                    style="background:var(--accent-glow);border:1px solid var(--accent-purple);color:var(--accent-fg);font-size:.75rem;"
                     onclick="LabCatalog.pmAddParamRow();">
               <i class="fa-solid fa-plus me-1"></i>Add Parameter
             </button>
@@ -375,14 +375,14 @@
                   <input type="number" step="0.01" id="lct-fhi" class="form-control form-control-sm">
                 </div>
                 <div class="col-6 col-md-3">
-                  <label class="form-label" style="font-size:.7rem;color:#f87171;">Critical Low</label>
+                  <label class="form-label" style="font-size:.7rem;color:var(--danger-fg);">Critical Low</label>
                   <input type="number" step="0.01" id="lct-clo" class="form-control form-control-sm"
-                         style="border-color:rgba(248,113,113,.4)!important;">
+                         style="border-color:var(--danger-bg)!important;">
                 </div>
                 <div class="col-6 col-md-3">
-                  <label class="form-label" style="font-size:.7rem;color:#f87171;">Critical High</label>
+                  <label class="form-label" style="font-size:.7rem;color:var(--danger-fg);">Critical High</label>
                   <input type="number" step="0.01" id="lct-chi" class="form-control form-control-sm"
-                         style="border-color:rgba(248,113,113,.4)!important;">
+                         style="border-color:var(--danger-bg)!important;">
                 </div>
                 <div class="col-md-6">
                   <label class="form-label" style="font-size:.7rem;color:var(--text-muted);">Paediatric Ref (text)</label>
@@ -397,7 +397,7 @@
       <div class="modal-footer" style="border-color:var(--border-color);">
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-sm fw-semibold"
-                style="background:rgba(14,165,233,.15);border:1px solid #0ea5e9;color:#7dd3fc;"
+                style="background:var(--info-bg);border:1px solid var(--info);color:var(--info-fg);"
                 onclick="LabCatalog.saveTest();">
           <i class="fa-solid fa-floppy-disk me-1"></i>Save Test
         </button>
@@ -452,7 +452,7 @@
           </div>
           <div class="col-md-3 d-flex align-items-end">
             <div id="lcpk-saving-badge" class="w-100 text-center rounded py-2"
-                 style="background:rgba(16,185,129,.12);border:1px solid var(--success);font-size:.78rem;color:var(--success);">
+                 style="background:var(--success-bg);border:1px solid var(--success);font-size:.78rem;color:var(--success-fg);">
               Set price &amp; select items to see savings
             </div>
           </div>
@@ -475,7 +475,7 @@
       <div class="modal-footer" style="border-color:var(--border-color);">
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-sm fw-semibold"
-                style="background:rgba(16,185,129,.15);border:1px solid #10b981;color:#6ee7b7;"
+                style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);"
                 onclick="LabCatalog.savePackage();">
           <i class="fa-solid fa-floppy-disk me-1"></i>Save Package
         </button>
@@ -509,17 +509,17 @@
 .lc-param-table th:last-child  { border-radius:0 8px 8px 0; }
 .lc-param-table td { padding:6px 8px;color:var(--text-label);border-bottom:1px solid var(--border-color); }
 .lc-param-table tr:last-child td { border-bottom:none; }
-.lc-flag-c { color:#f87171;font-weight:700; }
-.lc-flag-h { color:#fb923c; }
-.lc-flag-l { color:#60a5fa; }
-.lc-flag-n { color:var(--success); }
-.lc-add-param-row td { background:rgba(99,102,241,.05); }
+.lc-flag-c { color:var(--danger-fg);font-weight:700; }
+.lc-flag-h { color:var(--warning-fg); }
+.lc-flag-l { color:var(--blue-fg); }
+.lc-flag-n { color:var(--success-fg); }
+.lc-add-param-row td { background:var(--accent-glow); }
 .lc-chip-sel {
   display:inline-flex;align-items:center;gap:5px;
   font-size:.75rem;padding:4px 10px;border-radius:20px;
-  background:rgba(99,102,241,.15);border:1px solid #6366f1;color:#a5b4fc;cursor:pointer;
+  background:var(--accent-glow);border:1px solid var(--accent-purple);color:var(--accent-fg);cursor:pointer;
 }
-.lc-chip-sel:hover { background:rgba(99,102,241,.3); }
+.lc-chip-sel:hover { background:var(--accent-glow); }
 .lc-chip-unsel {
   display:inline-flex;align-items:center;gap:5px;
   font-size:.75rem;padding:4px 10px;border-radius:20px;
@@ -640,7 +640,7 @@ var LabCatalog = (function () {
       if (!b) return;
       b.style.background = (id === v) ? 'var(--accent-purple)' : 'var(--bg-input)';
       b.style.borderColor = (id === v) ? 'var(--accent-purple)' : 'var(--border-color)';
-      b.style.color = (id === v) ? '#fff' : 'var(--text-muted)';
+      b.style.color = (id === v) ? 'var(--text-on-accent)' : 'var(--text-muted)';
     });
     render();
   }
@@ -692,12 +692,12 @@ var LabCatalog = (function () {
 
   /* ─── PANELS ─── */
   var _DEPT_COLORS = {
-    HAEMATOLOGY:'#f472b6', BIOCHEMISTRY:'#60a5fa', MICROBIOLOGY:'#34d399',
-    SEROLOGY:'#a78bfa', URINE_ANALYSIS:'#fbbf24', HISTOPATHOLOGY:'#f87171',
-    CYTOLOGY:'#fb923c', ENDOCRINOLOGY:'#22d3ee', CLINICAL_PATH:'#a3e635',
-    GENERAL:'#94a3b8'
+    HAEMATOLOGY:'var(--pink-fg)',    BIOCHEMISTRY:'var(--blue-fg)',   MICROBIOLOGY:'var(--success-fg)',
+    SEROLOGY:'var(--violet-fg)',     URINE_ANALYSIS:'var(--warning-fg)', HISTOPATHOLOGY:'var(--danger-fg)',
+    CYTOLOGY:'var(--warning-fg)',    ENDOCRINOLOGY:'var(--teal-fg)',  CLINICAL_PATH:'var(--success-fg)',
+    GENERAL:'var(--text-muted)'
   };
-  function _deptColor(d) { return _DEPT_COLORS[d] || '#94a3b8'; }
+  function _deptColor(d) { return _DEPT_COLORS[d] || 'var(--text-muted)'; }
 
   function _renderPanels(panels) {
     var rows = panels.map(function (p) {
@@ -743,8 +743,8 @@ var LabCatalog = (function () {
             '<button class="lc-action-btn" onclick=\'event.stopPropagation();LabCatalog.openAddParam("'+p.testId+'","'+_esc(p.testName)+'");\' title="Add parameter"><i class="fa-solid fa-plus"></i></button>' +
             '<button class="lc-action-btn" onclick=\'event.stopPropagation();LabCatalog.openCreate("PANEL","'+p.testId+'");\' title="Edit panel"><i class="fa-solid fa-pen"></i></button>' +
             (p.isActive
-              ? '<button class="lc-action-btn" style="color:#f87171;border-color:rgba(248,113,113,.3);" onclick=\'event.stopPropagation();LabCatalog.toggle("'+p.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban"></i></button>'
-              : '<button class="lc-action-btn" style="color:var(--success);border-color:rgba(16,185,129,.3);" onclick=\'event.stopPropagation();LabCatalog.toggle("'+p.testId+'",true);\' title="Activate"><i class="fa-solid fa-check"></i></button>') +
+              ? '<button class="lc-action-btn" style="color:var(--danger-fg);border-color:var(--danger-bg);" onclick=\'event.stopPropagation();LabCatalog.toggle("'+p.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban"></i></button>'
+              : '<button class="lc-action-btn" style="color:var(--success-fg);border-color:var(--success-bg);" onclick=\'event.stopPropagation();LabCatalog.toggle("'+p.testId+'",true);\' title="Activate"><i class="fa-solid fa-check"></i></button>') +
             '<i class="fa-solid fa-chevron-down label-bright ms-1" style="font-size:.7rem;"></i>' +
           '</div>' +
         '</div>' +
@@ -752,7 +752,7 @@ var LabCatalog = (function () {
       '</div>';
     }).join('');
 
-    return '<div class="lc-section-title"><i class="fa-solid fa-layer-group" style="color:#a5b4fc;"></i>Panels<hr></div>' + rows;
+    return '<div class="lc-section-title"><i class="fa-solid fa-layer-group" style="color:var(--accent-fg);"></i>Panels<hr></div>' + rows;
   }
 
   /* ─── INDIVIDUAL TESTS (compact table) ─── */
@@ -767,21 +767,21 @@ var LabCatalog = (function () {
             ' <code class="label-bright" style="font-size:.7rem;">'+_esc(t.testCode)+'</code>' +
           '</div>' +
           '<span class="lc-dept-pill d-none d-md-inline" style="background:'+clr+'22;color:'+clr+';border:1px solid '+clr+'44;">'+_fmt(t.department)+'</span>' +
-          (t.requiresConsent ? '<span class="lc-dept-pill" style="background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3);">Consent</span>' : '') +
+          (t.requiresConsent ? '<span class="lc-dept-pill" style="background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning-bg);">Consent</span>' : '') +
         '</div>' +
         '<div class="d-flex align-items-center gap-2 flex-shrink-0">' +
           '<span class="label-bright" style="font-size:.72rem;">'+_esc(t.resultType)+(t.unit?' · '+_esc(t.unit):'')+'</span>' +
-          '<span class="fw-semibold" style="color:#22d3ee;font-size:.82rem;">₹'+Number(t.price).toFixed(2)+'</span>' +
+          '<span class="fw-semibold" style="color:var(--teal-fg);font-size:.82rem;">₹'+Number(t.price).toFixed(2)+'</span>' +
           (!t.isActive ? '<span class="lc-dept-pill" style="background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color);">Inactive</span>' : '') +
           '<button class="lc-action-btn" onclick=\'LabCatalog.openCreate("INDIVIDUAL","'+t.testId+'");\' title="Edit"><i class="fa-solid fa-pen" style="font-size:.72rem;"></i></button>' +
           (t.isActive
-            ? '<button class="lc-action-btn" style="color:#f87171;" onclick=\'LabCatalog.toggle("'+t.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban" style="font-size:.72rem;"></i></button>'
-            : '<button class="lc-action-btn" style="color:var(--success);" onclick=\'LabCatalog.toggle("'+t.testId+'",true);\' title="Activate"><i class="fa-solid fa-check" style="font-size:.72rem;"></i></button>') +
+            ? '<button class="lc-action-btn" style="color:var(--danger-fg);" onclick=\'LabCatalog.toggle("'+t.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban" style="font-size:.72rem;"></i></button>'
+            : '<button class="lc-action-btn" style="color:var(--success-fg);" onclick=\'LabCatalog.toggle("'+t.testId+'",true);\' title="Activate"><i class="fa-solid fa-check" style="font-size:.72rem;"></i></button>') +
         '</div>' +
       '</div>';
     }).join('');
 
-    return '<div class="lc-section-title"><i class="fa-solid fa-flask" style="color:#7dd3fc;"></i>Individual Tests<hr></div>' + rows;
+    return '<div class="lc-section-title"><i class="fa-solid fa-flask" style="color:var(--info-fg);"></i>Individual Tests<hr></div>' + rows;
   }
 
   /* ─── PACKAGES ─── */
@@ -807,31 +807,31 @@ var LabCatalog = (function () {
         '<div class="d-flex justify-content-between align-items-start gap-3">' +
           '<div class="flex-grow-1">' +
             '<div class="d-flex align-items-center gap-2 mb-1">' +
-              '<i class="fa-solid fa-box-open" style="color:#6ee7b7;"></i>' +
+              '<i class="fa-solid fa-box-open" style="color:var(--success-fg);"></i>' +
               '<span class="text-white-force fw-bold" style="font-size:.93rem;">'+_esc(pk.testName)+'</span>' +
               '<code class="label-bright" style="font-size:.7rem;">'+_esc(pk.testCode)+'</code>' +
               (!pk.isActive ? '<span class="lc-dept-pill" style="background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color);">Inactive</span>' : '') +
             '</div>' +
             '<div class="d-flex flex-wrap gap-1 mb-2">' + (chips || '<span class="label-bright small">No components defined</span>') + '</div>' +
             '<div class="label-bright" style="font-size:.72rem;">' + compIds.length + ' items · TAT '+pk.tatMinutes+' min' +
-              (saving > 0 ? ' · <span style="color:var(--success);">Patient saves ₹'+saving.toFixed(2)+'</span>' : '') +
+              (saving > 0 ? ' · <span style="color:var(--success-fg);">Patient saves ₹'+saving.toFixed(2)+'</span>' : '') +
             '</div>' +
           '</div>' +
           '<div class="d-flex flex-column align-items-end gap-1 flex-shrink-0">' +
-            '<span class="fw-bold" style="color:#6ee7b7;font-size:1rem;">₹'+Number(pk.price).toFixed(2)+'</span>' +
+            '<span class="fw-bold" style="color:var(--success-fg);font-size:1rem;">₹'+Number(pk.price).toFixed(2)+'</span>' +
             (sum > 0 ? '<span class="label-bright" style="font-size:.7rem;text-decoration:line-through;">₹'+sum.toFixed(2)+'</span>' : '') +
             '<div class="d-flex gap-1 mt-1">' +
               '<button class="lc-action-btn" onclick=\'LabCatalog.openCreate("PACKAGE","'+pk.testId+'");\' title="Edit"><i class="fa-solid fa-pen" style="font-size:.72rem;"></i></button>' +
               (pk.isActive
-                ? '<button class="lc-action-btn" style="color:#f87171;" onclick=\'LabCatalog.toggle("'+pk.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban" style="font-size:.72rem;"></i></button>'
-                : '<button class="lc-action-btn" style="color:var(--success);" onclick=\'LabCatalog.toggle("'+pk.testId+'",true);\' title="Activate"><i class="fa-solid fa-check" style="font-size:.72rem;"></i></button>') +
+                ? '<button class="lc-action-btn" style="color:var(--danger-fg);" onclick=\'LabCatalog.toggle("'+pk.testId+'",false);\' title="Deactivate"><i class="fa-solid fa-ban" style="font-size:.72rem;"></i></button>'
+                : '<button class="lc-action-btn" style="color:var(--success-fg);" onclick=\'LabCatalog.toggle("'+pk.testId+'",true);\' title="Activate"><i class="fa-solid fa-check" style="font-size:.72rem;"></i></button>') +
             '</div>' +
           '</div>' +
         '</div>' +
       '</div>';
     }).join('');
 
-    return '<div class="lc-section-title"><i class="fa-solid fa-box-open" style="color:#6ee7b7;"></i>Packages<hr></div>' + rows;
+    return '<div class="lc-section-title"><i class="fa-solid fa-box-open" style="color:var(--success-fg);"></i>Packages<hr></div>' + rows;
   }
 
   /* ─── helper: flat map of all orderable items by id ─── */
@@ -905,7 +905,7 @@ var LabCatalog = (function () {
         '<option value="QUALITATIVE"'+(pm&&pm.resultType==='QUALITATIVE'?' selected':'')+'>Qualitative</option>' +
         '<option value="DESCRIPTIVE"'+(pm&&pm.resultType==='DESCRIPTIVE'?' selected':'')+'>Descriptive</option>' +
       '</select></td>' +
-      '<td><button class="lc-action-btn" style="color:#f87171;" onclick="LabCatalog.pmRemoveRow(this,' + idx + ');" title="Remove"><i class="fa-solid fa-trash" style="font-size:.68rem;"></i></button></td>';
+      '<td><button class="lc-action-btn" style="color:var(--danger-fg);" onclick="LabCatalog.pmRemoveRow(this,' + idx + ');" title="Remove"><i class="fa-solid fa-trash" style="font-size:.68rem;"></i></button></td>';
     if (existingId) tr.setAttribute('data-pm-existing-id', existingId);
     document.getElementById('lcp-param-rows').appendChild(tr);
   }
@@ -1134,7 +1134,7 @@ var LabCatalog = (function () {
       badge.style.color = 'var(--text-muted)';
     } else {
       badge.innerHTML = '<i class="fa-solid fa-exclamation-triangle me-1"></i>Package price higher than sum by ₹'+Math.abs(saving).toFixed(2);
-      badge.style.color = '#fbbf24';
+      badge.style.color = 'var(--warning-fg)';
     }
   }
 

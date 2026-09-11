@@ -20,7 +20,7 @@
     <div class="card bg-dark border-secondary shadow-sm">
       <div class="table-responsive">
         <table class="table table-dark table-hover mb-0 align-middle">
-          <thead style="background-color: #1a1d20;">
+          <thead style="background-color: var(--surface-2);">
             <tr class="text-muted small text-uppercase">
               <th>IP Number</th>
               <th>Patient ID</th>
@@ -51,26 +51,33 @@
 
     <style>
       /* ─── LAYOUT & SURFACE ─────────────────────── */
-      :root {
-        --ip-surface:      #111418;
-        --ip-surface-2:    #181c22;
-        --ip-border-soft:  rgba(255,255,255,0.05);
-        --ip-border-mid:   rgba(255,255,255,0.09);
-        --ip-purple:       #635bff;
-        --ip-blue:         #3b82f6;
-        --ip-green:        #10b981;
-        --ip-amber:        #f59e0b;
-        --ip-red:          #ef4444;
-        --ip-teal:         #06b6d4;
-        --btn-cont:        rgba(16,185,129,0.15);  --txt-cont: #34d399;
-        --btn-stop:        rgba(239,68,68,0.15);   --txt-stop: #f87171;
-        --btn-hold:        rgba(245,158,11,0.15);  --txt-hold: #fbbf24;
-        --btn-mod:         rgba(59,130,246,0.15);  --txt-mod:  #60a5fa;
+      /* The --ip-* names are kept as an alias layer so the large existing
+         rule set below needs no rewrite, but every value now resolves to a
+         global token and therefore flips with the theme. Previously these
+         were fixed dark values declared on :root, which left this whole
+         workspace stuck in dark colours under the light theme.
+         Declared on :root AND body so the aliases re-resolve on whichever
+         element carries the theme class. */
+      :root, body {
+        --ip-surface:      var(--surface);
+        --ip-surface-2:    var(--surface-2);
+        --ip-border-soft:  var(--border-soft);
+        --ip-border-mid:   var(--border-mid);
+        --ip-purple:       var(--accent-purple);
+        --ip-blue:         var(--blue);
+        --ip-green:        var(--success);
+        --ip-amber:        var(--warning);
+        --ip-red:          var(--danger);
+        --ip-teal:         var(--teal);
+        --btn-cont:        var(--success-bg);  --txt-cont: var(--success-fg);
+        --btn-stop:        var(--danger-bg);   --txt-stop: var(--danger-fg);
+        --btn-hold:        var(--warning-bg);  --txt-hold: var(--warning-fg);
+        --btn-mod:         var(--blue-bg);     --txt-mod:  var(--blue-fg);
       }
 
       .ip-notes-wrapper {
         background: var(--ip-surface);
-        color: #e2e8f0;
+        color: var(--text-secondary);
         height: calc(100vh - 70px);
         margin: -1rem;
         width: calc(100% + 2rem);
@@ -87,11 +94,11 @@
         align-items: center;
         border-bottom: 1px solid var(--ip-border-soft);
         flex-shrink: 0;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 20px rgba(var(--shadow-rgb), 0.3);
         gap: 12px;
       }
-      .ip-pat-name  { font-size: 1.3rem; font-weight: 800; color: white; margin: 0; letter-spacing: -0.3px; }
-      .ip-pat-meta  { font-size: 0.8rem; color: #94a3b8; }
+      .ip-pat-name  { font-size: 1.3rem; font-weight: 800; color: var(--text-main); margin: 0; letter-spacing: -0.3px; }
+      .ip-pat-meta  { font-size: 0.8rem; color: var(--text-muted); }
 
       /* ─── FILTER BAR ─────────────────────────────── */
       .ip-filter-bar {
@@ -107,7 +114,7 @@
       .ip-filter-btn {
         background: transparent;
         border: 1px solid var(--ip-border-mid);
-        color: #94a3b8;
+        color: var(--text-muted);
         padding: 5px 14px;
         border-radius: 20px;
         font-size: 0.75rem;
@@ -116,8 +123,8 @@
         transition: all 0.15s;
         letter-spacing: 0.3px;
       }
-      .ip-filter-btn:hover  { background: rgba(255,255,255,0.04); color: #e2e8f0; }
-      .ip-filter-btn.active { background: var(--ip-purple); border-color: var(--ip-purple); color: white; }
+      .ip-filter-btn:hover  { background: var(--surface-hover); color: var(--text-secondary); }
+      .ip-filter-btn.active { background: var(--ip-purple); border-color: var(--ip-purple); color: var(--text-on-accent); }
 
       /* ─── THREE-PANEL GRID ──────────────────────── */
       .ip-grid {
@@ -136,9 +143,9 @@
         min-height: 0;
       }
       .ip-panel::-webkit-scrollbar { width: 3px; }
-      .ip-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+      .ip-panel::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
       .ip-center-panel {
-        background: rgba(10,13,18,0.5);
+        background: var(--overlay-scrim);
         position: relative;
         padding: 0;
         border-left: 1px solid var(--ip-border-soft);
@@ -154,7 +161,7 @@
         font-size: 0.68rem;
         text-transform: uppercase;
         letter-spacing: 1.8px;
-        color: #475569;
+        color: var(--text-faint);
         font-weight: 700;
         margin-bottom: 10px;
         margin-top: 20px;
@@ -163,24 +170,24 @@
 
       .diag-chip {
         display: inline-block;
-        background: rgba(99,91,255,0.12);
-        color: #a5b4fc;
+        background: var(--accent-glow);
+        color: var(--accent-fg);
         padding: 5px 10px;
         border-radius: 6px;
         font-size: 0.78rem;
         margin: 0 4px 6px 0;
-        border: 1px solid rgba(99,91,255,0.2);
+        border: 1px solid var(--accent-glow);
         font-weight: 500;
       }
       .allergy-chip {
         display: inline-block;
-        background: rgba(239,68,68,0.12);
-        color: #fca5a5;
+        background: var(--danger-bg);
+        color: var(--danger-fg);
         padding: 4px 10px;
         border-radius: 6px;
         font-size: 0.75rem;
         margin: 0 4px 5px 0;
-        border: 1px solid rgba(239,68,68,0.2);
+        border: 1px solid var(--danger-bg);
         font-weight: 600;
       }
 
@@ -192,19 +199,19 @@
         border-bottom: 1px solid var(--ip-border-soft);
       }
       .vital-card:last-child { border-bottom: none; }
-      .vc-label { color: #64748b; font-size: 0.8rem; line-height: 1; }
-      .vc-time  { color: #475569; font-size: 0.65rem; margin-top: 3px; }
-      .vc-val   { font-size: 1.1rem; font-weight: 700; color: white; }
-      .vc-val.warn  { color: #fbbf24; }
-      .vc-val.alert { color: #f87171; }
+      .vc-label { color: var(--text-faint); font-size: 0.8rem; line-height: 1; }
+      .vc-time  { color: var(--text-faint); font-size: 0.65rem; margin-top: 3px; }
+      .vc-val   { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
+      .vc-val.warn  { color: var(--warning-fg); }
+      .vc-val.alert { color: var(--danger-fg); }
 
       .handover-alert-box {
-        background: rgba(239,68,68,0.08);
-        border: 1px solid rgba(239,68,68,0.25);
+        background: var(--danger-bg);
+        border: 1px solid var(--danger-bg);
         border-radius: 10px;
         padding: 10px 14px;
         font-size: 0.8rem;
-        color: #fca5a5;
+        color: var(--danger-fg);
         margin-bottom: 4px;
       }
 
@@ -219,21 +226,21 @@
         min-height: 0;
       }
       .ip-timeline-scroller::-webkit-scrollbar { width: 3px; }
-      .ip-timeline-scroller::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+      .ip-timeline-scroller::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); }
 
       .shift-group { margin-bottom: 24px; }
       .shift-label {
         font-size: 0.7rem;
-        color: #a855f7;
+        color: var(--violet-fg);
         font-weight: 800;
         letter-spacing: 2px;
         text-transform: uppercase;
         padding: 8px 0;
         margin-bottom: 12px;
-        border-bottom: 1px solid rgba(168,85,247,0.15);
+        border-bottom: 1px solid var(--violet-bg);
         position: sticky;
         top: 0;
-        background: rgba(10,13,18,0.9);
+        background: var(--overlay-scrim);
         backdrop-filter: blur(8px);
         z-index: 10;
       }
@@ -244,49 +251,49 @@
         margin-bottom: 16px;
         padding: 14px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.015);
+        background: var(--surface-hover);
         border: 1px solid var(--ip-border-soft);
         animation: ipFadeIn 0.3s ease-out;
         position: relative;
       }
       .feed-item.d-filter-hidden { display: none !important; }
 
-      .feed-item.role-DOCTOR     { border-left: 3px solid #60a5fa; }
-      .feed-item.role-NURSE      { border-left: 3px solid #34d399; }
-      .feed-item.role-CONSULTANT { border-left: 3px solid #f59e0b; }
-      .feed-item.role-PROCEDURE  { border-left: 3px solid #c084fc; }
-      .feed-item.role-HANDOVER   { border-left: 3px solid #94a3b8; background: rgba(148,163,184,0.04); }
-      .feed-item.role-QUICK      { border-left: 3px solid #475569; }
-      .feed-item.role-INVESTIGATION { border-left: 3px solid #06b6d4; }
+      .feed-item.role-DOCTOR     { border-left: 3px solid var(--blue); }
+      .feed-item.role-NURSE      { border-left: 3px solid var(--success); }
+      .feed-item.role-CONSULTANT { border-left: 3px solid var(--warning); }
+      .feed-item.role-PROCEDURE  { border-left: 3px solid var(--violet); }
+      .feed-item.role-HANDOVER   { border-left: 3px solid var(--border-strong); background: var(--surface-hover); }
+      .feed-item.role-QUICK      { border-left: 3px solid var(--border-strong); }
+      .feed-item.role-INVESTIGATION { border-left: 3px solid var(--teal); }
 
       .feed-icon {
         width: 40px; height: 40px;
         border-radius: 10px;
         display: flex; align-items: center; justify-content: center;
         font-size: 1rem; flex-shrink: 0;
-        border: 1px solid rgba(255,255,255,0.06);
+        border: 1px solid var(--border-soft);
       }
-      .feed-icon.role-DOCTOR      { background: rgba(59,130,246,0.12); color: #60a5fa; }
-      .feed-icon.role-NURSE       { background: rgba(16,185,129,0.12); color: #34d399; }
-      .feed-icon.role-CONSULTANT  { background: rgba(245,158,11,0.12); color: #fbbf24; }
-      .feed-icon.role-PROCEDURE   { background: rgba(192,132,252,0.12); color: #c084fc; }
-      .feed-icon.role-HANDOVER    { background: rgba(148,163,184,0.08); color: #94a3b8; }
-      .feed-icon.role-QUICK       { background: rgba(71,85,105,0.12); color: #94a3b8; }
-      .feed-icon.role-INVESTIGATION { background: rgba(6,182,212,0.12); color: #22d3ee; }
-      .feed-icon.role-SYSTEM      { background: rgba(239,68,68,0.12); color: #f87171; }
+      .feed-icon.role-DOCTOR      { background: var(--blue-bg); color: var(--blue-fg); }
+      .feed-icon.role-NURSE       { background: var(--success-bg); color: var(--success-fg); }
+      .feed-icon.role-CONSULTANT  { background: var(--warning-bg); color: var(--warning-fg); }
+      .feed-icon.role-PROCEDURE   { background: var(--violet-bg); color: var(--violet-fg); }
+      .feed-icon.role-HANDOVER    { background: var(--surface-hover); color: var(--text-muted); }
+      .feed-icon.role-QUICK       { background: var(--surface-hover); color: var(--text-muted); }
+      .feed-icon.role-INVESTIGATION { background: var(--teal-bg); color: var(--teal-fg); }
+      .feed-icon.role-SYSTEM      { background: var(--danger-bg); color: var(--danger-fg); }
 
       .feed-body   { flex: 1; min-width: 0; }
       .feed-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 8px; flex-wrap: wrap; }
-      .feed-author { font-weight: 700; color: #f1f5f9; font-size: 0.9rem; }
+      .feed-author { font-weight: 700; color: var(--text-main); font-size: 0.9rem; }
       .feed-role   { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
-      .feed-role.role-DOCTOR      { background: rgba(59,130,246,0.15); color: #93c5fd; }
-      .feed-role.role-NURSE       { background: rgba(16,185,129,0.15); color: #6ee7b7; }
-      .feed-role.role-CONSULTANT  { background: rgba(245,158,11,0.15); color: #fcd34d; }
-      .feed-role.role-PROCEDURE   { background: rgba(192,132,252,0.15); color: #d8b4fe; }
-      .feed-role.role-HANDOVER    { background: rgba(148,163,184,0.1); color: #cbd5e1; }
-      .feed-role.role-INVESTIGATION { background: rgba(6,182,212,0.15); color: #67e8f9; }
-      .feed-time   { color: #475569; font-size: 0.72rem; white-space: nowrap; }
-      .feed-text   { color: #cbd5e1; font-size: 0.88rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+      .feed-role.role-DOCTOR      { background: var(--blue-bg); color: var(--blue-fg); }
+      .feed-role.role-NURSE       { background: var(--success-bg); color: var(--success-fg); }
+      .feed-role.role-CONSULTANT  { background: var(--warning-bg); color: var(--warning-fg); }
+      .feed-role.role-PROCEDURE   { background: var(--violet-bg); color: var(--violet-fg); }
+      .feed-role.role-HANDOVER    { background: var(--surface-hover); color: var(--text-secondary); }
+      .feed-role.role-INVESTIGATION { background: var(--teal-bg); color: var(--teal-fg); }
+      .feed-time   { color: var(--text-faint); font-size: 0.72rem; white-space: nowrap; }
+      .feed-text   { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
 
       .med-action-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
       .mac { font-size: 0.72rem; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
@@ -296,13 +303,13 @@
       .mac-mod  { background: var(--btn-mod);  color: var(--txt-mod);  }
 
       .vitals-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-      .vr-chip { background: rgba(255,255,255,0.04); border: 1px solid var(--ip-border-soft); border-radius: 8px; padding: 5px 10px; font-size: 0.78rem; color: #94a3b8; }
-      .vr-chip span { color: white; font-weight: 600; margin-left: 4px; }
+      .vr-chip { background: var(--surface-hover); border: 1px solid var(--ip-border-soft); border-radius: 8px; padding: 5px 10px; font-size: 0.78rem; color: var(--text-muted); }
+      .vr-chip span { color: var(--text-main); font-weight: 600; margin-left: 4px; }
 
       .empty-timeline {
         text-align: center;
         padding: 48px 20px;
-        color: #475569;
+        color: var(--text-faint);
         font-size: 0.9rem;
       }
 
@@ -320,9 +327,9 @@
       }
       .compose-input {
         flex: 1;
-        background: #0d1117;
+        background: var(--surface);
         border: 1px solid var(--ip-border-mid);
-        color: white;
+        color: var(--text-main);
         padding: 10px 14px;
         border-radius: 12px;
         font-size: 0.85rem;
@@ -330,9 +337,9 @@
       }
       .compose-input:focus { border-color: var(--ip-purple); box-shadow: 0 0 0 2px rgba(99,91,255,0.15); }
       .compose-btn {
-        background: #1e293b;
+        background: var(--bg-input);
         border: 1px solid var(--ip-border-mid);
-        color: #94a3b8;
+        color: var(--text-muted);
         width: 40px; height: 40px;
         border-radius: 10px;
         display: flex; align-items: center; justify-content: center;
@@ -340,15 +347,15 @@
         transition: 0.15s;
         flex-shrink: 0;
       }
-      .compose-btn:hover { background: #273444; color: white; }
-      .compose-btn.primary { background: var(--ip-purple); border-color: var(--ip-purple); color: white; }
+      .compose-btn:hover { background: var(--surface-3); color: var(--text-main); }
+      .compose-btn.primary { background: var(--ip-purple); border-color: var(--ip-purple); color: var(--text-on-accent); }
 
       /* ─── RIGHT PANEL ─────────────────────────────── */
       .action-fab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
       .action-fab {
-        background: #1a1e27;
+        background: var(--surface-2);
         border: 1px solid var(--ip-border-mid);
-        color: #cbd5e1;
+        color: var(--text-secondary);
         padding: 14px 10px;
         border-radius: 12px;
         font-weight: 600;
@@ -361,38 +368,38 @@
         align-items: center;
         gap: 6px;
       }
-      .action-fab:hover { background: #232837; border-color: rgba(255,255,255,0.15); }
+      .action-fab:hover { background: var(--surface-3); border-color: var(--border-mid); }
       .action-fab .fab-icon { font-size: 1.1rem; }
-      .action-fab.fab-dr     { border-color: rgba(59,130,246,0.3); }
-      .action-fab.fab-nr     { border-color: rgba(16,185,129,0.3); }
-      .action-fab.fab-cons   { border-color: rgba(245,158,11,0.3); }
-      .action-fab.fab-proc   { border-color: rgba(192,132,252,0.3); }
+      .action-fab.fab-dr     { border-color: var(--blue-bg); }
+      .action-fab.fab-nr     { border-color: var(--success-bg); }
+      .action-fab.fab-cons   { border-color: var(--warning-bg); }
+      .action-fab.fab-proc   { border-color: var(--violet-bg); }
 
       .med-queue-item {
-        background: #1a1e27;
+        background: var(--surface-2);
         border: 1px solid var(--ip-border-soft);
         border-radius: 10px;
         padding: 12px 14px;
         margin-bottom: 8px;
       }
-      .mqi-name { font-weight: 700; color: #e2e8f0; font-size: 0.85rem; margin-bottom: 2px; }
-      .mqi-freq { color: #64748b; font-size: 0.75rem; }
+      .mqi-name { font-weight: 700; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 2px; }
+      .mqi-freq { color: var(--text-faint); font-size: 0.75rem; }
       .mqi-status { font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
       .mqi-status.active    { background: var(--btn-cont); color: var(--txt-cont); }
       .mqi-status.hold      { background: var(--btn-hold); color: var(--txt-hold); }
-      .mqi-status.iv        { background: rgba(6,182,212,0.15); color: #67e8f9; }
+      .mqi-status.iv        { background: var(--teal-bg); color: var(--teal-fg); }
 
       .lab-result-item {
-        background: #1a1e27;
+        background: var(--surface-2);
         border: 1px solid var(--ip-border-soft);
         border-radius: 10px;
         padding: 10px 14px;
         margin-bottom: 8px;
       }
-      .lri-test   { font-weight: 600; color: #e2e8f0; font-size: 0.82rem; }
+      .lri-test   { font-weight: 600; color: var(--text-secondary); font-size: 0.82rem; }
       .lri-status { font-size: 0.7rem; }
-      .lri-status.pending   { color: #94a3b8; }
-      .lri-status.available { color: #34d399; }
+      .lri-status.pending   { color: var(--text-muted); }
+      .lri-status.available { color: var(--success-fg); }
 
       @keyframes ipFadeIn {
         from { opacity: 0; transform: translateY(8px); }
@@ -411,12 +418,12 @@
       .ip-modal-body  { padding: 20px; overflow-y: auto; max-height: 70vh; }
       .ip-modal-footer { padding: 14px 20px; border-top: 1px solid var(--ip-border-soft); display: flex; justify-content: flex-end; gap: 10px; }
 
-      .ip-form-label { font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; display: block; }
+      .ip-form-label { font-size: 0.72rem; color: var(--text-faint); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; display: block; }
       .ip-form-input {
         width: 100%;
-        background: #0d1117 !important;
-        border: 1px solid #2d3748 !important;
-        color: white !important;
+        background: var(--surface) !important;
+        border: 1px solid var(--border-hover) !important;
+        color: var(--text-main) !important;
         padding: 9px 12px;
         border-radius: 8px;
         font-size: 0.85rem;
@@ -426,9 +433,9 @@
       .ip-form-input:focus { border-color: var(--ip-purple) !important; box-shadow: 0 0 0 2px rgba(99,91,255,0.15); }
       .ip-form-select {
         width: 100%;
-        background: #0d1117 !important;
-        border: 1px solid #2d3748 !important;
-        color: white !important;
+        background: var(--surface) !important;
+        border: 1px solid var(--border-hover) !important;
+        color: var(--text-main) !important;
         padding: 9px 12px;
         border-radius: 8px;
         font-size: 0.85rem;
@@ -438,17 +445,17 @@
       }
 
       .sysex-row { display: grid; grid-template-columns: 50px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
-      .sysex-label { font-size: 0.78rem; color: #94a3b8; font-weight: 700; text-align: right; }
+      .sysex-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 700; text-align: right; }
 
       .med-order-row {
-        background: #131720;
+        background: var(--surface-2);
         border: 1px solid var(--ip-border-soft);
         border-radius: 10px;
         padding: 10px 12px;
         margin-bottom: 10px;
       }
-      .med-order-row .drug-label { font-weight: 700; font-size: 0.9rem; color: #e2e8f0; }
-      .med-order-row .drug-freq  { font-size: 0.78rem; color: #64748b; margin-top: 2px; }
+      .med-order-row .drug-label { font-weight: 700; font-size: 0.9rem; color: var(--text-secondary); }
+      .med-order-row .drug-freq  { font-size: 0.78rem; color: var(--text-faint); margin-top: 2px; }
 
       .med-action-row {
         display: flex;
@@ -473,7 +480,7 @@
       .med-action-btn.btn-mod  { background: var(--btn-mod);  color: var(--txt-mod);  }
 
       .add-drug-row {
-        border: 1px dashed #334155;
+        border: 1px dashed var(--border-hover);
         border-radius: 10px;
         padding: 10px 14px;
         display: flex;
@@ -488,27 +495,27 @@
         top: 100%;
         left: 0;
         right: 0;
-        background: #1e293b;
-        border: 1px solid #334155;
+        background: var(--bg-input);
+        border: 1px solid var(--border-hover);
         border-radius: 8px;
         max-height: 160px;
         overflow-y: auto;
         z-index: 9999;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.5);
       }
       .drug-autocomplete-list div {
         padding: 8px 12px;
         font-size: 0.8rem;
-        color: #e2e8f0;
+        color: var(--text-secondary);
         cursor: pointer;
-        border-bottom: 1px solid #2d3748;
+        border-bottom: 1px solid var(--border-hover);
       }
-      .drug-autocomplete-list div:hover { background: var(--ip-purple); color: white; }
+      .drug-autocomplete-list div:hover { background: var(--ip-purple); color: var(--text-on-accent); }
       .drug-autocomplete-list div:last-child { border-bottom: none; }
 
       .sign-btn {
         background: var(--ip-purple);
-        color: white;
+        color: var(--text-on-accent);
         border: none;
         width: 100%;
         padding: 14px;
@@ -521,16 +528,16 @@
       }
       .sign-btn:hover { opacity: 0.9; transform: translateY(-1px); }
       .sign-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-      .sign-btn.nurse-sign { background: linear-gradient(135deg, #059669, #10b981); }
+      .sign-btn.nurse-sign { background: linear-gradient(135deg, var(--success-deep), var(--success-solid)); }
 
       .inv-order-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
       .inv-order-row input { flex: 1; }
 
       /* ─── WNL BUTTON ─────────────────────────────── */
       .wnl-btn {
-        background: rgba(16,185,129,0.12);
-        border: 1px solid rgba(16,185,129,0.25);
-        color: #34d399;
+        background: var(--success-bg);
+        border: 1px solid var(--success-bg);
+        color: var(--success-fg);
         font-size: 0.72rem;
         font-weight: 700;
         padding: 4px 12px;
@@ -539,16 +546,16 @@
         transition: 0.15s;
         white-space: nowrap;
       }
-      .wnl-btn:hover { background: rgba(16,185,129,0.2); }
+      .wnl-btn:hover { background: var(--success-bg); }
 
       /* ─── HANDOVER MODAL ─────────────────────────── */
       .handover-output-box {
-        background: #0d1117;
+        background: var(--surface);
         border: 1px solid var(--ip-border-mid);
         border-radius: 10px;
         padding: 16px;
         font-size: 0.82rem;
-        color: #94a3b8;
+        color: var(--text-muted);
         white-space: pre-wrap;
         min-height: 300px;
         font-family: 'Courier New', monospace;
@@ -559,7 +566,7 @@
       .ip-loading-overlay {
         position: absolute;
         inset: 0;
-        background: rgba(10,13,18,0.7);
+        background: var(--overlay-scrim);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -573,14 +580,14 @@
         font-size: 0.7rem;
         padding: 3px 10px;
         border-radius: 8px;
-        background: rgba(16,185,129,0.1);
-        border: 1px solid rgba(16,185,129,0.3);
-        color: #34d399;
+        background: var(--success-bg);
+        border: 1px solid var(--success-bg);
+        color: var(--success-fg);
         cursor: pointer;
         transition: 0.15s;
         font-weight: 600;
       }
-      .mark-given-btn.given { background: rgba(16,185,129,0.25); }
+      .mark-given-btn.given { background: var(--success-bg); }
     </style>
 
     <!-- ─── MAIN WRAPPER ────────────────────────────── -->
@@ -600,17 +607,17 @@
         <div class="d-flex gap-2 align-items-center">
           <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
             onclick="openBaselineCasesheet()">
-            <i class="fa-solid fa-file-medical" style="color:#38bdf8;"></i>
+            <i class="fa-solid fa-file-medical" style="color:var(--info-fg);"></i>
             <span style="font-size:0.8rem;">Baseline</span>
           </button>
           <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
             onclick="openHandoverModal()">
-            <i class="fa-solid fa-right-from-bracket" style="color:#94a3b8;"></i>
+            <i class="fa-solid fa-right-from-bracket" style="color:var(--text-muted);"></i>
             <span style="font-size:0.8rem;">Handover</span>
           </button>
           <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
             onclick="ipnPrintNotes()" title="Print the progress record">
-            <i class="fa-solid fa-print" style="color:#fbbf24;"></i>
+            <i class="fa-solid fa-print" style="color:var(--warning-fg);"></i>
             <span style="font-size:0.8rem;">Print</span>
           </button>
         </div>
@@ -618,7 +625,7 @@
 
       <!-- Filter Bar -->
       <div class="ip-filter-bar">
-        <span style="font-size:0.72rem; color:#475569; font-weight:700; margin-right:4px;">FILTER:</span>
+        <span style="font-size:0.72rem; color:var(--text-faint); font-weight:700; margin-right:4px;">FILTER:</span>
         <button class="ip-filter-btn active" data-filter="ALL"     onclick="applyTimelineFilter(this, 'ALL')">All Feed</button>
         <button class="ip-filter-btn"        data-filter="DOCTOR"  onclick="applyTimelineFilter(this, 'DOCTOR')">Doctor</button>
         <button class="ip-filter-btn"        data-filter="NURSE"   onclick="applyTimelineFilter(this, 'NURSE')">Nursing</button>
@@ -659,7 +666,7 @@
             </button>
           </div>
           <div id="ip-allergy-container">
-            <span style="color:#475569; font-size:0.8rem;">None on record</span>
+            <span style="color:var(--text-faint); font-size:0.8rem;">None on record</span>
           </div>
 
           <div class="ip-section-title">Latest Vitals</div>
@@ -683,7 +690,7 @@
           </div>
 
           <div class="ip-section-title">Consultant</div>
-          <div id="ip-consultant-display" style="color:#94a3b8; font-size:0.82rem;">--</div>
+          <div id="ip-consultant-display" style="color:var(--text-muted); font-size:0.82rem;">--</div>
         </div>
 
         <!-- ═══ CENTER PANEL — TIMELINE ════════════ -->
@@ -691,7 +698,7 @@
           <div class="ip-timeline-scroller" id="ip-timeline-scroller">
             <div id="ip-timeline-container">
               <div class="empty-timeline" id="ip-timeline-empty">
-                <i class="fas fa-clipboard-list fa-2x mb-3 d-block" style="color:#2d3748;"></i>
+                <i class="fas fa-clipboard-list fa-2x mb-3 d-block" style="color:var(--text-faint);"></i>
                 No notes logged yet for this admission.
               </div>
             </div>
@@ -716,19 +723,19 @@
           <!-- Action FABs -->
           <div class="action-fab-grid">
             <button class="action-fab fab-dr" onclick="openDoctorNoteModal()">
-              <span class="fab-icon"><i class="fas fa-user-md" style="color:#60a5fa;"></i></span>
+              <span class="fab-icon"><i class="fas fa-user-md" style="color:var(--blue-fg);"></i></span>
               Dr Note
             </button>
             <button class="action-fab fab-nr" onclick="openNurseNoteModal()">
-              <span class="fab-icon"><i class="fas fa-syringe" style="color:#34d399;"></i></span>
+              <span class="fab-icon"><i class="fas fa-syringe" style="color:var(--success-fg);"></i></span>
               Nursing
             </button>
             <button class="action-fab fab-cons" onclick="openConsultantNoteModal()">
-              <span class="fab-icon"><i class="fas fa-stethoscope" style="color:#fbbf24;"></i></span>
+              <span class="fab-icon"><i class="fas fa-stethoscope" style="color:var(--warning-fg);"></i></span>
               Consult
             </button>
             <button class="action-fab fab-proc" onclick="openProcedureNoteModal()">
-              <span class="fab-icon"><i class="fas fa-scalpel" style="color:#c084fc;"></i></span>
+              <span class="fab-icon"><i class="fas fa-scalpel" style="color:var(--violet-fg);"></i></span>
               Procedure
             </button>
           </div>
@@ -743,25 +750,25 @@
             </button>
           </div>
           <div id="ipn-care-team-list" style="margin-bottom:14px;">
-            <div style="color:#475569; font-size:0.8rem;">Loading care team...</div>
+            <div style="color:var(--text-faint); font-size:0.8rem;">Loading care team...</div>
           </div>
 
           <!-- Active Medications -->
           <div class="ip-section-title">Active Medications</div>
           <div id="ip-active-meds-list">
-            <div style="color:#475569; font-size:0.8rem;">No active medications.</div>
+            <div style="color:var(--text-faint); font-size:0.8rem;">No active medications.</div>
           </div>
 
           <!-- Running IV -->
           <div class="ip-section-title">Running IV / Infusions</div>
           <div id="ip-running-iv-list">
-            <div style="color:#475569; font-size:0.8rem;">No running infusions.</div>
+            <div style="color:var(--text-faint); font-size:0.8rem;">No running infusions.</div>
           </div>
 
           <!-- Lab Results -->
           <div class="ip-section-title">Investigations</div>
           <div id="ip-lab-results-list">
-            <div style="color:#475569; font-size:0.8rem;">No orders found.</div>
+            <div style="color:var(--text-faint); font-size:0.8rem;">No orders found.</div>
           </div>
 
         </div><!-- /right panel -->
@@ -777,9 +784,9 @@
   <!-- ── DOCTOR NOTE MODAL ─────────────────────────────── -->
   <div class="modal fade" id="modalIPDoctorNote" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+      <div class="modal-content" style="background:var(--surface-2); border:1px solid var(--border-hover); border-radius:16px; overflow:hidden;">
         <div class="ip-modal-header">
-          <div class="ip-modal-title" style="color:#60a5fa;">
+          <div class="ip-modal-title" style="color:var(--blue-fg);">
             <i class="fas fa-user-md me-2"></i> Clinical Progress Note
           </div>
           <div class="d-flex gap-2 align-items-center flex-wrap">
@@ -809,7 +816,7 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
               <label class="ip-form-label mb-0">System Examination</label>
             </div>
-            <div style="background:#131720; border:1px solid var(--ip-border-soft); border-radius:10px; padding:14px;">
+            <div style="background:var(--surface-2); border:1px solid var(--ip-border-soft); border-radius:10px; padding:14px;">
               <div class="sysex-row">
                 <div class="sysex-label">CVS</div>
                 <select class="ip-form-select" id="dr-se-cvs">
@@ -871,7 +878,7 @@
             </div>
             <div id="dr-active-orders-container">
               <!-- Populated dynamically from IP_Pharmacy_Queue -->
-              <div style="color:#475569; font-size:0.8rem; padding:8px 0;">Loading active medications...</div>
+              <div style="color:var(--text-faint); font-size:0.8rem; padding:8px 0;">Loading active medications...</div>
             </div>
 
             <!-- Add New Drug -->
@@ -944,16 +951,16 @@
             <input type="text" class="ip-form-input mb-2" id="ipn-lab-search"
                    placeholder="Search the lab catalogue..." oninput="ipnRenderLabPicker()">
             <div id="ipn-lab-catalog"
-                 style="max-height:190px; overflow-y:auto; background:#131720;
+                 style="max-height:190px; overflow-y:auto; background:var(--surface-2);
                         border:1px solid var(--ip-border-soft); border-radius:8px; padding:8px;">
-              <div style="color:#475569; font-size:.78rem;">Loading catalogue...</div>
+              <div style="color:var(--text-faint); font-size:.78rem;">Loading catalogue...</div>
             </div>
-            <div id="ipn-lab-selected" style="color:#64748b; font-size:.72rem; margin-top:6px;">
+            <div id="ipn-lab-selected" style="color:var(--text-faint); font-size:.72rem; margin-top:6px;">
               No investigations selected.
             </div>
 
             <details class="mt-2">
-              <summary style="color:#64748b; font-size:.72rem; cursor:pointer;">
+              <summary style="color:var(--text-faint); font-size:.72rem; cursor:pointer;">
                 Order a test that is not in the catalogue
               </summary>
               <div id="dr-inv-orders-container" class="mt-2"></div>
@@ -961,7 +968,7 @@
                 onclick="addInvOrderRow()">
                 <i class="fas fa-plus me-1"></i> Add free-text test
               </button>
-              <div style="color:#64748b; font-size:.68rem; margin-top:4px;">
+              <div style="color:var(--text-faint); font-size:.68rem; margin-top:4px;">
                 A test typed here has no catalogue ID, so the lab cannot price it.
               </div>
             </details>
@@ -987,9 +994,9 @@
   <!-- ── NURSING NOTE MODAL ──────────────────────────── -->
   <div class="modal fade" id="modalIPNurseNote" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+      <div class="modal-content" style="background:var(--surface-2); border:1px solid var(--border-hover); border-radius:16px; overflow:hidden;">
         <div class="ip-modal-header">
-          <div class="ip-modal-title" style="color:#34d399;">
+          <div class="ip-modal-title" style="color:var(--success-fg);">
             <i class="fas fa-syringe me-2"></i> Nursing Execution Note
           </div>
           <div class="d-flex gap-2 align-items-center">
@@ -1003,7 +1010,7 @@
         <div class="ip-modal-body">
 
           <!-- Active Doctor Order Alert -->
-          <div id="nurse-active-order-alert" class="d-none" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:0.82rem; color:#fcd34d;">
+          <div id="nurse-active-order-alert" class="d-none" style="background:var(--warning-bg); border:1px solid var(--warning-bg); border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:0.82rem; color:var(--warning-fg);">
             <i class="fas fa-bell me-2"></i>
             <strong>Active Doctor Order:</strong> <span id="nurse-alert-text"></span>
           </div>
@@ -1031,7 +1038,7 @@
           <div class="mb-4">
             <label class="ip-form-label">Medication Administration Log</label>
             <div id="nr-med-log-container">
-              <div style="color:#475569; font-size:0.8rem;">Loading due medications...</div>
+              <div style="color:var(--text-faint); font-size:0.8rem;">Loading due medications...</div>
             </div>
           </div>
 
@@ -1074,9 +1081,9 @@
        script URL into the dialog title) ═══════════════════════════ -->
   <div class="modal fade" id="modalIPCrossConsult" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+      <div class="modal-content" style="background:var(--surface-2); border:1px solid var(--border-hover); border-radius:16px; overflow:hidden;">
         <div class="ip-modal-header">
-          <div class="ip-modal-title" style="color:#38bdf8;">
+          <div class="ip-modal-title" style="color:var(--info-fg);">
             <i class="fas fa-user-plus me-2"></i> Add to Care Team
           </div>
           <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1094,7 +1101,7 @@
             <label class="ip-form-label">Team Role</label>
             <select class="ip-form-select" id="xc-role-select"></select>
           </div>
-          <div id="xc-error" class="d-none" style="color:#f87171; font-size:0.78rem;"></div>
+          <div id="xc-error" class="d-none" style="color:var(--danger-fg); font-size:0.78rem;"></div>
         </div>
         <div class="ip-modal-footer">
           <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1110,9 +1117,9 @@
   <!-- ═══ DIAGNOSIS EDITOR ═══════════════════════════════════════ -->
   <div class="modal fade" id="modalIPDiagnosis" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+      <div class="modal-content" style="background:var(--surface-2); border:1px solid var(--border-hover); border-radius:16px; overflow:hidden;">
         <div class="ip-modal-header">
-          <div class="ip-modal-title" style="color:#f472b6;">
+          <div class="ip-modal-title" style="color:var(--pink-fg);">
             <i class="fas fa-notes-medical me-2"></i> Working Diagnosis
           </div>
           <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1123,7 +1130,7 @@
           </label>
           <textarea class="ip-form-input" id="dx-editor" rows="5"
                     placeholder="e.g.&#10;Community acquired pneumonia&#10;Type 2 Diabetes Mellitus"></textarea>
-          <div style="color:#64748b; font-size:0.72rem; margin-top:8px;">
+          <div style="color:var(--text-faint); font-size:0.72rem; margin-top:8px;">
             This updates the admission's working diagnosis and records the change
             on the timeline. The admission casesheet is not altered.
           </div>
@@ -1132,7 +1139,7 @@
             <input type="text" class="ip-form-input" id="dx-reason"
                    placeholder="e.g. Culture confirmed organism">
           </div>
-          <div id="dx-error" class="d-none" style="color:#f87171; font-size:0.78rem;"></div>
+          <div id="dx-error" class="d-none" style="color:var(--danger-fg); font-size:0.78rem;"></div>
         </div>
         <div class="ip-modal-footer">
           <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1147,9 +1154,9 @@
 
   <div class="modal fade" id="modalIPConsultantNote" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+      <div class="modal-content" style="background:var(--surface-2); border:1px solid var(--border-hover); border-radius:16px; overflow:hidden;">
         <div class="ip-modal-header">
-          <div class="ip-modal-title" style="color:#fbbf24;">
+          <div class="ip-modal-title" style="color:var(--warning-fg);">
             <i class="fas fa-stethoscope me-2"></i> Consultant / Visiting Doctor Note
           </div>
           <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1196,7 +1203,7 @@
         </div>
         <div class="ip-modal-footer">
           <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,#92400e,#f59e0b);" onclick="saveConsultantNote()">
+          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,var(--warning-deep),var(--warning-solid));" onclick="saveConsultantNote()">
             <i class="fas fa-signature me-2"></i> Save Consultant Note
           </button>
         </div>
@@ -1207,9 +1214,9 @@
   <!-- ── PROCEDURE NOTE MODAL ───────────────────────── -->
   <div class="modal fade" id="modalIPProcedureNote" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+      <div class="modal-content" style="background:var(--surface-2); border:1px solid var(--border-hover); border-radius:16px; overflow:hidden;">
         <div class="ip-modal-header">
-          <div class="ip-modal-title" style="color:#c084fc;">
+          <div class="ip-modal-title" style="color:var(--violet-fg);">
             <i class="fas fa-scalpel me-2"></i> Procedure Note
           </div>
           <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1238,7 +1245,7 @@
         </div>
         <div class="ip-modal-footer">
           <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,#4c1d95,#7c3aed);" onclick="saveProcedureNote()">
+          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,var(--violet-deep),var(--violet-solid));" onclick="saveProcedureNote()">
             <i class="fas fa-signature me-2"></i> Save Procedure Note
           </button>
         </div>
@@ -1249,9 +1256,9 @@
   <!-- ── HANDOVER MODAL ─────────────────────────────── -->
   <div class="modal fade" id="modalIPHandover" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-      <div class="modal-content" style="background:#181c22; border:1px solid #2d3748; border-radius:16px; overflow:hidden;">
+      <div class="modal-content" style="background:var(--surface-2); border:1px solid var(--border-hover); border-radius:16px; overflow:hidden;">
         <div class="ip-modal-header">
-          <div class="ip-modal-title" style="color:#94a3b8;">
+          <div class="ip-modal-title" style="color:var(--text-muted);">
             <i class="fas fa-right-from-bracket me-2"></i> Shift Handover Summary
           </div>
           <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -1314,20 +1321,20 @@ function ipn_dialogHost() {
     host.id = 'ipn-dialog-host';
     host.style.cssText =
         'position:fixed; inset:0; z-index:30000; display:none;' +
-        'align-items:center; justify-content:center; background:rgba(2,6,23,.72);';
+        'align-items:center; justify-content:center; background:var(--overlay-scrim);';
     host.innerHTML =
         '<div id="ipn-dialog-card" role="dialog" aria-modal="true" style="' +
-          'background:var(--bg-card,#1e293b); border:1px solid var(--border-color,#334155);' +
-          'border-radius:12px; width:min(460px,92vw); box-shadow:0 20px 60px rgba(0,0,0,.6);' +
-          'color:var(--text-main,#f8fafc); overflow:hidden;">' +
+          'background:var(--bg-card); border:1px solid var(--border-color);' +
+          'border-radius:12px; width:min(460px,92vw); box-shadow:0 20px 60px rgba(var(--shadow-rgb), .6);' +
+          'color:var(--text-main); overflow:hidden;">' +
           '<div id="ipn-dialog-head" style="padding:14px 18px; font-weight:700; font-size:.9rem;' +
-            'border-bottom:1px solid var(--border-color,#334155);"></div>' +
+            'border-bottom:1px solid var(--border-color);"></div>' +
           '<div style="padding:18px;">' +
             '<div id="ipn-dialog-msg" style="font-size:.84rem; line-height:1.5; white-space:pre-wrap;"></div>' +
             '<input type="text" id="ipn-dialog-input" class="hd-input mt-3 d-none" autocomplete="off">' +
           '</div>' +
           '<div style="padding:12px 18px; display:flex; justify-content:flex-end; gap:8px;' +
-            'border-top:1px solid var(--border-color,#334155);">' +
+            'border-top:1px solid var(--border-color);">' +
             '<button type="button" id="ipn-dialog-cancel" class="btn btn-sm btn-outline-light">Cancel</button>' +
             '<button type="button" id="ipn-dialog-ok" class="btn btn-sm btn-primary fw-bold">OK</button>' +
           '</div>' +
@@ -1345,9 +1352,9 @@ function ipn_dialog(opts) {
     const cancel = document.getElementById('ipn-dialog-cancel');
 
     head.textContent = opts.title || 'Crescentia';
-    head.style.color = opts.kind === 'err'  ? '#f87171'
-                     : opts.kind === 'warn' ? '#fbbf24'
-                     : 'var(--medical-purple,#635bff)';
+    head.style.color = opts.kind === 'err'  ? 'var(--danger-fg)'
+                     : opts.kind === 'warn' ? 'var(--warning-fg)'
+                     : 'var(--accent-purple)';
     msg.textContent = opts.message || '';
 
     input.classList.toggle('d-none', opts.mode !== 'prompt');
@@ -1468,9 +1475,9 @@ function ipn_prompt(message, value, done, opts) {
         <td><span class="badge bg-secondary">${p.wardBed}</span></td>
         <td class="text-secondary">${p.doa}</td>
         <td class="text-secondary small">${p.consultant}</td>
-        <td><span class="badge" style="background:rgba(99,91,255,0.15);color:#a5b4fc;">${p.diagnosis || 'Pending'}</span></td>
+        <td><span class="badge" style="background:var(--accent-glow);color:var(--accent-fg);">${p.diagnosis || 'Pending'}</span></td>
         <td class="text-end">
-          <button class="btn btn-sm text-white py-1 px-3 rounded-pill" style="background:#635bff; font-size:0.75rem;">
+          <button class="btn btn-sm text-white py-1 px-3 rounded-pill on-accent" style="background:var(--accent-purple); font-size:0.75rem;">
             Open Notes <i class="fas fa-chevron-right ms-1" style="font-size:0.65rem;"></i>
           </button>
         </td>
@@ -1497,7 +1504,7 @@ function ipn_prompt(message, value, done, opts) {
 
     // Clear and load
     document.getElementById('ip-timeline-container').innerHTML =
-      '<div class="empty-timeline"><i class="fas fa-circle-notch fa-spin fa-2x mb-3 d-block" style="color:#2d3748;"></i>Loading timeline...</div>';
+      '<div class="empty-timeline"><i class="fas fa-circle-notch fa-spin fa-2x mb-3 d-block" style="color:var(--text-faint);"></i>Loading timeline...</div>';
     resetLeftPanel();
     resetRightPanel();
 
@@ -1677,7 +1684,7 @@ function ipn_prompt(message, value, done, opts) {
     const ivList  = document.getElementById('ip-running-iv-list');
 
     if (meds.length === 0) {
-      medList.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No active medications.</div>';
+      medList.innerHTML = '<div style="color:var(--text-faint); font-size:0.8rem;">No active medications.</div>';
     } else {
       medList.innerHTML = meds.map(function(m) {
         return `<div class="med-queue-item">
@@ -1688,13 +1695,13 @@ function ipn_prompt(message, value, done, opts) {
             </div>
             <span class="mqi-status active">Active</span>
           </div>
-          <div style="font-size:0.7rem; color:#475569; margin-top:4px;">By: ${_esc(m.orderedBy)}</div>
+          <div style="font-size:0.7rem; color:var(--text-faint); margin-top:4px;">By: ${_esc(m.orderedBy)}</div>
         </div>`;
       }).join('');
     }
 
     if (ivs.length === 0) {
-      ivList.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No running infusions.</div>';
+      ivList.innerHTML = '<div style="color:var(--text-faint); font-size:0.8rem;">No running infusions.</div>';
     } else {
       ivList.innerHTML = ivs.map(function(m) {
         return `<div class="med-queue-item">
@@ -1716,7 +1723,7 @@ function ipn_prompt(message, value, done, opts) {
       .withSuccessHandler(function(resp) {
         const cont = document.getElementById('ip-lab-results-list');
         if (!resp.success || !resp.data || resp.data.length === 0) {
-          cont.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No orders found.</div>';
+          cont.innerHTML = '<div style="color:var(--text-faint); font-size:0.8rem;">No orders found.</div>';
           return;
         }
         cont.innerHTML = resp.data.map(function(l) {
@@ -1727,8 +1734,8 @@ function ipn_prompt(message, value, done, opts) {
               <div class="lri-test">${_esc(l.testName)}</div>
               <span class="lri-status ${isPending ? 'pending' : 'available'}">${isPending ? '⏳ Pending' : '✓ Available'}</span>
             </div>
-            <div style="font-size:0.7rem; color:#475569;">${l.orderedAt}</div>
-            ${hasResult ? '<div class="mt-1" style="font-size:0.78rem; color:#67e8f9;">' + JSON.stringify(l.result) + '</div>' : ''}
+            <div style="font-size:0.7rem; color:var(--text-faint);">${l.orderedAt}</div>
+            ${hasResult ? '<div class="mt-1" style="font-size:0.78rem; color:var(--teal-fg);">' + JSON.stringify(l.result) + '</div>' : ''}
           </div>`;
         }).join('');
       })
@@ -1750,7 +1757,7 @@ function ipn_prompt(message, value, done, opts) {
   function renderIPTimeline(resp) {
     const cont = document.getElementById('ip-timeline-container');
     if (!resp.success || !resp.data || resp.data.length === 0) {
-      cont.innerHTML = '<div class="empty-timeline"><i class="fas fa-clipboard-list fa-2x mb-3 d-block" style="color:#2d3748;"></i>No notes logged yet for this admission.</div>';
+      cont.innerHTML = '<div class="empty-timeline"><i class="fas fa-clipboard-list fa-2x mb-3 d-block" style="color:var(--text-faint);"></i>No notes logged yet for this admission.</div>';
       return;
     }
 
@@ -1815,7 +1822,7 @@ function ipn_prompt(message, value, done, opts) {
         nd.systemExam && nd.systemExam.cns  ? 'CNS: ' + nd.systemExam.cns  : null
       ].filter(Boolean);
       if (seItems.length > 0) {
-        bodyHTML += `<div style="font-size:0.78rem; color:#64748b; margin-bottom:8px;">${seItems.map(_esc).join(' &nbsp;|&nbsp; ')}</div>`;
+        bodyHTML += `<div style="font-size:0.78rem; color:var(--text-faint); margin-bottom:8px;">${seItems.map(_esc).join(' &nbsp;|&nbsp; ')}</div>`;
       }
       // Med orders
       if (nd.medOrders && nd.medOrders.length > 0) {
@@ -1828,7 +1835,7 @@ function ipn_prompt(message, value, done, opts) {
         bodyHTML += '</div>';
       }
       if (nd.adviceText) {
-        bodyHTML += `<div style="font-size:0.8rem; color:#64748b; margin-top:8px; font-style:italic;">${_esc(nd.adviceText)}</div>`;
+        bodyHTML += `<div style="font-size:0.8rem; color:var(--text-faint); margin-top:8px; font-style:italic;">${_esc(nd.adviceText)}</div>`;
       }
     }
 
@@ -1842,7 +1849,7 @@ function ipn_prompt(message, value, done, opts) {
         </div>`;
       }
       if (nd.intervention) {
-        bodyHTML += `<div style="font-size:0.78rem; color:#34d399; margin-top:6px;">${_esc(nd.intervention)}</div>`;
+        bodyHTML += `<div style="font-size:0.78rem; color:var(--success-fg); margin-top:6px;">${_esc(nd.intervention)}</div>`;
       }
       if (nd.observations) {
         bodyHTML += `<div class="feed-text mt-2">${_esc(nd.observations)}</div>`;
@@ -1850,20 +1857,20 @@ function ipn_prompt(message, value, done, opts) {
     }
 
     if (roleType === 'CONSULTANT') {
-      const specialty = nd.specialty ? ` <span style="color:#fbbf24;font-size:0.75rem;">[${_esc(nd.specialty)}]</span>` : '';
-      bodyHTML += `<div style="font-size:0.82rem; color:#fbbf24; font-weight:600; margin-bottom:4px;">${_esc(nd.consultantName||'')}${specialty}</div>`;
+      const specialty = nd.specialty ? ` <span style="color:var(--warning-fg);font-size:0.75rem;">[${_esc(nd.specialty)}]</span>` : '';
+      bodyHTML += `<div style="font-size:0.82rem; color:var(--warning-fg); font-weight:600; margin-bottom:4px;">${_esc(nd.consultantName||'')}${specialty}</div>`;
       if (nd.findings) bodyHTML += `<div class="feed-text mb-1">${_esc(nd.findings)}</div>`;
-      if (nd.recommendations) bodyHTML += `<div style="font-size:0.8rem; color:#64748b; font-style:italic;">${_esc(nd.recommendations)}</div>`;
+      if (nd.recommendations) bodyHTML += `<div style="font-size:0.8rem; color:var(--text-faint); font-style:italic;">${_esc(nd.recommendations)}</div>`;
     }
 
     if (roleType === 'PROCEDURE') {
-      bodyHTML += `<div style="font-size:0.82rem; color:#c084fc; font-weight:600; margin-bottom:4px;">${_esc(nd.procedureName||'')} <span style="font-size:0.72rem; color:#64748b;">(${_esc(nd.operator||'')})</span></div>`;
+      bodyHTML += `<div style="font-size:0.82rem; color:var(--violet-fg); font-weight:600; margin-bottom:4px;">${_esc(nd.procedureName||'')} <span style="font-size:0.72rem; color:var(--text-faint);">(${_esc(nd.operator||'')})</span></div>`;
       if (nd.findings) bodyHTML += `<div class="feed-text mb-1">${_esc(nd.findings)}</div>`;
-      if (nd.complications) bodyHTML += `<div style="font-size:0.78rem; color:#f87171;">${_esc(nd.complications)}</div>`;
+      if (nd.complications) bodyHTML += `<div style="font-size:0.78rem; color:var(--danger-fg);">${_esc(nd.complications)}</div>`;
     }
 
     if (roleType === 'HANDOVER') {
-      bodyHTML += `<div class="feed-text" style="font-family:monospace; font-size:0.78rem; white-space:pre-wrap; color:#94a3b8;">${_esc(nd.handoverText||'')}</div>`;
+      bodyHTML += `<div class="feed-text" style="font-family:monospace; font-size:0.78rem; white-space:pre-wrap; color:var(--text-muted);">${_esc(nd.handoverText||'')}</div>`;
     }
 
     if (roleType === 'QUICK') {
@@ -1871,10 +1878,10 @@ function ipn_prompt(message, value, done, opts) {
     }
 
     if (roleType === 'INVESTIGATION') {
-      bodyHTML += `<div style="font-size:0.82rem; color:#67e8f9; margin-bottom:4px;">${_esc(nd.testName||'')} <span style="color:#475569;">${_esc(nd.priority||'')}</span></div>`;
+      bodyHTML += `<div style="font-size:0.82rem; color:var(--teal-fg); margin-bottom:4px;">${_esc(nd.testName||'')} <span style="color:var(--text-faint);">${_esc(nd.priority||'')}</span></div>`;
       if (nd.result) {
-        bodyHTML += `<div style="font-size:0.8rem; color:#e2e8f0;">Result: ${_esc(nd.result)} ${_esc(nd.unit||'')}`;
-        if (nd.referenceRange) bodyHTML += ` <span style="color:#475569;">(Ref: ${_esc(nd.referenceRange)})</span>`;
+        bodyHTML += `<div style="font-size:0.8rem; color:var(--text-secondary);">Result: ${_esc(nd.result)} ${_esc(nd.unit||'')}`;
+        if (nd.referenceRange) bodyHTML += ` <span style="color:var(--text-faint);">(Ref: ${_esc(nd.referenceRange)})</span>`;
         bodyHTML += '</div>';
       }
     }
@@ -1893,7 +1900,7 @@ function ipn_prompt(message, value, done, opts) {
           <div>
             <span class="feed-author">${_esc(note.author)}</span>
             <span class="feed-role role-${roleType} ms-2">${roleLabel}</span>
-            ${note.signature ? `<span class="ms-2" style="font-size:0.66rem; color:#64748b;" title="Signature recorded when the note was written">&#10003; ${_esc(note.signature)}</span>` : ''}
+            ${note.signature ? `<span class="ms-2" style="font-size:0.66rem; color:var(--text-faint);" title="Signature recorded when the note was written">&#10003; ${_esc(note.signature)}</span>` : ''}
           </div>
           <span class="feed-time">${_esc(note.timestamp)}</span>
         </div>
@@ -1992,13 +1999,13 @@ function ipn_prompt(message, value, done, opts) {
     // Populate active orders
     const cont = document.getElementById('dr-active-orders-container');
     if (IPNotesModule.activeMeds.length === 0) {
-      cont.innerHTML = '<div style="color:#475569; font-size:0.8rem; padding:8px 0;">No active medications on file.</div>';
+      cont.innerHTML = '<div style="color:var(--text-faint); font-size:0.8rem; padding:8px 0;">No active medications on file.</div>';
     } else {
       cont.innerHTML = IPNotesModule.activeMeds.map(function(m, idx) {
         return `<div class="med-order-row" id="med-order-row-${idx}" data-queue-id="${_esc(m.queueId)}" data-drug="${_esc(m.drugName)}" data-dose="${_esc(m.dose||'')}" data-freq="${_esc(m.freq||'')}" data-route="${_esc(m.route||'Oral')}">
           <div class="d-flex justify-content-between align-items-center">
             <div>
-              <div class="drug-label">${_esc(m.drugName)} <span style="font-size:0.75rem; color:#64748b;">${_esc(m.dose||'')} ${_esc(m.route||'')}</span></div>
+              <div class="drug-label">${_esc(m.drugName)} <span style="font-size:0.75rem; color:var(--text-faint);">${_esc(m.dose||'')} ${_esc(m.route||'')}</span></div>
               <div class="drug-freq">${_esc(m.freq||'')}</div>
             </div>
           </div>
@@ -2008,7 +2015,7 @@ function ipn_prompt(message, value, done, opts) {
             <button class="med-action-btn btn-hold" data-action="HOLD" onclick="selectMedAction(this,${idx})">Hold</button>
             <button class="med-action-btn btn-mod"  data-action="MODIFY" onclick="selectMedAction(this,${idx})">Mod</button>
           </div>
-          <div class="mod-expand-fields d-none" id="mod-expand-${idx}" style="margin-top:10px; padding:10px; background:#0d1117; border-radius:8px; border:1px dashed #334155;">
+          <div class="mod-expand-fields d-none" id="mod-expand-${idx}" style="margin-top:10px; padding:10px; background:var(--surface); border-radius:8px; border:1px dashed var(--border-hover);">
             <div class="row g-2">
               <div class="col-4"><label class="ip-form-label">New Dose</label><input type="text" class="ip-form-input mod-new-dose" placeholder="New dose..."></div>
               <div class="col-4"><label class="ip-form-label">New Frequency</label>
@@ -2177,7 +2184,7 @@ function ipn_prompt(message, value, done, opts) {
         <option value="STAT">STAT</option>
         <option value="URGENT">Urgent</option>
       </select>
-      <button class="compose-btn" style="border:1px solid #334155; flex-shrink:0;" onclick="this.closest('.inv-order-row').remove()">
+      <button class="compose-btn" style="border:1px solid var(--border-hover); flex-shrink:0;" onclick="this.closest('.inv-order-row').remove()">
         <i class="fas fa-times"></i>
       </button>`;
     cont.appendChild(row);
@@ -2226,14 +2233,14 @@ function ipn_prompt(message, value, done, opts) {
     const cont = document.getElementById('dr-active-orders-container');
     const newRow = document.createElement('div');
     newRow.className = 'med-order-row';
-    newRow.style.borderLeft = '3px solid #34d399';
+    newRow.style.borderLeft = '3px solid var(--success-fg)';
     newRow.dataset.newIdx = IPNotesModule.newDrugOrders.length - 1;
     const routeTag = (route === 'IV Fluid' || route === 'IV')
-      ? '<span style="font-size:0.72rem; color:#67e8f9; margin-left:6px;">IV</span>'
+      ? '<span style="font-size:0.72rem; color:var(--teal-fg); margin-left:6px;">IV</span>'
       : '';
     newRow.innerHTML = `<div class="d-flex justify-content-between align-items-center">
       <div>
-        <div class="drug-label">${_esc(drugName)}${routeTag} <span style="font-size:0.72rem; color:#34d399; margin-left:4px;">NEW</span></div>
+        <div class="drug-label">${_esc(drugName)}${routeTag} <span style="font-size:0.72rem; color:var(--success-fg); margin-left:4px;">NEW</span></div>
         <div class="drug-freq">${_esc(dose)} &bull; ${_esc(order.freq)} &bull; ${_esc(route)}${instructions ? ' — ' + _esc(instructions) : ''}</div>
       </div>
       <button class="compose-btn" onclick="removeNewDrugOrder(this, ${IPNotesModule.newDrugOrders.length-1})" style="width:28px;height:28px;font-size:0.7rem;">✕</button>
@@ -2266,7 +2273,7 @@ function ipn_prompt(message, value, done, opts) {
 
     matches.forEach(function(drug) {
       const div = document.createElement('div');
-      div.innerHTML = `<strong>${_esc(drug.brand)}</strong> <span style="color:#64748b;">(${_esc(drug.generic)}) — ${_esc(drug.type)}</span>`;
+      div.innerHTML = `<strong>${_esc(drug.brand)}</strong> <span style="color:var(--text-faint);">(${_esc(drug.generic)}) — ${_esc(drug.type)}</span>`;
       div.onclick = function() {
         document.getElementById('ip-new-drug-name').value = drug.brand + ' ' + (drug.unit||'');
         list.classList.add('d-none');
@@ -2405,7 +2412,7 @@ function ipn_prompt(message, value, done, opts) {
     // Populate med log from active meds
     const logCont = document.getElementById('nr-med-log-container');
     if (IPNotesModule.activeMeds.length === 0) {
-      logCont.innerHTML = '<div style="color:#475569; font-size:0.8rem;">No medications to log.</div>';
+      logCont.innerHTML = '<div style="color:var(--text-faint); font-size:0.8rem;">No medications to log.</div>';
     } else {
       logCont.innerHTML = IPNotesModule.activeMeds.map(function(m) {
         return `<div class="med-queue-item" style="display:flex; justify-content:space-between; align-items:center;">
@@ -2661,7 +2668,7 @@ function ipn_prompt(message, value, done, opts) {
       .withSuccessHandler(applyIPCareTeamPanel)
       .withFailureHandler(function (e) {
         const c = document.getElementById('ipn-care-team-list');
-        if (c) c.innerHTML = '<div style="color:#f87171; font-size:0.78rem;">' + _esc(e.message) + '</div>';
+        if (c) c.innerHTML = '<div style="color:var(--danger-fg); font-size:0.78rem;">' + _esc(e.message) + '</div>';
       })
       .getIPCareTeamPanel(ipNumber, window.sessionToken);
   }
@@ -2675,27 +2682,27 @@ function ipn_prompt(message, value, done, opts) {
         const addBtn = document.getElementById('ipn-add-consult-btn');
 
         if (!res || !res.success) {
-          cont.innerHTML = '<div style="color:#f87171; font-size:0.78rem;">' +
+          cont.innerHTML = '<div style="color:var(--danger-fg); font-size:0.78rem;">' +
                            _esc((res && res.message) || 'Care team unavailable.') + '</div>';
           if (addBtn) addBtn.classList.add('d-none');
           return;
         }
 
         const colour = {
-          PRIMARY:       '#60a5fa',
-          CROSS_CONSULT: '#fbbf24',
-          SURGEON:       '#f87171',
-          ANAESTHETIST:  '#c084fc'
+          PRIMARY:       'var(--blue-fg)',
+          CROSS_CONSULT: 'var(--warning-fg)',
+          SURGEON:       'var(--danger-fg)',
+          ANAESTHETIST:  'var(--violet-fg)'
         };
         cont.innerHTML = (res.team || []).length
           ? res.team.map(function (t) {
-              const c = colour[t.teamRole] || '#94a3b8';
+              const c = colour[t.teamRole] || 'var(--text-muted)';
               const mine = (t.doctorId === res.selfDoctorId);
               const canDrop = res.canManageTeam && t.teamRole !== 'PRIMARY';
               return '<div class="med-queue-item" style="display:flex; justify-content:space-between; align-items:center;">' +
                        '<div>' +
                          '<div class="mqi-name" style="color:' + c + ';">' + _esc(t.name) +
-                           (mine ? ' <span style="font-size:0.65rem; color:#34d399;">(you)</span>' : '') +
+                           (mine ? ' <span style="font-size:0.65rem; color:var(--success-fg);">(you)</span>' : '') +
                          '</div>' +
                          '<div class="mqi-freq">' + _esc(t.teamRole.replace('_', ' ')) +
                            (t.specialty ? ' &bull; ' + _esc(t.specialty) : '') + '</div>' +
@@ -2706,7 +2713,7 @@ function ipn_prompt(message, value, done, opts) {
                          : '') +
                      '</div>';
             }).join('')
-          : '<div style="color:#475569; font-size:0.8rem;">No care team recorded.</div>';
+          : '<div style="color:var(--text-faint); font-size:0.8rem;">No care team recorded.</div>';
 
         if (addBtn) addBtn.classList.toggle('d-none', !res.canManageTeam);
 
@@ -2714,7 +2721,7 @@ function ipn_prompt(message, value, done, opts) {
         IPNotesModule.readOnly = (res.role === 'doctor' && !res.canWrite);
         if (IPNotesModule.readOnly) {
           cont.insertAdjacentHTML('beforeend',
-            '<div style="color:#fbbf24; font-size:0.72rem; margin-top:6px;">' +
+            '<div style="color:var(--warning-fg); font-size:0.72rem; margin-top:6px;">' +
             '<i class="fas fa-lock me-1"></i>You are not on this care team — ' +
             'notes are read-only until the primary consultant adds you.</div>');
         }
@@ -2885,13 +2892,13 @@ function ipn_prompt(message, value, done, opts) {
                            'display:flex; flex-direction:column; gap:8px; max-width:380px;';
       document.body.appendChild(host);
     }
-    const colour = kind === 'err'  ? '#f87171'
-                 : kind === 'warn' ? '#fbbf24'
-                 : '#34d399';
+    const colour = kind === 'err'  ? 'var(--danger-fg)'
+                 : kind === 'warn' ? 'var(--warning-fg)'
+                 : 'var(--success-fg)';
     const el = document.createElement('div');
-    el.style.cssText = 'background:#181c22; border:1px solid ' + colour +
-      '; border-left-width:4px; color:#e2e8f0; padding:12px 16px; border-radius:10px;' +
-      'font-size:0.82rem; box-shadow:0 8px 24px rgba(0,0,0,.5); cursor:pointer;';
+    el.style.cssText = 'background:var(--bg-elevated); border:1px solid ' + colour +
+      '; border-left-width:4px; color:var(--text-main); padding:12px 16px; border-radius:10px;' +
+      'font-size:0.82rem; box-shadow:0 8px 24px rgba(var(--shadow-rgb), .5); cursor:pointer;';
     el.textContent = msg;
     el.onclick = function () { el.remove(); };
     host.appendChild(el);
@@ -2924,10 +2931,10 @@ function ipn_prompt(message, value, done, opts) {
                _esc(a) + '</span>';
       }).join('');
     } else if (recorded) {
-      cont.innerHTML = '<span style="color:#34d399; font-size:0.8rem;">' +
+      cont.innerHTML = '<span style="color:var(--success-fg); font-size:0.8rem;">' +
                        '<i class="fas fa-check me-1"></i>None known (asked and recorded)</span>';
     } else {
-      cont.innerHTML = '<span style="color:#fbbf24; font-size:0.8rem;">' +
+      cont.innerHTML = '<span style="color:var(--warning-fg); font-size:0.8rem;">' +
                        '<i class="fas fa-circle-question me-1"></i>Not recorded — ask and enter it</span>';
     }
   }
@@ -3003,9 +3010,9 @@ function ipn_prompt(message, value, done, opts) {
     if (!alerts || !alerts.length) { bar.innerHTML = ''; return; }
 
     const style = {
-      DANGER: 'background:rgba(239,68,68,.12); border:1px solid #ef4444; color:#fca5a5;',
-      WARN:   'background:rgba(245,158,11,.10); border:1px solid #f59e0b; color:#fcd34d;',
-      INFO:   'background:rgba(148,163,184,.08); border:1px solid #334155; color:#94a3b8;'
+      DANGER: 'background:var(--danger-bg); border:1px solid var(--danger); color:var(--danger-fg);',
+      WARN:   'background:var(--warning-bg); border:1px solid var(--warning); color:var(--warning-fg);',
+      INFO:   'background:var(--surface-hover); border:1px solid var(--border-hover); color:var(--text-muted);'
     };
     bar.innerHTML = alerts.map(function (a) {
       const icon = a.level === 'DANGER' ? 'fa-triangle-exclamation'
@@ -3015,7 +3022,7 @@ function ipn_prompt(message, value, done, opts) {
              '<i class="fas ' + icon + ' me-2"></i>' + _esc(a.message) + '</div>';
     }).join('') +
     (coverage && coverage.note
-      ? '<div style="font-size:.68rem; color:#64748b; margin:-4px 0 8px 2px;">' +
+      ? '<div style="font-size:.68rem; color:var(--text-faint); margin:-4px 0 8px 2px;">' +
         _esc(coverage.note) + '</div>'
       : '');
   }
@@ -3076,7 +3083,7 @@ function ipn_prompt(message, value, done, opts) {
     });
 
     if (!all.length) {
-      host.innerHTML = '<div style="color:#475569; font-size:.78rem;">' +
+      host.innerHTML = '<div style="color:var(--text-faint); font-size:.78rem;">' +
         (cat.tests && cat.tests.length ? 'No test matches that search.'
          : 'No tests in the catalogue. Add them under Labs &gt; Test Catalog.') + '</div>';
       return;
@@ -3091,7 +3098,7 @@ function ipn_prompt(message, value, done, opts) {
                ' data-test-name="' + _esc(x.t.testName) + '"' +
                ' onchange="ipnToggleLab(this)">' +
              '<span>' + _esc(x.t.testName) +
-             ' <span style="color:#475569; font-size:.68rem;">' + x.kind + '</span></span></label>';
+             ' <span style="color:var(--text-faint); font-size:.68rem;">' + x.kind + '</span></span></label>';
     }).join('');
   }
 
@@ -3143,7 +3150,7 @@ function ipn_prompt(message, value, done, opts) {
 
   function resetLeftPanel() {
     document.getElementById('ip-diag-container').innerHTML    = '<span class="diag-chip">Loading...</span>';
-    document.getElementById('ip-allergy-container').innerHTML = '<span style="color:#475569; font-size:0.8rem;">Loading...</span>';
+    document.getElementById('ip-allergy-container').innerHTML = '<span style="color:var(--text-faint); font-size:0.8rem;">Loading...</span>';
     document.getElementById('vc-bp').innerHTML    = '--/--';
     document.getElementById('vc-pulse').innerText = '--';
     document.getElementById('vc-spo2').innerText  = '--%';
@@ -3158,16 +3165,16 @@ function ipn_prompt(message, value, done, opts) {
   function resetRightPanel() {
     IPNotesModule.readOnly = false;
     const ctList = document.getElementById('ipn-care-team-list');
-    if (ctList) ctList.innerHTML = '<div style="color:#475569; font-size:0.8rem;">Loading care team...</div>';
+    if (ctList) ctList.innerHTML = '<div style="color:var(--text-faint); font-size:0.8rem;">Loading care team...</div>';
     const ctBtn = document.getElementById('ipn-add-consult-btn');
     if (ctBtn) ctBtn.classList.add('d-none');
     IPNotesModule.careTeam = null;
     document.getElementById('ip-active-meds-list').innerHTML =
-      '<div style="color:#475569; font-size:0.8rem;">Loading...</div>';
+      '<div style="color:var(--text-faint); font-size:0.8rem;">Loading...</div>';
     document.getElementById('ip-running-iv-list').innerHTML =
-      '<div style="color:#475569; font-size:0.8rem;">Loading...</div>';
+      '<div style="color:var(--text-faint); font-size:0.8rem;">Loading...</div>';
     document.getElementById('ip-lab-results-list').innerHTML =
-      '<div style="color:#475569; font-size:0.8rem;">Loading...</div>';
+      '<div style="color:var(--text-faint); font-size:0.8rem;">Loading...</div>';
   }
 
   function _checkForPendingDoctorOrders(forNurse) {

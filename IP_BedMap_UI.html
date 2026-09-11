@@ -7,8 +7,8 @@
     margin-bottom: 2rem;
   }
   .bed-card {
-    background-color: #212529;
-    border: 2px solid #495057;
+    background-color: var(--bg-input);
+    border: 2px solid var(--border-strong);
     border-radius: 0.5rem;
     padding: 1rem;
     position: relative;
@@ -19,57 +19,57 @@
   }
   
   /* Status Colors */
-  .bed-status-available { border-color: #198754; box-shadow: 0 0 10px rgba(25, 135, 84, 0.2); }
-  .bed-status-occupied { border-color: #dc3545; box-shadow: 0 0 10px rgba(220, 53, 69, 0.2); }
-  .bed-status-reserved { border-color: #ffc107; box-shadow: 0 0 10px rgba(255, 193, 7, 0.2); }
-  .bed-status-cleaning { border-color: #0dcaf0; }
-  .bed-status-maintenance { border-color: #6c757d; }
-  .bed-status-isolation { border-color: #fd7e14; }
+  .bed-status-available { border-color: var(--success); box-shadow: 0 0 10px rgba(25, 135, 84, 0.2); }
+  .bed-status-occupied { border-color: var(--danger); box-shadow: 0 0 10px rgba(220, 53, 69, 0.2); }
+  .bed-status-reserved { border-color: var(--warning); box-shadow: 0 0 10px rgba(255, 193, 7, 0.2); }
+  .bed-status-cleaning { border-color: var(--info); }
+  .bed-status-maintenance { border-color: var(--border-strong); }
+  .bed-status-isolation { border-color: var(--warning); }
 
   /* Typography for Bed Map */
   .bed-id { font-size: 1.25rem; font-weight: 800; margin-bottom: 0.2rem; }
-  .bed-patient-info { font-size: 0.8rem; color: #adb5bd; min-height: 40px; }
+  .bed-patient-info { font-size: 0.8rem; color: var(--text-muted); min-height: 40px; }
   .los-badge { position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; }
   
   /* Select Overrides for Dark UI */
   .bed-status-select {
     background-color: transparent;
-    color: #fff;
-    border: 1px solid #495057;
+    color: var(--text-main);
+    border: 1px solid var(--border-strong);
     border-radius: 0.25rem;
     font-size: 0.8rem;
     padding: 0.2rem;
     width: 100%;
     margin-top: 0.5rem;
   }
-  .bed-status-select option { background-color: #212529; }
+  .bed-status-select option { background-color: var(--bg-input); }
 </style>
 
 <style>
   /* 1. Modal Theme Corrections for Text Visibility */
   .modal-content, #form-admission {
-    background-color: #1a1d20 !important;
-    color: #ffffff !important;
+    background-color: var(--surface-2) !important;
+    color: var(--text-main) !important;
   }
   
   .modal-body label,
   .modal-body .form-label,
   .modal-body h6,
   .modal-body .text-muted {
-    color: #f8f9fa !important; /* Forces Labels to Bright High-Clear White */
+    color: var(--text-main) !important; /* Forces Labels to Bright High-Clear White */
     font-weight: 600 !important;
   }
 
   .modal-body .form-control,
   .modal-body .form-select {
-    background-color: #2b3035 !important;
-    border: 1px solid #495057 !important;
-    color: #ffffff !important;
+    background-color: var(--surface-3) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--text-main) !important;
   }
 
   .modal-body .form-control[readonly] {
-    background-color: #343a40 !important;
-    color: #e9ecef !important;
+    background-color: var(--surface-3) !important;
+    color: var(--text-secondary) !important;
   }
 
   /* 2. Structured Box Grid Layout for Bed Maps */
@@ -82,11 +82,11 @@
   }
   
   .bed-card {
-    background-color: #212529 !important;
-    border: 2px solid #495057 !important;
+    background-color: var(--bg-input) !important;
+    border: 2px solid var(--border-strong) !important;
     border-radius: 0.5rem !important;
     padding: 1.25rem !important;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4) !important;
+    box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.4) !important;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -98,23 +98,23 @@
   }
 
   /* Distinct Top Borders Representing Realtime Statuses */
-  .bed-status-available { border-top: 5px solid #198754 !important; }
-  .bed-status-occupied { border-top: 5px solid #dc3545 !important; }
-  .bed-status-reserved { border-top: 5px solid #ffc107 !important; }
-  .bed-status-cleaning { border-top: 5px solid #0dcaf0 !important; }
-  .bed-status-maintenance { border-top: 5px solid #6c757d !important; }
-  .bed-status-isolation { border-top: 5px solid #fd7e14 !important; }
+  .bed-status-available { border-top: 5px solid var(--success) !important; }
+  .bed-status-occupied { border-top: 5px solid var(--danger) !important; }
+  .bed-status-reserved { border-top: 5px solid var(--warning) !important; }
+  .bed-status-cleaning { border-top: 5px solid var(--info) !important; }
+  .bed-status-maintenance { border-top: 5px solid var(--border-strong) !important; }
+  .bed-status-isolation { border-top: 5px solid var(--warning) !important; }
 
   .bed-id {
     font-size: 1.35rem !important;
     font-weight: 800 !important;
-    color: #ffffff !important;
+    color: var(--text-main) !important;
     margin-bottom: 0.5rem;
   }
 
   .bed-patient-info {
     font-size: 0.85rem !important;
-    color: #cfd4da !important;
+    color: var(--text-secondary) !important;
     min-height: 45px;
     line-height: 1.4;
   }
@@ -137,7 +137,7 @@
     <span class="text-danger"><i class="fa-solid fa-square me-1"></i> Occupied</span>
     <span class="text-warning"><i class="fa-solid fa-square me-1"></i> Reserved</span>
     <span class="text-info"><i class="fa-solid fa-square me-1"></i> Cleaning</span>
-    <span style="color: #fd7e14;"><i class="fa-solid fa-square me-1"></i> Isolation</span>
+    <span style="color: var(--warning-fg);"><i class="fa-solid fa-square me-1"></i> Isolation</span>
     <span class="text-secondary"><i class="fa-solid fa-square me-1"></i> Maintenance</span>
   </div>
 

@@ -5,16 +5,16 @@
     /* EMR COCKPIT - THEME ADAPTIVE STYLES       */
     /* ========================================= */
     .emr-module-card { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; transition: all 0.3s ease; cursor: pointer; height: 100%; }
-    .emr-module-card:hover { transform: translateY(-5px); border-color: var(--medical-purple, #635bff); box-shadow: 0 10px 20px var(--accent-glow); }
+    .emr-module-card:hover { transform: translateY(-5px); border-color: var(--accent-purple); box-shadow: 0 10px 20px var(--accent-glow); }
     .emr-icon-wrap { height: 70px; width: 70px; border-radius: 50%; background-color: var(--accent-glow); display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem auto; }
 
     .hd-workspace { font-size: 0.85rem; }
-    .hd-panel { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 8px; padding: 1rem; margin-bottom: 0.85rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    .hd-panel-title { color: var(--medical-purple, #635bff); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-bottom: 12px; }
+    .hd-panel { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 8px; padding: 1rem; margin-bottom: 0.85rem; box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.05); }
+    .hd-panel-title { color: var(--accent-fg); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-bottom: 12px; }
 
     /* Inputs & Controls */
     .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: 0.8rem; padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
-    .hd-input:focus { border-color: var(--medical-purple, #635bff) !important; box-shadow: 0 0 0 0.1rem var(--accent-glow); outline: none; }
+    .hd-input:focus { border-color: var(--accent-purple) !important; box-shadow: 0 0 0 0.1rem var(--accent-glow); outline: none; }
     .hd-label { font-size: 0.75rem; color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block;}
 
     /* Rx Table Uniformity */
@@ -23,39 +23,39 @@
     .rx-table td { padding: 4px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
 
     /* Advanced Floating Dial Pad */
-    #dial-pad-popover { position: absolute; z-index: 1050; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 260px; }
+    #dial-pad-popover { position: absolute; z-index: 1050; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; box-shadow: 0 10px 25px rgba(var(--shadow-rgb), 0.3); width: 260px; }
     .dial-btn { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 0; text-align: center; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: 0.1s; user-select: none; }
-    .dial-btn:hover { background: var(--accent-purple); border-color: var(--accent-purple); color: white; }
+    .dial-btn:hover { background: var(--accent-purple); border-color: var(--accent-purple); color: var(--text-on-accent); }
     .dial-btn:active { transform: scale(0.95); }
 
     .pill-badge { background-color: var(--accent-glow); color: var(--accent-purple); border: 1px solid var(--accent-purple); font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; cursor: pointer; display: inline-block; margin: 3px; transition: 0.2s; }
-    .pill-badge:hover { background-color: var(--accent-purple); color: white; }
+    .pill-badge:hover { background-color: var(--accent-purple); color: var(--text-on-accent); }
 
     /* Custom Vanilla JS Dropdown Engine */
-    .custom-dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 1050; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); max-height: 220px; overflow-y: auto; }
+    .custom-dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 1050; background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 4px; box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.2); max-height: 220px; overflow-y: auto; }
     .custom-dropdown-menu label { font-size: 0.8rem; border-radius: 4px; transition: 0.2s; color: var(--text-main) !important; }
     .custom-dropdown-menu label:hover { background-color: var(--border-hover); }
     .cursor-pointer { cursor: pointer; }
 
     /* SPECIFIC OVERRIDE: Gen Exam Red Switches */
-    .form-switch .gen-exam-chk:checked { background-color: var(--danger, #ef4444) !important; border-color: var(--danger, #ef4444) !important; }
+    .form-switch .gen-exam-chk:checked { background-color: var(--danger) !important; border-color: var(--danger) !important; }
 
     @media print {
-        body { background: white !important; color: black !important; margin: 0; padding: 0; }
+        body { background: #ffffff !important; color: #000000 !important; margin: 0; padding: 0; }
         #sidebar, .dr-badge, .fab-container, #emr-landing-menu, .no-print, #emr-workspace-op-consult { display: none !important; }
-        #print-rx-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: white !important; color: black !important; font-family: Arial, sans-serif; font-size: 11pt; }
+        #print-rx-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; background: #ffffff !important; color: #000000 !important; font-family: Arial, sans-serif; font-size: 11pt; }
     }
   </style>
 
     <div id="emr-landing-menu" class="container-fluid px-0 mt-4 d-none">
         <h3 class="fw-bold mb-4 text-white">Electronic Medical Records</h3>
         <div class="row g-4">
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('op-consult')"><div class="emr-icon-wrap"><i class="fa-solid fa-stethoscope fa-2xl" style="color: var(--medical-purple);"></i></div><h5 class="text-white fw-bold mt-2">OP Consultation</h5></div></div>
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-casesheet')"><div class="emr-icon-wrap"><i class="fa-solid fa-bed-pulse fa-2xl" style="color: #0ea5e9;"></i></div><h5 class="text-white fw-bold mt-2">IP Casesheet</h5></div></div>
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-notes'); fetchIPNotesLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-clipboard-user fa-2xl" style="color: #10b981;"></i></div><h5 class="text-white fw-bold mt-2">IP Notes</h5></div></div>
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('records')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-medical fa-2xl" style="color: #f59e0b;"></i></div><h5 class="text-white fw-bold mt-2">Patient Records</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('op-consult')"><div class="emr-icon-wrap"><i class="fa-solid fa-stethoscope fa-2xl" style="color: var(--accent-fg);"></i></div><h5 class="text-white fw-bold mt-2">OP Consultation</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-casesheet')"><div class="emr-icon-wrap"><i class="fa-solid fa-bed-pulse fa-2xl" style="color: var(--info-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Casesheet</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-notes'); fetchIPNotesLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-clipboard-user fa-2xl" style="color: var(--success-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Notes</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('records')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-medical fa-2xl" style="color: var(--warning-fg);"></i></div><h5 class="text-white fw-bold mt-2">Patient Records</h5></div></div>
             
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records'); fetchIPRecordsLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: #ec4899;"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records'); fetchIPRecordsLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: var(--pink-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
         </div>
     </div>
     
@@ -83,7 +83,7 @@
 
     <div id="print-rx-container" class="d-none d-print-block p-4 bg-white text-dark">
         <div class="text-center border-bottom border-dark pb-2 mb-3">
-            <h2 class="fw-bold mb-0" style="color: #000; text-transform: uppercase;">Valarmathi Clinic</h2>
+            <h2 class="fw-bold mb-0" style="color: var(--text-main); text-transform: uppercase;">Valarmathi Clinic</h2>
             <p class="mb-0 small text-muted">Premium Healthcare Services | Ph: +91 88387 23513</p>
         </div>
 

@@ -56,7 +56,7 @@
 
   <div class="px-3 pt-3 mt-3 border-top border-secondary flex-shrink-0">
     <div class="d-flex align-items-center gap-3">
-      <div class="rounded-circle d-flex justify-content-center align-items-center text-white fw-bold" style="width: 35px; height: 35px; background-color: var(--accent-purple);" id="profile-initial">?</div>
+      <div class="rounded-circle d-flex justify-content-center align-items-center text-white fw-bold on-accent" style="width: 35px; height: 35px; background-color: var(--accent-purple);" id="profile-initial">?</div>
       <div class="profile-details">
         <h6 id="display-user-name" class="m-0 text-white small">Loading...</h6>
         <small><a href="#" onclick="signOut()" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
@@ -108,39 +108,57 @@
     } catch (e) { /* ignore */ }
   })();
 
-  // 2. Dynamic Moon/Sun Theme Logic
-  function toggleTheme() {
-    const body = document.body;
-    const themeIcon = document.getElementById('theme-icon');
-    
-    body.classList.toggle('light-theme');
-    
-    if (body.classList.contains('light-theme')) {
-        localStorage.setItem('cresrx_theme', 'light');
-        if (themeIcon) {
-            themeIcon.classList.remove('fa-moon');
-            themeIcon.classList.add('fa-sun'); 
-        }
-    } else {
-        localStorage.setItem('cresrx_theme', 'dark');
-        if (themeIcon) {
-            themeIcon.classList.remove('fa-sun');
-            themeIcon.classList.add('fa-moon'); 
-        }
-    }
-  }
+  // 2. Theme control
+  // Single entry point for the theme. The class is kept on the root element
+  // AND the body element: the root is set pre-paint by the bootstrap in
+  // Index.html, the body is what the component stylesheets match on. A
+  // `themechange` event lets canvas-based
+  // widgets (Chart.js) that cannot read CSS variables repaint themselves.
+  function applyTheme(theme) {
+    const isLight = (theme === 'light');
 
-  // 3. Auto-load Theme Preference on Startup (Safe for Google Apps Script)
-  setTimeout(function() {
-    const savedTheme = localStorage.getItem('cresrx_theme');
+    // Scope colour transitions to the switch itself so we do not permanently
+    // add a transition to every element in the app.
+    document.body.classList.add('theme-switching');
+
+    document.documentElement.classList.toggle('light-theme', isLight);
+    document.body.classList.toggle('light-theme', isLight);
+
     const themeIcon = document.getElementById('theme-icon');
-    
-    if (savedTheme === 'light') {
-        document.body.classList.add('light-theme');
-        if (themeIcon) {
-            themeIcon.classList.remove('fa-moon');
-            themeIcon.classList.add('fa-sun');
-        }
+    if (themeIcon) {
+      themeIcon.classList.toggle('fa-sun', isLight);
+      themeIcon.classList.toggle('fa-moon', !isLight);
     }
-  }, 100); // 100ms delay ensures the DOM is fully injected before checking
+
+    try { localStorage.setItem('cresrx_theme', theme); } catch (e) { /* private mode */ }
+
+    // Let dependants (charts, canvases) re-read the resolved token values.
+    window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme } }));
+
+    setTimeout(function () { document.body.classList.remove('theme-switching'); }, 300);
+  }
+  window.applyTheme = applyTheme;
+
+  function toggleTheme() {
+    applyTheme(document.body.classList.contains('light-theme') ? 'dark' : 'light');
+  }
+  window.toggleTheme = toggleTheme;
+
+  // 3. Sync the icon with the theme the pre-paint bootstrap already applied.
+  (function syncThemeIcon() {
+    function sync() {
+      const isLight = document.documentElement.classList.contains('light-theme');
+      document.body.classList.toggle('light-theme', isLight);
+      const themeIcon = document.getElementById('theme-icon');
+      if (themeIcon) {
+        themeIcon.classList.toggle('fa-sun', isLight);
+        themeIcon.classList.toggle('fa-moon', !isLight);
+      }
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', sync);
+    } else {
+      sync();
+    }
+  })();
 </script>

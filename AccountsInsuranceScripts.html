@@ -18,7 +18,7 @@ const AccIns = (function () {
   const STATUSES = ['PENDING', 'SUBMITTED', 'QUERIED', 'APPROVED', 'SETTLED', 'SHORT_SETTLED', 'REJECTED'];
   const SCLR = { PENDING: 'warning', SUBMITTED: 'info', QUERIED: 'secondary', APPROVED: 'primary', SETTLED: 'success', SHORT_SETTLED: 'success', REJECTED: 'danger' };
 
-  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white'; t.style.zIndex = 4000; t.style.background = ok ? '#198754' : '#dc3545'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
+  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid'; t.style.zIndex = 4000; t.style.background = ok ? 'var(--success)' : 'var(--danger)'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
 
   function load() {
     const root = $('acc-ins-root'); if (!root) return;
@@ -134,7 +134,7 @@ const AccIns = (function () {
   }
 
   function shell(title, body) {
-    return '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:rgba(0,0,0,.5);z-index:3500" onclick="if(event.target===this)AccIns.closeModal()">' +
+    return '<div class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background:var(--overlay-scrim);z-index:3500" onclick="if(event.target===this)AccIns.closeModal()">' +
       '<div class="card bg-body border shadow" style="width:min(460px,94vw)"><div class="card-body">' +
       '<div class="d-flex justify-content-between mb-2"><h5 class="fw-bold mb-0 text-body">' + title + '</h5><button class="btn-close" onclick="AccIns.closeModal()"></button></div>' + body + '</div></div></div>';
   }

@@ -1,8 +1,8 @@
 <style>
-  .indicator-dot { width: 10px; height: 10px; transition: all 0.2s ease; box-shadow: 0 0 5px rgba(0,0,0,0.3); }
-  .hover-bg-dark:hover { background-color: rgba(255, 255, 255, 0.05); }
-  .slot-booked-tag { font-size: .6rem; color: #f59e0b; }
-  .av-sess-row { border: 1px solid var(--border-color, #334155); border-radius: 10px; }
+  .indicator-dot { width: 10px; height: 10px; transition: all 0.2s ease; box-shadow: 0 0 5px rgba(var(--shadow-rgb), 0.3); }
+  .hover-bg-dark:hover { background-color: var(--surface-hover); }
+  .slot-booked-tag { font-size: .6rem; color: var(--warning-fg); }
+  .av-sess-row { border: 1px solid var(--border-color); border-radius: 10px; }
 </style>
 
 <div id="tab-admin-avail" class="page-section d-none">
@@ -17,7 +17,7 @@
   <div class="card p-4 shadow-lg" style="max-width: 1200px;">
 
     <!-- ===================== CONTROL BAR ===================== -->
-    <div class="d-flex flex-wrap align-items-end gap-3 mb-4 p-3 rounded" style="background: var(--bg-main, #0f172a);">
+    <div class="d-flex flex-wrap align-items-end gap-3 mb-4 p-3 rounded" style="background: var(--bg-main);">
       <div>
         <label class="label-bright mb-1 fw-bold small">Doctor</label>
         <select id="avail-doctor" class="form-select form-select-sm text-white-force border-secondary" style="width: 220px;" onchange="loadAvailabilityGrid()">
@@ -48,7 +48,7 @@
     </div>
 
     <!-- ===================== WEEKLY TEMPLATE (collapsible) ===================== -->
-    <div id="hours-panel" class="d-none mb-4 p-3 rounded" style="background: var(--bg-main, #0f172a);">
+    <div id="hours-panel" class="d-none mb-4 p-3 rounded" style="background: var(--bg-main);">
       <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
           <h6 class="text-white fw-bold m-0">Recurring weekly hours</h6>
@@ -250,14 +250,14 @@ function renderMicroSlotGrid(res) {
 
       const masterChecked = (activeCount === total) ? 'checked' : '';
       const cardBorder = (activeCount === 0)
-        ? 'border-color:#ef4444; opacity:0.7;'
-        : (activeCount < total ? 'border-color:#f59e0b;' : 'border-color:#22c55e;');
+        ? 'border-color:var(--danger); opacity:0.7;'
+        : (activeCount < total ? 'border-color:var(--warning);' : 'border-color:var(--success);');
 
       html +=
         '<div class="col-md-6 col-lg-4">' +
           '<div class="card shadow-sm p-0 overflow-hidden parent-card" id="card-' + block.blockId + '" ' +
             'data-total="' + total + '" ' +
-            'style="background: var(--bg-base, #121418); ' + cardBorder + ' border-width:2px; transition: all .3s ease;">' +
+            'style="background: var(--bg-card); ' + cardBorder + ' border-width:2px; transition: all .3s ease;">' +
             '<div class="p-3 d-flex flex-column gap-2">' +
               '<div class="d-flex align-items-center justify-content-between">' +
                 '<div class="d-flex align-items-center gap-2">' +
@@ -338,13 +338,13 @@ function updateParentVisual(blockId) {
 
   if (checkedCount === total) {
     master.checked = true;
-    card.style.borderColor = '#22c55e'; card.style.opacity = '1';
+    card.style.borderColor = 'var(--success)'; card.style.opacity = '1';
   } else if (checkedCount === 0) {
     master.checked = false;
-    card.style.borderColor = '#ef4444'; card.style.opacity = '0.7';
+    card.style.borderColor = 'var(--danger)'; card.style.opacity = '0.7';
   } else {
     master.checked = false;
-    card.style.borderColor = '#f59e0b'; card.style.opacity = '1';
+    card.style.borderColor = 'var(--warning)'; card.style.opacity = '1';
   }
 }
 

@@ -1,7 +1,7 @@
 <style>
   .doc-chip { font-size: .7rem; padding: 2px 8px; border-radius: 10px;
-              border: 1px solid var(--border-color, #334155);
-              background: rgba(148,163,184,.12); white-space: nowrap; }
+              border: 1px solid var(--border-color);
+              background: var(--surface-hover); white-space: nowrap; }
 </style>
 
 <div id="tab-admin-appt" class="page-section d-none">
@@ -187,7 +187,7 @@ function renderLedger(rows) {
         const label = (s === 'Arrived') ? 'Arrived / Queue'
                     : (s === 'In-Progress' ? 'Consultation' : s);
         return '<option value="' + s + '"' + (r.status === s ? ' selected' : '') +
-               ' style="background:#1a1d21;">' + label + '</option>';
+               ' style="background:var(--surface-2);">' + label + '</option>';
       }).join('') +
       '</select>';
 

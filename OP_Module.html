@@ -2,102 +2,102 @@
   /* ========================================= */
   /* OP MODULE - THEME ADAPTIVE STYLES         */
   /* ========================================= */
-  .hd-workspace { background-color: var(--bg-main, #121418) !important; color: var(--text-main, #f8fafc); }
-  .hd-panel { background-color: var(--bg-card, #1e293b) !important; border: 1px solid var(--border-color, #334155) !important; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+  .hd-workspace { background-color: var(--bg-main) !important; color: var(--text-main); }
+  .hd-panel { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.05); }
 
-  .hd-panel-title { color: var(--medical-purple, #635bff); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color, #334155); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
-  .hd-panel-title:hover { color: var(--accent-purple, #7b74ff); }
-  .hd-label { font-size: 0.7rem; color: var(--text-label, #94a3b8); margin-bottom: 4px; font-weight: 600; display: block; }
+  .hd-panel-title { color: var(--accent-fg); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
+  .hd-panel-title:hover { color: var(--accent-purple); }
+  .hd-label { font-size: 0.7rem; color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
 
-  .hd-input { background-color: var(--bg-input, #0f172a) !important; border: 1px solid var(--border-color, #334155) !important; color: var(--text-main, #f8fafc) !important; font-size: 0.75rem; padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
-  .hd-input:focus { border-color: var(--medical-purple, #635bff) !important; outline: none; box-shadow: 0 0 0 2px var(--accent-glow, rgba(99, 91, 255, 0.2)); }
-  .hd-input:disabled { background-color: var(--bg-card, #1e293b) !important; color: var(--text-muted, #64748b) !important; cursor: not-allowed; opacity: 0.7; }
+  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: 0.75rem; padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
+  .hd-input:focus { border-color: var(--accent-purple) !important; outline: none; box-shadow: 0 0 0 2px var(--accent-glow, rgba(99, 91, 255, 0.2)); }
+  .hd-input:disabled { background-color: var(--bg-card) !important; color: var(--text-muted) !important; cursor: not-allowed; opacity: 0.7; }
 
-  .table-tight td, .table-tight th { padding: 6px 4px !important; vertical-align: middle; border-bottom: 1px solid var(--border-color, #334155); background-color: transparent !important; color: var(--text-main, #f8fafc);}
-  .table-tight th { font-size: 0.7rem; color: var(--text-label, #94a3b8); text-transform: uppercase; }
+  .table-tight td, .table-tight th { padding: 6px 4px !important; vertical-align: middle; border-bottom: 1px solid var(--border-color); background-color: transparent !important; color: var(--text-main);}
+  .table-tight th { font-size: 0.7rem; color: var(--text-label); text-transform: uppercase; }
 
-  .bg-abnormal-high { background-color: var(--danger-bg, rgba(239, 68, 68, 0.15)) !important; border: 1px solid var(--danger, #ef4444) !important; color: var(--danger, #ef4444) !important; }
-  .bg-abnormal-low { background-color: var(--info-bg, rgba(14, 165, 233, 0.15)) !important; border: 1px solid var(--info, #0ea5e9) !important; color: var(--info, #0ea5e9) !important; }
+  .bg-abnormal-high { background-color: var(--danger-bg, var(--danger-bg)) !important; border: 1px solid var(--danger) !important; color: var(--danger-fg) !important; }
+  .bg-abnormal-low { background-color: var(--info-bg, var(--info-bg)) !important; border: 1px solid var(--info) !important; color: var(--info-fg) !important; }
 
   .dial-trigger { cursor: pointer; text-align: center; font-weight: bold; }
-  .dial-trigger:hover { background-color: var(--accent-glow, rgba(99, 91, 255, 0.15)) !important; }
-  .dial-btn { font-size: 0.75rem; font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color, #334155); color: var(--text-main, #f8fafc); background: var(--bg-input, #0f172a);}
+  .dial-trigger:hover { background-color: var(--accent-glow, var(--accent-glow)) !important; }
+  .dial-btn { font-size: 0.75rem; font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
   .dial-btn:active { transform: scale(0.95); }
 
-  .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); width: 100%; max-height: 220px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
-  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: 0.75rem; color: var(--text-main, #f8fafc); border-bottom: 1px solid var(--border-color, #334155); display: flex; justify-content: space-between; align-items: center;}
-  .autocomplete-items div strong { color: var(--medical-purple, #635bff); }
-  .autocomplete-items div:hover { background-color: var(--border-hover, #334155); }
+  .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card); border: 1px solid var(--border-color); width: 100%; max-height: 220px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.4); }
+  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
+  .autocomplete-items div strong { color: var(--accent-fg); }
+  .autocomplete-items div:hover { background-color: var(--border-hover); }
 
-  .wnl-group { background: var(--bg-input, #0f1720); border-radius: 999px; display: inline-flex; border: 1px solid var(--border-color, #334155); overflow: hidden; }
-  .wnl-btn { padding: 4px 14px; font-size: 0.65rem; font-weight: 700; cursor: pointer; color: var(--text-muted, #64748b); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
-  .btn-check:checked + .wnl-btn-success { background-color: var(--success, #10b981); color: #fff; }
-  .btn-check:checked + .wnl-btn-danger { background-color: var(--danger, #ef4444); color: #fff; }
-  .wnl-group button.wnl-btn:hover { background-color: rgba(255,255,255,0.05); color: #fff; }
+  .wnl-group { background: var(--bg-input); border-radius: 999px; display: inline-flex; border: 1px solid var(--border-color); overflow: hidden; }
+  .wnl-btn { padding: 4px 14px; font-size: 0.65rem; font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
+  .btn-check:checked + .wnl-btn-success { background-color: var(--success-solid); color: var(--text-on-accent); }
+  .btn-check:checked + .wnl-btn-danger { background-color: var(--danger); color: var(--text-on-accent); }
+  .wnl-group button.wnl-btn:hover { background-color: var(--surface-hover); color: var(--text-main); }
 
   .scrollable-pane { height: calc(100vh - 190px); overflow-y: auto; overflow-x: hidden; padding-right: 5px; }
   .scrollable-pane::-webkit-scrollbar { width: 4px; }
-  .scrollable-pane::-webkit-scrollbar-thumb { background: var(--border-color, #334155); border-radius: 10px; }
+  .scrollable-pane::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
 
   /* ========================================= */
   /* SAFETY BAR — always visible               */
   /* ========================================= */
   .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
-  .op-safety-danger { background: rgba(239,68,68,0.12); border: 1px solid #ef4444; color: #fca5a5; }
-  .op-safety-warn   { background: rgba(245,158,11,0.10); border: 1px solid #f59e0b; color: #fcd34d; }
-  .op-safety-info   { background: rgba(148,163,184,0.08); border: 1px solid var(--border-color,#334155); color: #94a3b8; }
+  .op-safety-danger { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); }
+  .op-safety-warn   { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning-fg); }
+  .op-safety-info   { background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-muted); }
   .op-safety-line { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
 
   /* ========================================= */
   /* ASSIST PANEL — collapsed by default       */
   /* ========================================= */
-  .op-assist { background: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; }
-  .op-assist-sec + .op-assist-sec { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border-color, #334155); }
-  .op-assist-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label, #94a3b8); font-weight: 700; margin-bottom: 0.5rem; }
+  .op-assist { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; }
+  .op-assist-sec + .op-assist-sec { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
+  .op-assist-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
 
-  .op-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input, #0f172a); border: 1px solid var(--border-color, #334155); color: var(--text-main, #f8fafc); border-radius: 999px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; transition: 0.15s; }
-  .op-chip:hover { border-color: var(--medical-purple, #635bff); }
-  .op-chip .op-chip-add { color: #10b981; font-weight: 700; }
-  .op-chip-muted { color: var(--text-muted, #64748b); }
+  .op-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; transition: 0.15s; }
+  .op-chip:hover { border-color: var(--accent-purple); }
+  .op-chip .op-chip-add { color: var(--success-fg); font-weight: 700; }
+  .op-chip-muted { color: var(--text-muted); }
 
   /* Assist results sit IN FLOW inside the panel. The absolutely-positioned
      .autocomplete-items overlay depends on the wrapper being the nearest
      positioned ancestor and on nothing above it in the stacking order; inside
      the assist panel that was never reliable, and a dropdown you cannot see is
      indistinguishable from a search that found nothing. */
-  .op-assist-results { margin-top: 0.4rem; border: 1px solid var(--border-color, #334155); border-radius: 6px; overflow: hidden; max-height: 260px; overflow-y: auto; background: var(--bg-input, #0f172a); }
-  .op-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.75rem; color: var(--text-main, #f8fafc); border-bottom: 1px solid var(--border-color, #334155); border-left: 3px solid transparent; }
+  .op-assist-results { margin-top: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; max-height: 260px; overflow-y: auto; background: var(--bg-input); }
+  .op-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
   .op-assist-hit:last-child { border-bottom: none; }
-  .op-assist-hit:hover { background: var(--border-hover, #334155); }
-  .op-assist-empty { padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted, #94a3b8); }
+  .op-assist-hit:hover { background: var(--border-hover); }
+  .op-assist-empty { padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted); }
 
   /* Kind colours — the same hue identifies a kind in the result list, in the
      "most used" chips and on the preview card. */
-  .op-kind-TPL { border-left-color: #6366f1; }
-  .op-kind-BND { border-left-color: #10b981; }
-  .op-kind-LAB { border-left-color: #f59e0b; }
+  .op-kind-TPL { border-left-color: var(--accent-purple); }
+  .op-kind-BND { border-left-color: var(--success); }
+  .op-kind-LAB { border-left-color: var(--warning); }
   .op-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
-  .op-tag-TPL { background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid #6366f1; }
-  .op-tag-BND { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid #10b981; }
-  .op-tag-LAB { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid #f59e0b; }
-  .op-chip-TPL { border-color: #6366f1; }
-  .op-chip-TPL .op-chip-add { color: #a5b4fc; }
-  .op-chip-BND { border-color: #10b981; }
-  .op-chip-BND .op-chip-add { color: #6ee7b7; }
+  .op-tag-TPL { background: var(--accent-glow); color: var(--accent-fg); border: 1px solid var(--accent-purple); }
+  .op-tag-BND { background: var(--success-bg); color: var(--success-fg); border: 1px solid var(--success); }
+  .op-tag-LAB { background: var(--warning-bg); color: var(--warning-fg); border: 1px solid var(--warning); }
+  .op-chip-TPL { border-color: var(--accent-purple); }
+  .op-chip-TPL .op-chip-add { color: var(--accent-fg); }
+  .op-chip-BND { border-color: var(--success); }
+  .op-chip-BND .op-chip-add { color: var(--success-fg); }
 
   .op-scope-tag { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.4px; padding: 1px 5px; border-radius: 3px; }
-  .op-scope-PERSONAL { background: rgba(99,91,255,0.18); color: #a5b4fc; }
-  .op-scope-CLINIC   { background: rgba(14,165,233,0.18); color: #7dd3fc; }
-  .op-scope-SEED     { background: rgba(148,163,184,0.14); color: #94a3b8; }
-  .op-scope-PRESET   { background: rgba(14,165,233,0.18); color: #7dd3fc; }
+  .op-scope-PERSONAL { background: var(--accent-glow); color: var(--accent-fg); }
+  .op-scope-CLINIC   { background: var(--info-bg); color: var(--info-fg); }
+  .op-scope-SEED     { background: var(--surface-hover); color: var(--text-muted); }
+  .op-scope-PRESET   { background: var(--info-bg); color: var(--info-fg); }
 
-  .op-recall-card { background: var(--bg-input, #0f172a); border: 1px solid var(--border-color, #334155); border-left: 3px solid #10b981; border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.73rem; }
+  .op-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.73rem; }
   .op-suggest-strip { display: flex; flex-wrap: wrap; gap: 6px; }
-  .op-evidence { font-size: 0.6rem; color: var(--text-muted, #64748b); }
-  .op-allergy-chip { background: rgba(239,68,68,0.15); border: 1px solid #ef4444; color: #fca5a5; border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
-  .op-allergy-none { background: rgba(148,163,184,0.12); border: 1px dashed var(--border-color,#334155); color: #94a3b8; border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
-  .op-taper-tag { font-size: 0.55rem; background: rgba(245,158,11,0.18); color: #fcd34d; border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
-  .op-peds-hint { font-size: 0.6rem; color: #38bdf8; cursor: pointer; margin-top: 2px; display: inline-block; }
+  .op-evidence { font-size: 0.6rem; color: var(--text-muted); }
+  .op-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
+  .op-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
+  .op-taper-tag { font-size: 0.55rem; background: var(--warning-bg); color: var(--warning-fg); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+  .op-peds-hint { font-size: 0.6rem; color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
 </style>
 
 <div id="emr-workspace-op-consult" class="d-none hd-workspace mt-3 app-view h-100 flex-column px-2">
@@ -139,7 +139,7 @@
 
       <div class="modal fade" id="opReferModal" tabindex="-1">
        <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #f59e0b;">
+        <div class="modal-content text-white" style="background-color:var(--bg-input); border:1px solid var(--warning);">
          <div class="modal-header py-2 border-secondary">
             <h6 class="m-0 text-warning"><i class="fa-solid fa-user-doctor"></i> Refer to a colleague</h6>
            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -149,7 +149,7 @@
             <select class="hd-input mb-2" id="ref-to-doctor"><option value="">Select doctor</option></select>
             <label class="hd-label">Reason for referral <span class="text-danger">*</span></label>
             <textarea class="hd-input" id="ref-reason" rows="3" placeholder="What do you want their opinion on?"></textarea>
-            <div class="small mt-2" style="color:#94a3b8;">The patient appears in their queue as a referral. The  reason becomes part of the record.</div>
+            <div class="small mt-2" style="color:var(--text-muted);">The patient appears in their queue as a referral. The  reason becomes part of the record.</div>
          </div>
          <div class="modal-footer py-1 border-secondary">
            <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
@@ -167,7 +167,7 @@
         <button class="btn btn-sm btn-outline-info py-1 px-2" onclick="dispatchOPEmail()" id="btn-email-op" title="Email"><i class="fa-solid fa-envelope"></i></button>
         <button class="btn btn-sm btn-outline-warning py-1 px-2" onclick="printOPPrescription()" title="Print"><i class="fa-solid fa-print"></i></button>
         <button class="btn btn-sm btn-outline-light py-1 px-2" onclick="startNewOPConsult()" title="Clear the form and start a new consultation"><i class="fa-solid fa-file-circle-plus"></i></button>
-        <button class="btn btn-sm text-white fw-bold py-1 px-3" style="background-color: var(--medical-purple, #0ea5e9);" onclick="submitOPEncounter()" id="btn-submit-op">Save Consult</button>
+        <button class="btn btn-sm text-white fw-bold py-1 px-3 on-accent" style="background-color: var(--info-solid);" onclick="submitOPEncounter()" id="btn-submit-op">Save Consult</button>
       </div>
     </div>
   </div>
@@ -251,8 +251,8 @@
            <div class="no-print d-flex align-items-center">
                <div class="wnl-group me-3" onclick="event.stopPropagation();">
                    <button type="button" class="wnl-btn" onclick="markOPAllWNL(); document.querySelectorAll('.btn-check[id$=-wnl]').forEach(r => r.checked=true);">ALL WNL</button>
-                   <button type="button" class="wnl-btn" style="border-left:1px solid var(--border-color, #334155);" onclick="['cvs','rs','pa','cns'].forEach(s => setOPSysExam(s, 'abn')); document.querySelectorAll('.btn-check[id$=-abn]').forEach(r => r.checked=true);">ALL ABN</button>
-                   <button type="button" class="wnl-btn" style="border-left:1px solid var(--border-color, #334155); color:#7dd3fc;" onclick="event.stopPropagation(); saveMyExamDefaults();" title="Save the current normals as your defaults">SAVE AS MINE</button>
+                   <button type="button" class="wnl-btn" style="border-left:1px solid var(--border-color);" onclick="['cvs','rs','pa','cns'].forEach(s => setOPSysExam(s, 'abn')); document.querySelectorAll('.btn-check[id$=-abn]').forEach(r => r.checked=true);">ALL ABN</button>
+                   <button type="button" class="wnl-btn" style="border-left:1px solid var(--border-color); color:var(--info-fg);" onclick="event.stopPropagation(); saveMyExamDefaults();" title="Save the current normals as your defaults">SAVE AS MINE</button>
                </div>
                <i class="fa-solid fa-chevron-down text-secondary"></i>
            </div>
@@ -267,7 +267,7 @@
                     <input type="radio" class="btn-check" name="se-cvs" id="cvs-wnl" autocomplete="off" checked onclick="setOPSysExam('cvs', 'wnl')">
                     <label class="wnl-btn wnl-btn-success" for="cvs-wnl">WNL</label>
                     <input type="radio" class="btn-check" name="se-cvs" id="cvs-abn" autocomplete="off" onclick="setOPSysExam('cvs', 'abn')">
-                    <label class="wnl-btn wnl-btn-danger" for="cvs-abn" style="border-left:1px solid var(--border-color, #334155);">ABN</label>
+                    <label class="wnl-btn wnl-btn-danger" for="cvs-abn" style="border-left:1px solid var(--border-color);">ABN</label>
                   </div>
                 </div>
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-cvs-dd">
@@ -283,7 +283,7 @@
                     <input type="radio" class="btn-check" name="se-rs" id="rs-wnl" autocomplete="off" checked onclick="setOPSysExam('rs', 'wnl')">
                     <label class="wnl-btn wnl-btn-success" for="rs-wnl">WNL</label>
                     <input type="radio" class="btn-check" name="se-rs" id="rs-abn" autocomplete="off" onclick="setOPSysExam('rs', 'abn')">
-                    <label class="wnl-btn wnl-btn-danger" for="rs-abn" style="border-left:1px solid var(--border-color, #334155);">ABN</label>
+                    <label class="wnl-btn wnl-btn-danger" for="rs-abn" style="border-left:1px solid var(--border-color);">ABN</label>
                   </div>
                 </div>
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-rs-dd">
@@ -299,7 +299,7 @@
                     <input type="radio" class="btn-check" name="se-pa" id="pa-wnl" autocomplete="off" checked onclick="setOPSysExam('pa', 'wnl')">
                     <label class="wnl-btn wnl-btn-success" for="pa-wnl">WNL</label>
                     <input type="radio" class="btn-check" name="se-pa" id="pa-abn" autocomplete="off" onclick="setOPSysExam('pa', 'abn')">
-                    <label class="wnl-btn wnl-btn-danger" for="pa-abn" style="border-left:1px solid var(--border-color, #334155);">ABN</label>
+                    <label class="wnl-btn wnl-btn-danger" for="pa-abn" style="border-left:1px solid var(--border-color);">ABN</label>
                   </div>
                 </div>
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-pa-dd">
@@ -315,7 +315,7 @@
                     <input type="radio" class="btn-check" name="se-cns" id="cns-wnl" autocomplete="off" checked onclick="setOPSysExam('cns', 'wnl')">
                     <label class="wnl-btn wnl-btn-success" for="cns-wnl">WNL</label>
                     <input type="radio" class="btn-check" name="se-cns" id="cns-abn" autocomplete="off" onclick="setOPSysExam('cns', 'abn')">
-                    <label class="wnl-btn wnl-btn-danger" for="cns-abn" style="border-left:1px solid var(--border-color, #334155);">ABN</label>
+                    <label class="wnl-btn wnl-btn-danger" for="cns-abn" style="border-left:1px solid var(--border-color);">ABN</label>
                   </div>
                 </div>
                 <select class="form-select form-select-sm hd-input mb-2 d-none" id="op-se-cns-dd">
@@ -373,14 +373,14 @@
       </div>
 
       <!-- ===== ADVICE ===== -->
-      <div class="hd-panel mb-4 py-3" style="border-top: 3px solid var(--medical-purple, #0ea5e9) !important;">
+      <div class="hd-panel mb-4 py-3" style="border-top: 3px solid var(--info) !important;">
            <div class="hd-panel-title border-0 m-0 mb-3 fs-6">Advice &amp; Follow Up Plan</div>
            <div class="row g-4 align-items-start">
                <div class="col-md-8">
                    <label class="hd-label m-0 text-uppercase mb-2">Special Advices / Diet / Care Instructions</label>
                    <div class="position-relative">
                        <button id="btn-advice" class="hd-input text-start d-flex justify-content-between align-items-center" style="padding: 0.5rem;" type="button" onclick="toggleCustomDropdown('advice-dropdown')">Select standard advice... <i class="fa-solid fa-chevron-down ms-2"></i></button>
-                       <div id="advice-dropdown" class="custom-dropdown-menu p-2 w-100 d-none" style="background-color: var(--bg-card, #1e293b); border: 1px solid var(--border-color, #334155); position: absolute; z-index: 1000; border-radius: 4px; max-height: 260px; overflow-y: auto;"></div>
+                       <div id="advice-dropdown" class="custom-dropdown-menu p-2 w-100 d-none" style="background-color: var(--bg-card); border: 1px solid var(--border-color); position: absolute; z-index: 1000; border-radius: 4px; max-height: 260px; overflow-y: auto;"></div>
                    </div>
                    <input type="text" class="hd-input mt-2" id="op-advice-free" placeholder="Additional advice in your own words (type / to search)..." oninput="onSlashSearch(this, 'ADVICE')" autocomplete="off">
                </div>
@@ -456,7 +456,7 @@
 <!-- ===================== DIAL PAD ===================== -->
 <div class="modal fade" id="opDialPadModal" tabindex="-1">
   <div class="modal-dialog modal-sm modal-dialog-centered" style="max-width: 270px;">
-    <div class="modal-content text-white shadow-lg" style="background-color: #1e293b; border: 1px solid #334155;">
+    <div class="modal-content text-white shadow-lg" style="background-color: var(--bg-input); border: 1px solid var(--border-hover);">
       <div class="modal-body p-3">
         <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3">
           <h6 class="text-info m-0" style="font-size:0.8rem;" id="op-dial-title">Smart Input</h6>
@@ -501,7 +501,7 @@
           <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="appendOPDial(' Yrs')">Years</button></div>
         </div>
 
-        <button class="btn btn-primary w-100 mt-3 py-1 fw-bold text-white" style="font-size:0.8rem; background-color: #0ea5e9; border:none;" data-bs-dismiss="modal">Confirm</button>
+        <button class="btn btn-primary w-100 mt-3 py-1 fw-bold text-white on-accent" style="font-size:0.8rem; background-color: var(--info-solid); border:none;" data-bs-dismiss="modal">Confirm</button>
       </div>
     </div>
   </div>
@@ -510,7 +510,7 @@
 <!-- ===================== TAPER BUILDER ===================== -->
 <div class="modal fade" id="opTaperModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #f59e0b;">
+    <div class="modal-content text-white" style="background-color:var(--bg-input); border:1px solid var(--warning);">
       <div class="modal-header py-2 border-secondary">
         <h6 class="m-0 text-warning"><i class="fa-solid fa-stairs"></i> Taper Mode <span class="small text-muted ms-2" id="tp-drug-label"></span></h6>
         <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -534,8 +534,8 @@
             </select>
           </div>
         </div>
-        <div class="mt-3 p-2 rounded" style="background:#0f172a; border:1px solid #334155; min-height:90px;">
-          <div id="tp-preview" class="small" style="white-space:pre-line; color:#e2e8f0;">Fill the fields to preview the schedule.</div>
+        <div class="mt-3 p-2 rounded" style="background:var(--bg-card); border:1px solid var(--border-hover); min-height:90px;">
+          <div id="tp-preview" class="small" style="white-space:pre-line; color:var(--text-secondary);">Fill the fields to preview the schedule.</div>
           <div id="tp-summary" class="mt-2 fw-bold text-warning small"></div>
         </div>
       </div>
@@ -550,7 +550,7 @@
 <!-- ===================== LAB REQUEST ===================== -->
 <div class="modal fade" id="opLabRequestModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content text-white" style="background-color: #1e293b; border: 1px solid #0ea5e9;">
+    <div class="modal-content text-white" style="background-color: var(--bg-input); border: 1px solid var(--info);">
       <div class="modal-header border-secondary py-2">
         <h6 class="modal-title text-info m-0"><i class="fa-solid fa-flask"></i> Order Current Labs</h6>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -583,7 +583,7 @@
 <!-- ===================== DOSE CALCULATOR ===================== -->
 <div class="modal fade" id="opDoseCalcModal" tabindex="-1">
   <div class="modal-dialog modal-sm modal-dialog-centered">
-    <div class="modal-content text-white" style="background-color: #1e293b; border: 1px solid #0ea5e9;">
+    <div class="modal-content text-white" style="background-color: var(--bg-input); border: 1px solid var(--info);">
       <div class="modal-header py-2 border-secondary">
         <h6 class="m-0 text-info"><i class="fa-solid fa-calculator"></i> Dose calculator</h6>
         <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -605,7 +605,7 @@
         </select>
         <label class="hd-label">Strength available (mg per tab / 5 ml) &mdash; optional</label>
         <input type="number" class="hd-input mb-2" id="dc-strength" placeholder="e.g. 250">
-        <div class="bg-black rounded p-2 mt-2 small" id="dc-output" style="white-space:pre-line; min-height:60px; border: 1px solid #334155;">&mdash;</div>
+        <div class="bg-black rounded p-2 mt-2 small" id="dc-output" style="white-space:pre-line; min-height:60px; border: 1px solid var(--border-hover);">&mdash;</div>
       </div>
       <div class="modal-footer py-1 border-secondary">
         <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Close</button>
@@ -618,9 +618,9 @@
 <!-- ===================== SAVE TEMPLATE ===================== -->
 <div class="modal fade" id="opSaveTemplateModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #635bff;">
+    <div class="modal-content text-white" style="background-color:var(--bg-input); border:1px solid var(--accent-purple);">
       <div class="modal-header py-2 border-secondary">
-        <h6 class="m-0" style="color:#a5b4fc;">Save consultation template</h6>
+        <h6 class="m-0" style="color:var(--accent-fg);">Save consultation template</h6>
         <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body p-3">
@@ -628,7 +628,7 @@
         <input class="hd-input mb-2" id="tpl-name" placeholder="e.g. T2DM routine review">
         <label class="hd-label">Specialty / department</label>
         <input class="hd-input mb-2" id="tpl-dept" placeholder="optional">
-        <div class="small" style="color:#94a3b8;">Saves complaints, history, examination, diagnosis, lab orders, advice and review interval. <strong>Medicines are not included</strong> &mdash; save those as a bundle instead.</div>
+        <div class="small" style="color:var(--text-muted);">Saves complaints, history, examination, diagnosis, lab orders, advice and review interval. <strong>Medicines are not included</strong> &mdash; save those as a bundle instead.</div>
       </div>
       <div class="modal-footer py-1 border-secondary">
         <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
@@ -641,7 +641,7 @@
 <!-- ===================== SAVE BUNDLE ===================== -->
 <div class="modal fade" id="opSaveBundleModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered modal-sm">
-    <div class="modal-content text-white" style="background-color:#1e293b; border:1px solid #10b981;">
+    <div class="modal-content text-white" style="background-color:var(--bg-input); border:1px solid var(--success);">
       <div class="modal-header py-2 border-secondary">
         <h6 class="m-0 text-success">Save medicine bundle</h6>
         <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
@@ -651,7 +651,7 @@
         <input class="hd-input mb-2" id="bnd-name" placeholder="e.g. URI combo">
         <label class="hd-label">Indication</label>
         <input class="hd-input mb-2" id="bnd-indication" placeholder="e.g. Viral URI, adult">
-        <div id="bnd-preview" class="small" style="color:#94a3b8;"></div>
+        <div id="bnd-preview" class="small" style="color:var(--text-muted);"></div>
       </div>
       <div class="modal-footer py-1 border-secondary">
         <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
@@ -677,20 +677,20 @@ function op_dialogHost() {
     host.id = 'op-dialog-host';
     host.style.cssText =
         'position:fixed; inset:0; z-index:30000; display:none;' +
-        'align-items:center; justify-content:center; background:rgba(2,6,23,.72);';
+        'align-items:center; justify-content:center; background:var(--overlay-scrim);';
     host.innerHTML =
         '<div id="op-dialog-card" role="dialog" aria-modal="true" style="' +
-          'background:var(--bg-card,#1e293b); border:1px solid var(--border-color,#334155);' +
-          'border-radius:12px; width:min(460px,92vw); box-shadow:0 20px 60px rgba(0,0,0,.6);' +
-          'color:var(--text-main,#f8fafc); overflow:hidden;">' +
+          'background:var(--bg-card); border:1px solid var(--border-color);' +
+          'border-radius:12px; width:min(460px,92vw); box-shadow:0 20px 60px rgba(var(--shadow-rgb), .6);' +
+          'color:var(--text-main); overflow:hidden;">' +
           '<div id="op-dialog-head" style="padding:14px 18px; font-weight:700; font-size:.9rem;' +
-            'border-bottom:1px solid var(--border-color,#334155);"></div>' +
+            'border-bottom:1px solid var(--border-color);"></div>' +
           '<div style="padding:18px;">' +
             '<div id="op-dialog-msg" style="font-size:.84rem; line-height:1.5; white-space:pre-wrap;"></div>' +
             '<input type="text" id="op-dialog-input" class="hd-input mt-3 d-none" autocomplete="off">' +
           '</div>' +
           '<div style="padding:12px 18px; display:flex; justify-content:flex-end; gap:8px;' +
-            'border-top:1px solid var(--border-color,#334155);">' +
+            'border-top:1px solid var(--border-color);">' +
             '<button type="button" id="op-dialog-cancel" class="btn btn-sm btn-outline-light">Cancel</button>' +
             '<button type="button" id="op-dialog-ok" class="btn btn-sm btn-primary fw-bold">OK</button>' +
           '</div>' +
@@ -708,9 +708,9 @@ function op_dialog(opts) {
     const cancel = document.getElementById('op-dialog-cancel');
 
     head.textContent = opts.title || 'Crescentia';
-    head.style.color = opts.kind === 'err'  ? '#f87171'
-                     : opts.kind === 'warn' ? '#fbbf24'
-                     : 'var(--medical-purple,#635bff)';
+    head.style.color = opts.kind === 'err'  ? 'var(--danger-fg)'
+                     : opts.kind === 'warn' ? 'var(--warning-fg)'
+                     : 'var(--accent-purple)';
     msg.textContent = opts.message || '';
 
     input.classList.toggle('d-none', opts.mode !== 'prompt');
@@ -752,11 +752,11 @@ function opToast(msg, kind) {
                              'display:flex; flex-direction:column; gap:8px; max-width:400px;';
         document.body.appendChild(host);
     }
-    const colour = kind === 'err' ? '#ef4444' : kind === 'warn' ? '#f59e0b' : '#10b981';
+    const colour = kind === 'err' ? 'var(--danger)' : kind === 'warn' ? 'var(--warning)' : 'var(--success)';
     const el = document.createElement('div');
-    el.style.cssText = 'background:var(--bg-card,#1e293b); border:1px solid ' + colour +
-        '; border-left-width:4px; color:var(--text-main,#e2e8f0); padding:12px 16px;' +
-        'border-radius:8px; font-size:.8rem; box-shadow:0 8px 24px rgba(0,0,0,.5); cursor:pointer;';
+    el.style.cssText = 'background:var(--bg-elevated); border:1px solid ' + colour +
+        '; border-left-width:4px; color:var(--text-main); padding:12px 16px;' +
+        'border-radius:8px; font-size:.8rem; box-shadow:0 8px 24px rgba(var(--shadow-rgb), .5); cursor:pointer;';
     el.textContent = msg;
     el.onclick = function () { el.remove(); };
     host.appendChild(el);
@@ -1800,7 +1800,7 @@ function previewBundle(key) {
     const id = opEsc(b.bundleId);
     const items = b.items || [];
 
-    box.innerHTML = '<div class="op-recall-card" style="border-left:3px solid #10b981;">' +
+    box.innerHTML = '<div class="op-recall-card" style="border-left:3px solid var(--success);">' +
         '<div class="mb-1"><span class="op-tag op-tag-BND">Rx bundle</span></div>' +
         '<div class="text-white fw-bold mb-2">' + opEsc(b.name) +
         (b.indication ? ' <span class="op-evidence">&mdash; ' + opEsc(b.indication) + '</span>' : '') + '</div>' +
@@ -2037,7 +2037,7 @@ function loadConsultDoctors() {
 function onConsultDoctorChanged() {
     const sel = document.getElementById('op-doctor-select');
     window.currentDoctorId = sel.value || '';
-    sel.style.borderColor = sel.value ? 'var(--border-color,#334155)' : '#ef4444';
+    sel.style.borderColor = sel.value ? 'var(--border-color)' : 'var(--danger)';
     // Always reload. An admin with no linked doctor profile still needs the
     // clinic and seed phrase tiers - the old `if (sel.value)` guard starved them.
     loadComposerContext();
@@ -2115,7 +2115,7 @@ function renderAssist(res) {
     }
 
     if (res.classes && res.classes.length) {
-        html += '<div class="mb-3"><div class="op-assist-head mb-2" style="color:#7dd3fc;">Usual approach for this diagnosis</div>' +
+        html += '<div class="mb-3"><div class="op-assist-head mb-2" style="color:var(--info-fg);">Usual approach for this diagnosis</div>' +
                 '<div class="op-evidence mb-2">Drug classes only &mdash; you choose the product.</div>';
         html += res.classes.map(function (c, i) {
             return '<label class="d-flex align-items-center gap-2 py-1" style="cursor:pointer;">' +
@@ -2126,7 +2126,7 @@ function renderAssist(res) {
     }
 
     if (res.labs && res.labs.length) {
-        html += '<div class="mb-2"><div class="op-assist-head mb-2" style="color:#c4b5fd;">Usual investigations</div>' +
+        html += '<div class="mb-2"><div class="op-assist-head mb-2" style="color:var(--violet-fg);">Usual investigations</div>' +
                 '<div class="op-suggest-strip">' +
                 res.labs.map(function (l) {
                     return '<span class="op-chip" onclick="addWorkupLab(\'' + opEsc(l).replace(/'/g, "\\'") + '\')">' +
@@ -2135,7 +2135,7 @@ function renderAssist(res) {
     }
 
     if (res.advice) {
-        html += '<div class="mb-1"><div class="op-assist-head mb-1" style="color:#fcd34d;">Standard advice</div>' +
+        html += '<div class="mb-1"><div class="op-assist-head mb-1" style="color:var(--warning-fg);">Standard advice</div>' +
                 '<span class="op-chip" onclick="applyAssistAdvice()"><span class="op-chip-add">+</span>' +
                 opEsc(res.advice) + '</span></div>';
     }
@@ -2328,7 +2328,7 @@ function addOPRxRow(pre) {
         '</td>' +
         '<td style="position:relative;">' +
           '<input type="text" class="hd-input op-rx-name" placeholder="Search drug / brand..." autocomplete="off" ' +
-                 'data-source="EXTERNAL" style="border-left:3px solid #64748b;" ' +
+                 'data-source="EXTERNAL" style="border-left:3px solid var(--border-strong);" ' +
                  'oninput="onOPDrugType(this)" onfocus="onOPDrugType(this)" onchange="queueSafetyCheck()">' +
           '<div class="autocomplete-items d-none"></div>' +
           '<div class="op-peds-slot"></div>' +
@@ -2391,16 +2391,16 @@ function onOPDrugType(inputEl) {
 
 function opDropdownHeader(label) {
     const h = document.createElement('div');
-    h.style.cssText = 'padding:4px 8px;font-size:0.6rem;text-transform:uppercase;color:#94a3b8;background:#121418;cursor:default;';
+    h.style.cssText = 'padding:4px 8px;font-size:0.6rem;text-transform:uppercase;color:var(--text-muted);background:var(--surface-2);cursor:default;';
     h.innerText = label;
     return h;
 }
 
 function opStockColor(status) {
-    if (status === 'out') return '#ef4444';
-    if (status === 'low') return '#f59e0b';
-    if (status === 'ok')  return '#10b981';
-    return '#64748b';
+    if (status === 'out') return 'var(--danger)';
+    if (status === 'low') return 'var(--warning)';
+    if (status === 'ok')  return 'var(--success)';
+    return 'var(--text-faint)';
 }
 
 function opDrugOption(inputEl, m) {
@@ -2427,11 +2427,11 @@ function opDrugOption(inputEl, m) {
 }
 
 function updateOPRxSource(inputEl, source, m) {
-    let color = '#64748b', title = 'External / manual \u2014 printed only, not sent to pharmacy';
+    let color = 'var(--text-faint)', title = 'External / manual \u2014 printed only, not sent to pharmacy';
     if (source === 'INTERNAL') {
-        if (m && m.status === 'out')      { color = '#ef4444'; title = 'In pharmacy but OUT of stock'; }
-        else if (m && m.status === 'low') { color = '#f59e0b'; title = 'In pharmacy \u2014 LOW stock'; }
-        else                              { color = '#10b981'; title = 'In pharmacy, in stock \u2014 will be billed'; }
+        if (m && m.status === 'out')      { color = 'var(--danger)'; title = 'In pharmacy but OUT of stock'; }
+        else if (m && m.status === 'low') { color = 'var(--warning)'; title = 'In pharmacy \u2014 LOW stock'; }
+        else                              { color = 'var(--success)'; title = 'In pharmacy, in stock \u2014 will be billed'; }
     }
     inputEl.style.borderLeft = '3px solid ' + color;
     inputEl.title = title;

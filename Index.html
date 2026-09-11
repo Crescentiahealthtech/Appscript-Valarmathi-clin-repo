@@ -12,9 +12,66 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   
   <?!= include('Styles'); ?>
+
+  <script>
+    /* Apply the persisted theme before first paint. Running here - ahead of
+       the body element - prevents the dark-theme flash that a post-load
+       toggle caused. The class is mirrored onto the body as soon as it
+       exists, because component rules are written against
+       `body.light-theme`. With no stored choice the app keeps its dark
+       default, unchanged from before. */
+    (function () {
+      var t;
+      try { t = localStorage.getItem('cresrx_theme'); } catch (e) { t = null; }
+      if (t === 'light') {
+        document.documentElement.classList.add('light-theme');
+        document.addEventListener('DOMContentLoaded', function () {
+          document.body.classList.add('light-theme');
+        });
+      }
+    })();
+  </script>
+
+<script>
+  /* ==========================================================
+     THEME UTILITIES (shared)
+     Canvas-based widgets cannot resolve CSS variables, so charts
+     must read the *computed* token value and repaint whenever the
+     theme changes. Anything registered here is re-rendered on the
+     `themechange` event dispatched by applyTheme().
+     ========================================================== */
+  window.cssVar = function (name, fallback) {
+    try {
+      var v = getComputedStyle(document.body).getPropertyValue(name).trim();
+      if (v) return v;
+    } catch (e) { /* pre-paint */ }
+    return fallback || '#6366f1';
+  };
+
+  // Palette helpers so every chart in the app draws from one source.
+  window.chartPalette = function () {
+    return [cssVar('--chart-1'), cssVar('--chart-2'), cssVar('--chart-3'),
+            cssVar('--chart-4'), cssVar('--chart-5'), cssVar('--chart-6')];
+  };
+  window.chartTheme = function () {
+    return { grid: cssVar('--chart-grid'), tick: cssVar('--chart-tick'),
+             text: cssVar('--text-muted'), accent: cssVar('--accent-purple') };
+  };
+
+  // Register a repaint callback; it fires on every theme switch.
+  window.__themeRepainters = [];
+  window.onThemeChange = function (fn) {
+    if (typeof fn === 'function') window.__themeRepainters.push(fn);
+  };
+  window.addEventListener('themechange', function () {
+    (window.__themeRepainters || []).forEach(function (fn) {
+      try { fn(); } catch (e) { /* one bad repainter must not stop the rest */ }
+    });
+  });
+</script>
 </head>
 <body>
-  <div class="dr-badge shadow-sm"><i class="fa-solid fa-user-doctor" style="color: var(--accent-purple);"></i> Logavignesh Meivasagam</div>
+  <div class="dr-badge shadow-sm"><i class="fa-solid fa-user-doctor" style="color: var(--accent-fg);"></i> Logavignesh Meivasagam</div>
   <?!= include('Auth'); ?>
   
   <div id="app-screen" class="d-none">

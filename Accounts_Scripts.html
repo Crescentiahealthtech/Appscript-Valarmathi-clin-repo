@@ -32,8 +32,8 @@ const AccX = (function () {
   }
   function toast(msg, ok) {
     const t = document.createElement('div');
-    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white';
-    t.style.zIndex = 3000; t.style.background = ok ? '#198754' : '#dc3545';
+    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid';
+    t.style.zIndex = 3000; t.style.background = ok ? 'var(--success)' : 'var(--danger)';
     t.textContent = msg; document.body.appendChild(t);
     setTimeout(() => t.remove(), 3500);
   }
