@@ -1814,12 +1814,14 @@ function ipn_prompt(message, value, done, opts) {
       if (nd.subjectiveObjective) {
         bodyHTML += `<div class="feed-text mb-2">${_esc(nd.subjectiveObjective)}</div>`;
       }
-      // System exam summary
+      // System exam summary. Notes written before the section name was
+      // canonicalised may still carry the old "systemExam" key.
+      const se = nd.sysExam || nd.systemExam || {};
       const seItems = [
-        nd.systemExam && nd.systemExam.cvs  ? 'CVS: ' + nd.systemExam.cvs  : null,
-        nd.systemExam && nd.systemExam.rs   ? 'RS: '  + nd.systemExam.rs   : null,
-        nd.systemExam && nd.systemExam.pa   ? 'PA: '  + nd.systemExam.pa   : null,
-        nd.systemExam && nd.systemExam.cns  ? 'CNS: ' + nd.systemExam.cns  : null
+        se.cvs ? 'CVS: ' + se.cvs : null,
+        se.rs  ? 'RS: '  + se.rs  : null,
+        se.pa  ? 'P/A: ' + se.pa  : null,
+        se.cns ? 'CNS: ' + se.cns : null
       ].filter(Boolean);
       if (seItems.length > 0) {
         bodyHTML += `<div style="font-size:0.78rem; color:var(--text-faint); margin-bottom:8px;">${seItems.map(_esc).join(' &nbsp;|&nbsp; ')}</div>`;
@@ -2158,9 +2160,10 @@ function ipn_prompt(message, value, done, opts) {
         if (nd.subjectiveObjective) {
           document.getElementById('dr-soap-text').value = nd.subjectiveObjective;
         }
-        if (nd.systemExam) {
-          const se = nd.systemExam;
-          // systemExam fields are stored as combined "select + detail" string; split on first space boundary
+        const prevSysExam = nd.sysExam || nd.systemExam;
+        if (prevSysExam) {
+          const se = prevSysExam;
+          // sysExam fields are stored as a combined "select + detail" string; split on the first space boundary
           if (se.cvs) { document.getElementById('dr-se-cvs').value = se.cvs.split(' ')[0] || se.cvs; document.getElementById('dr-se-cvs-detail').value = se.cvs.includes(' ') ? se.cvs.substring(se.cvs.indexOf(' ')+1) : ''; }
           if (se.rs)  { document.getElementById('dr-se-rs').value  = se.rs.split(' ')[0]  || se.rs;  document.getElementById('dr-se-rs-detail').value  = se.rs.includes(' ')  ? se.rs.substring(se.rs.indexOf(' ')+1) : ''; }
           if (se.pa)  { document.getElementById('dr-se-pa').value  = se.pa.split(' ')[0]  || se.pa;  document.getElementById('dr-se-pa-detail').value  = se.pa.includes(' ')  ? se.pa.substring(se.pa.indexOf(' ')+1) : ''; }
@@ -2352,7 +2355,10 @@ function ipn_prompt(message, value, done, opts) {
 
     const noteData = {
       subjectiveObjective: document.getElementById('dr-soap-text').value.trim(),
-      systemExam: {
+      // Canonical section name. This used to be posted as "systemExam", which
+      // the server's section RBAC did not recognise and therefore stripped —
+      // the exam findings never reached the record or the printout.
+      sysExam: {
         cvs: (document.getElementById('dr-se-cvs').value + ' ' + document.getElementById('dr-se-cvs-detail').value).trim(),
         rs:  (document.getElementById('dr-se-rs').value  + ' ' + document.getElementById('dr-se-rs-detail').value).trim(),
         pa:  (document.getElementById('dr-se-pa').value  + ' ' + document.getElementById('dr-se-pa-detail').value).trim(),

@@ -507,8 +507,12 @@ function ipc_routeLabOrders_(payload, patientId, encounterId, w) {
 
 /**
  * Print-ready casesheet HTML.
- * Read by header and fully escaped: clinical free text routinely contains
- * "<" and "&", and the doctor column moved when Phase 5 added attribution.
+ *
+ * Read by header (the doctor column moved when Phase 5 added attribution) and
+ * fully escaped: clinical free text routinely contains "<" and "&".
+ * Composed through IP_Print_Kit so the casesheet, the progress record and the
+ * full-file print share one letterhead, one grid and one set of page-break
+ * rules — previously each had its own inline CSS and they had drifted apart.
  */
 function getIPCasesheetPrintHtml(encounterId, sessionToken) {
   try {
@@ -527,132 +531,174 @@ function getIPCasesheetPrintHtml(encounterId, sessionToken) {
     var gate = resolveIPRead_(sessionToken, f("IP_Number"));
     if (!gate.ok) return { success: false, message: gate.message };
 
-    var e = function (v) {
-      return String(v === null || v === undefined ? "" : v)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return {
+      success: true,
+      html: ipc_composeCasesheetHtml_(f, { standalone: true })
     };
-    var fe = function (h) { return e(f(h)); };
-    var parse = function (h) { try { return JSON.parse(f(h) || "[]"); } catch (err) { return []; } };
-
-    var complaints = parse("Chief_Complaints");
-    var history    = parse("History");
-    var meds       = parse("Prescription_JSON");
-    var labs       = parse("Lab_Orders_JSON");
-    var outside    = parse("Outside Lab Records");
-
-    var listText = function (arr) {
-      return arr.map(function (c) {
-        if (typeof c === "string") return e(c);
-        var t = e(c.condition || c.text || "");
-        if (c.prefix) t = e(c.prefix) + " " + t;
-        return c.duration ? t + " (" + e(c.duration) + ")" : t;
-      }).filter(Boolean).join(" | ");
-    };
-
-    var medsHtml = meds.length
-      ? '<table style="width:100%; border-collapse:collapse; font-size:0.85rem;">' +
-        '<thead><tr style="background:#f1f5f9;">' +
-        '<th style="text-align:left; padding:6px; border:1px solid #e2e8f0;">#</th>' +
-        '<th style="text-align:left; padding:6px; border:1px solid #e2e8f0;">Drug</th>' +
-        '<th style="text-align:left; padding:6px; border:1px solid #e2e8f0;">Dose / Frequency</th>' +
-        '<th style="text-align:left; padding:6px; border:1px solid #e2e8f0;">Route</th>' +
-        '<th style="text-align:left; padding:6px; border:1px solid #e2e8f0;">Duration</th>' +
-        '</tr></thead><tbody>' +
-        meds.map(function (md, i) {
-          return '<tr>' +
-            '<td style="padding:6px; border:1px solid #e2e8f0;">' + (i + 1) + '</td>' +
-            '<td style="padding:6px; border:1px solid #e2e8f0;"><strong>' +
-              e(md.type || "") + " " + e(md.strength || "") + " " + e(md.drugName || "") +
-            '</strong></td>' +
-            '<td style="padding:6px; border:1px solid #e2e8f0;">' +
-              e(md.dose || "") + " " + e(md.freq || md.sig || "") + '</td>' +
-            '<td style="padding:6px; border:1px solid #e2e8f0;">' + e(md.route || "Oral") + '</td>' +
-            '<td style="padding:6px; border:1px solid #e2e8f0;">' + e(md.duration || "") + '</td>' +
-          '</tr>';
-        }).join("") +
-        '</tbody></table>'
-      : '<span style="color:#777;">No admission medication ordered.</span>';
-
-    var orderedLabs = labs.filter(function (l) { return dc_upper_(l.type) === "ORDER"; })
-                          .map(function (l) { return e(l.testName); }).join(", ");
-    var outsideHtml = outside.length
-      ? outside.map(function (l) { return e(l.test) + ": " + e(l.val); }).join(" | ")
-      : "None";
-
-    var signature = f("Author_Signature_Snapshot") || f("Doctor's Name") || "Doctor's Signature";
-
-    var html =
-    '<html><head><meta charset="utf-8"><title>IP Casesheet ' + fe("IP_Number") + '</title>' +
-    '<style>@media print{@page{margin:14mm;} .noprint{display:none;}}' +
-    'body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0;padding:20px;}' +
-    'h5{margin:0 0 6px;padding-bottom:4px;border-bottom:1px solid #cbd5e1;color:#0369a1;font-size:0.9rem;}' +
-    '.sec{margin-bottom:18px;font-size:0.88rem;}' +
-    '.grid{display:flex;justify-content:space-between;gap:18px;}' +
-    '</style></head><body>' +
-    '<div style="max-width:820px;margin:auto;">' +
-      '<div style="border-bottom:2px solid #0369a1;padding-bottom:10px;margin-bottom:18px;text-align:center;">' +
-        '<h2 style="margin:0;text-transform:uppercase;color:#0369a1;">Valarmathi Clinic</h2>' +
-        '<p style="margin:0;font-size:0.85rem;color:#555;">Premium Healthcare Services | Ph: +91 88387 23513</p>' +
-        '<h4 style="margin:8px 0 0;">IP Admission Casesheet</h4>' +
-      '</div>' +
-
-      '<div class="grid" style="background:#f8fafc;padding:14px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:18px;font-size:0.88rem;">' +
-        '<div><strong>Patient:</strong> ' + fe("Patient Name") + '<br>' +
-          '<strong>PID:</strong> ' + fe("Patient_ID") + ' &nbsp;|&nbsp; <strong>IP No:</strong> ' + fe("IP_Number") + '<br>' +
-          '<strong>Age/Sex:</strong> ' + fe("Age") + ' / ' + fe("Sex") + '<br>' +
-          '<strong>Ward/Bed:</strong> ' + fe("Ward") + ' - ' + fe("Bed") + '</div>' +
-        '<div style="text-align:right;"><strong>Date:</strong> ' + fe("Timestamp") + '<br>' +
-          '<strong>Doctor:</strong> ' + fe("Doctor's Name") + '<br>' +
-          '<span style="font-size:0.78rem;color:#555;">' + fe("Doctor_ID") + '</span></div>' +
-      '</div>' +
-
-      '<div class="sec"><h5>Vitals on Admission</h5>' +
-        '<strong>BP:</strong> ' + fe("Sys_BP") + '/' + fe("Dia_BP") + ' mmHg &nbsp;|&nbsp; ' +
-        '<strong>Pulse:</strong> ' + fe("PR") + ' bpm &nbsp;|&nbsp; ' +
-        '<strong>SpO2:</strong> ' + fe("SpO2") + '% &nbsp;|&nbsp; ' +
-        '<strong>Temp:</strong> ' + fe("Temp") + ' &deg;F &nbsp;|&nbsp; ' +
-        '<strong>Wt:</strong> ' + fe("Weight") + ' kg' +
-      '</div>' +
-
-      '<div class="sec"><h5>Clinical History &amp; Examination</h5>' +
-        '<p><strong>Chief Complaints:</strong> ' + (listText(complaints) || "--") + '</p>' +
-        '<p><strong>History:</strong> ' + (listText(history) || "--") + '</p>' +
-        '<p><strong>General Exam:</strong> Pallor: ' + fe("Pallor") + ', Icterus: ' + fe("Icterus") +
-          ', Cyanosis: ' + fe("Cyanosis") + ', Clubbing: ' + fe("Clubbing") + ', Edema: ' + fe("Edema") +
-          '<br><em>Notes:</em> ' + (fe("Other GE findings") || "--") + '</p>' +
-        '<p><strong>Systemic Exam:</strong> CVS: ' + fe("CVS") + ' | RS: ' + fe("RS") +
-          ' | P/A: ' + fe("PA") + ' | CNS: ' + fe("CNS") + '</p>' +
-        '<p><strong>Primary Diagnosis:</strong> <span style="font-size:1.05em;font-weight:bold;">' +
-          (fe("Primary Diagnosis") || "--") + '</span></p>' +
-      '</div>' +
-
-      '<div class="sec"><h5>Admission Orders</h5>' + medsHtml + '</div>' +
-
-      '<div class="sec grid">' +
-        '<div style="width:48%;">' +
-          '<h5>Lab Orders</h5><p>' + (orderedLabs || "None") + '</p>' +
-          '<h5 style="margin-top:14px;">External Lab Results</h5><p>' + outsideHtml + '</p>' +
-        '</div>' +
-        '<div style="width:48%;">' +
-          '<h5>Radiology / Scans</h5><p style="white-space:pre-wrap;">' +
-            (fe("Radiological records") || "None") + '</p>' +
-          '<h5 style="margin-top:14px;">Advice / Plan</h5><p style="white-space:pre-wrap;">' +
-            (fe("Advice") || "Standard ward protocol.") + '</p>' +
-        '</div>' +
-      '</div>' +
-
-      '<div style="text-align:right;margin-top:56px;">' +
-        '<div style="border-top:1px solid #000;display:inline-block;padding-top:5px;width:230px;text-align:center;">' +
-          '<strong>' + e(signature) + '</strong>' +
-        '</div>' +
-      '</div>' +
-    '</div></body></html>';
-
-    return { success: true, html: html };
   } catch (err) {
     return { success: false, message: err.toString() };
   }
+}
+
+/**
+ * The casesheet body. Shared by the standalone print and the full-file print,
+ * so the admission chart never has two different layouts.
+ *
+ * @param {function(string):string} f      header-addressed field reader
+ * @param {Object} opts   { standalone:true } wraps the sections in a document;
+ *                        otherwise only the sections are returned.
+ */
+function ipc_composeCasesheetHtml_(f, opts) {
+  opts = opts || {};
+  var e  = ipp_esc_;
+  var fe = function (h) { return e(f(h)); };
+  var parse = function (h) { try { return JSON.parse(f(h) || "[]"); } catch (err) { return []; } };
+
+  var complaints = parse("Chief_Complaints");
+  var history    = parse("History");
+  var meds       = parse("Prescription_JSON");
+  var labs       = parse("Lab_Orders_JSON");
+  var outside    = parse("Outside Lab Records");
+
+  // Complaints and history are structured {prefix, condition, duration}. One
+  // per line, so a long problem list reads as a list instead of a paragraph.
+  var listLines = function (arr) {
+    return arr.map(function (c) {
+      if (typeof c === "string") return e(c);
+      var t = e(c.condition || c.text || "");
+      if (!t) return "";
+      if (c.prefix)   t = e(c.prefix) + " " + t;
+      if (c.duration) t += ' <span class="muted">(' + e(c.duration) + ')</span>';
+      return t;
+    }).filter(Boolean).join("<br>");
+  };
+
+  // ---- vitals: only what was measured -------------------------------------
+  var bp = (f("Sys_BP") || f("Dia_BP"))
+    ? (f("Sys_BP") || "--") + "/" + (f("Dia_BP") || "--") + " mmHg" : "";
+  // Two columns: six vitals stacked in one made the block taller than the
+  // examination findings below it, for no reason.
+  var vitalsKv = ipp_cols_(
+    ipp_kv_([
+      ["Blood Pressure", e(bp)],
+      ["Pulse",  f("PR")   ? fe("PR") + " bpm"  : ""],
+      ["SpO2",   f("SpO2") ? fe("SpO2") + " %"  : ""]
+    ], { narrow: true }),
+    ipp_kv_([
+      ["Temp",   f("Temp")   ? fe("Temp") + " °F"   : ""],
+      ["Height", f("Height") ? fe("Height") + " cm" : ""],
+      ["Weight", f("Weight") ? fe("Weight") + " kg" : ""]
+    ], { narrow: true })
+  );
+
+  // ---- general examination: positive findings first ------------------------
+  var geFlags = ["Pallor", "Icterus", "Cyanosis", "Clubbing", "Edema"];
+  var positive = geFlags.filter(function (k) { return dc_upper_(f(k)) === "YES"; });
+  var negative = geFlags.filter(function (k) { return dc_upper_(f(k)) === "NO"; });
+  var geKv = ipp_kv_([
+    ["Positive", positive.length ? '<strong>' + e(positive.join(", ")) + '</strong>' : ""],
+    ["Negative", negative.length ? '<span class="muted">' + e(negative.join(", ")) + '</span>' : ""],
+    ["Notes",    ipp_escMultiline_(f("Other GE findings"))]
+  ], { narrow: true });
+
+  // ---- systemic examination: one system per row ----------------------------
+  var seKv = ipp_kv_([
+    ["CVS", fe("CVS")], ["RS", fe("RS")], ["P/A", fe("PA")], ["CNS", fe("CNS")]
+  ], { narrow: true });
+
+  // ---- medications ---------------------------------------------------------
+  var medsTable = ipp_table_(
+    [{ label: "#", cls: "ctr" }, "Drug", "Dose / Frequency", { label: "Route", cls: "ctr" }, { label: "Duration", cls: "ctr" }],
+    meds.map(function (md, i) {
+      var name = [md.type, md.drugName || md.name, md.strength]
+        .map(dc_str_).filter(Boolean).join(" ");
+      var note = dc_str_(md.comment || md.instructions);
+      return [
+        String(i + 1),
+        '<strong>' + e(name) + '</strong>' +
+          (note ? '<br><span class="muted">' + e(note) + '</span>' : ''),
+        e([md.dose, md.freq || md.sig].map(dc_str_).filter(Boolean).join(" ")),
+        e(md.route || "Oral"),
+        e(md.duration || md.days || "")
+      ];
+    }),
+    ["10mm", "auto", "38mm", "20mm", "22mm"]
+  ) || '<span class="muted">No admission medication ordered.</span>';
+
+  // ---- orders and results --------------------------------------------------
+  var orderedLabs = labs.filter(function (l) { return dc_upper_(l.type) === "ORDER"; })
+                        .map(function (l) { return e(l.testName); }).filter(Boolean).join(", ");
+  var outsideHtml = outside.map(function (l) {
+      var t = e(l.test), v = e(l.val);
+      return t ? ('<strong>' + t + ':</strong> ' + (v || "--")) : "";
+    }).filter(Boolean).join("<br>");
+
+  // ---- version / amendment provenance -------------------------------------
+  var amendKv = "";
+  if (dc_str_(f("Amend_Reason")) || dc_upper_(f("Status")) === "SUPERSEDED" ||
+      (parseInt(f("Version"), 10) || 1) > 1) {
+    amendKv = ipp_kv_([
+      ["Version",  fe("Version") || "1"],
+      ["Status",   fe("Status") || "CURRENT"],
+      ["Amended",  f("Amended_At") ? fe("Amended_At") + (f("Amended_By") ? " by " + fe("Amended_By") : "") : ""],
+      ["Reason",   ipp_escMultiline_(f("Amend_Reason"))],
+      ["Superseded by", fe("Superseded_By")]
+    ], { narrow: true });
+  }
+
+  var body =
+    ipp_sec_("Vitals on Admission", vitalsKv) +
+    ipp_sec_("Presenting Complaints & History",
+      ipp_cols_(
+        ipp_kv_([["Chief Complaints", listLines(complaints)]], { narrow: true }),
+        ipp_kv_([["History", listLines(history)]], { narrow: true })
+      )) +
+    ipp_sec_("Examination", ipp_cols_(
+      '<div style="font-weight:600;color:#334155;margin-bottom:3px;font-size:9pt;">General</div>' + (geKv || '<span class="muted">Not recorded.</span>'),
+      '<div style="font-weight:600;color:#334155;margin-bottom:3px;font-size:9pt;">Systemic</div>' + (seKv || '<span class="muted">Not recorded.</span>')
+    )) +
+    ipp_sec_("Provisional Diagnosis",
+      f("Primary Diagnosis") ? '<div class="dx">' + fe("Primary Diagnosis") + '</div>' : "") +
+    ipp_sec_("Admission Medication Orders", medsTable, { loose: true, keepEmpty: true }) +
+    ipp_sec_("Investigations & Results", ipp_cols_(
+      ipp_kv_([
+        ["Lab Orders",    orderedLabs],
+        ["External Labs", outsideHtml]
+      ], { narrow: true }),
+      ipp_kv_([
+        ["Radiology", ipp_escMultiline_(f("Radiological records"))]
+      ], { narrow: true })
+    )) +
+    ipp_sec_("Advice / Plan",
+      ipp_escMultiline_(f("Advice")) || '<span class="muted">Standard ward protocol.</span>',
+      { keepEmpty: true }) +
+    ipp_sec_("Record Provenance", amendKv);
+
+  if (!opts.standalone) return body;
+
+  var wardBed = [f("Ward"), f("Bed")].filter(function (x) { return !!x; }).join(" / ");
+  var ageSex  = [f("Age"), f("Sex")].filter(function (x) { return !!x; }).join(" / ");
+  var signature = f("Author_Signature_Snapshot") || f("Doctor's Name");
+
+  return ipp_doc_({
+    docTitle: "Inpatient Admission Casesheet",
+    patient: {
+      name:       f("Patient Name"),
+      pid:        f("Patient_ID"),
+      ipNumber:   f("IP_Number"),
+      ageSex:     ageSex,
+      wardBed:    wardBed,
+      consultant: f("Doctor's Name"),
+      diagnosis:  f("Primary Diagnosis")
+    },
+    bodyHtml: ipp_kv_([
+        ["Recorded", fe("Timestamp")],
+        ["Encounter", fe("Encounter_ID")]
+      ], { narrow: true }) +
+      '<div style="height:10px;"></div>' + body +
+      ipp_sig_(signature, "Admitting Doctor" + (f("Doctor_ID") ? " · " + f("Doctor_ID") : "")),
+    footNote: "Encounter " + f("Encounter_ID")
+  });
 }
 
 /** Previous casesheets for this admission, for the recall panel. */

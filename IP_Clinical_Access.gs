@@ -136,7 +136,36 @@ function ipc_roleMayAuthor_(role, roleType) {
 }
 
 /**
- * Returns a copy of noteData holding only the sections this role may author.
+ * Client-side section names that mean the same thing as a canonical one.
+ *
+ * The IP Notes composer posted the doctor's systemic examination as
+ * "systemExam" while this matrix — and every reader, the printer included —
+ * knew it as "sysExam". Because an unlisted section is STRIPPED rather than
+ * rejected, every CVS/RS/P-A/CNS finding a doctor typed on a ward round was
+ * silently discarded at the gate: never written to IP_Timeline_DB, so never
+ * shown on the timeline and never printed. The save still reported success,
+ * which is the worst possible failure mode for a clinical record.
+ *
+ * Canonicalising here rather than only fixing the composer means any other
+ * caller — a legacy tab left open, a future mobile client — lands on the same
+ * stored key instead of quietly losing the finding again.
+ */
+var IPC_SECTION_ALIASES = {
+  "systemExam":   "sysExam",
+  "systemicExam": "sysExam",
+  "sysExamination": "sysExam",
+  "vitalSigns":   "vitals"
+};
+
+/** The stored name for a submitted noteData section. */
+function ipc_canonicalSection_(key) {
+  var k = dc_str_(key);
+  return IPC_SECTION_ALIASES[k] || k;
+}
+
+/**
+ * Returns a copy of noteData holding only the sections this role may author,
+ * keyed by canonical section name.
  * @return {{data:Object, stripped:Array<string>}}
  */
 function ipc_filterSections_(roleType, role, noteData) {
@@ -148,9 +177,23 @@ function ipc_filterSections_(roleType, role, noteData) {
   var allowed = rule[dc_str_(role).toLowerCase()] || rule["*"] || [];
   var allowAll = (allowed.length === 1 && allowed[0] === "*");
 
+  var isEmpty = function (v) {
+    if (v === null || v === undefined) return true;
+    if (typeof v === "string") return v.trim() === "";
+    if (Array.isArray(v)) return v.length === 0;
+    if (typeof v === "object") {
+      return Object.keys(v).every(function (k) { return isEmpty(v[k]); });
+    }
+    return false;
+  };
+
   Object.keys(src).forEach(function (k) {
-    if (allowAll || allowed.indexOf(k) !== -1) out[k] = src[k];
-    else stripped.push(k);
+    var canon = ipc_canonicalSection_(k);
+    if (!allowAll && allowed.indexOf(canon) === -1) { stripped.push(k); return; }
+    // If a payload carries both the canonical name and an alias, the one with
+    // content wins; a blank alias must never overwrite a real finding.
+    if (out[canon] !== undefined && isEmpty(src[k])) return;
+    out[canon] = src[k];
   });
   return { data: out, stripped: stripped };
 }

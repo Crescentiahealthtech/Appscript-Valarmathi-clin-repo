@@ -1039,6 +1039,19 @@ function getIPLabResults(ipNumber, patientId, sessionToken) {
  * @param {string} ipNumber
  * @param {Object} opts  { from, to } ISO dates, or blank for the whole stay
  */
+/**
+ * Print-ready HTML for an admission's progress record.
+ *
+ * Composed with IP_Print_Kit so the sheet matches the casesheet typographically
+ * and lines up column-for-column. Every section a note can carry is rendered
+ * through an aligned label/value grid rather than a run of inline <p> tags —
+ * that is what makes a stack of ward-round notes readable on paper.
+ *
+ * @param {string} ipNumber
+ * @param {Object} opts  { from, to } ISO dates for a date-bounded extract,
+ *                       { roleTypes: [...] } to print only certain note kinds,
+ *                       { trend: false } to suppress the vitals chart
+ */
 function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
   try {
     var gate = resolveIPRead_(sessionToken, ipNumber);
@@ -1049,123 +1062,238 @@ function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
     if (!tl.success) return { success: false, message: tl.message };
 
     var adm = ipc_admissionRow_(ipNumber);
-    var e = function (v) {
-      return String(v === null || v === undefined ? "" : v)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    };
 
     var from = opts.from ? new Date(opts.from) : null;
     var to   = opts.to   ? new Date(opts.to)   : null;
     if (to) to.setHours(23, 59, 59, 999);
 
-    // Timeline comes newest-first; a printed record reads chronologically.
+    var wanted = null;
+    if (opts.roleTypes && opts.roleTypes.length) {
+      wanted = {};
+      opts.roleTypes.forEach(function (r) { wanted[dc_upper_(r)] = true; });
+    }
+
+    // A printed record reads chronologically. Sorting on the timestamp rather
+    // than reversing the sheet order matters: a note entered late, or a row
+    // written during an amendment, sits out of sequence in the sheet and would
+    // otherwise print out of sequence too.
     var rows = tl.data.filter(function (n) {
-      if (!n.rawTs) return true;
+      if (wanted && !wanted[dc_upper_(n.roleType)]) return false;
+      if (!n.rawTs) return !from && !to;
       var d = new Date(n.rawTs);
       if (from && d < from) return false;
       if (to && d > to) return false;
       return true;
-    }).reverse();
+    }).sort(ipn_byTimeAsc_);
 
     if (!rows.length) {
       return { success: false, message: "No notes in that period to print." };
     }
 
-    var LABEL = {
-      DOCTOR: "Clinical Progress Note", NURSE: "Nursing Note",
-      CONSULTANT: "Consultant Opinion", PROCEDURE: "Procedure Note",
-      HANDOVER: "Shift Handover", QUICK: "Quick Note"
-    };
+    var patient = ipn_printPatient_(ipNumber, adm);
+    var body = ipp_sec_("Observation Chart", ipn_trendSection_(rows, opts), { loose: true }) +
+               ipp_sec_("Progress Notes",
+                        rows.map(ipn_printNote_).join(""),
+                        { loose: true });
 
-    var body = rows.map(function (n) {
-      var d = n.noteData || {};
-      var parts = [];
+    var span = (from || to)
+      ? "Extract: " + (from ? ipp_when_(from, "dd-MMM-yyyy") : "admission") +
+        " to " + (to ? ipp_when_(to, "dd-MMM-yyyy") : "today")
+      : "Whole stay";
 
-      var line = function (label, val) {
-        var v = String(val === null || val === undefined ? "" : val).trim();
-        if (!v) return;
-        parts.push('<p style="margin:3px 0;"><strong>' + e(label) + ':</strong> ' + e(v) + '</p>');
-      };
-
-      line("Subjective / Objective", d.subjectiveObjective);
-      if (d.vitals) {
-        line("Vitals", "BP " + (d.vitals.bp || "--") + " | Pulse " + (d.vitals.pulse || "--") +
-                       " | SpO2 " + (d.vitals.spo2 || "--") + "% | Temp " + (d.vitals.temp || "--"));
-      }
-      if (d.sysExam) {
-        line("Systemic exam", ["CVS: " + (d.sysExam.cvs || "--"), "RS: " + (d.sysExam.rs || "--"),
-                               "P/A: " + (d.sysExam.pa || "--"), "CNS: " + (d.sysExam.cns || "--")].join(" | "));
-      }
-      line("Assessment", d.assessment);
-      line("Diagnosis", d.diagnosis);
-      line("Plan", d.plan);
-      line("Advice", d.adviceText);
-      line("Intervention", d.intervention);
-      line("Observations", d.observations);
-      line("Specialty", d.specialty);
-      line("Findings", d.findings);
-      line("Recommendations", d.recommendations);
-      line("Procedure", d.procedureName);
-      line("Operator", d.operator);
-      line("Complications", d.complications);
-      line("Note", d.text);
-
-      if (d.medOrders && d.medOrders.length) {
-        parts.push('<p style="margin:3px 0;"><strong>Orders:</strong> ' +
-          d.medOrders.map(function (m) {
-            return e((m.action || "NEW") + " " + (m.drugName || "") + " " +
-                     (m.dose || "") + " " + (m.freq || "") + " " + (m.route || ""));
-          }).join("; ") + '</p>');
-      }
-      if (d.investigationOrders && d.investigationOrders.length) {
-        parts.push('<p style="margin:3px 0;"><strong>Investigations:</strong> ' +
-          e(d.investigationOrders.map(function (o) { return o.testName; }).filter(Boolean).join(", ")) + '</p>');
-      }
-      if (d.handoverText) {
-        parts.push('<pre style="margin:3px 0; white-space:pre-wrap; font-family:inherit; font-size:.82rem;">' +
-                   e(d.handoverText) + '</pre>');
-      }
-      if (!parts.length) parts.push('<p style="margin:3px 0; color:#666;">No content recorded.</p>');
-
-      return '<div style="border:1px solid #e2e8f0; border-left:3px solid #0369a1; ' +
-             'border-radius:5px; padding:10px 12px; margin-bottom:10px; page-break-inside:avoid;">' +
-               '<div style="display:flex; justify-content:space-between; font-size:.78rem; ' +
-                 'color:#475569; margin-bottom:6px;">' +
-                 '<span><strong>' + e(LABEL[n.roleType] || n.roleType) + '</strong> &mdash; ' +
-                   e(n.author) + (n.signature ? ' <em>(' + e(n.signature) + ')</em>' : '') + '</span>' +
-                 '<span>' + e(n.timestamp) + (n.shift ? ' &bull; ' + e(n.shift) : '') + '</span>' +
-               '</div>' + parts.join("") +
-             '</div>';
-    }).join("");
-
-    var html =
-      '<html><head><meta charset="utf-8"><title>IP Notes ' + e(ipNumber) + '</title>' +
-      '<style>@media print{@page{margin:14mm;}}' +
-      'body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0;padding:20px;font-size:.86rem;}' +
-      '</style></head><body><div style="max-width:820px;margin:auto;">' +
-        '<div style="border-bottom:2px solid #0369a1;padding-bottom:10px;margin-bottom:16px;text-align:center;">' +
-          '<h2 style="margin:0;text-transform:uppercase;color:#0369a1;">Valarmathi Clinic</h2>' +
-          '<p style="margin:0;font-size:.82rem;color:#555;">Premium Healthcare Services | Ph: +91 88387 23513</p>' +
-          '<h4 style="margin:8px 0 0;">Inpatient Progress Record</h4>' +
-        '</div>' +
-        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-bottom:16px;">' +
-          '<strong>Patient:</strong> ' + e(adm ? adm.row[2] : "") +
-          ' &nbsp;|&nbsp; <strong>IP No:</strong> ' + e(ipNumber) +
-          ' &nbsp;|&nbsp; <strong>PID:</strong> ' + e(adm ? adm.row[1] : "") + '<br>' +
-          '<strong>Ward/Bed:</strong> ' + e(adm ? (adm.row[7] + " / " + adm.row[8]) : "") +
-          ' &nbsp;|&nbsp; <strong>Consultant:</strong> ' + e(adm ? adm.row[9] : "") + '<br>' +
-          '<strong>Working diagnosis:</strong> ' + e(adm ? adm.row[10] : "") + '<br>' +
-          '<span style="font-size:.78rem;color:#555;">' + rows.length + ' note(s)' +
-          (from || to ? ', filtered by date' : ', whole stay') + '. Printed ' +
-          e(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd-MMM-yyyy hh:mm a")) + '.</span>' +
-        '</div>' + body +
-      '</div></body></html>';
+    var html = ipp_doc_({
+      docTitle: "Inpatient Progress Record",
+      patient:  patient,
+      bodyHtml: body + ipp_sig_(patient.consultant || "Consultant", "Treating Consultant"),
+      footNote: rows.length + " note(s) · " + span
+    });
 
     return { success: true, html: html, noteCount: rows.length };
   } catch (err) {
     return { success: false, message: err.toString() };
   }
+}
+
+/** Oldest first; rows with no usable timestamp keep their relative order last. */
+function ipn_byTimeAsc_(a, b) {
+  var ta = a.rawTs ? new Date(a.rawTs).getTime() : NaN;
+  var tb = b.rawTs ? new Date(b.rawTs).getTime() : NaN;
+  if (isNaN(ta) && isNaN(tb)) return 0;
+  if (isNaN(ta)) return 1;
+  if (isNaN(tb)) return -1;
+  return ta - tb;
+}
+
+/**
+ * Identity block for an admission, shared by the notes and full-file printers.
+ * IP_Admissions is the frozen 13-column schema documented in
+ * IP_Admissions_Logic.gs: [1]Patient_ID [2]Patient_Name [3]Age_Sex
+ * [7]Ward_Bed [8]Bed [9]Consultant [10]Diagnosis.
+ */
+function ipn_printPatient_(ipNumber, adm) {
+  var r = adm ? adm.row : [];
+  // Historic rows wrote "B - B201" into Ward_Bed and left Bed stale; the
+  // admissions module's own resolver is the authority on which is real.
+  var wb = ipa_resolveWardBed_(r[7], r[8]);
+  return {
+    name:       dc_str_(r[2]),
+    pid:        dc_str_(r[1]),
+    ipNumber:   dc_str_(ipNumber),
+    ageSex:     dc_str_(r[3]),
+    wardBed:    [wb.ward, wb.bed].filter(function (x) { return !!x; }).join(" / "),
+    consultant: dc_str_(r[9]),
+    diagnosis:  dc_str_(r[10])
+  };
+}
+
+/** The vitals chart, built from whichever notes carry a vitals block. */
+function ipn_trendSection_(rows, opts) {
+  if (opts && opts.trend === false) return "";
+  var series = rows.filter(function (n) {
+    return n.noteData && n.noteData.vitals;
+  }).map(function (n) {
+    return { ts: n.rawTs, label: n.timestamp, vitals: n.noteData.vitals };
+  });
+  if (series.length < 2) return "";   // one reading is not a trend
+  return ipp_vitalsTrend_(series);
+}
+
+var IPN_PRINT_LABELS = {
+  DOCTOR: "Clinical Progress Note", NURSE: "Nursing Note",
+  CONSULTANT: "Consultant Opinion", PROCEDURE: "Procedure Note",
+  HANDOVER: "Shift Handover", QUICK: "Quick Note",
+  INVESTIGATION: "Investigation"
+};
+
+/** One timeline entry as an aligned, unbreakable block. */
+function ipn_printNote_(n) {
+  var d = n.noteData || {};
+  var e = ipp_esc_;
+  var kv = [];
+  var push = function (label, valueHtml) {
+    var v = String(valueHtml === null || valueHtml === undefined ? "" : valueHtml).trim();
+    if (v) kv.push([label, v]);
+  };
+
+  push("Subjective / Objective", ipp_escMultiline_(d.subjectiveObjective));
+
+  if (d.vitals) {
+    var v = d.vitals;
+    // Only the parameters actually recorded. The old printer emitted
+    // "BP -- | Pulse -- | SpO2 --% | Temp --" for a note with no vitals at all.
+    var vit = [
+      dc_str_(v.bp)    ? "BP " + e(v.bp) + " mmHg"   : "",
+      dc_str_(v.pulse) ? "Pulse " + e(v.pulse) + " bpm" : "",
+      dc_str_(v.spo2)  ? "SpO2 " + e(v.spo2) + "%"   : "",
+      dc_str_(v.temp)  ? "Temp " + e(v.temp) + " °F" : ""
+    ].filter(Boolean).join(" &nbsp;&middot;&nbsp; ");
+    push("Vitals", vit);
+  }
+
+  // Systemic examination. Older rows may still hold the pre-canonical key.
+  var se = d.sysExam || d.systemExam;
+  if (se) {
+    var exam = [
+      dc_str_(se.cvs) ? ["CVS", se.cvs] : null,
+      dc_str_(se.rs)  ? ["RS",  se.rs]  : null,
+      dc_str_(se.pa)  ? ["P/A", se.pa]  : null,
+      dc_str_(se.cns) ? ["CNS", se.cns] : null
+    ].filter(Boolean);
+    if (exam.length) {
+      // Each system on its own line with a fixed-width gutter, so CVS/RS/P-A/CNS
+      // read down the page instead of running together on one wrapped line.
+      push("Systemic Exam",
+        '<table class="kv narrow" style="margin:-2px 0;"><tbody>' +
+        exam.map(function (x) {
+          return '<tr><th style="width:16mm;font-weight:600;">' + e(x[0]) +
+                 '</th><td>' + e(x[1]) + '</td></tr>';
+        }).join("") + '</tbody></table>');
+    }
+  }
+
+  push("Assessment",      ipp_escMultiline_(d.assessment));
+  push("Diagnosis",       ipp_escMultiline_(d.diagnosis));
+  push("Plan",            ipp_escMultiline_(d.plan));
+  push("Advice",          ipp_escMultiline_(d.adviceText));
+  push("Intervention",    ipp_escMultiline_(d.intervention));
+  push("Observations",    ipp_escMultiline_(d.observations));
+  push("Consultant",      e(d.consultantName));
+  push("Specialty",       e(d.specialty));
+  push("Findings",        ipp_escMultiline_(d.findings));
+  push("Recommendations", ipp_escMultiline_(d.recommendations));
+  push("Procedure",       e(d.procedureName));
+  push("Operator",        e(d.operator));
+  push("Anaesthesia",     e(d.anaesthesia));
+  push("Complications",   ipp_escMultiline_(d.complications));
+  push("Note",            ipp_escMultiline_(d.text));
+  push("Alert",           ipp_escMultiline_(d.alertText));
+
+  if (d.intakeOutput && (dc_str_(d.intakeOutput.intake) || dc_str_(d.intakeOutput.output))) {
+    push("Intake / Output",
+      "In " + e(d.intakeOutput.intake || "--") + " &nbsp;&middot;&nbsp; Out " +
+      e(d.intakeOutput.output || "--"));
+  }
+
+  var blocks = [];
+  if (kv.length) blocks.push(ipp_kv_(kv));
+
+  if (d.medOrders && d.medOrders.length) {
+    blocks.push('<div style="height:5px;"></div>' + ipp_table_(
+      [{ label: "Action", cls: "ctr" }, "Drug", "Dose / Frequency", "Route"],
+      d.medOrders.map(function (m) {
+        return [
+          e(m.action || "NEW"),
+          e(m.drugName || m.newDrugName || ""),
+          [e(m.dose || ""), e(m.freq || "")].filter(Boolean).join(" "),
+          e(m.route || "")
+        ];
+      }),
+      ["20mm", "auto", "42mm", "22mm"]
+    ));
+  }
+
+  if (d.investigationOrders && d.investigationOrders.length) {
+    var tests = d.investigationOrders.map(function (o) {
+      var name = dc_str_(o.testName);
+      if (!name) return "";
+      var prio = dc_upper_(o.priority);
+      return e(name) + (prio && prio !== "ROUTINE" ? ' <strong>(' + e(prio) + ')</strong>' : "");
+    }).filter(Boolean);
+    if (tests.length) {
+      blocks.push('<div style="height:5px;"></div>' +
+                  ipp_kv_([["Investigations", tests.join(", ")]]));
+    }
+  }
+
+  if (d.markedMeds && d.markedMeds.length) {
+    var given = d.markedMeds.filter(function (m) { return m.given; })
+                            .map(function (m) { return e(m.drugName); }).filter(Boolean);
+    if (given.length) {
+      blocks.push('<div style="height:5px;"></div>' +
+                  ipp_kv_([["Medication Given", given.join(", ")]]));
+    }
+  }
+
+  if (dc_str_(d.handoverText)) {
+    blocks.push('<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:3px;">' +
+                ipp_esc_(d.handoverText) + '</div>');
+  }
+
+  if (!blocks.length) {
+    blocks.push('<span class="muted">No content recorded.</span>');
+  }
+
+  var author = dc_str_(n.author);
+  var sig    = dc_str_(n.signature);
+
+  return '<div class="note">' +
+    '<div class="nh clearfix">' +
+      '<span><span class="tag">' + ipp_esc_(IPN_PRINT_LABELS[dc_upper_(n.roleType)] || n.roleType) + '</span>' +
+        ipp_esc_(author) + (sig && sig !== author ? ' <em>(' + ipp_esc_(sig) + ')</em>' : '') + '</span>' +
+      '<span class="r">' + ipp_esc_(n.timestamp) +
+        (dc_str_(n.shift) ? ' &middot; ' + ipp_esc_(n.shift) + ' shift' : '') + '</span>' +
+    '</div>' + blocks.join("") +
+  '</div>';
 }
 
 // ── 15. LAB CATALOGUE FOR IP NOTES ────────────────────────
