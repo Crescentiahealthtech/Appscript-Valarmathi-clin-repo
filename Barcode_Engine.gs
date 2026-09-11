@@ -231,7 +231,7 @@ function resolveScan(payload, context, sessionToken) {
     if (cls.type !== 'PATIENT') {
       bc_auditScan_(scope, cls, context, false);
       return { success: true, type: cls.type, id: cls.value, found: false,
-               message: 'Lab barcode recognised. Lab tube scanning is enabled in a later phase.' };
+               message: 'Lab barcode recognised. Open its order in the Lab workspace to collect or receive it.' };
     }
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();

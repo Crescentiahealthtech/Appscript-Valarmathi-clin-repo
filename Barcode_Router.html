@@ -252,7 +252,20 @@
     }
 
     if (cls.type !== 'PATIENT') {
-      toast('Lab barcode recognised. Lab tube scanning arrives in a later phase.', 'warn');
+      // Phase 2 ships tube scanning, but it belongs to the lab order workflow,
+      // which claims the scanner while it is open. Reaching here means no lab
+      // screen owns the scan, so say where the code IS read rather than the
+      // Phase 1 "arrives in a later phase", which is no longer true.
+      if (cls.type === 'LAB_ORDER' && context === 'lab-workspace-view' &&
+          window.LabX && typeof LabX.openPanel === 'function') {
+        LabX.openPanel(cls.value);
+        toast('Opening ' + cls.value + '.', 'ok');
+        auditScan(cls.value, cls.type, context);
+        return;
+      }
+      toast(cls.type === 'LAB_SAMPLE'
+        ? 'Tube ' + cls.value + ' recognised. Open its order in the Lab workspace to collect or receive it.'
+        : 'Lab order ' + cls.value + ' recognised. Open it from the Lab workspace.', 'warn');
       auditScan(cls.value, cls.type, context);
       return;
     }

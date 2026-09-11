@@ -401,6 +401,16 @@ var LabX = (function () {
       _cur=res.order; _cur._bill=res.bill; _cur._samples=res.samples||[];
       _renderPanelHead(); _renderStepper();
       _renderStageBody();
+      // A claim belongs to this dialog. Closing it must hand scanning back,
+      // or the next card scanned on the worklist is verified against an order
+      // that is no longer on screen.
+      var am=$('lx-action-modal');
+      if(am && !am._scanRelease){
+        am._scanRelease=true;
+        am.addEventListener('hidden.bs.modal', function(){
+          if(window.CrescScan&&CrescScan.release) CrescScan.release();
+        });
+      }
       modal('lx-action-modal').show();
     }, 'Opening order…');
   }
@@ -578,17 +588,28 @@ var LabX = (function () {
 
   /* Routes a scan made anywhere on this screen into the identity check or,
      once identity is settled, into bench receiving. */
+  /* The order workflow itself lives in #lx-action-modal, so a blanket
+     ".modal.show" test matched our OWN dialog and made every claim hand the
+     scan straight back to the router — which then answered a patient card with
+     "Close the open dialog, then scan again" and a tube with "arrives in a
+     later phase". Only a DIFFERENT dialog stacked on top may take the scan. */
+  function _otherDialogOpen(){
+    var open=document.querySelectorAll('.modal.show');
+    for(var i=0;i<open.length;i++){ if(open[i].id!=='lx-action-modal') return true; }
+    return false;
+  }
+
   function _scanClaim(stage){
     if(!window.CrescScan||!CrescScan.claim) return;
     if(stage==='BILLED'||stage==='RECOLLECT'){
       CrescScan.claim('lab-collect', function(cls){
-        if(document.querySelector('.modal.show')) return false;   // a dialog owns the scan
+        if(_otherDialogOpen()) return false;                      // another dialog owns the scan
         if(cls.type!=='PATIENT'){ flash('Scan the patient\'s card, not a tube.',false); return true; }
         verifyId(cls.value); return true;
       });
     } else if(stage==='SAMPLE_COLLECTED'){
       CrescScan.claim('lab-receive', function(cls){
-        if(document.querySelector('.modal.show')) return false;
+        if(_otherDialogOpen()) return false;
         if(cls.type!=='LAB_SAMPLE'){ flash('Scan a tube barcode.',false); return true; }
         receiveScan(cls.value); return true;
       });
