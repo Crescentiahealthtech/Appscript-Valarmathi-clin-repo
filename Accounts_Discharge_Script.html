@@ -240,13 +240,25 @@ const AccDischarge = (function () {
       .saveDischargeDraft({ ipNumber: IP, packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), ward: wardPayload(), remarks: ($('acc-dis-remarks') || {}).value || '', user: who() });
   }
 
-  function finalize() {
+  function finalize(dsOverrideReason) {
     if (!TAB) return; const m = model();
-    if (!confirm('Settle & discharge ' + IP + '?\nPatient pays ' + inr(m.patient) + (m.insTotal > 0 ? ', insurance ' + inr(m.insTotal) : '') + (m.refund > 0 ? ', refund ' + inr(m.refund) : '') + '.')) return;
+    if (!dsOverrideReason && !confirm('Settle & discharge ' + IP + '?\nPatient pays ' + inr(m.patient) + (m.insTotal > 0 ? ', insurance ' + inr(m.insTotal) : '') + (m.refund > 0 ? ', refund ' + inr(m.refund) : '') + '.')) return;
     google.script.run
-      .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) { AccDischarge.print(true, res.summary); load(); } })
+      .withSuccessHandler(function (res) {
+        // The discharge-summary gate refuses once and names the reason. The
+        // settlement is untouched: re-calling with a reason completes it and
+        // the reason lands in both audit trails.
+        if (res && res.success === false && res.code === 'DS_NOT_SIGNED') {
+          const reason = prompt(res.message + '\n\nWhy is this patient being discharged without a signed discharge summary?');
+          if (reason && reason.trim()) finalize(reason.trim());
+          else toast('Settlement cancelled.', false);
+          return;
+        }
+        toast(res.message, !!res.success);
+        if (res.success) { AccDischarge.print(true, res.summary); load(); }
+      })
       .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
-      .settleDischarge({ ipNumber: IP, wardCharges: wardPayload(), packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), patientPayMode: ($('acc-dis-mode') || {}).value || 'Cash', reason: ($('acc-dis-remarks') || {}).value || '', user: who() });
+      .settleDischarge({ ipNumber: IP, wardCharges: wardPayload(), packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), patientPayMode: ($('acc-dis-mode') || {}).value || 'Cash', reason: ($('acc-dis-remarks') || {}).value || '', user: who(), dsOverrideReason: dsOverrideReason || '' });
   }
 
   function print(isFinal, settled) {

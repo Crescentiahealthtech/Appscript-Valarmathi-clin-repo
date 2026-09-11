@@ -1,0 +1,1519 @@
+<script>
+/* =====================================================================
+   DS_Desk_Scripts.html — CresRx · IP Discharge Summary Engine
+   Frontend for the Discharge Desk, the section editor, verification,
+   signing, return-for-correction and amendments.
+
+   Register in Index.html after ScriptsMV:
+     <?!= include('DS_Desk_Scripts'); ?>
+
+   CONVENTIONS THIS FILE KEEPS
+     - Every element ID lives in DS_IDS below. Nothing addresses an
+       element by an inline string, so a renamed ID breaks in one place.
+     - Every google.script.run call shows a spinner before it runs and
+       removes it in BOTH handlers, and every success handler is wrapped
+       in try/catch: a thrown render error must not strand the spinner.
+     - Every rendered value is escaped. Clinical free text routinely
+       contains "<" and "&".
+     - No PHI is written to localStorage or sessionStorage.
+     - Colours come from theme variables only.
+   ===================================================================== */
+
+var DS_IDS = Object.freeze({
+  deskView: 'ds-desk-view',
+  deskTabs: 'ds-desk-tabs',
+  deskSearch: 'ds-desk-search',
+  deskMeta: 'ds-desk-meta',
+  deskSpinner: 'ds-desk-spinner',
+  deskRows: 'ds-desk-rows',
+  deskEmpty: 'ds-desk-empty',
+  deskRefresh: 'ds-desk-refresh',
+  deskBack: 'ds-desk-back',
+  deskAwaiting: 'ds-desk-awaiting',
+  deskAwaitingWrap: 'ds-desk-awaiting-wrap',
+
+  editorView: 'ds-editor-view',
+  edTitle: 'ds-ed-title',
+  edBanner: 'ds-ed-banner',
+  edStatusLine: 'ds-ed-statusline',
+  edActions: 'ds-ed-actions',
+  edPresence: 'ds-ed-presence',
+  edNotice: 'ds-ed-notice',
+  edSpinner: 'ds-ed-spinner',
+  edGrid: 'ds-ed-grid',
+  edNav: 'ds-ed-nav',
+  edSections: 'ds-ed-sections',
+  edReadiness: 'ds-ed-readiness',
+  edTimeline: 'ds-ed-timeline',
+
+  modalInitiate: 'ds-modal-initiate',
+  initPatient: 'ds-init-patient',
+  initType: 'ds-init-type',
+  initPlanned: 'ds-init-planned',
+  initGo: 'ds-init-go',
+
+  modalReturn: 'ds-modal-return',
+  retComment: 'ds-ret-comment',
+  retSections: 'ds-ret-sections',
+  retGo: 'ds-ret-go',
+
+  modalSign: 'ds-modal-sign',
+  signWho: 'ds-sign-who',
+  signAttest: 'ds-sign-attest',
+  signSoftWrap: 'ds-sign-softwrap',
+  signSoft: 'ds-sign-soft',
+  signBehalfWrap: 'ds-sign-behalfwrap',
+  signBehalf: 'ds-sign-behalf',
+  signCredLabel: 'ds-sign-credlabel',
+  signCred: 'ds-sign-cred',
+  signAttestation: 'ds-sign-attestation',
+  signError: 'ds-sign-error',
+  signGo: 'ds-sign-go',
+
+  modalReason: 'ds-modal-reason',
+  reasonTitle: 'ds-reason-title',
+  reasonHelp: 'ds-reason-help',
+  reasonText: 'ds-reason-text',
+  reasonGo: 'ds-reason-go',
+
+  modalConflict: 'ds-modal-conflict',
+  conflictMsg: 'ds-conflict-msg',
+  conflictMine: 'ds-conflict-mine',
+  conflictText: 'ds-conflict-text',
+  conflictCopy: 'ds-conflict-copy',
+  conflictReload: 'ds-conflict-reload',
+
+  modalSource: 'ds-modal-source',
+  sourceBody: 'ds-source-body',
+
+  modalDiff: 'ds-modal-diff',
+  diffBody: 'ds-diff-body',
+  diffModeStaff: 'ds-diff-mode-staff',
+  diffModeReview: 'ds-diff-mode-review'
+});
+
+/* ---------------------------------------------------------------------
+   STATE
+   ------------------------------------------------------------------ */
+var DSState = {
+  queue: null,
+  tab: null,
+  search: '',
+  summaryId: '',
+  header: null,
+  payload: null,
+  permissions: {},
+  readiness: { hard: [], soft: [] },
+  events: [],
+  sectionComments: {},     // pinned comments from the last RETURN
+  dirty: {},               // sectionKey -> true
+  activeSection: '',
+  saveTimer: null,
+  presenceTimer: null,
+  initiateIp: null,
+  reasonHandler: null,
+  diffMode: 'staff'
+};
+
+var DS_STATUS_TABS = [
+  { key: 'GENERATED',             label: 'Generated' },
+  { key: 'IN_PREPARATION',        label: 'In preparation' },
+  { key: 'PENDING_SIGNATURE',     label: 'Pending signature' },
+  { key: 'RETURNED',              label: 'Returned' },
+  { key: 'SIGNED',                label: 'Signed' },
+  { key: 'AMENDMENT_IN_PROGRESS', label: 'Amendments' },
+  { key: 'CANCELLED',             label: 'Cancelled' }
+];
+
+/* Sections the server refuses to let anyone edit. */
+var DS_READONLY_SECTIONS = ['PATIENT_BANNER', 'SIGNATURES'];
+
+/* The order the editor and the printed document share. */
+var DS_SECTION_ORDER = [
+  'PATIENT_BANNER', 'ADMISSION_DETAILS', 'DIAGNOSIS', 'PRESENTING_COMPLAINTS',
+  'HISTORY', 'ALLERGIES', 'EXAM_ON_ADMISSION', 'INVESTIGATIONS', 'PENDING_RESULTS',
+  'PROCEDURES', 'HOSPITAL_COURSE', 'TREATMENT_GIVEN', 'CONDITION_AT_DISCHARGE',
+  'DISCHARGE_MEDICATIONS', 'STOPPED_MEDICATIONS', 'ADVICE', 'FOLLOW_UP', 'RED_FLAGS',
+  'LAMA_DETAILS', 'REFERRAL_DETAILS', 'DEATH_DETAILS', 'ABSCOND_DETAILS', 'SIGNATURES'
+];
+
+/* ---------------------------------------------------------------------
+   SMALL HELPERS
+   ------------------------------------------------------------------ */
+function dsEl(id) { return document.getElementById(id); }
+
+function dsEsc(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function dsEscML(v) { return dsEsc(v).replace(/\r\n|\r|\n/g, '<br>'); }
+
+function dsShow(id, on) {
+  var el = dsEl(id);
+  if (el) el.classList.toggle('d-none', !on);
+}
+
+function dsToken() { return window.sessionToken || ''; }
+
+function dsNotice(kind, text) {
+  var el = dsEl(DS_IDS.edNotice);
+  if (!el) return;
+  el.className = 'alert py-2 px-3 alert-' + kind;
+  el.innerHTML = dsEsc(text);
+  el.classList.remove('d-none');
+  if (kind === 'success') {
+    setTimeout(function () { el.classList.add('d-none'); }, 4000);
+  }
+}
+
+/** One place that decides what a failed envelope means. */
+function dsHandleFailure(res) {
+  if (!res) { dsNotice('danger', 'No response from the server. Try again.'); return true; }
+  if (res.success !== false) return false;
+
+  if (res.code === 'VERSION_CONFLICT') { dsShowConflict(res); return true; }
+  dsNotice('danger', res.message || 'That did not work.');
+  return true;
+}
+
+function dsBadge(status) {
+  return '<span class="ds-chip ds-chip-' + dsEsc(status) + '">' +
+         dsEsc(String(status || '').replace(/_/g, ' ')) + '</span>';
+}
+
+function dsModal(id) {
+  var el = dsEl(id);
+  if (!el || typeof bootstrap === 'undefined') return null;
+  return bootstrap.Modal.getOrCreateInstance(el);
+}
+
+/* ---------------------------------------------------------------------
+   SCREEN 1 - THE DISCHARGE DESK
+   ------------------------------------------------------------------ */
+
+/** Entry point. switchTab('ds-desk-view'); dsOpenDesk(); */
+function dsOpenDesk() {
+  if (DSState.tab === null) {
+    var role = String(window.loggedInRole || '').toLowerCase();
+    DSState.tab = (role === 'doctor') ? 'PENDING_SIGNATURE' : 'GENERATED';
+  }
+  dsLoadQueue();
+}
+
+function dsLoadQueue() {
+  dsShow(DS_IDS.deskSpinner, true);
+  dsEl(DS_IDS.deskRows).innerHTML = '';
+  dsShow(DS_IDS.deskEmpty, false);
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      dsShow(DS_IDS.deskSpinner, false);
+      try {
+        if (!res || res.success === false) {
+          dsEl(DS_IDS.deskEmpty).innerHTML = dsEsc((res && res.message) || 'The queue could not be loaded.');
+          dsShow(DS_IDS.deskEmpty, true);
+          return;
+        }
+        DSState.queue = res.data;
+        dsRenderTabs();
+        dsRenderQueue();
+      } catch (e) {
+        dsEl(DS_IDS.deskEmpty).innerHTML = dsEsc('Could not draw the queue: ' + e.message);
+        dsShow(DS_IDS.deskEmpty, true);
+      }
+    })
+    .withFailureHandler(function (err) {
+      dsShow(DS_IDS.deskSpinner, false);
+      dsEl(DS_IDS.deskEmpty).innerHTML = dsEsc('The queue could not be loaded: ' + err.message);
+      dsShow(DS_IDS.deskEmpty, true);
+    })
+    .ds_getQueue(dsToken(), {});
+}
+
+function dsRenderTabs() {
+  var counts = (DSState.queue && DSState.queue.counts) || {};
+  var html = DS_STATUS_TABS.map(function (t) {
+    var n = counts[t.key] || 0;
+    return '<button class="ds-tab' + (DSState.tab === t.key ? ' active' : '') +
+           '" data-ds-tab="' + dsEsc(t.key) + '">' + dsEsc(t.label) +
+           ' <span class="badge">' + n + '</span></button>';
+  }).join('');
+  html += '<button class="ds-tab' + (DSState.tab === 'ALL' ? ' active' : '') +
+          '" data-ds-tab="ALL">All</button>';
+
+  var wrap = dsEl(DS_IDS.deskTabs);
+  wrap.innerHTML = html;
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-tab]'), function (b) {
+    b.addEventListener('click', function () {
+      DSState.tab = b.getAttribute('data-ds-tab');
+      dsRenderTabs();
+      dsRenderQueue();
+    });
+  });
+}
+
+function dsRenderQueue() {
+  var d = DSState.queue || { rows: [], awaitingInitiation: [] };
+  var q = String(DSState.search || '').toUpperCase();
+
+  var rows = d.rows.filter(function (r) {
+    if (DSState.tab && DSState.tab !== 'ALL' && r.status !== DSState.tab) return false;
+    if (!q) return true;
+    return String(r.patientName || '').toUpperCase().indexOf(q) > -1 ||
+           String(r.ipNumber || '').toUpperCase().indexOf(q) > -1;
+  });
+
+  dsEl(DS_IDS.deskRows).innerHTML = rows.map(function (r) {
+    return '<tr>' +
+      '<td><div class="fw-semibold">' + dsEsc(r.patientName || '--') + '</div>' +
+        '<div class="ds-muted">' + dsEsc(r.ageSex || '') + ' &middot; ' + dsEsc(r.patientId) + '</div></td>' +
+      '<td>' + dsEsc(r.ipNumber) + '</td>' +
+      '<td>' + dsEsc([r.ward, r.bed].filter(Boolean).join(' / ')) + '</td>' +
+      '<td>' + dsEsc(r.consultant || '') + '</td>' +
+      '<td>' + dsEsc(r.dischargeType) + '</td>' +
+      '<td>' + dsBadge(r.status) + (r.returnedCount ?
+        ' <span class="ds-muted">returned x' + r.returnedCount + '</span>' : '') + '</td>' +
+      '<td class="ds-tat-' + dsEsc(r.tatLevel) + '">' + dsFormatTat(r.tatMinutes) + '</td>' +
+      '<td class="ds-muted">' + dsEsc(r.lastActor || '') + '<br>' + dsEsc(r.lastActorAt || '') + '</td>' +
+      '<td class="text-end"><button class="btn btn-sm btn-outline-primary" ' +
+        'data-ds-open="' + dsEsc(r.summaryId) + '">Open</button></td>' +
+      '</tr>';
+  }).join('');
+
+  Array.prototype.forEach.call(
+    dsEl(DS_IDS.deskRows).querySelectorAll('[data-ds-open]'), function (b) {
+      b.addEventListener('click', function () { dsOpenEditor(b.getAttribute('data-ds-open')); });
+    });
+
+  dsEl(DS_IDS.deskEmpty).innerHTML = q
+    ? 'No discharge summary matches that search.'
+    : 'Nothing in this list.';
+  dsShow(DS_IDS.deskEmpty, rows.length === 0);
+
+  var awaiting = d.awaitingInitiation || [];
+  dsShow(DS_IDS.deskAwaitingWrap, awaiting.length > 0);
+  dsEl(DS_IDS.deskAwaiting).innerHTML = awaiting.map(function (a) {
+    var canInit = d.permissions && d.permissions.initiate;
+    return '<tr>' +
+      '<td><div class="fw-semibold">' + dsEsc(a.patientName) + '</div>' +
+        '<div class="ds-muted">' + dsEsc(a.ageSex) + ' &middot; ' + dsEsc(a.patientId) + '</div></td>' +
+      '<td>' + dsEsc(a.ipNumber) + '</td>' +
+      '<td>' + dsEsc([a.ward, a.bed].filter(Boolean).join(' / ')) + '</td>' +
+      '<td>' + dsEsc(a.doa) + '</td>' +
+      '<td class="ds-muted">' + dsEsc(a.diagnosis) + '</td>' +
+      '<td class="text-end">' + (canInit
+        ? '<button class="btn btn-sm btn-primary" data-ds-init="' + dsEsc(a.ipNumber) +
+          '" data-ds-name="' + dsEsc(a.patientName) + '">Initiate discharge</button>'
+        : '<span class="ds-muted">Doctor only</span>') + '</td>' +
+      '</tr>';
+  }).join('');
+
+  Array.prototype.forEach.call(
+    dsEl(DS_IDS.deskAwaiting).querySelectorAll('[data-ds-init]'), function (b) {
+      b.addEventListener('click', function () {
+        dsOpenInitiate(b.getAttribute('data-ds-init'), b.getAttribute('data-ds-name'));
+      });
+    });
+
+  dsEl(DS_IDS.deskMeta).innerHTML =
+    dsEsc(rows.length + ' summary' + (rows.length === 1 ? '' : 's') +
+          ' - ' + awaiting.length + ' admission' + (awaiting.length === 1 ? '' : 's') +
+          ' with none started');
+}
+
+function dsFormatTat(min) {
+  var m = parseInt(min, 10) || 0;
+  if (m < 60) return m + ' min';
+  var h = Math.floor(m / 60), r = m % 60;
+  if (h < 24) return h + 'h ' + r + 'm';
+  return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
+}
+
+/* ---- initiate ---- */
+function dsOpenInitiate(ipNumber, patientName) {
+  DSState.initiateIp = ipNumber;
+  dsEl(DS_IDS.initPatient).innerHTML =
+    dsEsc(patientName || '') + ' &middot; IP ' + dsEsc(ipNumber);
+  dsEl(DS_IDS.initType).value = 'NORMAL';
+  dsEl(DS_IDS.initPlanned).value = '';
+  var m = dsModal(DS_IDS.modalInitiate);
+  if (m) m.show();
+}
+
+function dsDoInitiate() {
+  var btn = dsEl(DS_IDS.initGo);
+  var planned = dsEl(DS_IDS.initPlanned).value;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+
+  var done = function () { btn.disabled = false; btn.innerHTML = 'Generate summary'; };
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      done();
+      try {
+        if (!res || res.success === false) {
+          alert((res && res.message) || 'The summary could not be generated.');
+          return;
+        }
+        var m = dsModal(DS_IDS.modalInitiate);
+        if (m) m.hide();
+        dsOpenEditor(res.data.summaryId);
+      } catch (e) { alert('Generated, but the editor could not open: ' + e.message); }
+    })
+    .withFailureHandler(function (err) { done(); alert('Generation failed: ' + err.message); })
+    .ds_initiateDischarge(dsToken(), DSState.initiateIp,
+                          dsEl(DS_IDS.initType).value,
+                          planned ? new Date(planned).toISOString() : '');
+}
+
+/* ---------------------------------------------------------------------
+   SCREEN 2 - THE EDITOR
+   ------------------------------------------------------------------ */
+
+function dsOpenEditor(summaryId) {
+  DSState.summaryId = summaryId;
+  DSState.dirty = {};
+  if (typeof switchTab === 'function') switchTab(DS_IDS.editorView);
+  dsLoadSummary();
+  dsStartPresence();
+}
+
+function dsLoadSummary(afterFn) {
+  dsShow(DS_IDS.edSpinner, true);
+  dsShow(DS_IDS.edGrid, false);
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      dsShow(DS_IDS.edSpinner, false);
+      try {
+        if (!res || res.success === false) {
+          dsNotice('danger', (res && res.message) || 'The summary could not be loaded.');
+          return;
+        }
+        DSState.header = res.data.header;
+        DSState.payload = res.data.payload;
+        DSState.permissions = res.data.permissions || {};
+        DSState.readiness = res.data.readiness || { hard: [], soft: [] };
+        DSState.events = res.data.events || [];
+        DSState.dirty = {};
+        DSState.sectionComments = dsLatestSectionComments(DSState.events);
+        dsShow(DS_IDS.edGrid, true);
+        dsRenderEditor();
+        dsRenderPresence(res.data.editors || []);
+        if (typeof afterFn === 'function') afterFn();
+      } catch (e) {
+        dsNotice('danger', 'The summary loaded but could not be drawn: ' + e.message);
+      }
+    })
+    .withFailureHandler(function (err) {
+      dsShow(DS_IDS.edSpinner, false);
+      dsNotice('danger', 'The summary could not be loaded: ' + err.message);
+    })
+    .ds_getSummary(dsToken(), DSState.summaryId);
+}
+
+/** Section comments from the most recent RETURN, so they stay pinned. */
+function dsLatestSectionComments(events) {
+  for (var i = 0; i < events.length; i++) {
+    if (events[i].action === 'DS_RETURN') {
+      return (events[i].meta && events[i].meta.sectionComments) || {};
+    }
+    if (events[i].action === 'DS_SUBMIT') return {};   // resubmitted: clear them
+  }
+  return {};
+}
+
+function dsRenderEditor() {
+  var h = DSState.header, p = DSState.payload;
+  if (!h) return;
+
+  dsEl(DS_IDS.edTitle).innerHTML = dsEsc((p && p.documentTitle) || 'Discharge Summary');
+
+  var b = (p && p.sections && p.sections.PATIENT_BANNER && p.sections.PATIENT_BANNER.content) || {};
+  dsEl(DS_IDS.edBanner).innerHTML =
+    '<strong>' + dsEsc(b.name || '') + '</strong> ' + dsEsc(b.ageSex || '') +
+    ' &middot; ' + dsEsc(b.patientId || '') + ' &middot; IP ' + dsEsc(h.ipNumber);
+
+  dsEl(DS_IDS.edStatusLine).innerHTML =
+    dsBadge(h.status) +
+    ' <span class="ds-muted ms-2">' + dsEsc(h.dischargeType) + '</span>' +
+    (h.signedAt ? ' <span class="ds-muted ms-2">Signed ' + dsEsc(h.signedAt) +
+                  ' by ' + dsEsc(h.signedBy) + ' &middot; ' + dsEsc(h.shortHash) + '</span>' : '') +
+    (h.returnedCount ? ' <span class="ds-muted ms-2">returned ' + h.returnedCount +
+                       ' time(s)</span>' : '');
+
+  dsRenderActions();
+  dsRenderNav();
+  dsRenderSections();
+  dsRenderReadiness();
+  dsRenderTimeline();
+}
+
+function dsRenderActions() {
+  var perm = DSState.permissions;
+  var out = [];
+  var btn = function (id, cls, icon, label) {
+    return '<button class="btn btn-sm ' + cls + ' fw-semibold" data-ds-act="' + id + '">' +
+           '<i class="fa-solid ' + icon + ' me-2"></i>' + label + '</button>';
+  };
+
+  out.push(btn('back', 'btn-outline-light', 'fa-arrow-left', 'Desk'));
+  if (perm.edit)     out.push(btn('save', 'btn-primary', 'fa-floppy-disk', 'Save'));
+  if (perm.generate) out.push(btn('regen', 'btn-outline-secondary', 'fa-rotate', 'Regenerate'));
+  out.push(btn('diff', 'btn-outline-info', 'fa-code-compare', 'Changes'));
+  if (perm.submit)   out.push(btn('submit', 'btn-warning', 'fa-paper-plane', 'Submit for signature'));
+  if (perm['return']) out.push(btn('return', 'btn-outline-warning', 'fa-reply', 'Return'));
+  if (perm.sign)     out.push(btn('sign', 'btn-success', 'fa-signature', 'Verify and sign'));
+  if (perm.amend)    out.push(btn('amend', 'btn-outline-primary', 'fa-file-pen', 'Start amendment'));
+  if (perm.discardAmendment) out.push(btn('discard', 'btn-outline-secondary', 'fa-xmark', 'Discard amendment'));
+  if (perm.printDraft) out.push(btn('printDraft', 'btn-outline-secondary', 'fa-print', 'Print draft'));
+  if (perm.printFinal) out.push(btn('printFinal', 'btn-outline-success', 'fa-print', 'Print'));
+  if (perm.cancel)   out.push(btn('cancel', 'btn-outline-danger', 'fa-ban', 'Cancel'));
+
+  var wrap = dsEl(DS_IDS.edActions);
+  wrap.innerHTML = out.join('');
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-act]'), function (b) {
+    b.addEventListener('click', function () { dsAction(b.getAttribute('data-ds-act')); });
+  });
+}
+
+function dsSectionKeys() {
+  var p = DSState.payload;
+  if (!p || !p.sections) return [];
+  var have = Object.keys(p.sections);
+  var ordered = DS_SECTION_ORDER.filter(function (k) { return have.indexOf(k) > -1; });
+  have.forEach(function (k) { if (ordered.indexOf(k) === -1) ordered.push(k); });
+  return ordered;
+}
+
+function dsSectionState(key, sec) {
+  if (sec.origin === 'AI' && !sec.aiAcceptedBy) {
+    return { icon: 'fa-robot', cls: 'text-warning', title: 'AI draft pending acceptance' };
+  }
+  if (sec.sourceChangedSinceEdit) {
+    return { icon: 'fa-triangle-exclamation', cls: 'text-warning', title: 'Source changed since this was edited' };
+  }
+  if (DSState.sectionComments[key]) {
+    return { icon: 'fa-comment-dots', cls: 'text-danger', title: 'Comment from the doctor' };
+  }
+  if (dsIsEmptySection(sec)) return { icon: 'fa-circle', cls: 'text-body-secondary', title: 'Empty' };
+  if (sec.edited) return { icon: 'fa-pen', cls: 'text-info', title: 'Edited' };
+  return { icon: 'fa-wand-magic-sparkles', cls: 'text-body-secondary', title: 'Auto-generated' };
+}
+
+function dsIsEmptySection(sec) {
+  var c = sec.content;
+  switch (sec.format) {
+    case 'LIST':   return !c || !c.length;
+    case 'TABLE':  return !c || !c.rows || !c.rows.length;
+    case 'FIELDS': return !c || Object.keys(c).every(function (k) { return !String(c[k] || '').trim(); });
+    default:       return !String(c || '').trim();
+  }
+}
+
+function dsRenderNav() {
+  var p = DSState.payload;
+  if (!p) { dsEl(DS_IDS.edNav).innerHTML = ''; return; }
+
+  var html = dsSectionKeys().map(function (k) {
+    var sec = p.sections[k];
+    var st = dsSectionState(k, sec);
+    return '<button class="ds-navitem' + (DSState.activeSection === k ? ' active' : '') +
+           '" data-ds-nav="' + dsEsc(k) + '">' +
+           '<span>' + dsEsc(sec.title || k) + '</span>' +
+           '<span class="ds-state ' + st.cls + '" title="' + dsEsc(st.title) + '">' +
+           '<i class="fa-solid ' + st.icon + '"></i></span></button>';
+  }).join('');
+
+  var wrap = dsEl(DS_IDS.edNav);
+  wrap.innerHTML = html;
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-nav]'), function (b) {
+    b.addEventListener('click', function () {
+      var key = b.getAttribute('data-ds-nav');
+      DSState.activeSection = key;
+      dsRenderNav();
+      var target = dsEl(DS_IDS.edSections).querySelector('[data-ds-sec="' + key + '"]');
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+function dsRenderSections() {
+  var p = DSState.payload;
+  if (!p) { dsEl(DS_IDS.edSections).innerHTML = ''; return; }
+  var canEdit = !!DSState.permissions.edit;
+
+  var html = dsSectionKeys().map(function (key) {
+    var sec = p.sections[key];
+    var readOnly = !canEdit || DS_READONLY_SECTIONS.indexOf(key) > -1;
+    var body;
+
+    switch (sec.format) {
+      case 'LIST':   body = dsRenderList(key, sec, readOnly); break;
+      case 'TABLE':  body = dsRenderTable(key, sec, readOnly); break;
+      case 'FIELDS': body = dsRenderFields(key, sec, readOnly); break;
+      default:       body = dsRenderText(key, sec, readOnly); break;
+    }
+
+    var pin = DSState.sectionComments[key]
+      ? '<div class="ds-pin"><i class="fa-solid fa-comment-dots me-1"></i>' +
+        dsEsc(DSState.sectionComments[key]) + '</div>' : '';
+
+    var reviewToggle = (key === 'DISCHARGE_MEDICATIONS')
+      ? '<label class="form-check form-check-inline ms-auto mb-0">' +
+        '<input class="form-check-input" type="checkbox" data-ds-review="' + dsEsc(key) + '"' +
+        (sec.reviewed ? ' checked' : '') + (readOnly ? ' disabled' : '') + '>' +
+        '<span class="form-check-label fw-semibold">Reviewed</span></label>'
+      : '';
+
+    var chips = (sec.sourceRefs && sec.sourceRefs.length)
+      ? '<div class="mt-2">' + dsSourceChips(sec.sourceRefs) + '</div>' : '';
+
+    var flag = sec.sourceChangedSinceEdit
+      ? '<div class="ds-muted mt-1 text-warning">' +
+        '<i class="fa-solid fa-triangle-exclamation me-1"></i>' +
+        'The record changed after this section was edited - check it against the source.</div>' : '';
+
+    return '<div class="ds-section" data-ds-sec="' + dsEsc(key) + '">' +
+      '<div class="d-flex align-items-center gap-2 mb-2">' +
+        '<h6>' + dsEsc(sec.title || key) + '</h6>' +
+        (sec.edited ? '<span class="ds-muted">edited by ' + dsEsc(sec.editedBy) + '</span>' : '') +
+        reviewToggle +
+      '</div>' + pin + body + flag + chips + '</div>';
+  }).join('');
+
+  var wrap = dsEl(DS_IDS.edSections);
+  wrap.innerHTML = html;
+  dsWireSectionInputs(wrap);
+}
+
+function dsSourceChips(refs) {
+  var seen = {};
+  return refs.filter(function (r) {
+    var k = r.type + ':' + r.id;
+    if (seen[k]) return false;
+    seen[k] = true;
+    return true;
+  }).slice(0, 12).map(function (r) {
+    return '<button class="ds-srcchip" data-ds-src="' + dsEsc(r.type) + '|' + dsEsc(r.id) + '">' +
+           '<i class="fa-solid fa-link me-1"></i>' + dsEsc(String(r.type).toLowerCase()) + '</button>';
+  }).join('');
+}
+
+function dsRenderText(key, sec, readOnly) {
+  if (readOnly) {
+    return '<div style="white-space:pre-wrap; font-size:.86rem">' + dsEscML(sec.content) + '</div>';
+  }
+  return '<textarea data-ds-text="' + dsEsc(key) + '" rows="6">' + dsEsc(sec.content) + '</textarea>';
+}
+
+function dsRenderFields(key, sec, readOnly) {
+  var c = sec.content || {};
+  var keys = Object.keys(c);
+  if (!keys.length) return '<div class="ds-muted">Nothing recorded.</div>';
+  return '<div class="row g-2">' + keys.map(function (f) {
+    var label = f.replace(/([A-Z])/g, ' $1').replace(/^./, function (m) { return m.toUpperCase(); });
+    var val = c[f];
+    if (readOnly) {
+      return '<div class="col-md-6"><div class="ds-muted">' + dsEsc(label) + '</div>' +
+             '<div>' + dsEscML(val) + '</div></div>';
+    }
+    return '<div class="col-md-6"><label class="ds-muted d-block mb-1">' + dsEsc(label) + '</label>' +
+           '<input type="text" data-ds-field="' + dsEsc(key) + '|' + dsEsc(f) + '" value="' +
+           dsEsc(val) + '"></div>';
+  }).join('') + '</div>';
+}
+
+function dsRenderList(key, sec, readOnly) {
+  var items = sec.content || [];
+  if (readOnly) {
+    if (!items.length) return '<div class="ds-muted">Nothing recorded.</div>';
+    return '<ul class="mb-0" style="font-size:.86rem">' +
+           items.map(function (i) { return '<li>' + dsEsc(i) + '</li>'; }).join('') + '</ul>';
+  }
+  return '<div data-ds-list="' + dsEsc(key) + '">' +
+    items.map(function (i, idx) {
+      return '<div class="d-flex gap-2 mb-1">' +
+        '<input type="text" data-ds-listitem="' + dsEsc(key) + '|' + idx + '" value="' + dsEsc(i) + '">' +
+        '<button class="btn btn-sm btn-outline-danger" data-ds-listdel="' + dsEsc(key) + '|' + idx +
+        '"><i class="fa-solid fa-xmark"></i></button></div>';
+    }).join('') +
+    '<button class="btn btn-sm btn-outline-primary mt-1" data-ds-listadd="' + dsEsc(key) + '">' +
+    '<i class="fa-solid fa-plus me-1"></i>Add line</button></div>';
+}
+
+function dsRenderTable(key, sec, readOnly) {
+  var c = sec.content || { columns: [], rows: [] };
+  if (!c.rows.length && readOnly) return '<div class="ds-muted">Nothing recorded.</div>';
+
+  var head = '<tr>' + c.columns.map(function (h) { return '<th>' + dsEsc(h) + '</th>'; }).join('') +
+             (readOnly ? '' : '<th></th>') + '</tr>';
+
+  var body = c.rows.map(function (row, ri) {
+    var cells = c.columns.map(function (col, ci) {
+      var v = row[ci] === undefined ? '' : row[ci];
+      if (readOnly) return '<td>' + dsEsc(v) + '</td>';
+      return '<td><input type="text" data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci +
+             '" value="' + dsEsc(v) + '"></td>';
+    }).join('');
+    return '<tr>' + cells + (readOnly ? '' :
+      '<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-ds-rowdel="' +
+      dsEsc(key) + '|' + ri + '"><i class="fa-solid fa-xmark"></i></button></td>') + '</tr>';
+  }).join('');
+
+  return '<div class="table-responsive"><table><thead>' + head + '</thead><tbody>' + body +
+         '</tbody></table></div>' +
+    (readOnly ? '' : '<button class="btn btn-sm btn-outline-primary mt-2" data-ds-rowadd="' +
+     dsEsc(key) + '"><i class="fa-solid fa-plus me-1"></i>Add row</button>');
+}
+
+function dsWireSectionInputs(wrap) {
+  var mark = function (key) {
+    DSState.dirty[key] = true;
+    dsScheduleAutosave();
+  };
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-text]'), function (el) {
+    el.addEventListener('input', function () {
+      var key = el.getAttribute('data-ds-text');
+      DSState.payload.sections[key].content = el.value;
+      el.style.height = 'auto';
+      el.style.height = (el.scrollHeight + 4) + 'px';
+      mark(key);
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-field]'), function (el) {
+    el.addEventListener('input', function () {
+      var parts = el.getAttribute('data-ds-field').split('|');
+      DSState.payload.sections[parts[0]].content[parts[1]] = el.value;
+      mark(parts[0]);
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-listitem]'), function (el) {
+    el.addEventListener('input', function () {
+      var parts = el.getAttribute('data-ds-listitem').split('|');
+      DSState.payload.sections[parts[0]].content[parseInt(parts[1], 10)] = el.value;
+      mark(parts[0]);
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-listdel]'), function (el) {
+    el.addEventListener('click', function () {
+      var parts = el.getAttribute('data-ds-listdel').split('|');
+      DSState.payload.sections[parts[0]].content.splice(parseInt(parts[1], 10), 1);
+      mark(parts[0]);
+      dsRenderSections();
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-listadd]'), function (el) {
+    el.addEventListener('click', function () {
+      var key = el.getAttribute('data-ds-listadd');
+      DSState.payload.sections[key].content.push('');
+      mark(key);
+      dsRenderSections();
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-cell]'), function (el) {
+    el.addEventListener('input', function () {
+      var p = el.getAttribute('data-ds-cell').split('|');
+      DSState.payload.sections[p[0]].content.rows[parseInt(p[1], 10)][parseInt(p[2], 10)] = el.value;
+      mark(p[0]);
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-rowdel]'), function (el) {
+    el.addEventListener('click', function () {
+      var p = el.getAttribute('data-ds-rowdel').split('|');
+      DSState.payload.sections[p[0]].content.rows.splice(parseInt(p[1], 10), 1);
+      mark(p[0]);
+      dsRenderSections();
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-rowadd]'), function (el) {
+    el.addEventListener('click', function () {
+      var key = el.getAttribute('data-ds-rowadd');
+      var sec = DSState.payload.sections[key];
+      sec.content.rows.push(sec.content.columns.map(function () { return ''; }));
+      mark(key);
+      dsRenderSections();
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-review]'), function (el) {
+    el.addEventListener('change', function () {
+      var key = el.getAttribute('data-ds-review');
+      DSState.payload.sections[key].reviewed = el.checked;
+      mark(key);
+    });
+  });
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-src]'), function (el) {
+    el.addEventListener('click', function () {
+      var p = el.getAttribute('data-ds-src').split('|');
+      dsOpenSource(p[0], p[1]);
+    });
+  });
+}
+
+/* ---- readiness and timeline ---- */
+function dsRenderReadiness() {
+  var r = DSState.readiness || { hard: [], soft: [] };
+  var html = '';
+
+  if (!r.hard.length && !r.soft.length) {
+    html = '<div class="ds-muted"><i class="fa-solid fa-check text-success me-1"></i>' +
+           'Ready for signature.</div>';
+  }
+  r.hard.forEach(function (i) {
+    html += '<div class="ds-ready-item ds-ready-hard" data-ds-ready="' + dsEsc(i.sectionKey) + '">' +
+            '<i class="fa-solid fa-circle-exclamation me-1"></i>' + dsEsc(i.label) + '</div>';
+  });
+  r.soft.forEach(function (i) {
+    html += '<div class="ds-ready-item ds-ready-soft" data-ds-ready="' + dsEsc(i.sectionKey) + '">' +
+            '<i class="fa-solid fa-triangle-exclamation me-1"></i>' + dsEsc(i.label) + '</div>';
+  });
+
+  var wrap = dsEl(DS_IDS.edReadiness);
+  wrap.innerHTML = html;
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-ready]'), function (el) {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', function () {
+      var key = el.getAttribute('data-ds-ready');
+      if (!key) return;
+      var t = dsEl(DS_IDS.edSections).querySelector('[data-ds-sec="' + key + '"]');
+      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+}
+
+function dsRenderTimeline() {
+  dsEl(DS_IDS.edTimeline).innerHTML = (DSState.events || []).map(function (e) {
+    return '<div class="mb-2 pb-2" style="border-bottom:1px solid var(--border-soft)">' +
+      '<div style="font-size:.8rem"><strong>' +
+      dsEsc(String(e.action || '').replace(/^DS_/, '').replace(/_/g, ' ')) + '</strong> ' +
+      '<span class="ds-muted">' + dsEsc(e.actor) + ' &middot; ' + dsEsc(e.atText) + '</span></div>' +
+      (e.comment ? '<div class="ds-muted mt-1">' + dsEscML(e.comment) + '</div>' : '') +
+      '</div>';
+  }).join('') || '<div class="ds-muted">No activity yet.</div>';
+}
+
+function dsRenderPresence(editors) {
+  var el = dsEl(DS_IDS.edPresence);
+  if (!editors || !editors.length) { el.classList.add('d-none'); return; }
+  el.innerHTML = '<i class="fa-solid fa-user-pen me-2"></i>' +
+    dsEsc(editors.map(function (e) { return (e.name || e.username) + ' (' + e.role + ')'; }).join(', ')) +
+    (editors.length === 1 ? ' also has this summary open.' : ' also have this summary open.');
+  el.classList.remove('d-none');
+}
+
+/* ---------------------------------------------------------------------
+   SAVING
+   ------------------------------------------------------------------ */
+function dsScheduleAutosave() {
+  if (DSState.saveTimer) clearTimeout(DSState.saveTimer);
+  DSState.saveTimer = setTimeout(function () { dsSave(true); }, 30000);
+}
+
+function dsIsDirty() { return Object.keys(DSState.dirty).length > 0; }
+
+function dsPatchesFromDirty() {
+  var patches = {};
+  Object.keys(DSState.dirty).forEach(function (k) {
+    var sec = DSState.payload.sections[k];
+    patches[k] = { content: sec.content, reviewed: sec.reviewed };
+  });
+  return patches;
+}
+
+function dsSave(silent) {
+  if (!dsIsDirty()) {
+    if (!silent) dsNotice('info', 'Nothing to save.');
+    return;
+  }
+  if (DSState.saveTimer) { clearTimeout(DSState.saveTimer); DSState.saveTimer = null; }
+
+  var patches = dsPatchesFromDirty();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (dsHandleFailure(res)) return;
+        DSState.dirty = {};
+        DSState.header.rowVersion = res.data.rowVersion;
+        DSState.header.status = res.data.status;
+        if (!silent) dsNotice('success', 'Saved.');
+        dsLoadSummary();
+      } catch (e) { dsNotice('danger', 'Saved, but the screen could not refresh: ' + e.message); }
+    })
+    .withFailureHandler(function (err) { dsNotice('danger', 'Save failed: ' + err.message); })
+    .ds_saveWorking(dsToken(), DSState.summaryId, DSState.header.rowVersion, patches);
+}
+
+/** Saves pending edits first so a workflow move never discards typing. */
+function dsSaveThen(fn) {
+  if (!dsIsDirty()) { fn(); return; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (dsHandleFailure(res)) return;
+        DSState.dirty = {};
+        DSState.header.rowVersion = res.data.rowVersion;
+        fn();
+      } catch (e) { dsNotice('danger', e.message); }
+    })
+    .withFailureHandler(function (err) { dsNotice('danger', 'Save failed: ' + err.message); })
+    .ds_saveWorking(dsToken(), DSState.summaryId, DSState.header.rowVersion, dsPatchesFromDirty());
+}
+
+/* ---------------------------------------------------------------------
+   ACTIONS
+   ------------------------------------------------------------------ */
+function dsAction(what) {
+  switch (what) {
+    case 'back':
+      // The router wrapper below asks about unsaved changes and stops the
+      // presence heartbeat. Asking here too would prompt twice.
+      if (typeof switchTab === 'function') switchTab(DS_IDS.deskView);
+      var stillHere = dsEl(DS_IDS.editorView);
+      if (stillHere && stillHere.classList.contains('active-section')) return;  // cancelled
+      dsLoadQueue();
+      break;
+    case 'save':   dsSave(false); break;
+    case 'regen':  dsRegenerate(); break;
+    case 'diff':   dsOpenDiff('staff'); break;
+    case 'submit': dsSubmit(); break;
+    case 'return': dsOpenReturn(); break;
+    case 'sign':   dsOpenSign(); break;
+    case 'amend':
+      dsAskReason('Start an amendment',
+        'The working copy resets to the last signed version. The reason is printed on the amended summary.',
+        function (reason) { dsCall('ds_startAmendment', [reason], 'Amendment started.'); });
+      break;
+    case 'discard':
+      dsCall('ds_discardAmendment', [], 'Amendment discarded.');
+      break;
+    case 'cancel':
+      dsAskReason('Cancel this discharge summary',
+        'The summary is marked cancelled. Nothing is deleted and it can be re-initiated later.',
+        function (reason) { dsCall('ds_cancel', [reason], 'Cancelled.'); });
+      break;
+    case 'printDraft': dsPrint('DRAFT'); break;
+    case 'printFinal': dsPrint('FINAL'); break;
+  }
+}
+
+/** Runs a mutating endpoint that takes (token, summaryId, rowVersion, ...rest). */
+function dsCall(fnName, rest, successText) {
+  var args = [dsToken(), DSState.summaryId, DSState.header.rowVersion].concat(rest || []);
+  var runner = google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (dsHandleFailure(res)) return;
+        dsNotice('success', (res && res.message) || successText || 'Done.');
+        dsLoadSummary();
+      } catch (e) { dsNotice('danger', 'Done, but the screen could not refresh: ' + e.message); }
+    })
+    .withFailureHandler(function (err) { dsNotice('danger', err.message); });
+  runner[fnName].apply(runner, args);
+}
+
+function dsRegenerate() {
+  if (!confirm(
+      'Regenerate from the clinical record?\n\n' +
+      '- Sections nobody has edited are refreshed from the notes and results.\n' +
+      '- Sections you or anyone else edited keep their text, and are flagged if ' +
+      'the record has changed underneath them.\n\n' +
+      'Nothing you typed is lost.')) return;
+  dsSaveThen(function () { dsCall('ds_regenerate', [], 'Regenerated.'); });
+}
+
+function dsSubmit() {
+  dsSaveThen(function () { dsCall('ds_submit', [[]], 'Submitted for signature.'); });
+}
+
+/* ---- return for correction ---- */
+function dsOpenReturn() {
+  dsEl(DS_IDS.retComment).value = '';
+  dsEl(DS_IDS.retSections).innerHTML = dsSectionKeys()
+    .filter(function (k) { return DS_READONLY_SECTIONS.indexOf(k) === -1; })
+    .map(function (k) {
+      var sec = DSState.payload.sections[k];
+      return '<div class="mb-2"><label class="ds-muted d-block">' + dsEsc(sec.title || k) + '</label>' +
+             '<input type="text" class="form-control form-control-sm" data-ds-seccomment="' +
+             dsEsc(k) + '" placeholder="optional"></div>';
+    }).join('');
+  var m = dsModal(DS_IDS.modalReturn);
+  if (m) m.show();
+}
+
+function dsDoReturn() {
+  var comment = dsEl(DS_IDS.retComment).value.trim();
+  if (!comment) { alert('Say what needs correcting.'); return; }
+
+  var sectionComments = {};
+  Array.prototype.forEach.call(
+    dsEl(DS_IDS.retSections).querySelectorAll('[data-ds-seccomment]'), function (el) {
+      var v = el.value.trim();
+      if (v) sectionComments[el.getAttribute('data-ds-seccomment')] = v;
+    });
+
+  var m = dsModal(DS_IDS.modalReturn);
+  if (m) m.hide();
+  dsCall('ds_return', [comment, sectionComments], 'Returned for correction.');
+}
+
+/* ---- reason prompt (amend / cancel) ---- */
+function dsAskReason(title, help, handler) {
+  dsEl(DS_IDS.reasonTitle).innerHTML = dsEsc(title);
+  dsEl(DS_IDS.reasonHelp).innerHTML = dsEsc(help);
+  dsEl(DS_IDS.reasonText).value = '';
+  DSState.reasonHandler = handler;
+  var m = dsModal(DS_IDS.modalReason);
+  if (m) m.show();
+}
+
+function dsDoReason() {
+  var text = dsEl(DS_IDS.reasonText).value.trim();
+  if (!text) { alert('A reason is required.'); return; }
+  var m = dsModal(DS_IDS.modalReason);
+  if (m) m.hide();
+  if (typeof DSState.reasonHandler === 'function') DSState.reasonHandler(text);
+}
+
+/* ---------------------------------------------------------------------
+   VERIFY AND SIGN
+   ------------------------------------------------------------------ */
+var DS_SIGN_BLOCKS = [
+  { id: 'finalDiagnosis', label: 'Final diagnosis', sectionKey: 'DIAGNOSIS' },
+  { id: 'allergies',      label: 'Allergies',       sectionKey: 'ALLERGIES' },
+  { id: 'medications',    label: 'Discharge medications', sectionKey: 'DISCHARGE_MEDICATIONS' },
+  { id: 'followUp',       label: 'Follow-up and warning signs', sectionKey: 'FOLLOW_UP' },
+  { id: 'pendingResults', label: 'Pending results acknowledged', sectionKey: 'PENDING_RESULTS' }
+];
+
+function dsOpenSign() {
+  var h = DSState.header;
+  var p = DSState.payload;
+
+  dsEl(DS_IDS.signError).classList.add('d-none');
+  dsEl(DS_IDS.signCred).value = '';
+  dsEl(DS_IDS.signAttestation).checked = false;
+  dsEl(DS_IDS.signBehalf).value = '';
+
+  var banner = (p.sections.PATIENT_BANNER && p.sections.PATIENT_BANNER.content) || {};
+  dsEl(DS_IDS.signWho).innerHTML =
+    '<div class="ds-muted">You are signing</div>' +
+    '<div class="fw-bold">' + dsEsc(banner.name || '') +
+    ' &middot; IP ' + dsEsc(h.ipNumber) + ' &middot; ' + dsEsc(p.documentTitle) + '</div>';
+
+  var blocks = DS_SIGN_BLOCKS.slice();
+  ['LAMA_DETAILS', 'REFERRAL_DETAILS', 'DEATH_DETAILS', 'ABSCOND_DETAILS'].forEach(function (k) {
+    if (p.sections[k]) {
+      blocks.push({ id: 'typeSpecific', label: p.sections[k].title, sectionKey: k });
+    }
+  });
+
+  dsEl(DS_IDS.signAttest).innerHTML = blocks.map(function (b) {
+    var sec = p.sections[b.sectionKey];
+    var summary = sec ? dsSectionSummaryText(b.sectionKey, sec) : '';
+    return '<div class="form-check mb-2">' +
+      '<input class="form-check-input" type="checkbox" data-ds-attest="' + dsEsc(b.id) + '">' +
+      '<label class="form-check-label"><strong>' + dsEsc(b.label) + '</strong>' +
+      (summary ? '<div class="ds-muted">' + dsEsc(summary) + '</div>' : '') +
+      '</label></div>';
+  }).join('');
+
+  var soft = (DSState.readiness && DSState.readiness.soft) || [];
+  dsShow(DS_IDS.signSoftWrap, soft.length > 0);
+  dsEl(DS_IDS.signSoft).innerHTML = soft.map(function (s, i) {
+    return '<div class="form-check mb-1">' +
+      '<input class="form-check-input" type="checkbox" data-ds-soft="' + i + '">' +
+      '<label class="form-check-label ds-muted">' + dsEsc(s.label) + '</label></div>';
+  }).join('');
+
+  // The server decides whether an on-behalf reason is required; the field is
+  // always offered so a wrong client guess can never block a doctor.
+  dsShow(DS_IDS.signBehalfWrap, true);
+
+  dsEl(DS_IDS.signCredLabel).innerHTML =
+    'Authenticator code, or your password if you have not enrolled MFA';
+
+  var m = dsModal(DS_IDS.modalSign);
+  if (m) m.show();
+}
+
+function dsSectionSummaryText(key, sec) {
+  if (key === 'DISCHARGE_MEDICATIONS') {
+    var rows = (sec.content && sec.content.rows) || [];
+    var counts = { NEW: 0, CHANGED: 0, CONTINUED: 0 };
+    rows.forEach(function (r) {
+      var s = String(r[9] || '').toUpperCase();
+      if (counts[s] !== undefined) counts[s]++;
+    });
+    return rows.length + ' medication(s): ' + counts.NEW + ' new, ' +
+           counts.CHANGED + ' changed, ' + counts.CONTINUED + ' continued.';
+  }
+  if (sec.format === 'TEXT') return String(sec.content || '').substring(0, 160);
+  if (sec.format === 'LIST') return (sec.content || []).join('; ').substring(0, 160);
+  if (sec.format === 'FIELDS') {
+    var c = sec.content || {};
+    return Object.keys(c).map(function (k) { return c[k]; })
+            .filter(Boolean).join(' - ').substring(0, 160);
+  }
+  return ((sec.content && sec.content.rows) || []).length + ' row(s)';
+}
+
+function dsDoSign() {
+  var err = dsEl(DS_IDS.signError);
+  err.classList.add('d-none');
+
+  var unticked = Array.prototype.filter.call(
+    dsEl(DS_IDS.signAttest).querySelectorAll('[data-ds-attest]'),
+    function (el) { return !el.checked; });
+  if (unticked.length) {
+    err.innerHTML = 'Confirm every review block before signing.';
+    err.classList.remove('d-none');
+    return;
+  }
+  if (!dsEl(DS_IDS.signAttestation).checked) {
+    err.innerHTML = 'Tick the attestation line.';
+    err.classList.remove('d-none');
+    return;
+  }
+  var cred = dsEl(DS_IDS.signCred).value.trim();
+  if (!cred) {
+    err.innerHTML = 'Enter your signing credential.';
+    err.classList.remove('d-none');
+    return;
+  }
+
+  var attestations = {};
+  Array.prototype.forEach.call(
+    dsEl(DS_IDS.signAttest).querySelectorAll('[data-ds-attest]'),
+    function (el) { attestations[el.getAttribute('data-ds-attest')] = el.checked; });
+
+  var btn = dsEl(DS_IDS.signGo);
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing...';
+  var done = function () {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-signature me-2"></i> Sign';
+  };
+
+  // A digit-only credential is a TOTP code; anything else is a password.
+  var method = /^\d{6,8}$/.test(cred) ? 'TOTP' : 'PASSWORD';
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      done();
+      try {
+        if (!res || res.success === false) {
+          if (res && res.code === 'VERSION_CONFLICT') {
+            var m = dsModal(DS_IDS.modalSign);
+            if (m) m.hide();
+            dsShowConflict(res);
+            return;
+          }
+          err.innerHTML = dsEsc((res && res.message) || 'Signing failed.');
+          err.classList.remove('d-none');
+          return;
+        }
+        var m2 = dsModal(DS_IDS.modalSign);
+        if (m2) m2.hide();
+        dsNotice('success', res.message + ' Verification code ' + res.data.shortHash + '.');
+        dsLoadSummary();
+      } catch (e) {
+        err.innerHTML = dsEsc('Signed, but the screen could not refresh: ' + e.message);
+        err.classList.remove('d-none');
+      }
+    })
+    .withFailureHandler(function (e) {
+      done();
+      err.innerHTML = dsEsc('Signing failed: ' + e.message);
+      err.classList.remove('d-none');
+    })
+    .ds_sign(dsToken(), DSState.summaryId, DSState.header.rowVersion,
+             { method: method, value: cred }, attestations,
+             dsEl(DS_IDS.signBehalf).value.trim());
+}
+
+/* ---------------------------------------------------------------------
+   DIFF - word-level LCS for TEXT and FIELDS, row-level for TABLE
+   ------------------------------------------------------------------ */
+function dsOpenDiff(mode) {
+  DSState.diffMode = mode || 'staff';
+  dsEl(DS_IDS.diffModeStaff).classList.toggle('active', DSState.diffMode === 'staff');
+  dsEl(DS_IDS.diffModeReview).classList.toggle('active', DSState.diffMode === 'review');
+
+  var from = (DSState.diffMode === 'review') ? 'SUBMITTED' : 'BASELINE';
+  dsEl(DS_IDS.diffBody).innerHTML =
+    '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+  var m = dsModal(DS_IDS.modalDiff);
+  if (m) m.show();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (!res || res.success === false) {
+          dsEl(DS_IDS.diffBody).innerHTML =
+            '<div class="ds-muted">' + dsEsc((res && res.message) || 'No comparison available.') + '</div>';
+          return;
+        }
+        dsRenderDiff(res.data);
+      } catch (e) {
+        dsEl(DS_IDS.diffBody).innerHTML = '<div class="ds-muted">' + dsEsc(e.message) + '</div>';
+      }
+    })
+    .withFailureHandler(function (err) {
+      dsEl(DS_IDS.diffBody).innerHTML = '<div class="ds-muted">' + dsEsc(err.message) + '</div>';
+    })
+    .ds_getDiff(dsToken(), DSState.summaryId, from, 'WORKING');
+}
+
+function dsRenderDiff(d) {
+  var changed = d.sections.filter(function (s) { return s.changed; });
+  if (!changed.length) {
+    dsEl(DS_IDS.diffBody).innerHTML =
+      '<div class="ds-muted">Nothing has changed between ' + dsEsc(d.from) +
+      ' and ' + dsEsc(d.to) + '.</div>';
+    return;
+  }
+
+  dsEl(DS_IDS.diffBody).innerHTML =
+    '<div class="ds-muted mb-3">' + changed.length + ' section(s) changed between ' +
+    dsEsc(d.from) + ' and ' + dsEsc(d.to) + '.</div>' +
+    changed.map(function (s) {
+      var body;
+      if (s.format === 'TABLE') body = dsDiffTable(s.old, s['new']);
+      else if (s.format === 'FIELDS') body = dsDiffFields(s.old, s['new']);
+      else if (s.format === 'LIST') body = dsDiffWords((s.old || []).join('\n'), (s['new'] || []).join('\n'));
+      else body = dsDiffWords(s.old || '', s['new'] || '');
+      return '<div class="ds-section"><h6 class="mb-2">' + dsEsc(s.title) + '</h6>' +
+             (s.editedBy ? '<div class="ds-muted mb-2">edited by ' + dsEsc(s.editedBy) + '</div>' : '') +
+             body + '</div>';
+    }).join('');
+}
+
+/** Word-level LCS. Small, dependency-free, and enough for clinical prose. */
+function dsDiffWords(oldText, newText) {
+  var a = String(oldText || '').split(/(\s+)/);
+  var b = String(newText || '').split(/(\s+)/);
+
+  var n = a.length, m = b.length, i, j;
+
+  // Guard against a pathological payload locking the browser.
+  if (n * m > 400000) {
+    return '<div class="ds-muted">Too long to compare word by word.</div>' +
+           '<div class="ds-diff-del" style="white-space:pre-wrap">' + dsEscML(oldText) + '</div>' +
+           '<div class="ds-diff-add mt-2" style="white-space:pre-wrap">' + dsEscML(newText) + '</div>';
+  }
+
+  var lcs = [];
+  for (i = 0; i <= n; i++) {
+    var row = [];
+    for (j = 0; j <= m; j++) row.push(0);
+    lcs.push(row);
+  }
+  for (i = n - 1; i >= 0; i--) {
+    for (j = m - 1; j >= 0; j--) {
+      lcs[i][j] = (a[i] === b[j]) ? lcs[i + 1][j + 1] + 1
+                                  : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+
+  var out = [];
+  i = 0; j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { out.push(dsEsc(a[i])); i++; j++; }
+    else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      out.push('<span class="ds-diff-del">' + dsEsc(a[i]) + '</span>'); i++;
+    } else {
+      out.push('<span class="ds-diff-add">' + dsEsc(b[j]) + '</span>'); j++;
+    }
+  }
+  while (i < n) { out.push('<span class="ds-diff-del">' + dsEsc(a[i]) + '</span>'); i++; }
+  while (j < m) { out.push('<span class="ds-diff-add">' + dsEsc(b[j]) + '</span>'); j++; }
+
+  return '<div style="white-space:pre-wrap; font-size:.86rem">' +
+         out.join('').replace(/\n/g, '<br>') + '</div>';
+}
+
+function dsDiffFields(oldC, newC) {
+  var o = oldC || {}, n = newC || {};
+  var keys = Object.keys(o).concat(Object.keys(n)).filter(function (k, i, arr) {
+    return arr.indexOf(k) === i;
+  });
+  return '<table style="width:100%; font-size:.84rem">' + keys.map(function (k) {
+    if (String(o[k] || '') === String(n[k] || '')) return '';
+    return '<tr><td class="ds-muted" style="width:28%">' + dsEsc(k) + '</td>' +
+           '<td>' + dsDiffWords(o[k] || '', n[k] || '') + '</td></tr>';
+  }).join('') + '</table>';
+}
+
+function dsDiffTable(oldC, newC) {
+  var o = (oldC && oldC.rows) || [], n = (newC && newC.rows) || [];
+  var cols = (newC && newC.columns) || (oldC && oldC.columns) || [];
+  var key = function (r) { return (r || []).join(''); };
+  var oldKeys = o.map(key), newKeys = n.map(key);
+
+  var rows = [];
+  n.forEach(function (r, i) {
+    var cls = oldKeys.indexOf(newKeys[i]) > -1 ? '' : 'ds-diff-row-changed';
+    rows.push('<tr class="' + cls + '">' +
+      r.map(function (c) { return '<td>' + dsEsc(c) + '</td>'; }).join('') + '</tr>');
+  });
+  o.forEach(function (r, i) {
+    if (newKeys.indexOf(oldKeys[i]) > -1) return;
+    rows.push('<tr class="ds-diff-del">' +
+      r.map(function (c) { return '<td>' + dsEsc(c) + '</td>'; }).join('') + '</tr>');
+  });
+
+  return '<div class="table-responsive"><table style="width:100%; font-size:.8rem"><thead><tr>' +
+    cols.map(function (c) { return '<th>' + dsEsc(c) + '</th>'; }).join('') +
+    '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>';
+}
+
+/* ---------------------------------------------------------------------
+   SOURCE LOOK-THROUGH
+   ------------------------------------------------------------------ */
+function dsOpenSource(type, id) {
+  dsEl(DS_IDS.sourceBody).innerHTML =
+    '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+  var m = dsModal(DS_IDS.modalSource);
+  if (m) m.show();
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (!res || res.success === false) {
+          dsEl(DS_IDS.sourceBody).innerHTML =
+            '<div class="ds-muted">' + dsEsc((res && res.message) || 'Not found.') + '</div>';
+          return;
+        }
+        var d = res.data;
+        dsEl(DS_IDS.sourceBody).innerHTML =
+          '<div class="ds-muted mb-2">' + dsEsc(d.type) + ' &middot; ' + dsEsc(d.id) +
+          (d.at ? ' &middot; ' + dsEsc(d.at) : '') +
+          (d.author ? ' &middot; ' + dsEsc(d.author) : '') + '</div>' +
+          '<pre style="white-space:pre-wrap; font-size:.82rem; background:var(--bg-input); ' +
+          'padding:.75rem; border-radius:8px; color:var(--text-main)">' +
+          dsEsc(JSON.stringify(d, null, 2)) + '</pre>';
+      } catch (e) {
+        dsEl(DS_IDS.sourceBody).innerHTML = '<div class="ds-muted">' + dsEsc(e.message) + '</div>';
+      }
+    })
+    .withFailureHandler(function (err) {
+      dsEl(DS_IDS.sourceBody).innerHTML = '<div class="ds-muted">' + dsEsc(err.message) + '</div>';
+    })
+    .ds_getSourceItem(dsToken(), { type: type, id: id, summaryId: DSState.summaryId });
+}
+
+/* ---------------------------------------------------------------------
+   PRINTING - the server returns HTML and the client prints it through a
+   hidden iframe, the same pattern the lab reports use.
+   ------------------------------------------------------------------ */
+function dsPrint(mode) {
+  if (typeof google.script.run.ds_getPrintHtml !== 'function') {
+    dsNotice('info', 'The print engine is not installed yet.');
+    return;
+  }
+  dsNotice('info', 'Preparing the document...');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        if (!res || res.success === false) {
+          dsNotice('danger', (res && res.message) || 'The document could not be prepared.');
+          return;
+        }
+        dsPrintHtml(res.data.html);
+        dsNotice('success', 'Sent to the printer.');
+      } catch (e) { dsNotice('danger', e.message); }
+    })
+    .withFailureHandler(function (err) { dsNotice('danger', err.message); })
+    .ds_getPrintHtml(dsToken(), DSState.summaryId, 'WORKING', mode);
+}
+
+function dsPrintHtml(html) {
+  var old = document.getElementById('ds-print-frame');
+  if (old) old.parentNode.removeChild(old);
+
+  var f = document.createElement('iframe');
+  f.id = 'ds-print-frame';
+  f.style.position = 'fixed';
+  f.style.right = '0';
+  f.style.bottom = '0';
+  f.style.width = '0';
+  f.style.height = '0';
+  f.style.border = '0';
+  document.body.appendChild(f);
+
+  var doc = f.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+  setTimeout(function () {
+    try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {}
+  }, 400);
+}
+
+/* ---------------------------------------------------------------------
+   VERSION CONFLICT
+   ------------------------------------------------------------------ */
+function dsShowConflict(res) {
+  dsEl(DS_IDS.conflictMsg).innerHTML =
+    dsEsc(res.message || 'This summary was updated by someone else.');
+  dsEl(DS_IDS.conflictMine).classList.add('d-none');
+  dsEl(DS_IDS.conflictText).value = Object.keys(DSState.dirty).map(function (k) {
+    var sec = DSState.payload.sections[k];
+    return '--- ' + (sec.title || k) + ' ---\n' +
+           (typeof sec.content === 'string' ? sec.content : JSON.stringify(sec.content, null, 2));
+  }).join('\n\n');
+  var m = dsModal(DS_IDS.modalConflict);
+  if (m) m.show();
+}
+
+/* ---------------------------------------------------------------------
+   PRESENCE AND UNSAVED-CHANGE GUARDS
+   ------------------------------------------------------------------ */
+function dsStartPresence() {
+  dsStopPresence();
+  var beat = function () {
+    if (!DSState.summaryId) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        try { if (res && res.success) dsRenderPresence(res.data.editors || []); } catch (e) {}
+      })
+      .withFailureHandler(function () { /* presence is advisory; never nag */ })
+      .ds_heartbeatEditing(dsToken(), DSState.summaryId);
+  };
+  beat();
+  DSState.presenceTimer = setInterval(beat, 60000);
+}
+
+function dsStopPresence() {
+  if (DSState.presenceTimer) { clearInterval(DSState.presenceTimer); DSState.presenceTimer = null; }
+}
+
+function dsConfirmLeave() {
+  if (!dsIsDirty()) return true;
+  return confirm('You have unsaved changes to this discharge summary. Leave without saving?');
+}
+
+/* ---------------------------------------------------------------------
+   WIRING
+   ------------------------------------------------------------------ */
+(function dsWire() {
+  var ready = function () {
+    var on = function (id, evt, fn) {
+      var el = dsEl(id);
+      if (el) el.addEventListener(evt, fn);
+    };
+
+    on(DS_IDS.deskRefresh, 'click', dsLoadQueue);
+    on(DS_IDS.deskBack, 'click', function () {
+      if (typeof switchTab === 'function') switchTab('tab-admin-emr');
+    });
+    on(DS_IDS.deskSearch, 'input', function () {
+      DSState.search = this.value;
+      dsRenderQueue();
+    });
+
+    on(DS_IDS.initGo, 'click', dsDoInitiate);
+    on(DS_IDS.retGo, 'click', dsDoReturn);
+    on(DS_IDS.reasonGo, 'click', dsDoReason);
+    on(DS_IDS.signGo, 'click', dsDoSign);
+
+    on(DS_IDS.diffModeStaff, 'click', function () { dsOpenDiff('staff'); });
+    on(DS_IDS.diffModeReview, 'click', function () { dsOpenDiff('review'); });
+
+    on(DS_IDS.conflictCopy, 'click', function () {
+      dsEl(DS_IDS.conflictMine).classList.remove('d-none');
+    });
+    on(DS_IDS.conflictReload, 'click', function () {
+      DSState.dirty = {};
+      var m = dsModal(DS_IDS.modalConflict);
+      if (m) m.hide();
+      dsLoadSummary();
+    });
+
+    // Ctrl+S saves, anywhere in the editor.
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's') {
+        var view = dsEl(DS_IDS.editorView);
+        if (view && view.classList.contains('active-section')) {
+          e.preventDefault();
+          dsSave(false);
+        }
+      }
+    });
+
+    window.addEventListener('beforeunload', function (e) {
+      var view = dsEl(DS_IDS.editorView);
+      if (view && view.classList.contains('active-section') && dsIsDirty()) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    });
+
+    // The SPA router is the other way out of the editor. Wrapping switchTab
+    // here rather than editing ScriptsMV.html keeps the guard inside this
+    // module: if the module is removed, the router goes back to normal.
+    if (typeof window.switchTab === 'function' && !window.switchTab.__dsGuarded) {
+      var original = window.switchTab;
+      var guarded = function (tabId, clickedElement) {
+        var view = dsEl(DS_IDS.editorView);
+        var leavingEditor = view && view.classList.contains('active-section') &&
+                            tabId !== DS_IDS.editorView;
+        if (leavingEditor && !dsConfirmLeave()) return;
+        if (leavingEditor) dsStopPresence();
+        return original.apply(this, arguments);
+      };
+      guarded.__dsGuarded = true;
+      window.switchTab = guarded;
+    }
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready);
+  else ready();
+})();
+
+/* ---------------------------------------------------------------------
+   ENTRY POINTS FOR OTHER MODULES
+   ------------------------------------------------------------------ */
+
+/** IP Admissions / IP Notes: open the summary for one admission, or start it. */
+function dsOpenForAdmission(ipNumber, patientName) {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      try {
+        var map = (res && res.success) ? res.data : {};
+        var entry = map[String(ipNumber).toUpperCase()];
+        if (entry && entry.status !== 'CANCELLED') dsOpenEditor(entry.summaryId);
+        else dsOpenInitiate(ipNumber, patientName);
+      } catch (e) { alert(e.message); }
+    })
+    .withFailureHandler(function (err) { alert(err.message); })
+    .ds_getStatusMap(dsToken(), [ipNumber]);
+}
+
+/** Badge HTML for a status-map entry, for other modules' row renderers. */
+function dsStatusBadge(entry) {
+  if (!entry) return '<span class="ds-chip ds-chip-CANCELLED">no summary</span>';
+  return '<span class="ds-chip ds-chip-' + dsEsc(entry.status) + '">' +
+         dsEsc(String(entry.status).replace(/_/g, ' ')) + '</span>';
+}
+
+window.dsOpenDesk = dsOpenDesk;
+window.dsOpenEditor = dsOpenEditor;
+window.dsOpenForAdmission = dsOpenForAdmission;
+window.dsStatusBadge = dsStatusBadge;
+</script>

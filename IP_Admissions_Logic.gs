@@ -596,13 +596,33 @@ function processBedTransfer(ipNumber, oldBedId, newWard, newBedId) {
 
 // ---- WRITE: discharge -----------------------------------------------------
 
-function processPatientDischarge(ipNumber, bedId) {
+/**
+ * @param {string} ipNumber
+ * @param {string} bedId
+ * @param {string} [dsOverrideReason]  supplied by the client after the
+ *        discharge-summary gate returns DS_NOT_SIGNED. With
+ *        DS_BILLING_GATE = OFF the gate is a no-op and this argument is
+ *        never needed, so existing callers are unaffected.
+ */
+function processPatientDischarge(ipNumber, bedId, dsOverrideReason) {
   var lock = LockService.getScriptLock();
   try {
+    var ip0 = ipa_str_(ipNumber);
+    if (!ip0) return { success: false, message: 'IP Number is required.' };
+
+    // --- discharge summary gate (outside the lock: it only reads) ----------
+    var dsGate = null;
+    if (typeof dsx_gateCheck_ === 'function') {
+      dsGate = dsx_gateCheck_(ip0, dsOverrideReason);
+      if (!dsGate.allow) {
+        return { success: false, code: dsGate.code, message: dsGate.message,
+                 data: { summaryId: dsGate.summaryId, summaryStatus: dsGate.status } };
+      }
+    }
+
     lock.waitLock(IPA_CFG.LOCK_MS);
 
-    var ip = ipa_str_(ipNumber);
-    if (!ip) return { success: false, message: 'IP Number is required.' };
+    var ip = ip0;
 
     var sheet = ipa_sheet_();
     var data = sheet.getDataRange().getValues();
@@ -627,6 +647,14 @@ function processPatientDischarge(ipNumber, bedId) {
     ipa_releaseBed_(resolvedBed);
 
     SpreadsheetApp.flush();
+
+    if (dsGate && typeof dsx_logGateOverride_ === 'function') {
+      if (dsGate.overridden) dsx_logGateOverride_(ip, dsGate, 'WARD', 'processPatientDischarge');
+      if (typeof dsx_logDischargeCompleted_ === 'function') {
+        dsx_logDischargeCompleted_(ip, 'WARD', 'processPatientDischarge');
+      }
+    }
+
     return { success: true, message: 'Discharged ' + ip + '.' };
 
   } catch (e) {

@@ -3,6 +3,16 @@
 // ==========================================
 
 function doGet(e) {
+  // 0. Discharge summary verification. Anonymous by design: anyone holding a
+  //    printed summary can confirm it is genuine. The page carries no clinical
+  //    content — see dsx_verifyPage_ in DS_Print.gs.
+  if (e && e.parameter && e.parameter.verifyDS) {
+    if (typeof dsx_verifyPage_ === 'function') {
+      return dsx_verifyPage_(e.parameter.verifyDS);
+    }
+    return HtmlService.createHtmlOutput('Verification is not available on this deployment.');
+  }
+
   // 1. WhatsApp / Patient Mobile Interceptor
   if (e && e.parameter && e.parameter.viewReport) {
     const orderId = e.parameter.viewReport;

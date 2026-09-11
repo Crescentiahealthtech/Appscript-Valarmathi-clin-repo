@@ -349,6 +349,7 @@
                                 : '<span class="text-body-secondary">Pending</span>') + '</td>' +
         '<td>' + losBadge + '</td>' +
         '<td class="text-end text-nowrap">' +
+          ipwDischargeSummaryCell(row) +
           '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
             'onclick="openChangeBedModal(' + args + ')"><i class="fa-solid fa-right-left"></i></button>' +
           '<button class="btn btn-sm btn-outline-danger" title="Discharge" ' +
@@ -357,6 +358,47 @@
     });
 
     $('ipw-tbody').innerHTML = html;
+    ipwLoadDischargeBadges(rows);
+  }
+
+  /* ---- Discharge Summary entry point -------------------------------------
+     The clinical summary is started here, when discharge is PLANNED, not at
+     the billing counter — by then the patient is already at the desk and the
+     summary is always late. The badge is filled in asynchronously so the ward
+     list never waits on the discharge module. */
+  function ipwDischargeSummaryCell(row) {
+    return '<span class="me-1" data-ipw-ds="' + esc(row.ipNumber) + '"></span>' +
+           '<button class="btn btn-sm btn-outline-info me-1" title="Discharge summary" ' +
+           'onclick="ipwOpenDischargeSummary(&#39;' + esc(row.ipNumber) + '&#39;,&#39;' +
+           esc(row.patientName) + '&#39;)"><i class="fa-solid fa-file-circle-check"></i></button>';
+  }
+
+  function ipwOpenDischargeSummary(ipNumber, patientName) {
+    if (typeof window.dsOpenForAdmission !== 'function') {
+      alert('The discharge summary module is not installed in this deployment.');
+      return;
+    }
+    window.dsOpenForAdmission(ipNumber, patientName);
+  }
+
+  function ipwLoadDischargeBadges(rows) {
+    if (typeof window.dsStatusBadge !== 'function') return;
+    var ips = rows.map(function (r) { return r.ipNumber; }).filter(Boolean);
+    if (!ips.length) return;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        try {
+          if (!res || res.success === false) return;
+          Array.prototype.forEach.call(
+            document.querySelectorAll('[data-ipw-ds]'), function (el) {
+              var entry = res.data[String(el.getAttribute('data-ipw-ds')).toUpperCase()];
+              if (entry) el.innerHTML = window.dsStatusBadge(entry);
+            });
+        } catch (e) { /* a badge is never worth breaking the ward list for */ }
+      })
+      .withFailureHandler(function () { /* silent: the badge is decoration */ })
+      .ds_getStatusMap(window.sessionToken || '', ips);
   }
 
   // ---- wards / beds -------------------------------------------------------
@@ -559,18 +601,29 @@
 
   // ---- discharge ----------------------------------------------------------
 
-  function confirmDischarge(ipNumber, bedId) {
-    if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
+  function confirmDischarge(ipNumber, bedId, dsOverrideReason) {
+    if (!dsOverrideReason &&
+        !confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
                  ', closes the admission, and moves it to the IP Ledger.')) return;
     message('<div class="spinner-border text-primary"></div><br>Processing discharge...');
 
     google.script.run
       .withSuccessHandler(function (res) {
+        // The discharge-summary gate refuses once, names the summary's state,
+        // and completes on a second call carrying a reason. With the gate off
+        // this branch never runs.
+        if (res && res.success === false && res.code === 'DS_NOT_SIGNED') {
+          var reason = prompt(res.message + '\n\nWhy is this patient being discharged ' +
+                              'without a signed discharge summary?');
+          if (reason && reason.trim()) { confirmDischarge(ipNumber, bedId, reason.trim()); return; }
+          loadIPLedger();
+          return;
+        }
         if (!res || res.success === false) alert((res && res.message) || 'Discharge failed.');
         loadIPLedger();
       })
       .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPLedger(); })
-      .processPatientDischarge(ipNumber, bedId);
+      .processPatientDischarge(ipNumber, bedId, dsOverrideReason || '');
   }
 
   // ---- consultants --------------------------------------------------------
@@ -621,6 +674,7 @@
   window.openChangeBedModal       = openChangeBedModal;
   window.submitBedTransfer        = submitBedTransfer;
   window.confirmDischarge         = confirmDischarge;
+  window.ipwOpenDischargeSummary  = ipwOpenDischargeSummary;
   window.filterLedger             = loadIPLedger;  // legacy callers
   window.loadConsultantOptions = loadConsultantOptions;
 })();

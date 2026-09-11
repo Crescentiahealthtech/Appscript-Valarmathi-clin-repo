@@ -363,6 +363,14 @@ function ipr_discharge_(ipNumber, encounterId, adm) {
     };
   }
 
+  // The Discharge Summary Engine is the current source. It is read first, and
+  // only when it has nothing to say does this fall through to the legacy
+  // "Discharge_Summary" sheet and then to the bare admission fact.
+  try {
+    var ds = ipr_dischargeSummaryBlock_(ipNumber);
+    if (ds) return ds;
+  } catch (e) { /* the module may not be installed on this deployment */ }
+
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Discharge_Summary");
     if (!sh || sh.getLastRow() < 2) return fallback;
@@ -394,6 +402,66 @@ function ipr_discharge_(ipNumber, encounterId, adm) {
   } catch (e) { /* a malformed summary sheet must not hide the admission fact */ }
 
   return fallback;
+}
+
+/**
+ * The per-admission Discharge Summary card for the IP Records drawer.
+ * Read-only, and it fails soft: if DS_Summaries does not exist, or the module
+ * is not deployed, this returns null and the drawer behaves exactly as before.
+ *
+ * @return {Object|null} {source:"ds", status, date, outcome, summary, diagnosis,
+ *                        summaryId, dischargeType, signedBy, signerRegNo,
+ *                        shortHash, versions:[...], pdfReady}
+ */
+function ipr_dischargeSummaryBlock_(ipNumber) {
+  if (typeof dsx_getHeader_ !== "function" || typeof dsx_summaryIdFor_ !== "function") return null;
+
+  var header;
+  try { header = dsx_getHeader_(dsx_summaryIdFor_(ipNumber)); } catch (e) { return null; }
+  if (!header) return null;
+
+  var status = dc_upper_(header.Status);
+  var signed = status === "SIGNED";
+
+  var versions = [];
+  try {
+    versions = dsx_listSnapshots_(dc_str_(header.Summary_ID))
+      .filter(function (s) { return s.type === "SIGNED"; })
+      .map(function (s) {
+        return {
+          version: s.snapshotNo,
+          at: ipr_when_(s.createdAt, "dd MMM yyyy hh:mm a"),
+          by: s.createdBy,
+          shortHash: s.contentHash ? String(s.contentHash).substring(0, 12) : ""
+        };
+      });
+  } catch (e) { versions = []; }
+
+  var finalDx = "";
+  try {
+    var working = dsx_getWorking_(dc_str_(header.Summary_ID));
+    if (working && working.payload && working.payload.sections &&
+        working.payload.sections.DIAGNOSIS && working.payload.sections.DIAGNOSIS.content) {
+      finalDx = dc_str_(working.payload.sections.DIAGNOSIS.content.final);
+    }
+  } catch (e) { /* the header alone is enough to draw the card */ }
+
+  return {
+    source: "ds",
+    summaryId: dc_str_(header.Summary_ID),
+    status: status,
+    dischargeType: dc_upper_(header.Discharge_Type) || "NORMAL",
+    date: ipr_when_(header.Signed_At || header.Clinical_Discharge_At ||
+                    header.Planned_Discharge_At, "dd MMM yyyy"),
+    outcome: signed ? "Discharged" : ("Summary " + status.replace(/_/g, " ").toLowerCase()),
+    summary: "",
+    diagnosis: finalDx || dc_str_(header.Diagnosis),
+    signedBy: dc_str_(header.Signed_By),
+    signerRegNo: dc_str_(header.Signer_Reg_No),
+    shortHash: dc_str_(header.Signed_Hash).substring(0, 12),
+    versions: versions,
+    pdfReady: dc_upper_(header.Pdf_Status) === "READY"
+  };
 }
 
 // ---------------------------------------------------------------------------
