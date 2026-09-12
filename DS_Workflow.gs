@@ -526,21 +526,45 @@ function dsx_resolveDraft_(summaryId, header, actor) {
   //    is why it is second, but it is a real clinical document.
   var snaps = [];
   try { snaps = dsx_listSnapshots_(summaryId); } catch (e2) { snaps = []; }
+  var signedNo = dsx_int_(header.Last_Signed_Snapshot_No);
   for (var i = 0; i < snaps.length; i++) {
     try {
       var got = dsx_getSnapshotPayload_(summaryId, snaps[i].snapshotNo);
-      if (got && got.payload) {
-        return {
-          payload: got.payload, source: 'SNAPSHOT_' + snaps[i].snapshotNo, repaired: true,
-          note: 'The working draft could not be read, so snapshot ' + snaps[i].snapshotNo +
-                ' was restored. Edits made after that snapshot are not in it — check the ' +
-                'summary before submitting.'
-        };
-      }
+      if (!got || !got.payload) continue;
+
+      // Restoring a signed summary from its OWN signed snapshot is not a
+      // degradation — that snapshot IS the document. Only a draft loses work
+      // this way, and only then is there anything to warn about.
+      var isTheSignedOne = signedNo && snaps[i].snapshotNo === signedNo;
+      return {
+        payload: got.payload,
+        source: 'SNAPSHOT_' + snaps[i].snapshotNo,
+        repaired: true,
+        note: isTheSignedOne ? '' :
+              'The working draft could not be read, so snapshot ' + snaps[i].snapshotNo +
+              ' was restored. Edits made after that snapshot are not in it — check the ' +
+              'summary before submitting.'
+      };
     } catch (e3) { /* try the next snapshot down */ }
   }
 
-  // 3. Nothing stored survives. Rebuild from the clinical record itself.
+  // 3. Nothing stored survives. Rebuild from the clinical record itself —
+  //    but NEVER for a signed document. A signed summary is a specific set of
+  //    words a doctor put their name to; the record has moved since, so a
+  //    fresh assembly would differ from what was signed while still carrying
+  //    the signature block and the hash chain's claim to be that document.
+  //    Handing that to a pharmacist or a patient would be worse than handing
+  //    them nothing, so an unreadable signed snapshot is reported as the
+  //    integrity failure it is.
+  var status = dsx_upper_(header.Status);
+  if (status === DSX_STATUS.SIGNED || status === DSX_STATUS.AMENDMENT_IN_PROGRESS) {
+    return {
+      payload: null, source: 'NONE', repaired: false,
+      note: 'the signed version could not be read, and a signed summary is never ' +
+            'rebuilt from current data'
+    };
+  }
+
   try {
     if (typeof dsx_assemble_ !== 'function') {
       return { payload: null, source: 'NONE', repaired: false, note: '' };
@@ -1551,8 +1575,20 @@ function ds_getDiff(token, summaryId, fromRef, toRef) {
 function dsx_resolveRef_(summaryId, ref) {
   var r = dsx_upper_(ref) || 'WORKING';
   if (r === 'WORKING') {
-    var w = dsx_getWorking_(summaryId);
-    return { label: 'WORKING', payload: w ? w.payload : null };
+    var w = null;
+    try { w = dsx_getWorking_(summaryId); } catch (eW) { w = null; }
+    if (w && w.payload) return { label: 'WORKING', payload: w.payload };
+
+    // An unreadable working row used to throw out of the print engine, or
+    // print nothing, while the editor recovered the same summary happily —
+    // so the screen and the paper disagreed about whether the document
+    // existed. Both now fall back the same way.
+    var hdr = dsx_getHeader_(summaryId);
+    if (hdr) {
+      var d = dsx_resolveDraft_(summaryId, hdr, { username: '', role: '' });
+      if (d.payload) return { label: d.source, payload: d.payload };
+    }
+    return { label: 'WORKING', payload: null };
   }
   var parts = r.split(':');
   var type = parts[0];
