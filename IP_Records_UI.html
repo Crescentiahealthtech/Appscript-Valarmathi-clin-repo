@@ -193,7 +193,7 @@
   function toast(msg, kind) {
     if (typeof ipnToast === 'function') { ipnToast(msg, kind); return; }
     if (kind === 'err') { console.error(msg); } else { console.log(msg); }
-    alert(msg);
+    crescAlert(msg);
   }
 
   function setText(id, txt) {

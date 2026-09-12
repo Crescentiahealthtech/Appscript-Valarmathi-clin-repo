@@ -918,10 +918,13 @@
   // ---------------------------------------------------------------------
   function clearBill(silent) {
     var dirty = HB.items.length || ($('hb-name').value || '').trim();
-    if (!silent && dirty &&
-        !confirm('Clear this bill?\n\nThe patient and the particulars on screen are discarded. ' +
-                 'Bills already saved are not affected.')) return;
+    if (silent || !dirty) { doClearBill(silent); return; }
+    crescConfirm('Clear this bill?\n\nThe patient and the particulars on screen are discarded. ' +
+                 'Bills already saved are not affected.', { okLabel: 'Clear bill' })
+      .then(function (ok) { if (ok) doClearBill(silent); });
+  }
 
+  function doClearBill(silent) {
     HB.patient = null; HB.appointments = []; HB.admission = null;
     HB.items = []; HB.apptId = ''; HB.packageCode = ''; HB.lastSaved = null;
     HB.paidTouched = false;
@@ -1002,30 +1005,36 @@
   function reprint(invoiceNo) {
     google.script.run
       .withSuccessHandler(function (res) {
-        if (!res || !res.success) { alert((res && res.message) || 'Could not load that invoice.'); return; }
+        if (!res || !res.success) { crescAlert((res && res.message) || 'Could not load that invoice.'); return; }
         $('hb-print').innerHTML = invoiceHtml(res.data.invoice, res.data.items);
         window.print();
       })
-      .withFailureHandler(function (err) { alert('Could not load that invoice: ' + (err && err.message)); })
+      .withFailureHandler(function (err) { crescAlert('Could not load that invoice: ' + (err && err.message)); })
       .hb_getInvoice(token(), invoiceNo);
   }
 
   function collect(invoiceNo, balance) {
-    var raw = prompt('Record a payment against ' + invoiceNo +
-                     '.\n\nOutstanding: ' + money(balance) + '\nAmount received:', balance);
-    if (raw === null) return;
-    var amount = Number(raw);
-    if (!amount || amount <= 0) { alert('Enter an amount greater than zero.'); return; }
-    var mode = prompt('Payment mode (Cash / UPI / Card / Bank Transfer):', 'Cash');
-    if (mode === null) return;
+    crescPrompt('Record a payment against ' + invoiceNo +
+                '.\n\nOutstanding: ' + money(balance) + '\nAmount received:', balance,
+                { title: 'Record payment', okLabel: 'Next' })
+      .then(function (raw) {
+        if (raw === null) return;
+        var amount = Number(raw);
+        if (!amount || amount <= 0) { crescAlert('Enter an amount greater than zero.'); return; }
 
-    google.script.run
-      .withSuccessHandler(function (res) {
-        alert((res && res.message) || 'Done.');
-        if (res && res.success) loadLedger();
-      })
-      .withFailureHandler(function (err) { alert('Could not record the payment: ' + (err && err.message)); })
-      .hb_recordPayment(token(), invoiceNo, amount, mode, '');
+        crescPrompt('Payment mode (Cash / UPI / Card / Bank Transfer):', 'Cash',
+                    { title: 'Payment mode', okLabel: 'Record payment' })
+          .then(function (mode) {
+            if (mode === null) return;
+            google.script.run
+              .withSuccessHandler(function (res) {
+                crescAlert((res && res.message) || 'Done.');
+                if (res && res.success) loadLedger();
+              })
+              .withFailureHandler(function (err) { crescAlert('Could not record the payment: ' + (err && err.message)); })
+              .hb_recordPayment(token(), invoiceNo, amount, mode, '');
+          });
+      });
   }
 
   // ---------------------------------------------------------------------

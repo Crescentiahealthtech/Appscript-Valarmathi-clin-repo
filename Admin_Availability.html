@@ -355,9 +355,9 @@ function saveAvailabilitySettings(overrideConflicts) {
   const isBulk    = document.getElementById('toggle-bulk-date').checked;
   const endDate   = isBulk ? document.getElementById('avail-end-date').value : startDate;
 
-  if (!doctorId)  return alert("Select a doctor.");
-  if (!startDate) return alert("Please select a date.");
-  if (isBulk && startDate > endDate) return alert("End date cannot be before start date.");
+  if (!doctorId)  return crescAlert("Select a doctor.");
+  if (!startDate) return crescAlert("Please select a date.");
+  if (isBulk && startDate > endDate) return crescAlert("End date cannot be before start date.");
 
   const blockedTimes = [];
   document.querySelectorAll('#avail-container .micro-checkbox:not(:checked)')
@@ -394,17 +394,17 @@ function saveAvailabilitySettings(overrideConflicts) {
         if (overrideConflicts && conflictModalInstance) conflictModalInstance.hide();
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         document.getElementById('last-audit-log').innerText = 'Last updated today at ' + timeStr;
-        alert(res.message);
+        crescAlert(res.message);
         loadAvailabilityGrid();
 
       } else {
-        alert("Action failed: " + ((res && res.message) || 'Unknown error.'));
+        crescAlert("Action failed: " + ((res && res.message) || 'Unknown error.'));
       }
     })
     .withFailureHandler(function (err) {
       btn.innerHTML = ogHtml;
       btn.disabled = false;
-      alert("Network error: " + err.message);
+      crescAlert("Network error: " + err.message);
     })
     .setDoctorDayBlocks(payload, window.sessionToken);
 }
@@ -493,7 +493,7 @@ function renderSessionRows() {
 }
 
 function addSessionRow() {
-  if (!document.getElementById('avail-doctor').value) return alert('Select a doctor first.');
+  if (!document.getElementById('avail-doctor').value) return crescAlert('Select a doctor first.');
   avSessionRows.push({
     uid: 'r' + (avRowSeq++), weekday: 1, sessionLabel: 'CLINIC',
     startTime: '10:00', endTime: '13:00',
@@ -520,7 +520,7 @@ function editSession(uid, field, value) {
 
 function saveWeeklyHours() {
   const doctorId = document.getElementById('avail-doctor').value;
-  if (!doctorId) return alert('Select a doctor.');
+  if (!doctorId) return crescAlert('Select a doctor.');
 
   const btn = document.getElementById('btn-save-hours');
   const og = btn.innerHTML;
@@ -537,13 +537,13 @@ function saveWeeklyHours() {
         loadWeeklyHours();
         loadAvailabilityGrid();
       } else {
-        alert((res && res.message) || 'Could not save clinic hours.');
+        crescAlert((res && res.message) || 'Could not save clinic hours.');
       }
     })
     .withFailureHandler(function (err) {
       btn.innerHTML = og;
       btn.disabled = false;
-      alert('Network error: ' + err.message);
+      crescAlert('Network error: ' + err.message);
     })
     .saveDoctorSchedule({ doctorId: doctorId, rows: avSessionRows }, window.sessionToken);
 }

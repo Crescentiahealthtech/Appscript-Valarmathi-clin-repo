@@ -323,13 +323,13 @@
     google.script.run
       .withSuccessHandler(function (r) {
         btn.disabled = false; btn.innerHTML = label;
-        if (!r || !r.success) { alert((r && r.message) || 'Could not build the card.'); return; }
+        if (!r || !r.success) { crescAlert((r && r.message) || 'Could not build the card.'); return; }
         if (asSticker) CrescLabel.printPatientSticker(r.patient);
         else CrescLabel.printPatientCard(r.patient);
       })
       .withFailureHandler(function (err) {
         btn.disabled = false; btn.innerHTML = label;
-        alert('Could not reach the server: ' + (err && err.message ? err.message : err));
+        crescAlert('Could not reach the server: ' + (err && err.message ? err.message : err));
       })
       .getPatientLabelData(patientId, window.sessionToken);
   }

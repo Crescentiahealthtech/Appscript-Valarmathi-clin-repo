@@ -256,16 +256,27 @@ const AccDischarge = (function () {
 
   function finalize(dsOverrideReason) {
     if (!TAB) return; const m = model();
-    if (!dsOverrideReason && !confirm('Settle & discharge ' + IP + '?\nPatient pays ' + inr(m.patient) + (m.insTotal > 0 ? ', insurance ' + inr(m.insTotal) : '') + (m.refund > 0 ? ', refund ' + inr(m.refund) : '') + '.')) return;
+    // An override reason means the confirmation was already answered on the
+    // first pass; only the initial call asks.
+    if (dsOverrideReason) { finalizeGo(dsOverrideReason); return; }
+    crescConfirm('Settle & discharge ' + IP + '?\nPatient pays ' + inr(m.patient) + (m.insTotal > 0 ? ', insurance ' + inr(m.insTotal) : '') + (m.refund > 0 ? ', refund ' + inr(m.refund) : '') + '.',
+      { okLabel: 'Settle & discharge' })
+      .then(function (ok) { if (ok) finalizeGo(''); });
+  }
+
+  function finalizeGo(dsOverrideReason) {
     google.script.run
       .withSuccessHandler(function (res) {
         // The discharge-summary gate refuses once and names the reason. The
         // settlement is untouched: re-calling with a reason completes it and
         // the reason lands in both audit trails.
         if (res && res.success === false && res.code === 'DS_NOT_SIGNED') {
-          const reason = prompt(res.message + '\n\nWhy is this patient being discharged without a signed discharge summary?');
-          if (reason && reason.trim()) finalize(reason.trim());
-          else toast('Settlement cancelled.', false);
+          crescPrompt(res.message + '\n\nWhy is this patient being discharged without a signed discharge summary?',
+            '', { title: 'Discharge summary not signed', okLabel: 'Discharge anyway' })
+            .then(function (reason) {
+              if (reason && reason.trim()) finalizeGo(reason.trim());
+              else toast('Settlement cancelled.', false);
+            });
           return;
         }
         toast(res.message, !!res.success);

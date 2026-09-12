@@ -263,7 +263,7 @@ function toggleApptScanMode(force) {
   var want = (force === undefined) ? !apptScanOn : !!force;
 
   if (!window.CrescScan) {
-    alert('The barcode scanner is not available in this deployment.');
+    crescAlert('The barcode scanner is not available in this deployment.');
     return;
   }
 
@@ -354,23 +354,24 @@ function markScannedPatientArrived(patientId) {
 function changeAppointmentStatus(apptId, newStatus) {
   google.script.run
     .withSuccessHandler(function (msg) {
-      if (msg && msg !== 'Status updated!') alert(msg);
+      if (msg && msg !== 'Status updated!') crescAlert(msg);
       loadAdminLedger();
     })
-    .withFailureHandler(function (err) { alert('Could not update status: ' + err.message); })
+    .withFailureHandler(function (err) { crescAlert('Could not update status: ' + err.message); })
     .updateAppointmentStatus(apptId, newStatus, window.sessionToken);
 }
 
 function cycleStatus(apptId, action, refresh) {
   if (action !== 'DELETE') return;
-  if (!confirm('Delete this appointment?')) return;
-
-  google.script.run
-    .withSuccessHandler(function (msg) {
-      if (msg && msg !== 'Status updated!') alert(msg);
-      if (refresh) loadAdminLedger();
-    })
-    .withFailureHandler(function (err) { alert('Could not delete: ' + err.message); })
-    .updateAppointmentStatus(apptId, 'DELETE', window.sessionToken);
+  crescConfirm('Delete this appointment?', { okLabel: 'Delete', kind: 'err' }).then(function (ok) {
+    if (!ok) return;
+    google.script.run
+      .withSuccessHandler(function (msg) {
+        if (msg && msg !== 'Status updated!') crescAlert(msg);
+        if (refresh) loadAdminLedger();
+      })
+      .withFailureHandler(function (err) { crescAlert('Could not delete: ' + err.message); })
+      .updateAppointmentStatus(apptId, 'DELETE', window.sessionToken);
+  });
 }
 </script>

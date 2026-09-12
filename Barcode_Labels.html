@@ -253,7 +253,7 @@
    * app's own print styles.
    */
   function print(labelsHtml, widthMm, heightMm) {
-    if (!labelsHtml) { alert('Nothing to print.'); return; }
+    if (!labelsHtml) { crescAlert('Nothing to print.'); return; }
     var old = document.getElementById('cresc-label-frame');
     if (old && old.parentNode) old.parentNode.removeChild(old);
 
@@ -275,7 +275,7 @@
         f.contentWindow.focus();
         f.contentWindow.print();
       } catch (e) {
-        alert('Could not open the print dialog: ' + e.message);
+        crescAlert('Could not open the print dialog: ' + e.message);
       }
       // Left in the DOM briefly: removing it during the print dialog cancels
       // the job in Chrome.
@@ -289,7 +289,7 @@
   function printPatientSticker(p) { print(patientStickerHtml(p), 50, 25); }
   function printTubeLabels(list) {
     var arr = Array.isArray(list) ? list : [list];
-    if (!arr.length) { alert('No tubes to label.'); return; }
+    if (!arr.length) { crescAlert('No tubes to label.'); return; }
     print(arr.map(tubeLabelHtml).join(''), 50, 25);
   }
 

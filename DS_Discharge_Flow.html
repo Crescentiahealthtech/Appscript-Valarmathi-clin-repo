@@ -105,7 +105,7 @@
     DF.summary = null;
     DF.gate = null;
 
-    if (!DF.ip) { alert('No admission was named.'); return; }
+    if (!DF.ip) { crescAlert('No admission was named.'); return; }
 
     $('df-patient').innerHTML =
       (DF.name ? '<strong>' + esc(DF.name) + '</strong> &middot; ' : '') +
@@ -239,7 +239,7 @@
   function dischargeStep(which) {
     if (which === 'summary') {
       if (typeof window.dsOpenForAdmission !== 'function') {
-        alert('The discharge summary module is not installed in this deployment.');
+        crescAlert('The discharge summary module is not installed in this deployment.');
         return;
       }
       closeDischargeFlow();
@@ -248,7 +248,7 @@
     }
     if (which === 'bill') {
       if (typeof window.openDischargeDesk !== 'function') {
-        alert('The settlement desk is not available to your account.');
+        crescAlert('The settlement desk is not available to your account.');
         return;
       }
       closeDischargeFlow();
@@ -264,11 +264,15 @@
    * Ledger's copy never had.
    */
   function releaseAdmission(overrideReason) {
-    if (!overrideReason &&
-        !confirm('Close admission ' + DF.ip + ' without settling a bill?\n\n' +
+    // A reason means the confirmation was answered on the first pass.
+    if (overrideReason) { releaseAdmissionGo(overrideReason); return; }
+    crescConfirm('Close admission ' + DF.ip + ' without settling a bill?\n\n' +
                  'This frees bed ' + (DF.bed || '(unassigned)') + ' and moves the admission ' +
-                 'to the IP Ledger. No charges are posted.')) return;
+                 'to the IP Ledger. No charges are posted.', { okLabel: 'Close admission' })
+      .then(function (ok) { if (ok) releaseAdmissionGo(''); });
+  }
 
+  function releaseAdmissionGo(overrideReason) {
     var body = $('df-body');
     body.innerHTML = '<div class="text-center py-4 df-sub">' +
       '<span class="spinner-border spinner-border-sm me-2"></span>Closing the admission…</div>';
@@ -276,14 +280,17 @@
     google.script.run
       .withSuccessHandler(function (res) {
         if (res && res.success === false && res.code === 'DS_NOT_SIGNED') {
-          var reason = prompt(res.message + '\n\nWhy is this patient being discharged ' +
-                              'without a signed discharge summary?');
-          if (reason && reason.trim()) { releaseAdmission(reason.trim()); return; }
-          render();
+          crescPrompt(res.message + '\n\nWhy is this patient being discharged ' +
+                      'without a signed discharge summary?', '',
+                      { title: 'Discharge summary not signed', okLabel: 'Discharge anyway' })
+            .then(function (reason) {
+              if (reason && reason.trim()) { releaseAdmissionGo(reason.trim()); return; }
+              render();
+            });
           return;
         }
         if (!res || res.success === false) {
-          alert((res && res.message) || 'Discharge failed.');
+          crescAlert((res && res.message) || 'Discharge failed.');
           render();
           return;
         }
@@ -291,7 +298,7 @@
         if (DF.onDone) { try { DF.onDone(); } catch (e) { /* the caller's refresh */ } }
       })
       .withFailureHandler(function (err) {
-        alert('Discharge failed: ' + (err && err.message ? err.message : err));
+        crescAlert('Discharge failed: ' + (err && err.message ? err.message : err));
         render();
       })
       .processPatientDischarge(DF.ip, DF.bed, overrideReason || '');

@@ -403,7 +403,7 @@
 
   function ipwOpenDischargeSummary(ipNumber, patientName) {
     if (typeof window.dsOpenForAdmission !== 'function') {
-      alert('The discharge summary module is not installed in this deployment.');
+      crescAlert('The discharge summary module is not installed in this deployment.');
       return;
     }
     window.dsOpenForAdmission(ipNumber, patientName);
@@ -488,7 +488,7 @@
       .withFailureHandler(function (err) {
         bedEl.innerHTML = '<option value="">Error loading beds</option>';
         if (isAdmit) bedHint('Bed lookup failed: ' + err.message, 'danger');
-        else alert('Bed lookup failed: ' + err.message);
+        else crescAlert('Bed lookup failed: ' + err.message);
       })
       .getAvailableBedsByWard(wardEl.value);
   }
@@ -607,7 +607,7 @@
         if (!res || res.success === false) { admAlert((res && res.message) || 'Admission failed.', 'danger'); return; }
         var inst = bootstrap.Modal.getInstance($('modalAdmitPatient'));
         if (inst) inst.hide();
-        alert(res.message);
+        crescAlert(res.message);
         ipwFacetsLoaded = false;   // a new consultant may now be on the ward
         loadIPLedger();
       })
@@ -628,8 +628,8 @@
 
   function submitBedTransfer() {
     var val = function (id) { return $(id) ? $(id).value.trim() : ''; };
-    if (!val('transfer-ward')) { alert('Select a destination ward.'); return; }
-    if (!val('transfer-bed'))  { alert('Select a destination bed.'); return; }
+    if (!val('transfer-ward')) { crescAlert('Select a destination ward.'); return; }
+    if (!val('transfer-bed'))  { crescAlert('Select a destination bed.'); return; }
 
     var btn = $('btn-submit-transfer');
     var reset = function () { if (btn) { btn.innerText = 'Confirm Transfer'; btn.disabled = false; } };
@@ -638,13 +638,13 @@
     google.script.run
       .withSuccessHandler(function (res) {
         reset();
-        if (!res || res.success === false) { alert((res && res.message) || 'Transfer failed.'); return; }
+        if (!res || res.success === false) { crescAlert((res && res.message) || 'Transfer failed.'); return; }
         var inst = bootstrap.Modal.getInstance($('modalChangeBed'));
         if (inst) inst.hide();
-        alert(res.message);
+        crescAlert(res.message);
         loadIPLedger();
       })
-      .withFailureHandler(function (err) { reset(); alert('Transfer failed: ' + err.message); })
+      .withFailureHandler(function (err) { reset(); crescAlert('Transfer failed: ' + err.message); })
       .processBedTransfer(val('transfer-ip-no'), val('transfer-old-bed'),
                           val('transfer-ward'), val('transfer-bed'));
   }
@@ -661,7 +661,7 @@
    */
   function confirmDischarge(ipNumber, bedId, ward, patientName) {
     if (typeof window.crescOpenDischargeFlow !== 'function') {
-      alert('The discharge panel is not installed in this deployment ' +
+      crescAlert('The discharge panel is not installed in this deployment ' +
             '(DS_Discharge_Flow.html).');
       return;
     }

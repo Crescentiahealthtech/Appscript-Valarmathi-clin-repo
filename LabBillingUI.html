@@ -221,9 +221,15 @@ var LabBill=(function(){
 
   /* 🚀 WHATSAPP & EMAIL INVOICE DISPATCH 🚀 */
   function waInvoice(billId, patientName) {
-    var mobile = prompt("Enter 10-digit WhatsApp number for " + patientName + "\n(Do not add country code):", "");
-    if (!mobile || mobile.trim().length < 10) return;
-    
+    crescPrompt("Enter 10-digit WhatsApp number for " + patientName + "\n(Do not add country code):", "",
+                { title: 'Send invoice on WhatsApp', okLabel: 'Continue' })
+      .then(function (mobile) {
+        if (!mobile || mobile.trim().length < 10) return;
+        waInvoiceGo(billId, patientName, mobile);
+      });
+  }
+
+  function waInvoiceGo(billId, patientName, mobile) {
     run('generateAndStoreLabInvoicePDF', [billId], function(res) {
       if (!res || !res.success) { flash((res && res.message) || 'Failed to generate PDF.', false); return; }
       
@@ -237,9 +243,15 @@ var LabBill=(function(){
   }
 
   function emailInvoice(billId) {
-    var email = prompt("Enter patient's email address:", "");
-    if (!email || email.trim() === "") return;
-    
+    crescPrompt("Enter patient's email address:", "",
+                { title: 'Email invoice', okLabel: 'Send' })
+      .then(function (email) {
+        if (!email || email.trim() === "") return;
+        emailInvoiceGo(billId, email);
+      });
+  }
+
+  function emailInvoiceGo(billId, email) {
     run('emailLabInvoicePDF', [billId, email.trim()], function(res) {
       if (res && res.success) { flash(res.message, true); } 
       else { flash((res && res.message) || 'Failed to send email.', false); }
@@ -256,7 +268,7 @@ var LabBill=(function(){
 
   function _triggerNativePrint(htmlString) {
     var printWindow = window.open('', '_blank', 'width=900,height=800,top=50,left=50');
-    if (!printWindow) { alert("Pop-up blocker is preventing printing. Please click 'Allow Pop-ups' in your URL bar."); return; }
+    if (!printWindow) { crescAlert("Pop-up blocker is preventing printing. Please click 'Allow Pop-ups' in your URL bar."); return; }
     printWindow.document.open(); printWindow.document.write(htmlString); printWindow.document.close();
     printWindow.focus();
     setTimeout(function() { printWindow.print(); }, 500);

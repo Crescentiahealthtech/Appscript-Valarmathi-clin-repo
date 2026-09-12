@@ -299,14 +299,14 @@ function autoFetchPatient() {
         ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
           document.getElementById(id).value = '';
         });
-        alert('Patient ID not found.');
+        crescAlert('Patient ID not found.');
       }
     })
     .withFailureHandler(function (err) {
       ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
         document.getElementById(id).value = '';
       });
-      alert('Could not fetch patient: ' + err.message);
+      crescAlert('Could not fetch patient: ' + err.message);
     })
     .getPatientDemographics(pId);
 }
@@ -318,10 +318,10 @@ function saveAdminBooking() {
   const forceOff = document.getElementById('ab-force-off').checked;
   const time     = forceOff ? document.getElementById('ab-time').value : abSelectedTime;
 
-  if (!doctorId) return alert('Select a doctor.');
-  if (!name)     return alert('Patient name is required.');
-  if (!date)     return alert('Select a date.');
-  if (!time)     return alert(forceOff ? 'Enter a manual time.' : 'Select an available slot.');
+  if (!doctorId) return crescAlert('Select a doctor.');
+  if (!name)     return crescAlert('Patient name is required.');
+  if (!date)     return crescAlert('Select a date.');
+  if (!time)     return crescAlert(forceOff ? 'Enter a manual time.' : 'Select an available slot.');
 
   const payload = {
     doctorId:    doctorId,
@@ -346,16 +346,16 @@ function saveAdminBooking() {
       if (res && res.success) {
         closeAdminBookModal();
         if (typeof loadAdminLedger === 'function') loadAdminLedger();
-        alert(res.message);
+        crescAlert(res.message);
       } else {
-        alert((res && res.message) || 'Booking failed.');
+        crescAlert((res && res.message) || 'Booking failed.');
         loadBookingSlots();   // the slot may have been taken while the form was open
       }
     })
     .withFailureHandler(function (err) {
       btn.innerHTML = og;
       btn.disabled = false;
-      alert('Network error: ' + err.message);
+      crescAlert('Network error: ' + err.message);
     })
     .bookAppointmentScoped(payload, window.sessionToken);
 }

@@ -428,15 +428,15 @@ function dsDoInitiate() {
       done();
       try {
         if (!res || res.success === false) {
-          alert((res && res.message) || 'The summary could not be generated.');
+          crescAlert((res && res.message) || 'The summary could not be generated.');
           return;
         }
         var m = dsModal(DS_IDS.modalInitiate);
         if (m) m.hide();
         dsOpenEditor(res.data.summaryId);
-      } catch (e) { alert('Generated, but the editor could not open: ' + e.message); }
+      } catch (e) { crescAlert('Generated, but the editor could not open: ' + e.message); }
     })
-    .withFailureHandler(function (err) { done(); alert('Generation failed: ' + err.message); })
+    .withFailureHandler(function (err) { done(); crescAlert('Generation failed: ' + err.message); })
     .ds_initiateDischarge(dsToken(), DSState.initiateIp,
                           dsEl(DS_IDS.initType).value,
                           planned ? new Date(planned).toISOString() : '');
@@ -1376,13 +1376,16 @@ function dsCall(fnName, rest, successText) {
 }
 
 function dsRegenerate() {
-  if (!confirm(
+  crescConfirm(
       'Regenerate from the clinical record?\n\n' +
       '- Sections nobody has edited are refreshed from the notes and results.\n' +
       '- Sections you or anyone else edited keep their text, and are flagged if ' +
       'the record has changed underneath them.\n\n' +
-      'Nothing you typed is lost.')) return;
-  dsSaveThen(function () { dsCall('ds_regenerate', [], 'Regenerated.'); });
+      'Nothing you typed is lost.', { okLabel: 'Regenerate' })
+    .then(function (ok) {
+      if (!ok) return;
+      dsSaveThen(function () { dsCall('ds_regenerate', [], 'Regenerated.'); });
+    });
 }
 
 function dsSubmit() {
@@ -1406,7 +1409,7 @@ function dsOpenReturn() {
 
 function dsDoReturn() {
   var comment = dsEl(DS_IDS.retComment).value.trim();
-  if (!comment) { alert('Say what needs correcting.'); return; }
+  if (!comment) { crescAlert('Say what needs correcting.'); return; }
 
   var sectionComments = {};
   Array.prototype.forEach.call(
@@ -1432,7 +1435,7 @@ function dsAskReason(title, help, handler) {
 
 function dsDoReason() {
   var text = dsEl(DS_IDS.reasonText).value.trim();
-  if (!text) { alert('A reason is required.'); return; }
+  if (!text) { crescAlert('A reason is required.'); return; }
   var m = dsModal(DS_IDS.modalReason);
   if (m) m.hide();
   if (typeof DSState.reasonHandler === 'function') DSState.reasonHandler(text);
@@ -1853,9 +1856,17 @@ function dsStopPresence() {
   if (DSState.presenceTimer) { clearInterval(DSState.presenceTimer); DSState.presenceTimer = null; }
 }
 
-function dsConfirmLeave() {
-  if (!dsIsDirty()) return true;
-  return confirm('You have unsaved changes to this discharge summary. Leave without saving?');
+/**
+ * Asks - in page, not in the browser's chrome - whether unsaved editor work
+ * may be discarded. The answer cannot be returned synchronously any more, so
+ * the caller passes what to do once the question is answered; a clean editor
+ * proceeds immediately, without a dialog.
+ */
+function dsConfirmLeave(onProceed) {
+  if (!dsIsDirty()) { onProceed(); return; }
+  crescConfirm('You have unsaved changes to this discharge summary. Leave without saving?',
+    { okLabel: 'Leave without saving', kind: 'warn' })
+    .then(function (ok) { if (ok) onProceed(); });
 }
 
 /* ---------------------------------------------------------------------
@@ -1924,8 +1935,16 @@ function dsConfirmLeave() {
         var view = dsEl(DS_IDS.editorView);
         var leavingEditor = view && view.classList.contains('active-section') &&
                             tabId !== DS_IDS.editorView;
-        if (leavingEditor && !dsConfirmLeave()) return;
-        if (leavingEditor) dsStopPresence();
+        var self = this, args = arguments;
+        if (leavingEditor) {
+          // The question is answered asynchronously, so this navigation is
+          // stopped and replayed from inside the answer.
+          dsConfirmLeave(function () {
+            dsStopPresence();
+            original.apply(self, args);
+          });
+          return;
+        }
         return original.apply(this, arguments);
       };
       guarded.__dsGuarded = true;
@@ -1950,11 +1969,11 @@ function dsOpenForAdmission(ipNumber, patientName) {
         var entry = map[String(ipNumber).toUpperCase()];
         if (entry && entry.status !== 'CANCELLED') dsOpenEditor(entry.summaryId);
         else dsOpenInitiate(ipNumber, patientName);
-      } catch (e) { alert(e.message); }
+      } catch (e) { crescAlert(e.message); }
     },
-    function (err) { alert((err && err.message) || 'The discharge module did not respond.'); });
+    function (err) { crescAlert((err && err.message) || 'The discharge module did not respond.'); });
 
-  if (!runner) { alert(DS_BACKEND_MISSING_MSG); return; }
+  if (!runner) { crescAlert(DS_BACKEND_MISSING_MSG); return; }
   runner.ds_getStatusMap(dsToken(), [ipNumber]);
 }
 

@@ -344,18 +344,25 @@
   // ===================================================================
   function fetchPatientForPharmacy() {
     const query = document.getElementById('phSearchQuery').value.trim();
-    if (!query) return alert("Enter a Patient ID or Mobile Number.");
+    if (!query) return crescAlert("Enter a Patient ID or Mobile Number.");
 
     if (hasUnsavedItems()) {
-      if (!confirm("Start a new bill for this patient? The current unsaved items will be cleared.")) return;
+      crescConfirm("Start a new bill for this patient? The current unsaved items will be cleared.",
+        { okLabel: 'Start a new bill' })
+        .then(ok => { if (ok) fetchPatientForPharmacyGo(query); });
+      return;
     }
+    fetchPatientForPharmacyGo(query);
+  }
+
+  function fetchPatientForPharmacyGo(query) {
     clearBillItems();
 
     phOverlay(true, "Fetching patient & prescriptions…");
     google.script.run
       .withSuccessHandler(res => {
         phOverlay(false);
-        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Lookup failed.")); return; }
+        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Lookup failed.")); return; }
         const p = res.patient;
         if (p) {
           document.getElementById('phPatientName').value = p.name || "";
@@ -375,9 +382,9 @@
         }
         phPrescriptions = res.prescriptions || [];
         renderPrescriptions();
-        if (!p && phPrescriptions.length === 0) alert("No patient record or pending prescription found. Continue as Walk-In.");
+        if (!p && phPrescriptions.length === 0) crescAlert("No patient record or pending prescription found. Continue as Walk-In.");
       })
-      .withFailureHandler(() => { phOverlay(false); alert("❌ Network error. Try again."); })
+      .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network error. Try again."); })
       .getPatientBillingContext(query);
   }
 
@@ -620,8 +627,8 @@
       remaining -= take;
     }
 
-    if (!firstDone) { setRowBatch(parentRow, null, requestedQty); alert(`⚠️ All available batches of "${brand}" are expired. Cannot dispense.`); }
-    else if (remaining > 0) alert(`⚠️ Only ${requestedQty - remaining} unit(s) of "${brand}" are in stock. Billed the available quantity.`);
+    if (!firstDone) { setRowBatch(parentRow, null, requestedQty); crescAlert(`⚠️ All available batches of "${brand}" are expired. Cannot dispense.`); }
+    else if (remaining > 0) crescAlert(`⚠️ Only ${requestedQty - remaining} unit(s) of "${brand}" are in stock. Billed the available quantity.`);
 
     reindexSNo();
     calculatePharmaTotals();
@@ -752,54 +759,66 @@
       if (a && b && a.indexOf(b) === -1 && b.indexOf(a) === -1) rxMismatch = { rx: rxName, billed: billed };
     });
     if (rxMismatch) {
-      const ok = confirm('⚠️ SUBSTITUTION CHECK\n\nPrescribed: ' + rxMismatch.rx +
+      crescConfirm('⚠️ SUBSTITUTION CHECK\n\nPrescribed: ' + rxMismatch.rx +
         '\nBilling:   ' + rxMismatch.billed +
-        '\n\nThese look like different medicines. Continue only if this substitution is intentional.\n\nProceed?');
-      if (!ok) { btn.innerHTML = original; btn.disabled = false; return; }
-    }
-    document.querySelectorAll('#phBillingBody tr').forEach(tr => {
-      const drug = tr.querySelector('.drug-name').value.trim();
-      const qty = parseFloat(tr.querySelector('.bill-qty').value) || 0;
-      const batch = tr.querySelector('.batch-id').value.trim();
-      if (drug !== "" && qty > 0) {
-        if (!batch) invalid = true;
-        payload.billedItems.push({
-          drug: drug, generic: tr.dataset.generic || "", batch: batch,
-          expiry: tr.querySelector('.expiry-id').value.trim(), unit: tr.dataset.unit || "",
-          qty: qty, rate: parseFloat(tr.querySelector('.rate').value) || 0,
-          gst: parseFloat(tr.querySelector('.gst-perc').value) || 0, rowId: tr.dataset.rowId || ""
+        '\n\nThese look like different medicines. Continue only if this substitution is intentional.\n\nProceed?',
+        { title: 'Substitution check', okLabel: 'Substitution is intentional' })
+        .then(ok => {
+          if (!ok) { btn.innerHTML = original; btn.disabled = false; return; }
+          collectAndSave();
         });
-      }
-    });
+      return;
+    }
+    collectAndSave();
 
-    const stop = msg => { alert(msg); btn.innerHTML = original; btn.disabled = false; };
-    if (payload.billedItems.length === 0) return stop("⚠️ Add at least one valid item to bill.");
-    if (invalid) return stop("⚠️ An item has no batch selected. Pick it from the dropdown so a batch is assigned.");
-    if ((payload.payMode === 'UPI' || payload.payMode === 'CARD') && !payload.txnId) return stop("⚠️ Enter the UPI/Card reference number.");
+    // Everything past the substitution check, so the check can answer
+    // asynchronously without duplicating the save path.
+    function collectAndSave() {
+      let invalid = false;
+      document.querySelectorAll('#phBillingBody tr').forEach(tr => {
+        const drug = tr.querySelector('.drug-name').value.trim();
+        const qty = parseFloat(tr.querySelector('.bill-qty').value) || 0;
+        const batch = tr.querySelector('.batch-id').value.trim();
+        if (drug !== "" && qty > 0) {
+          if (!batch) invalid = true;
+          payload.billedItems.push({
+            drug: drug, generic: tr.dataset.generic || "", batch: batch,
+            expiry: tr.querySelector('.expiry-id').value.trim(), unit: tr.dataset.unit || "",
+            qty: qty, rate: parseFloat(tr.querySelector('.rate').value) || 0,
+            gst: parseFloat(tr.querySelector('.gst-perc').value) || 0, rowId: tr.dataset.rowId || ""
+          });
+        }
+      });
 
-    google.script.run
-      .withSuccessHandler(res => {
-        btn.innerHTML = original; btn.disabled = false;
-        if (res && res.success) {
-          if (res.duplicate) { alert("ℹ️ " + res.message + " (Invoice " + res.invoiceNo + ")"); return; }
-          
-          // 1. Generate Pure HTML specifically optimized for Apps Script PDF Blob
-          const rawHtml = buildPrintInvoiceRaw(res.print);
-          
-          // 2. Inject to A4 Print Screen
-          document.getElementById('ph-invoice-print').innerHTML = rawHtml;
-          
-          // 3. Store full doc in memory for backend Dispatch
-          currentDispatchHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{padding:20px; color:var(--text-main); background:var(--bg-card); font-family:sans-serif;}</style></head><body>${rawHtml}</body></html>`;
-          
-          // 4. Trigger the Interceptor Hub (Success Modal)
-          document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
-          document.getElementById('ph-dispatch-modal').style.display = 'flex';
+      const stop = msg => { crescAlert(msg); btn.innerHTML = original; btn.disabled = false; };
+      if (payload.billedItems.length === 0) return stop("⚠️ Add at least one valid item to bill.");
+      if (invalid) return stop("⚠️ An item has no batch selected. Pick it from the dropdown so a batch is assigned.");
+      if ((payload.payMode === 'UPI' || payload.payMode === 'CARD') && !payload.txnId) return stop("⚠️ Enter the UPI/Card reference number.");
 
-        } else alert("❌ " + ((res && res.message) || "Save failed."));
-      })
-      .withFailureHandler(err => { btn.innerHTML = original; btn.disabled = false; alert("❌ Network error: please retry."); })
-      .processPharmacyBill(payload);
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.innerHTML = original; btn.disabled = false;
+          if (res && res.success) {
+            if (res.duplicate) { crescAlert("ℹ️ " + res.message + " (Invoice " + res.invoiceNo + ")"); return; }
+          
+            // 1. Generate Pure HTML specifically optimized for Apps Script PDF Blob
+            const rawHtml = buildPrintInvoiceRaw(res.print);
+          
+            // 2. Inject to A4 Print Screen
+            document.getElementById('ph-invoice-print').innerHTML = rawHtml;
+          
+            // 3. Store full doc in memory for backend Dispatch
+            currentDispatchHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{padding:20px; color:var(--text-main); background:var(--bg-card); font-family:sans-serif;}</style></head><body>${rawHtml}</body></html>`;
+          
+            // 4. Trigger the Interceptor Hub (Success Modal)
+            document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
+            document.getElementById('ph-dispatch-modal').style.display = 'flex';
+
+          } else crescAlert("❌ " + ((res && res.message) || "Save failed."));
+        })
+        .withFailureHandler(err => { btn.innerHTML = original; btn.disabled = false; crescAlert("❌ Network error: please retry."); })
+        .processPharmacyBill(payload);
+    }
   }
 
   function buildPrintInvoiceRaw(d) {
@@ -978,9 +997,12 @@
   function sendPharmaWhatsApp() {
     const invNo = document.getElementById('dh-invoice-no').innerText;
     if (!invNo) return;
-    const targetWa = prompt("Confirm or edit WhatsApp number for dispatch:", phPatientContact.whatsapp);
-    if (!targetWa) return;
+    crescPrompt("Confirm or edit WhatsApp number for dispatch:", phPatientContact.whatsapp,
+                { title: 'Send invoice on WhatsApp', okLabel: 'Send' })
+      .then(targetWa => { if (targetWa) sendPharmaWhatsAppGo(invNo, targetWa); });
+  }
 
+  function sendPharmaWhatsAppGo(invNo, targetWa) {
     phOverlay(true, "Generating PDF & Uploading to Drive...");
     google.script.run
       .withSuccessHandler(res => {
@@ -988,26 +1010,29 @@
         if (res && res.success) {
           const msg = encodeURIComponent(`Hello! Here is your pharmacy invoice (${invNo}) from Crescentia HealthTech. View/Download it here: ${res.link}`);
           window.open(`https://wa.me/91${targetWa.replace(/\D/g, '')}?text=${msg}`, '_blank');
-        } else alert("❌ Error generating PDF: " + (res.message || "Unknown error."));
+        } else crescAlert("❌ Error generating PDF: " + (res.message || "Unknown error."));
       })
-      .withFailureHandler(() => { phOverlay(false); alert("❌ Network Error."); })
+      .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
       .generateAndStorePharmacyInvoicePDF(invNo, currentDispatchHtml);
   }
 
   function sendPharmaEmail() {
     const invNo = document.getElementById('dh-invoice-no').innerText;
     if (!invNo) return;
-    const targetEmail = prompt("Confirm or edit Email address for dispatch:", phPatientContact.email);
-    if (!targetEmail) return;
+    crescPrompt("Confirm or edit Email address for dispatch:", phPatientContact.email,
+                { title: 'Email invoice', okLabel: 'Send' })
+      .then(targetEmail => { if (targetEmail) sendPharmaEmailGo(invNo, targetEmail); });
+  }
 
+  function sendPharmaEmailGo(invNo, targetEmail) {
     phOverlay(true, "Generating PDF & Dispatching Email...");
     google.script.run
       .withSuccessHandler(res => {
         phOverlay(false);
-        if (res && res.success) alert("✅ Invoice emailed successfully!");
-        else alert("❌ Error: " + (res.message || "Unknown error."));
+        if (res && res.success) crescAlert("✅ Invoice emailed successfully!");
+        else crescAlert("❌ Error: " + (res.message || "Unknown error."));
       })
-      .withFailureHandler(() => { phOverlay(false); alert("❌ Network Error."); })
+      .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
       .emailPharmacyInvoice(invNo, currentDispatchHtml, targetEmail);
   }
 
@@ -1031,10 +1056,13 @@
   function clearPharmacyBill() {
     const hasPatient = ['phSearchQuery','phPatientName','phMobile','phAddress','phAge']
       .some(id => (document.getElementById(id).value || "").trim() !== "");
-    if ((hasUnsavedItems() || hasPatient) &&
-        !confirm("Clear this bill?\n\nThe items and patient details on screen are discarded. Bills already saved are not affected.")) {
-      return;
-    }
+    if (!hasUnsavedItems() && !hasPatient) { clearPharmacyBillGo(); return; }
+    crescConfirm("Clear this bill?\n\nThe items and patient details on screen are discarded. Bills already saved are not affected.",
+      { okLabel: 'Clear bill' })
+      .then(ok => { if (ok) clearPharmacyBillGo(); });
+  }
+
+  function clearPharmacyBillGo() {
     resetPharmacyBilling();
     const q = document.getElementById('phSearchQuery');
     if (q) q.focus();
@@ -1097,16 +1125,24 @@
 
   function settleCredit(invoiceNo) {
     const mode = document.getElementById('cm-mode-' + invoiceNo).value;
-    let txn = "";
-    if (mode === 'UPI' || mode === 'CARD') { txn = prompt("Enter " + mode + " reference number:") || ""; if (!txn) return; }
+    if (mode === 'UPI' || mode === 'CARD') {
+      crescPrompt("Enter " + mode + " reference number:", '',
+                  { title: 'Settle credit bill', okLabel: 'Settle' })
+        .then(txn => { if (txn) settleCreditGo(invoiceNo, mode, txn); });
+      return;
+    }
+    settleCreditGo(invoiceNo, mode, "");
+  }
+
+  function settleCreditGo(invoiceNo, mode, txn) {
     const rowEl = document.getElementById('cm-' + invoiceNo);
     rowEl.style.opacity = '0.5';
     google.script.run
       .withSuccessHandler(res => {
-        if (res && res.success) { rowEl.remove(); alert("✅ " + res.message); }
-        else { rowEl.style.opacity = '1'; alert("❌ " + ((res && res.message) || "Failed.")); }
+        if (res && res.success) { rowEl.remove(); crescAlert("✅ " + res.message); }
+        else { rowEl.style.opacity = '1'; crescAlert("❌ " + ((res && res.message) || "Failed.")); }
       })
-      .withFailureHandler(() => { rowEl.style.opacity = '1'; alert("❌ Network error."); })
+      .withFailureHandler(() => { rowEl.style.opacity = '1'; crescAlert("❌ Network error."); })
       .settleCreditBill({ invoiceNo: invoiceNo, payMode: mode, txnId: txn });
   }
 

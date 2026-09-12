@@ -317,13 +317,13 @@
           loadPharmacyInventory(); 
           showToast('Batch updated', response.message, 'success');
         } else {
-          alert(response.message);
+          crescAlert(response.message);
         }
         btn.innerHTML = originalText;
         btn.disabled = false;
       })
       .withFailureHandler((err) => {
-        alert("Error saving: " + err.message);
+        crescAlert("Error saving: " + err.message);
         btn.innerHTML = originalText;
         btn.disabled = false;
       })
