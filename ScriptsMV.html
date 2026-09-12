@@ -20,6 +20,7 @@
   // 1. Define all restricted UI elements (Sidebar Links & Inner Cards)
   const restrictedElements = [
    'nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
+    'nav-tab-ipward', 'nav-tab-discharge',
     'nav-tab-pharmacy', 'nav-tab-lab', 'nav-tab-accounts', 'card-hosp-billing',
     'dash-card-revenue', 'dash-card-credit', 'dash-gateway-accounts'   // NEW
   ];
@@ -40,14 +41,17 @@
       allowedElements = restrictedElements;
       break;
     case 'doctor':
-      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr', 'nav-tab-pharmacy', 'nav-tab-lab'];
+      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
+                         'nav-tab-ipward', 'nav-tab-discharge', 'nav-tab-pharmacy', 'nav-tab-lab'];
       break;
     case 'receptionist':
     case 'reception':
       allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'card-hosp-billing'];
       break;
     case 'nurse':
-      allowedElements = ['nav-tab-dash', 'nav-tab-emr'];
+      // The ward is where a nurse works; the discharge desk is where the
+      // nursing half of a summary (observations, meds given) is read back.
+      allowedElements = ['nav-tab-dash', 'nav-tab-emr', 'nav-tab-ipward', 'nav-tab-discharge'];
       break;
     case 'pharmacy':
       allowedElements = ['nav-tab-dash', 'nav-tab-pharmacy'];
@@ -159,6 +163,16 @@ function switchTab(tabId, clickedElement) {
         }
     }
     
+    // 🛏️ IP WARD ROUTER HOOK
+    if (tabId === 'ip-ledger-view') {
+        if (typeof loadIPLedger === 'function') setTimeout(loadIPLedger, 0);
+    }
+
+    // 🏥 DISCHARGE DESK ROUTER HOOK
+    if (tabId === 'ds-desk-view') {
+        if (typeof dsOpenDesk === 'function') setTimeout(dsOpenDesk, 0);
+    }
+
     // 🏦 ACCOUNTS ROUTER HOOK (FIXED)
     if (tabId === 'workspace-accounts') { // Changed workspaceId to tabId
         if (typeof showAccounts === 'function') {

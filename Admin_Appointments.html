@@ -13,9 +13,26 @@
         <h3 class="fw-bold m-0 text-white">Daily Ledger</h3>
       </div>
       <div class="d-flex gap-2">
+        <!-- Scan-to-arrive. The front desk scans the barcode on whatever the
+             patient brought — card, prescription, lab report, discharge
+             summary — and today's booking flips to Arrived without anyone
+             finding the row first. -->
+        <button class="btn btn-sm btn-outline-warning shadow-sm" id="appt-scan-toggle"
+                onclick="toggleApptScanMode()">
+          <i class="fa-solid fa-barcode"></i> Scan &rarr; Arrived
+        </button>
         <button class="btn btn-sm btn-outline-info shadow-sm" onclick="openWorkingHours()"><i class="fa-solid fa-clock"></i> Hours</button>
         <button class="btn btn-sm btn-outline-success shadow-sm" onclick="openAdminBookingModal('','')"><i class="fa-solid fa-plus"></i> Manual Booking</button>
       </div>
+    </div>
+
+    <div id="appt-scan-banner" class="alert alert-warning py-2 px-3 mb-3 d-none
+                d-flex align-items-center justify-content-between gap-2">
+      <span><i class="fa-solid fa-barcode me-2"></i>
+        <strong>Scan mode on.</strong>
+        <span id="appt-scan-status">Scan a patient barcode to mark them arrived.</span>
+      </span>
+      <button class="btn btn-sm btn-outline-dark" onclick="toggleApptScanMode(false)">Stop scanning</button>
     </div>
 
     <div class="card p-3 mb-3 d-flex flex-row flex-wrap align-items-center justify-content-between gap-2">
@@ -122,6 +139,13 @@ function loadAdminLedger() {
 
   if (!dateVal) return;
 
+  // The scan claim is released automatically when the user navigates away, so
+  // re-take it whenever this screen loads with scan mode still switched on.
+  if (apptScanOn && window.CrescScan &&
+      window.CrescScan.claimed() !== 'appt-arrive') {
+    toggleApptScanMode(true);
+  }
+
   tbody.innerHTML = '<tr><td colspan="9" class="text-center label-bright py-4">' +
                     '<i class="fa-solid fa-spinner fa-spin"></i> Loading schedule...</td></tr>';
 
@@ -216,6 +240,118 @@ function renderLedger(rows) {
 
   tbody.innerHTML = html;
   setLedgerStats(booked, arrived, completed);
+}
+
+// ============================================================================
+// SCAN → PATIENT ARRIVED
+// ----------------------------------------------------------------------------
+// Barcode_Router.html already resolves a scan and offers "Mark arrived" in its
+// side panel. That is the right behaviour when a scan happens anywhere in the
+// app. On the Daily Ledger it is one step too many: the receptionist is
+// looking at today's list and wants the scan to just do it. CrescScan.claim()
+// exists for exactly this — a screen takes over scan routing while it owns the
+// task, and releases it on the way out.
+// ============================================================================
+
+var apptScanOn = false;
+
+function apptScanStatus(msg, tone) {
+  var el = document.getElementById('appt-scan-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = tone ? ('fw-bold text-' + tone) : '';
+}
+
+function toggleApptScanMode(force) {
+  var want = (force === undefined) ? !apptScanOn : !!force;
+
+  if (!window.CrescScan) {
+    alert('The barcode scanner is not available in this deployment.');
+    return;
+  }
+
+  var btn = document.getElementById('appt-scan-toggle');
+  var banner = document.getElementById('appt-scan-banner');
+
+  if (!want) {
+    apptScanOn = false;
+    try { window.CrescScan.release('appt-arrive'); } catch (e) {}
+    if (banner) banner.classList.add('d-none');
+    if (btn) btn.classList.replace('btn-warning', 'btn-outline-warning');
+    return;
+  }
+
+  apptScanOn = true;
+  if (banner) banner.classList.remove('d-none');
+  if (btn) btn.classList.replace('btn-outline-warning', 'btn-warning');
+  apptScanStatus('Scan a patient barcode to mark them arrived.');
+
+  window.CrescScan.claim('appt-arrive', function (cls) {
+    // Anything that is not a patient ID falls through to the normal router:
+    // a tube barcode scanned here is a mis-scan, not an arrival.
+    if (!cls || cls.type !== 'PATIENT') return false;
+    markScannedPatientArrived(cls.value);
+    return true;
+  });
+}
+
+/**
+ * Flips today's booking for one patient to Arrived.
+ *
+ * Resolving the scan first (rather than searching the rendered table) keeps
+ * the decision on the server: it knows which of today's appointments belongs
+ * to this patient, whether the caller's role may check anyone in, and it
+ * audits the scan. The ledger on screen may be showing another date or
+ * another doctor's filter entirely.
+ */
+function markScannedPatientArrived(patientId) {
+  apptScanStatus('Looking up ' + patientId + '...');
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        apptScanStatus((res && res.message) || 'That code could not be resolved.', 'danger');
+        return;
+      }
+      if (!res.found) {
+        apptScanStatus(res.message || ('No patient registered with ID ' + patientId + '.'), 'danger');
+        return;
+      }
+
+      var name = (res.patient && res.patient.name) || patientId;
+      var appts = res.appointments || [];
+      var booked = appts.filter(function (a) { return a.status === 'Booked'; });
+
+      if (!booked.length) {
+        var already = appts.filter(function (a) {
+          return a.status === 'Arrived' || a.status === 'In-Progress';
+        });
+        apptScanStatus(already.length
+          ? name + ' is already checked in.'
+          : name + ' has no booking for today. Use Manual Booking.', 'danger');
+        return;
+      }
+
+      // Earliest booking of the day: the one they have come for.
+      var target = booked[0];
+      google.script.run
+        .withSuccessHandler(function (r) {
+          if (!r || !r.success) {
+            apptScanStatus((r && r.message) || 'Could not update the appointment.', 'danger');
+            return;
+          }
+          apptScanStatus(name + ' marked arrived (' + (target.time12 || 'today') + ').', 'success');
+          loadAdminLedger();
+        })
+        .withFailureHandler(function (e) {
+          apptScanStatus('Network error: ' + e.message, 'danger');
+        })
+        .barcodeUpdateAppointment(target.apptId, 'Arrived', window.sessionToken);
+    })
+    .withFailureHandler(function (e) {
+      apptScanStatus('Lookup failed: ' + e.message, 'danger');
+    })
+    .resolveScan(patientId, 'tab-admin-appt', window.sessionToken);
 }
 
 function changeAppointmentStatus(apptId, newStatus) {

@@ -1185,6 +1185,15 @@ function getLabReportHtml(orderId) {
       }
     }
     
+    // Patient-ID barcode, so a printed report can be scanned straight back to
+    // the patient at the counter.
+    let pidBarcode = "";
+    try {
+      if (typeof bcp_patientBarcodeBlock_ === 'function') {
+        pidBarcode = bcp_patientBarcodeBlock_(pId, { align: 'right', height: 8 });
+      }
+    } catch (e) { pidBarcode = ""; }
+
     const pName = patRow ? patRow[pHeaders.indexOf("Name")] : orderRow[oHeaders.indexOf("PatientName")];
     const pAge = patRow ? patRow[pHeaders.indexOf("Age")] : orderRow[oHeaders.indexOf("Age")];
     const pSex = patRow ? patRow[pHeaders.indexOf("Gender")] : orderRow[oHeaders.indexOf("Gender")];
@@ -1308,6 +1317,7 @@ function getLabReportHtml(orderId) {
               <p><strong>Referred By:</strong> Dr. ${docName}</p>
               <p><strong>Registered On:</strong> ${ordDate}</p>
             </div>
+            <div class="patient-col" style="text-align:right;">${pidBarcode}</div>
           </div>
 
           <h3 style="font-size: 14px; color: #1e3a8a; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px;">DEPARTMENT OF BIOCHEMISTRY & CLINICAL PATHOLOGY</h3>
@@ -1830,6 +1840,20 @@ function _buildReportHtmlGrouped(o, groups, bill, now) {
   var props = PropertiesService.getScriptProperties().getProperties();
   var clinicName = props['CLINIC_NAME'] || 'Crescentia Clinic';
 
+  // Patient-ID barcode. The report is printed on a white card so the bars can
+  // be black; the rest of the report is dark, which no scanner would read.
+  var idBarcode = '';
+  try {
+    if (typeof bcp_code128Svg_ === 'function') {
+      idBarcode = bcp_code128Svg_(String(o.patientId || '').trim(),
+                                  { height: 8, moduleWidth: 0.30, fontSize: 2.6 });
+    }
+  } catch (e) { idBarcode = ''; }
+  var idBarcodeHtml = idBarcode
+    ? '<div style="background:#fff;padding:4px 6px;border-radius:6px;display:inline-block;margin-top:6px;">' +
+      idBarcode + '</div>'
+    : '';
+
   function sectionHtml(g) {
     var rowsHtml = (g.rows || []).map(function (r) {
       var fc = r.flag === 'C' ? 'color:#f87171;font-weight:800' :
@@ -1864,7 +1888,7 @@ function _buildReportHtmlGrouped(o, groups, bill, now) {
     '<div><div style="font-size:18px;font-weight:800;color:#7dd3fc;">&#128300; ' + _esc(clinicName) + ' — Lab Report</div><div style="color:#94a3b8;font-size:12px;margin-top:2px;">NABL ISO 15189:2022 Compliant</div></div>' +
     '<div style="text-align:right;"><div style="color:#94a3b8;font-size:11px;">Order ID</div><div style="font-family:monospace;color:#7dd3fc;font-size:13px;">' + _esc(o.orderId) + '</div></div></div>' +
     '<div style="padding:14px 24px;background:#0a1628;border-bottom:1px solid #1e293b;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
-    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Patient</div><div style="font-weight:700;font-size:15px;margin-top:2px;">' + _esc(o.patientName) + '</div><div style="color:#94a3b8;font-size:12px;">' + _esc(o.patientId) + ' · ' + _esc(o.gender) + (o.age ? ' · ' + _esc(o.age) + 'y' : '') + '</div></div>' +
+    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Patient</div><div style="font-weight:700;font-size:15px;margin-top:2px;">' + _esc(o.patientName) + '</div><div style="color:#94a3b8;font-size:12px;">' + _esc(o.patientId) + ' · ' + _esc(o.gender) + (o.age ? ' · ' + _esc(o.age) + 'y' : '') + '</div>' + idBarcodeHtml + '</div>' +
     '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Ordered By</div><div style="font-weight:600;margin-top:2px;">' + _esc(o.doctorName || '—') + '</div><div style="color:#94a3b8;font-size:12px;">' + _esc(o.source) + '</div></div>' +
     '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Report Date</div><div style="font-weight:600;margin-top:2px;">' + _esc(now.substring(0, 10)) + '</div>' + (bill && bill.receiptNumber ? '<div style="color:#94a3b8;font-size:12px;">Receipt: ' + _esc(bill.receiptNumber) + '</div>' : '') + '</div></div>' +
     groups.map(sectionHtml).join('') +

@@ -407,9 +407,37 @@ function saveIPNote(payload, sessionToken) {
 
     // ---- Phase 6 gate: identity, care team, section-level RBAC ----------
     // Everything the client claimed about who is writing is discarded here.
+    // opts carries the one thing the client is allowed to influence: WHICH
+    // doctor an administrator is recording this note for. Who may do that,
+    // and whether that doctor is real and on the care team, is decided
+    // server-side inside resolveIPWrite_().
     const w = resolveIPWrite_(sessionToken, payload.ipNumber,
-                              payload.roleType, payload.noteData);
-    if (!w.ok) return { success: false, message: w.message };
+                              payload.roleType, payload.noteData,
+                              { onBehalfOfDoctorId: payload.onBehalfOfDoctorId });
+    if (!w.ok) return { success: false, message: w.message, code: w.code || "" };
+
+    // ---- Idempotency ----------------------------------------------------
+    // A save that gives no visible feedback gets clicked again, and the ward
+    // ends up with the same progress note twice — with two different Note_IDs,
+    // so nothing downstream can tell they are duplicates. The composer stamps
+    // one clientNoteId per attempt and reuses it across retries; the first
+    // write to reach here wins and every repeat returns that same result.
+    // Held inside the script lock, so two clicks racing cannot both pass.
+    const clientKey = String(payload.clientNoteId || "").trim();
+    if (clientKey) {
+      const seen = _ipnRecallSavedNote_(clientKey);
+      if (seen) {
+        return {
+          success: true,
+          duplicate: true,
+          message: "Already saved — this note was recorded a moment ago.",
+          noteId: seen.noteId,
+          author: seen.author,
+          signature: seen.signature,
+          stripped: []
+        };
+      }
+    }
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ipc_timelineSheet_();
@@ -474,10 +502,16 @@ function saveIPNote(payload, sessionToken) {
                              payload.ipNumber);
     }
 
+    if (clientKey) {
+      _ipnRememberSavedNote_(clientKey,
+        { noteId: noteId, author: w.authorLabel, signature: w.signature });
+    }
+
     try {
       logAudit_(w.sess, "IP_NOTE_SAVE", "IP_Timeline", noteId, {
         ipNumber: payload.ipNumber, roleType: roleType,
-        doctorId: w.doctorId, stripped: w.stripped
+        doctorId: w.doctorId, stripped: w.stripped,
+        onBehalf: !!w.onBehalf
       });
     } catch (e) { /* auditing must never fail a clinical save */ }
 
@@ -501,6 +535,34 @@ function saveIPNote(payload, sessionToken) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ── 4b. SAVE IDEMPOTENCY ────────────────────────────────
+//
+// CacheService, not a sheet column: the window that matters is the few
+// seconds between an impatient second click and the first save returning, and
+// a cache read costs nothing on the hot path. A lost cache entry degrades to
+// the old behaviour (a duplicate note) rather than to a lost one, which is
+// the right way round for a clinical record.
+
+var IPN_DEDUPE_TTL_S = 600;   // 10 minutes
+
+function _ipnDedupeKey_(clientKey) {
+  return "IPNOTE_" + String(clientKey).replace(/[^A-Za-z0-9_\-]/g, "").substring(0, 200);
+}
+
+function _ipnRecallSavedNote_(clientKey) {
+  try {
+    var raw = CacheService.getScriptCache().get(_ipnDedupeKey_(clientKey));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function _ipnRememberSavedNote_(clientKey, result) {
+  try {
+    CacheService.getScriptCache()
+      .put(_ipnDedupeKey_(clientKey), JSON.stringify(result), IPN_DEDUPE_TTL_S);
+  } catch (e) { /* dedupe is an optimisation, never a precondition */ }
 }
 
 // ── 5. SYNC MED ORDERS TO PHARMACY QUEUE ─────────────────
@@ -672,8 +734,9 @@ function updateIPMedAction(payload, sessionToken) {
 
     // Changing a drug order is a prescribing act: it goes through the same
     // gate as writing the note that would have ordered it.
-    const w = resolveIPWrite_(sessionToken, data[targetRow][1], "DOCTOR", {});
-    if (!w.ok) return { success: false, message: w.message };
+    const w = resolveIPWrite_(sessionToken, data[targetRow][1], "DOCTOR", {},
+                              { onBehalfOfDoctorId: payload.onBehalfOfDoctorId });
+    if (!w.ok) return { success: false, message: w.message, code: w.code || "" };
     const actor = w.authorLabel;
 
     for (let i = 1; i < data.length; i++) {
@@ -745,6 +808,51 @@ function generateIPHandoverSummary(payload, sessionToken) {
     let alerts = [];
     let events = [];        // diagnosis revisions, amendments, procedures
     let consults = [];
+    let activeMedsList = [];
+
+    // ── Active medications ─────────────────────────────────────────────
+    // The single most important line of a shift handover. This block was
+    // missing while the summary still printed activeMedsList, so every
+    // handover died with "activeMedsList is not defined" and no shift
+    // handover could be produced at all.
+    //
+    // Read directly rather than through getClinicalContext(): that function
+    // takes the read gate again and pulls labs, allergies and the care team,
+    // none of which the handover needs.
+    if (pqSheet && pqSheet.getLastRow() > 1) {
+      const pqData = pqSheet.getDataRange().getValues();
+      const seenDrug = {};
+      // Newest first, so a drug modified twice reports its current order.
+      for (let i = pqData.length - 1; i > 0; i--) {
+        if (String(pqData[i][1]).trim() !== String(payload.ipNumber).trim()) continue;
+        if (String(pqData[i][11] || "ACTIVE").toUpperCase() !== "ACTIVE") continue;
+
+        const drugName = String(pqData[i][3] || "").trim();
+        if (!drugName) continue;
+        const key = (typeof _normDrug_ === "function") ? _normDrug_(drugName)
+                                                       : drugName.toUpperCase();
+        if (key && seenDrug[key]) continue;
+        if (key) seenDrug[key] = true;
+
+        const route = String(pqData[i][6] || "").trim();
+        const isIV = /^(IV|INFUSION)/i.test(route) || /FLUID/i.test(route);
+        activeMedsList.push(
+          (isIV ? "▶ [IV] " : "• ") + drugName +
+          [String(pqData[i][4] || "").trim(),      // dose
+           String(pqData[i][5] || "").trim(),      // frequency
+           route,
+           String(pqData[i][7] || "").trim()]      // instructions / rate
+            .filter(Boolean)
+            .map(function (x) { return " — " + x; })
+            .join(""));
+      }
+      // Running infusions belong at the top of a handover list.
+      activeMedsList.sort(function (a, b) {
+        var ai = a.indexOf("[IV]") !== -1 ? 0 : 1;
+        var bi = b.indexOf("[IV]") !== -1 ? 0 : 1;
+        return ai - bi;
+      });
+    }
 
     if (tlSheet) {
       const tlData = tlSheet.getDataRange().getValues();
@@ -1190,6 +1298,28 @@ function ipn_printNote_(n) {
     push("Vitals", vit);
   }
 
+  // General examination, as the horizontal row it is entered on. An
+  // all-negative examination is PRINTED, not omitted: "no pallor, no icterus,
+  // no cyanosis, no clubbing, no oedema" is a finding, and a blank line in a
+  // ward chart reads as "not examined".
+  if (d.genExam && typeof d.genExam === "object") {
+    var geKeys = Object.keys(d.genExam).filter(function (k) { return k !== "notes"; });
+    if (geKeys.length || dc_str_(d.genExam.notes)) {
+      var present = geKeys.filter(function (k) {
+        return dc_upper_(d.genExam[k]) === "YES";
+      }).map(function (k) { return k.charAt(0).toUpperCase() + k.slice(1); });
+      var absent = geKeys.filter(function (k) {
+        return dc_upper_(d.genExam[k]) !== "YES";
+      }).map(function (k) { return "no " + k; });
+
+      var geParts = [];
+      if (present.length) geParts.push("<strong>" + e(present.join(", ")) + " present</strong>");
+      if (absent.length)  geParts.push(e(absent.join(", ")));
+      if (dc_str_(d.genExam.notes)) geParts.push(e(d.genExam.notes));
+      push("General Exam", geParts.join(" &nbsp;&middot;&nbsp; "));
+    }
+  }
+
   // Systemic examination. Older rows may still hold the pre-canonical key.
   var se = d.sysExam || d.systemExam;
   if (se) {
@@ -1219,6 +1349,7 @@ function ipn_printNote_(n) {
   push("Observations",    ipp_escMultiline_(d.observations));
   push("Consultant",      e(d.consultantName));
   push("Specialty",       e(d.specialty));
+  push("Referred For",    ipp_escMultiline_(d.reason));
   push("Findings",        ipp_escMultiline_(d.findings));
   push("Recommendations", ipp_escMultiline_(d.recommendations));
   push("Procedure",       e(d.procedureName));

@@ -477,20 +477,55 @@ function getOPPrescriptionHtml(encounterId) {
     const vitals = data.vitals || {};
     const clin = data.clinical || {};
     const bp = (vitals.sysBp || vitals.diaBp) ? `${vitals.sysBp || '-'}/${vitals.diaBp || '-'}` : "--";
-    
+
+    const esc = (v) => String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    // The patient-ID barcode. Printing it on the prescription means the sheet
+    // the patient walks out with IS the ID card — nothing extra to issue on a
+    // first visit, and nothing extra to lose before the second one.
+    let rxBarcode = '';
+    try {
+      if (typeof bcp_patientBarcodeBlock_ === 'function') {
+        rxBarcode = bcp_patientBarcodeBlock_(data.patientId, { align: 'right', height: 8 });
+      }
+    } catch (e) { rxBarcode = ''; }
+
+    // Complaints and history are stored pipe-separated ("Headache | Chest pain
+    // | Loose stools"). Printed as that one run-on line they read as a single
+    // sentence and nothing stands out; a clinician reading the sheet a week
+    // later needs one problem per line.
+    const clinicalList = (raw) => {
+      const items = String(raw || '')
+        .split('|').map(s => s.trim()).filter(Boolean);
+      if (!items.length) return '';
+      return '<ul style="margin:1mm 0 0; padding-left:5mm; list-style-type:disc;">' +
+        items.map(t => `<li style="margin-bottom:0.8mm;">${esc(t)}</li>`).join('') +
+        '</ul>';
+    };
+
+    const complaintsHtml = clinicalList(clin.complaints);
+    const historyHtml    = clinicalList(clin.history);
+
     // 3. Build Medication Table Rows
     let medsHtml = "";
     if (!data.meds || data.meds.length === 0) {
       medsHtml = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#6b7280;">No medications prescribed.</td></tr>`;
     } else {
       data.meds.forEach((m, i) => {
+        // An IV order's rate is the order. Print it beside the volume, in the
+        // dosage column, where the person setting the drip will look.
+        const isIV = String(m.type || m.strength || '').toUpperCase() === 'IV';
+        const dose = [esc(m.sig), isIV && m.rate ? '@ ' + esc(m.rate) : '']
+          .filter(Boolean).join(' ') || '-';
         medsHtml += `
           <tr style="page-break-inside: avoid;">
             <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${i + 1}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;"><strong>${m.strength || ''} ${m.drugName || ''}</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${m.sig || '-'}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${m.duration || '-'}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; color: #6b7280;">${m.comments || '-'}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;"><strong>${esc(m.strength)} ${esc(m.drugName)}</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${dose}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${esc(m.duration) || '-'}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; color: #6b7280;">${esc(m.comments) || '-'}</td>
           </tr>`;
       });
     }
@@ -555,9 +590,16 @@ function getOPPrescriptionHtml(encounterId) {
             </div>
           </div>
 
-          <div class="section-break" style="display:flex; justify-content:space-between; font-size:11pt; background:#f9fafb; padding:3mm; border-radius:4px;">
-            <div><span class="label">Patient:</span> <strong>${data.patientName || 'Unknown'}</strong> &bull; ${data.patientAgeSex || '--'}</div>
-            <div style="text-align: right;"><span class="label">Patient ID:</span> <strong>${data.patientId || '--'}</strong></div>
+          <div class="section-break" style="font-size:11pt; background:#f9fafb; padding:3mm; border-radius:4px;">
+            <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+              <tr>
+                <td style="vertical-align:middle; padding:0;">
+                  <div><span class="label">Patient:</span> <strong>${esc(data.patientName) || 'Unknown'}</strong> &bull; ${esc(data.patientAgeSex) || '--'}</div>
+                  <div style="margin-top:1mm;"><span class="label">Patient ID:</span> <strong>${esc(data.patientId) || '--'}</strong></div>
+                </td>
+                <td style="width:48mm; vertical-align:middle; padding:0;">${rxBarcode}</td>
+              </tr>
+            </table>
           </div>
 
           <div class="section-break" style="display:flex; gap:4mm; flex-wrap:wrap; font-size:10pt;">
@@ -569,8 +611,19 @@ function getOPPrescriptionHtml(encounterId) {
           </div>
 
           <div class="section-break">
-            <div style="font-size:11pt; margin-bottom:2mm;"><span class="label">Complaints & History:</span> ${clin.complaints || 'Routine Checkup'}</div>
-            <div style="font-size:11pt;"><span class="label">Clinical Diagnosis:</span> <strong>${clin.diagnosis || 'Pending Diagnosis'}</strong></div>
+            <table style="width:100%; border-collapse:collapse; table-layout:fixed; font-size:11pt;">
+              <tr>
+                <td style="width:50%; vertical-align:top; padding:0 3mm 0 0;">
+                  <span class="label">Presenting Complaints</span>
+                  ${complaintsHtml || '<div style="margin-top:1mm;">Routine Checkup</div>'}
+                </td>
+                <td style="width:50%; vertical-align:top; padding:0;">
+                  <span class="label">History</span>
+                  ${historyHtml || '<div style="margin-top:1mm;">Not recorded</div>'}
+                </td>
+              </tr>
+            </table>
+            <div style="font-size:11pt; margin-top:3mm;"><span class="label">Clinical Diagnosis:</span> <strong>${esc(clin.diagnosis) || 'Pending Diagnosis'}</strong></div>
           </div>
 
           <div class="section-break">

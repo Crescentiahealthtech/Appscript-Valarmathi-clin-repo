@@ -67,17 +67,27 @@
       </div>
 
       <div class="d-flex align-items-center gap-2">
+        <!-- Switched by showIPRecordTab(), NOT by Bootstrap's pill data API.
+             The detail view is revealed by removing .d-none from an ancestor,
+             and a tab whose pane is measured while that ancestor is still
+             hidden does not complete its transition: the first click on
+             "Progress Notes" appeared to do nothing, and only worked once
+             Casesheet had been clicked and the panes had been laid out. An
+             explicit class swap has no transition to lose. -->
         <ul class="nav nav-pills" id="ip-record-tabs" role="tablist">
           <li class="nav-item" role="presentation">
-            <button class="nav-link active py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-casesheet" type="button" style="font-size: 0.8rem;">Casesheet</button>
+            <button class="nav-link active py-1 px-3 text-white" type="button"
+                    data-ip-tab="tab-casesheet" style="font-size: 0.8rem;">Casesheet</button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-notes" type="button" style="font-size: 0.8rem;">
+            <button class="nav-link py-1 px-3 text-white" type="button"
+                    data-ip-tab="tab-notes" style="font-size: 0.8rem;">
               Progress Notes <span class="badge bg-secondary ms-1" id="ip-det-notecount">0</span>
             </button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link py-1 px-3 text-white" data-bs-toggle="pill" data-bs-target="#tab-discharge" type="button" style="font-size: 0.8rem;">Discharge</button>
+            <button class="nav-link py-1 px-3 text-white" type="button"
+                    data-ip-tab="tab-discharge" style="font-size: 0.8rem;">Discharge</button>
           </li>
         </ul>
 
@@ -312,9 +322,15 @@
           '<div class="mt-1">' + statusBadge + '</div>' +
         '</td>' +
         '<td style="font-size:0.7rem;">' + notes + (gaps ? '<div class="mt-1">' + gaps + '</div>' : '') + '</td>' +
-        '<td class="text-end">' +
-          '<button class="btn btn-outline-info btn-sm py-1 px-3" style="font-size:0.72rem;" ' +
+        '<td class="text-end text-nowrap">' +
+          '<button class="btn btn-outline-info btn-sm py-1 px-3 me-1" style="font-size:0.72rem;" ' +
             'data-record-key="' + esc(p.encounterId || p.ipNumber) + '">View File</button>' +
+          // Opens the file straight onto the notes tab. Wanting the progress
+          // notes is the commonest reason to open an IP record at all.
+          '<button class="btn btn-outline-success btn-sm py-1 px-3" style="font-size:0.72rem;" ' +
+            'title="Open the progress notes" ' +
+            'data-record-key="' + esc(p.encounterId || p.ipNumber) + '" ' +
+            'data-open-tab="tab-notes">Notes</button>' +
         '</td>' +
       '</tr>';
     }).join(''));
@@ -324,19 +340,59 @@
     var tbody = document.getElementById('ip-records-tbody');
     if (tbody) {
       tbody.querySelectorAll('button[data-record-key]').forEach(function (b) {
-        b.addEventListener('click', function () { viewIPRecordDetail(b.dataset.recordKey); });
+        b.addEventListener('click', function () {
+          viewIPRecordDetail(b.dataset.recordKey, b.dataset.openTab || 'tab-casesheet');
+        });
       });
     }
   }
 
   // ---- detail ------------------------------------------------------------
 
-  function viewIPRecordDetail(recordKey) {
+  /**
+   * Shows one pane of the record detail view and lights its pill.
+   * Deliberately not Bootstrap's Tab plugin — see the markup comment above.
+   */
+  function showIPRecordTab(paneId) {
+    var wrap = document.getElementById('ip-record-tabContent');
+    var tabs = document.getElementById('ip-record-tabs');
+    if (!wrap || !tabs) return;
+
+    wrap.querySelectorAll('.tab-pane').forEach(function (p) {
+      var on = (p.id === paneId);
+      p.classList.toggle('active', on);
+      p.classList.toggle('show', on);
+    });
+    tabs.querySelectorAll('[data-ip-tab]').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.ipTab === paneId);
+    });
+  }
+
+  function wireIPRecordTabs() {
+    var tabs = document.getElementById('ip-record-tabs');
+    if (!tabs || tabs.dataset.wired === '1') return;
+    tabs.dataset.wired = '1';
+    tabs.querySelectorAll('[data-ip-tab]').forEach(function (b) {
+      b.addEventListener('click', function () { showIPRecordTab(b.dataset.ipTab); });
+    });
+  }
+
+  /**
+   * @param {string} recordKey
+   * @param {string} [openTab] pane to land on; defaults to the casesheet.
+   */
+  function viewIPRecordDetail(recordKey, openTab) {
     if (!recordKey) return;
     IPRec.loadingKey = recordKey;
 
     document.getElementById('ip-records-ledger-view').classList.add('d-none');
     document.getElementById('ip-records-detail-view').classList.remove('d-none');
+
+    // Wire once the detail view is actually in the layout, and always start
+    // from a known tab so the screen never opens on whatever was last open
+    // for a different patient.
+    wireIPRecordTabs();
+    showIPRecordTab(openTab || 'tab-casesheet');
 
     setHtml('det-casesheet-body', '<div class="text-center text-secondary py-5">' +
       '<i class="fa-solid fa-spinner fa-spin me-2"></i>Loading the file...</div>');
@@ -661,6 +717,7 @@
   window.filterIPRecords       = filterIPRecords;
   window.setIPRecordFilter     = setIPRecordFilter;
   window.viewIPRecordDetail    = viewIPRecordDetail;
+  window.showIPRecordTab       = showIPRecordTab;
   window.closeIPRecordDetail   = closeIPRecordDetail;
   window.renderIPRecordNotes   = renderIPRecordNotes;
   window.printIPRecord         = printIPRecord;

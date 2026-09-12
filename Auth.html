@@ -361,12 +361,24 @@
       .withSuccessHandler(function (mfaRes) {
         btn.innerHTML = 'Verify & Login';
         btn.disabled = false;
-        if (mfaRes.success) {
+        if (mfaRes && mfaRes.success) {
           document.getElementById('mfa-screen').classList.add('d-none');
           executeUIRouting(pendingAuthRes, pendingAuthName);
-        } else {
-          alert("Invalid or Expired MFA Code. Try again.");
+          return;
         }
+        // Say what actually went wrong. The old blanket "Invalid or Expired
+        // MFA Code" hid the case that was really happening — an enrolment
+        // whose stored secret is not valid Base32, which no amount of
+        // retyping the six digits can ever fix.
+        var msg = (mfaRes && mfaRes.message) || 'Invalid or expired code. Try again.';
+        if (mfaRes && mfaRes.code === 'BAD_SECRET') {
+          msg += '\n\nThis is a problem with the enrolment on file, not with the ' +
+                 'code you typed. Ask an administrator to re-enrol your ' +
+                 'authenticator (enrolMFA in the Apps Script editor).';
+        }
+        alert(msg);
+        document.getElementById('in-mfa-code').value = '';
+        document.getElementById('in-mfa-code').focus();
       })
       .withFailureHandler(function (err) {
         btn.innerHTML = 'Verify & Login';

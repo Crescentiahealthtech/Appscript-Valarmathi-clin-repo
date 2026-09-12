@@ -79,10 +79,28 @@ function ipc_casesheetSheet_() {
 var IPC_ROLE_NOTE_TYPES = {
   "doctor":       ["DOCTOR", "CONSULTANT", "PROCEDURE", "QUICK", "HANDOVER"],
   "nurse":        ["NURSE", "QUICK", "HANDOVER"],
-  "admin":        ["QUICK", "HANDOVER"],
+  // In a single-consultant clinic the doctor IS the administrator, and an
+  // admin login that could not write a progress note simply meant the note
+  // went unwritten. An admin may now author anything a doctor can — but only
+  // ON BEHALF OF a named, active doctor (see IPC_ROLE_ACTS_AS below). The
+  // note then carries that doctor's ID and signature snapshot, and the admin's
+  // own username in Author_Username, so the record says who typed it and who
+  // stands behind it. An admin still cannot manufacture a signature out of
+  // nothing: with no doctor chosen, the write is refused.
+  "admin":        ["DOCTOR", "NURSE", "CONSULTANT", "PROCEDURE", "QUICK", "HANDOVER"],
   "receptionist": ["QUICK"],
   "reception":    ["QUICK"]
 };
+
+/**
+ * Roles that write as a doctor they name, rather than as themselves.
+ * Mirrors resolveWriteDoctor_() in Doctor_Core.gs, which already lets these
+ * roles record an OP encounter under a chosen doctor.
+ */
+var IPC_ROLE_ACTS_AS = ["admin"];
+
+/** Note types that MUST be attributed to a doctor, whoever is at the keyboard. */
+var IPC_DOCTOR_AUTHORED_TYPES = ["DOCTOR", "CONSULTANT", "PROCEDURE"];
 
 /**
  * Which noteData sections each role may write, per note type.
@@ -91,7 +109,7 @@ var IPC_ROLE_NOTE_TYPES = {
  */
 var IPC_SECTION_RBAC = {
   "DOCTOR": {
-    "doctor": ["subjectiveObjective", "vitalsReview", "sysExam", "assessment",
+    "doctor": ["subjectiveObjective", "vitalsReview", "genExam", "sysExam", "assessment",
                "medOrders", "investigationOrders", "adviceText", "diagnosis",
                "plan", "alertText"]
   },
@@ -104,8 +122,12 @@ var IPC_SECTION_RBAC = {
     "doctor": ["vitals", "intervention", "observations", "intakeOutput", "alertText"]
   },
   "CONSULTANT": {
-    "doctor": ["consultantName", "specialty", "findings", "recommendations",
-               "medOrders", "investigationOrders", "alertText"]
+    // A consultant opinion is a clinical note, not a memo: it examines the
+    // patient, orders drugs and orders investigations. The sections mirror the
+    // progress note so the two read alike on the timeline and in print.
+    "doctor": ["consultantName", "specialty", "reason", "subjectiveObjective",
+               "genExam", "sysExam", "findings", "recommendations",
+               "medOrders", "investigationOrders", "adviceText", "alertText"]
   },
   "PROCEDURE": {
     "doctor": ["procedureName", "operator", "findings", "complications",
@@ -449,8 +471,11 @@ function ipc_wardVisibilityFilter_(scope) {
  * @return {{ok, message, sess, role, username, displayName, doctorId,
  *           signature, authorLabel, noteData, stripped, mayPrescribe}}
  */
-function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData) {
-  var fail = function (msg) { return { ok: false, message: msg }; };
+function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData, opts) {
+  var fail = function (msg, code) {
+    return { ok: false, message: msg, code: code || "" };
+  };
+  opts = opts || {};
 
   var sess = dc_validateSession_(sessionToken);
   if (!sess) return fail("Your session has expired. Please sign in again.");
@@ -468,7 +493,13 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData) {
   if (!ipc_admissionRow_(ip)) return fail("Admission " + ip + " was not found.");
 
   // ---- doctor identity + care-team gate ---------------------------------
+  // effectiveRole is the role the SECTION filter and the prescribing gate use.
+  // It differs from `role` only when an administrator is writing on behalf of
+  // a doctor: the sections they may fill are the doctor's, because the note
+  // being produced is the doctor's.
   var doctorId = "", signature = "", displayName = dc_sessionName_(sess);
+  var onBehalf = false;
+  var effectiveRole = role;
 
   if (role === "doctor") {
     doctorId = dc_str_(sess.doctorId);
@@ -487,17 +518,57 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData) {
     // Signature is SNAPSHOTTED here and never re-derived at print time.
     signature   = prof.signature;
     displayName = prof.name;
+
+  } else if (IPC_ROLE_ACTS_AS.indexOf(role) !== -1 &&
+             IPC_DOCTOR_AUTHORED_TYPES.indexOf(type) !== -1) {
+    // An administrator authoring a doctor's note must name the doctor it
+    // belongs to. Refusing here rather than writing an unattributed note is
+    // the whole point: a progress note with no clinician behind it is not a
+    // clinical record.
+    var actAs = dc_str_(opts.onBehalfOfDoctorId);
+    if (!actAs) {
+      return fail("Choose the doctor this " + type.toLowerCase() +
+                  " note is being recorded for before saving.", "DOCTOR_REQUIRED");
+    }
+    var actProf = dc_getDoctorById_(actAs);
+    if (!actProf) return fail("Doctor profile '" + actAs + "' not found.", "DOCTOR_REQUIRED");
+    if (actProf.status !== "ACTIVE") {
+      return fail(actProf.name + " is not an active doctor.", "DOCTOR_REQUIRED");
+    }
+    // The care team still gates the chart: an admin cannot route a note onto
+    // an admission the chosen doctor has nothing to do with.
+    if (!ipc_mayWriteOnAdmission_(ip, actAs)) {
+      return fail(actProf.name + " is not on the care team for " + ip +
+                  ". Add them as a cross-consult first.", "NOT_ON_TEAM");
+    }
+    doctorId      = actProf.doctorId;
+    signature     = actProf.signature;
+    displayName   = actProf.name;
+    onBehalf      = true;
+    effectiveRole = "doctor";
+
+  } else if (IPC_ROLE_ACTS_AS.indexOf(role) !== -1 && type === "NURSE") {
+    // Nursing observations recorded by the administrator stay the
+    // administrator's: there is no nurse to attribute them to, and a
+    // medication marked "given" is a nursing act (the NURSE section matrix
+    // already withholds markedMeds from anyone but a nurse).
+    effectiveRole = "nurse";
   }
 
-  var authorLabel = ipc_authorLabel_(role, displayName);
+  var authorLabel = ipc_authorLabel_(onBehalf ? "doctor" : role, displayName);
+  if (onBehalf) {
+    authorLabel += " (recorded by " + dc_str_(sess.username) + ")";
+  }
 
-  var filtered = ipc_filterSections_(type, role, noteData);
+  var filtered = ipc_filterSections_(type, effectiveRole, noteData);
 
   return {
     ok: true,
     message: "",
     sess: sess,
     role: role,
+    effectiveRole: effectiveRole,
+    onBehalf: onBehalf,
     username: dc_str_(sess.username),
     displayName: displayName,
     doctorId: doctorId,
@@ -505,7 +576,8 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData) {
     authorLabel: authorLabel,
     noteData: filtered.data,
     stripped: filtered.stripped,
-    mayPrescribe: (role === "doctor" && IPC_PRESCRIBING_TYPES.indexOf(type) !== -1)
+    mayPrescribe: (effectiveRole === "doctor" && !!doctorId &&
+                   IPC_PRESCRIBING_TYPES.indexOf(type) !== -1)
   };
 }
 
@@ -636,6 +708,18 @@ function getIPNotePermissions(sessionToken) {
       if (prof) { name = prof.name || name; signature = prof.signature; }
     }
 
+    // Roles that write on behalf of a doctor need the doctor list up front,
+    // and the composer needs to know it must not let them save without one.
+    var actsAs = (IPC_ROLE_ACTS_AS.indexOf(role) !== -1);
+    var doctors = [];
+    if (actsAs) {
+      try {
+        doctors = (getActiveDoctors() || []).map(function (d) {
+          return { doctorId: d.doctorId, name: d.name, specialty: d.specialty };
+        });
+      } catch (e) { doctors = []; }
+    }
+
     return {
       success: true,
       role: role,
@@ -644,7 +728,12 @@ function getIPNotePermissions(sessionToken) {
       signature: signature,
       authorLabel: ipc_authorLabel_(role, name),
       noteTypes: (IPC_ROLE_NOTE_TYPES[role] || []).slice(),
-      canPrescribe: (role === "doctor")
+      canPrescribe: (role === "doctor" || actsAs),
+      // The composer shows an "Acting as" picker when this is true, and blocks
+      // the doctor-authored note types until one is chosen.
+      actsOnBehalf: actsAs,
+      onBehalfTypes: IPC_DOCTOR_AUTHORED_TYPES.slice(),
+      doctors: doctors
     };
   } catch (e) {
     return { success: false, message: e.message, noteTypes: [] };
@@ -797,8 +886,12 @@ function updateIPDiagnosis(payload, sessionToken) {
   try {
     payload = payload || {};
 
-    var w = resolveIPWrite_(sessionToken, payload.ipNumber, "DOCTOR", {});
-    if (!w.ok) return { success: false, message: w.message };
+    // Revising a working diagnosis is a doctor's act. An administrator may
+    // record one, but only under the doctor they name — same rule as a
+    // progress note, enforced in the same place.
+    var w = resolveIPWrite_(sessionToken, payload.ipNumber, "DOCTOR", {},
+                            { onBehalfOfDoctorId: payload.onBehalfOfDoctorId });
+    if (!w.ok) return { success: false, message: w.message, code: w.code || "" };
 
     var list = String(payload.diagnosis || "")
       .split(/[,\n]/).map(function (d) { return d.trim(); }).filter(Boolean);

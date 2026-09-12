@@ -182,6 +182,13 @@
               style="font-size:.72rem; max-width: 200px;">
           <i class="fa-solid fa-id-badge me-1"></i>--
         </span>
+        <!-- Administrators record a casesheet for a named doctor. Hidden for
+             a doctor, who signs as themselves. -->
+        <span class="d-none align-items-center gap-1 flex-shrink-0" id="ipc-actas-wrap">
+          <span class="hd-label m-0" style="font-size:.68rem;">Acting as</span>
+          <select id="ipc-actas" class="form-select form-select-sm bg-dark text-white border-secondary"
+                  style="width:180px; font-size:.72rem;" onchange="ipcSetActingDoctor(this.value)"></select>
+        </span>
         <select id="ipc-triage-status" class="form-select form-select-sm bg-dark text-white fw-bold border-secondary flex-shrink-0"
                 style="width: 118px;" onchange="ipcUpdateTriageUI()">
           <option value="Stable" selected>&#128994; Stable</option>
@@ -1047,12 +1054,12 @@ function ipcApplyAdmissionContext(ctx) {
     window.ipcCurrentIP     = p.ipNumber;
 
     // Identity comes from the server, not from a picker. The name shown is
-    // the one that will be written into the signature column.
-    const sign = document.getElementById('ipc-signing-as');
-    if (sign) {
-        sign.innerHTML = '<i class="fa-solid fa-id-badge me-1"></i>' +
-                         ipcEsc(ctx.authorLabel || ctx.doctorName || '--');
-    }
+    // the one that will be written into the signature column — except for an
+    // administrator, who must name the doctor they are recording for and then
+    // sees that doctor's name here.
+    ipcActsOnBehalf = !!ctx.actsOnBehalf;
+    ipcDoctorChoices = ctx.doctors || [];
+    ipcRenderActingDoctor(ctx);
     window.ipcDoctorId = ctx.doctorId || '';
 
     ipcRenderCareTeam(ctx.careTeam || []);
@@ -2934,6 +2941,59 @@ function ipcCollectRxRows() {
  * because the casesheet is re-read into the composer by "copy previous" and a
  * flattened string cannot be parsed back into rows.
  */
+// ---------------------------------------------------------------------------
+// ACTING DOCTOR (administrators)
+// The chosen id is mirrored onto window.crescActingDoctorId so IP Notes and
+// the casesheet agree about who the session is recording for — picking a
+// doctor in one place should not have to be repeated in the other.
+// ---------------------------------------------------------------------------
+var ipcActsOnBehalf = false;
+var ipcDoctorChoices = [];
+
+function ipcRenderActingDoctor(ctx) {
+    const wrap = document.getElementById('ipc-actas-wrap');
+    const sel  = document.getElementById('ipc-actas');
+    const sign = document.getElementById('ipc-signing-as');
+
+    if (!ipcActsOnBehalf) {
+        if (wrap) { wrap.classList.add('d-none'); wrap.classList.remove('d-flex'); }
+        if (sign) {
+            sign.innerHTML = '<i class="fa-solid fa-id-badge me-1"></i>' +
+                             ipcEsc((ctx && (ctx.authorLabel || ctx.doctorName)) || '--');
+        }
+        return;
+    }
+
+    if (wrap) { wrap.classList.remove('d-none'); wrap.classList.add('d-flex'); }
+    if (sel) {
+        sel.innerHTML = ipcDoctorChoices.length
+            ? '<option value="">-- choose a doctor --</option>' +
+              ipcDoctorChoices.map(function (d) {
+                  return '<option value="' + ipcAttr(d.doctorId) + '">' + ipcEsc(d.name) +
+                         (d.specialty ? ' (' + ipcEsc(d.specialty) + ')' : '') + '</option>';
+              }).join('')
+            : '<option value="">No active doctors on file</option>';
+        sel.value = window.crescActingDoctorId || '';
+    }
+    ipcUpdateSigningBadge(ctx);
+}
+
+function ipcUpdateSigningBadge(ctx) {
+    const sign = document.getElementById('ipc-signing-as');
+    if (!sign) return;
+    const id = window.crescActingDoctorId || '';
+    const chosen = ipcDoctorChoices.filter(function (d) { return d.doctorId === id; })[0];
+    sign.innerHTML = chosen
+        ? '<i class="fa-solid fa-id-badge me-1"></i>Dr. ' +
+          ipcEsc(String(chosen.name).replace(/^Dr\.?\s+/i, ''))
+        : '<i class="fa-solid fa-triangle-exclamation me-1"></i>choose a doctor';
+}
+
+function ipcSetActingDoctor(doctorId) {
+    window.crescActingDoctorId = doctorId || '';
+    ipcUpdateSigningBadge();
+}
+
 function ipcBuildIPCFlatPayload() {
     const p = (ipcAdmission && ipcAdmission.patient) || {};
 
@@ -2991,6 +3051,8 @@ function ipcBuildIPCFlatPayload() {
     return {
         ipNumber:    p.ipNumber || window.ipcCurrentIP || '',
         patientId:   p.patientId || '',
+        // Empty for a doctor, and ignored by the server for one.
+        onBehalfOfDoctorId: window.crescActingDoctorId || '',
         patientName: p.name || '',
         age:         p.age || '',
         sex:         p.sex || '',
@@ -3032,6 +3094,15 @@ function ipcSubmitIPCEncounter() {
     if (!ipcAdmission) { ipcToast('Open a bed before saving.', 'warn'); return; }
     if (!ipcAdmission.canWrite) {
         ipcToast('You are not on the care team for this admission.', 'err');
+        return;
+    }
+    // Stop an administrator here rather than after a full casesheet has been
+    // typed: the server refuses an unattributed clinical record, and a
+    // refusal at the Save button is a wasted consultation.
+    if (ipcActsOnBehalf && !window.crescActingDoctorId) {
+        ipcToast('Choose the doctor this casesheet is recorded for ("Acting as", top right).', 'warn');
+        const sel = document.getElementById('ipc-actas');
+        if (sel) sel.focus();
         return;
     }
     const dx = ipcCollectDx();

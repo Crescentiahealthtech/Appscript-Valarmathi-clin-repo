@@ -156,6 +156,47 @@ function dsShow(id, on) {
 
 function dsToken() { return window.sessionToken || ''; }
 
+/* ---------------------------------------------------------------------
+   BACKEND PRESENCE
+   ---------------------------------------------------------------------
+   Apps Script has no module system. If DS_Workflow.gs / DS_Data.gs were not
+   copied into the deployed project, google.script.run simply has no ds_*
+   methods on it, and calling one throws a TypeError *synchronously* — before
+   either handler is attached. Every spinner shown just above such a call
+   therefore spins for ever, which is exactly the "Discharge Desk loads for a
+   long time but shows nothing" symptom.
+
+   dsRunner() is the single place that notices. It returns null instead of a
+   runner, having already said plainly what is missing. Every ds_* call site
+   goes through it.
+   ------------------------------------------------------------------ */
+
+var DS_BACKEND_MISSING_MSG =
+  'The discharge summary backend is not deployed in this project. ' +
+  'Copy DS_Data.gs, DS_Workflow.gs, DS_Assembly.gs, DS_Print.gs, DS_Gate.gs, ' +
+  'DS_Setup.gs and DS_QR_Lib.gs into the Apps Script project and redeploy, ' +
+  'then run verifyDeployment() to confirm.';
+
+/**
+ * @param {string} method   the ds_* server function about to be called
+ * @param {Function} onOk
+ * @param {Function} onFail
+ * @return {Object|null} a configured google.script.run runner, or null when
+ *                       the server function does not exist in this deployment.
+ */
+function dsRunner(method, onOk, onFail) {
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return null;
+  var runner = google.script.run
+    .withSuccessHandler(onOk || function () {})
+    .withFailureHandler(onFail || function () {});
+  return (typeof runner[method] === 'function') ? runner : null;
+}
+
+/** True when the discharge backend is callable from this page. */
+function dsBackendReady() {
+  return !!dsRunner('ds_getQueue', null, null);
+}
+
 function dsNotice(kind, text) {
   var el = dsEl(DS_IDS.edNotice);
   if (!el) return;
@@ -206,8 +247,8 @@ function dsLoadQueue() {
   dsEl(DS_IDS.deskRows).innerHTML = '';
   dsShow(DS_IDS.deskEmpty, false);
 
-  google.script.run
-    .withSuccessHandler(function (res) {
+  var runner = dsRunner('ds_getQueue',
+    function (res) {
       dsShow(DS_IDS.deskSpinner, false);
       try {
         if (!res || res.success === false) {
@@ -222,13 +263,20 @@ function dsLoadQueue() {
         dsEl(DS_IDS.deskEmpty).innerHTML = dsEsc('Could not draw the queue: ' + e.message);
         dsShow(DS_IDS.deskEmpty, true);
       }
-    })
-    .withFailureHandler(function (err) {
+    },
+    function (err) {
       dsShow(DS_IDS.deskSpinner, false);
-      dsEl(DS_IDS.deskEmpty).innerHTML = dsEsc('The queue could not be loaded: ' + err.message);
+      dsEl(DS_IDS.deskEmpty).innerHTML = dsEsc('The queue could not be loaded: ' + (err && err.message));
       dsShow(DS_IDS.deskEmpty, true);
-    })
-    .ds_getQueue(dsToken(), {});
+    });
+
+  if (!runner) {
+    dsShow(DS_IDS.deskSpinner, false);
+    dsEl(DS_IDS.deskEmpty).innerHTML = dsEsc(DS_BACKEND_MISSING_MSG);
+    dsShow(DS_IDS.deskEmpty, true);
+    return;
+  }
+  runner.ds_getQueue(dsToken(), {});
 }
 
 function dsRenderTabs() {
@@ -384,8 +432,8 @@ function dsLoadSummary(afterFn) {
   dsShow(DS_IDS.edSpinner, true);
   dsShow(DS_IDS.edGrid, false);
 
-  google.script.run
-    .withSuccessHandler(function (res) {
+  var runner = dsRunner('ds_getSummary',
+    function (res) {
       dsShow(DS_IDS.edSpinner, false);
       try {
         if (!res || res.success === false) {
@@ -406,12 +454,18 @@ function dsLoadSummary(afterFn) {
       } catch (e) {
         dsNotice('danger', 'The summary loaded but could not be drawn: ' + e.message);
       }
-    })
-    .withFailureHandler(function (err) {
+    },
+    function (err) {
       dsShow(DS_IDS.edSpinner, false);
-      dsNotice('danger', 'The summary could not be loaded: ' + err.message);
-    })
-    .ds_getSummary(dsToken(), DSState.summaryId);
+      dsNotice('danger', 'The summary could not be loaded: ' + (err && err.message));
+    });
+
+  if (!runner) {
+    dsShow(DS_IDS.edSpinner, false);
+    dsNotice('danger', DS_BACKEND_MISSING_MSG);
+    return;
+  }
+  runner.ds_getSummary(dsToken(), DSState.summaryId);
 }
 
 /** Section comments from the most recent RETURN, so they stay pinned. */
@@ -1492,17 +1546,19 @@ function dsConfirmLeave() {
 
 /** IP Admissions / IP Notes: open the summary for one admission, or start it. */
 function dsOpenForAdmission(ipNumber, patientName) {
-  google.script.run
-    .withSuccessHandler(function (res) {
+  var runner = dsRunner('ds_getStatusMap',
+    function (res) {
       try {
         var map = (res && res.success) ? res.data : {};
         var entry = map[String(ipNumber).toUpperCase()];
         if (entry && entry.status !== 'CANCELLED') dsOpenEditor(entry.summaryId);
         else dsOpenInitiate(ipNumber, patientName);
       } catch (e) { alert(e.message); }
-    })
-    .withFailureHandler(function (err) { alert(err.message); })
-    .ds_getStatusMap(dsToken(), [ipNumber]);
+    },
+    function (err) { alert((err && err.message) || 'The discharge module did not respond.'); });
+
+  if (!runner) { alert(DS_BACKEND_MISSING_MSG); return; }
+  runner.ds_getStatusMap(dsToken(), [ipNumber]);
 }
 
 /** Badge HTML for a status-map entry, for other modules' row renderers. */
@@ -1512,6 +1568,7 @@ function dsStatusBadge(entry) {
          dsEsc(String(entry.status).replace(/_/g, ' ')) + '</span>';
 }
 
+window.dsBackendReady = dsBackendReady;
 window.dsOpenDesk = dsOpenDesk;
 window.dsOpenEditor = dsOpenEditor;
 window.dsOpenForAdmission = dsOpenForAdmission;
