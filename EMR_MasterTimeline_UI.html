@@ -356,6 +356,57 @@ function toggleTimelineCard(bodyId, chevronId) {
     }
 }
 
+/**
+ * The discharge-summary strip inside an admission card.
+ *
+ * Three states, all of them worth seeing: signed (with the signer, their
+ * registration number and the short hash that identifies the exact signed
+ * version), in progress (so the ward knows it is owed), and none started.
+ */
+function buildIPDischargeBlock(ev) {
+  if (!ev.summaryId) {
+    return `
+      <div class="p-3 mt-2" style="background-color: var(--surface); border: 1px dashed var(--border-hover); border-radius: 6px;">
+        <span class="text-muted" style="font-size:.9em;">
+          <i class="fa-regular fa-file me-1"></i> No discharge summary has been started for this stay.
+        </span>
+      </div>`;
+  }
+
+  const signed = !!ev.summarySigned;
+  const edge  = signed ? 'var(--success)' : 'var(--warning)';
+  const fg    = signed ? 'var(--success-fg)' : 'var(--warning-fg)';
+  const icon  = signed ? 'fa-file-circle-check' : 'fa-file-pen';
+  const label = signed ? 'Discharge summary &mdash; signed'
+                       : `Discharge summary &mdash; ${(ev.summaryStatus || '').replace(/_/g, ' ').toLowerCase()}`;
+
+  return `
+    <div class="p-3 mt-2" style="background-color: var(--surface); border-left: 3px solid ${edge}; border: 1px solid var(--border-hover); border-left-width: 3px; border-radius: 6px;">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <strong style="color:${fg}; font-size:.95em;"><i class="fa-solid ${icon} me-1"></i> ${label}</strong>
+        <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.8em;"
+                onclick="openDischargeSummaryFromTimeline('${ev.ipNumber}')">
+          <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Open
+        </button>
+      </div>
+      ${signed ? `<div class="mt-2" style="color: var(--text-main); font-size:.88em;">
+          Signed ${ev.signedAt || ''}${ev.signedBy ? ' by ' + ev.signedBy : ''}${ev.signerRegNo ? ' (Reg: ' + ev.signerRegNo + ')' : ''}
+          ${ev.shortHash ? `<span class="text-muted ms-2" style="font-family:monospace;">${ev.shortHash}</span>` : ''}
+        </div>` : ''}
+    </div>`;
+}
+
+/** Opens the discharge desk on this admission's summary. */
+function openDischargeSummaryFromTimeline(ipNumber) {
+  if (typeof dsOpenForAdmission === 'function') { dsOpenForAdmission(ipNumber, ''); return; }
+  // The discharge desk is a lazy bundle; ask for it, then retry once it is in.
+  if (window.CrescModules) {
+    window.CrescModules.onReady('emr-discharge', function () {
+      if (typeof dsOpenForAdmission === 'function') dsOpenForAdmission(ipNumber, '');
+    });
+  }
+}
+
 function buildIPCard(ev) {
   return `
     <div class="timeline-node">
@@ -375,9 +426,17 @@ function buildIPCard(ev) {
 
         <div id="body-ip-${ev.ipNumber}" style="display: none;">
           <div class="p-3 mt-2" style="background-color: var(--surface); border: 1px solid var(--border-hover); border-radius: 6px;">
-             <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 80px; display:inline-block;">Ward:</span> ${ev.ward}</p>
-             <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 0; font-weight: bold;"><span style="color: var(--danger-fg); font-weight: bold; width: 80px; display:inline-block;">Diagnosis:</span> ${ev.diagnosis}</p>
+             <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Ward:</span> ${ev.ward}</p>
+             <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Stay:</span> ${ev.admitted || ev.date}${ev.discharged ? ' &rarr; ' + ev.discharged : ' &rarr; still admitted'}</p>
+             ${ev.consultant ? `<p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Consultant:</span> ${ev.consultant}</p>` : ''}
+             <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 0; font-weight: bold;"><span style="color: var(--danger-fg); font-weight: bold; width: 110px; display:inline-block;">Diagnosis:</span> ${ev.diagnosis}</p>
           </div>
+
+          <!-- The discharge summary for this stay. Until now the timeline read
+               a sheet nothing writes, so no inpatient episode appeared here at
+               all; a signed summary is the document that closes the stay and
+               belongs on the patient's record beside the consultations. -->
+          ${buildIPDischargeBlock(ev)}
         </div>
         
       </div>

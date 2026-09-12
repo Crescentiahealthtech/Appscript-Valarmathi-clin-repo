@@ -573,15 +573,18 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
     dsx_refsFrom_('PATIENT', [dsx_pid_(adm.Patient_ID)]));
 
   // -- EXAM_ON_ADMISSION -----------------------------------------------------
+  // Vitals are one field PER READING, not a single "BP 120/80 · PR 88 · …"
+  // string. A clinician correcting the admission pulse had to retype the
+  // whole line and keep the separators right; and on screen the row now
+  // lays out as a strip of small labelled boxes.
   sections.EXAM_ON_ADMISSION = dsx_newSection_('Examination on admission', 'FIELDS',
-    cs ? {
-      vitals: dsx_admissionVitals_(cs),
+    cs ? dsx_merge_(dsx_vitalFields_(cs), {
       generalExamination: dsx_generalExam_(cs),
       cvs: dsx_str_(cs.CVS),
       rs: dsx_str_(cs.RS),
       pa: dsx_str_(cs.PA),
       cns: dsx_str_(cs.CNS)
-    } : {},
+    }) : {},
     'AUTO', dsx_refsFrom_('CASESHEET', csRefs));
 
   // -- INVESTIGATIONS / PENDING_RESULTS -------------------------------------
@@ -619,31 +622,29 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
       return n.data && n.data.medOrders && n.data.medOrders.length;
     }).map(function (n) { return n.noteId; })));
 
-  // Oral, topical and inhaled carry forward by default. Injectables do not —
-  // they are listed for review instead, because a discharge prescription that
-  // silently includes an IV drug is a real-world harm.
-  var active = replay.drugs.filter(function (d) { return d.state === 'ACTIVE'; });
-  var dischargeRows = active.filter(function (d) { return !d.injectable; }).map(function (d) {
-    return [
-      (d.generic || '').toUpperCase(), d.brand, d.dose, d.route, d.freq,
-      dsx_timingGrid_(d.freq), '', '', dsx_str_(d.instructions), d.status
-    ];
-  });
+  // WRITTEN BY HAND, never prefilled.
+  //
+  // This table used to be seeded from the inpatient medication replay: every
+  // active non-injectable drug arrived as a row. What a patient goes home on
+  // is a fresh prescribing decision, not the ward chart minus the drips —
+  // doses change, courses finish, and a row that is already on the page is a
+  // row nobody re-reads. It starts empty and the drug column autocompletes
+  // from pharmacy stock, exactly as prescribing does in OP and IP.
+  //
+  // Treatment given during the stay (above) still carries the full replay, so
+  // nothing is lost from the record — it simply is not the discharge script.
   sections.DISCHARGE_MEDICATIONS = dsx_newSection_('Discharge medications', 'TABLE',
     { columns: ['Generic', 'Brand', 'Strength / Dose', 'Route', 'Frequency', 'Timing',
                 'Food', 'Duration', 'Instructions', 'Status'],
-      rows: dischargeRows },
-    'AUTO', dsx_refsFrom_('NOTE', bundle.notes.map(function (n) { return n.noteId; })));
+      rows: [] },
+    'MANUAL', []);
   sections.DISCHARGE_MEDICATIONS.reviewed = false;
 
-  var stopped = replay.drugs.filter(function (d) { return d.state === 'STOPPED' || d.state === 'HELD'; });
-  sections.STOPPED_MEDICATIONS = dsx_newSection_('Medications stopped or held', 'TABLE',
-    { columns: ['Generic', 'Brand', 'Stopped on', 'State', 'Reason'],
-      rows: stopped.map(function (d) {
-        return [(d.generic || '').toUpperCase(), d.brand,
-                dsx_fmt_(d.stoppedAt, 'dd-MMM-yyyy'), d.state, ''];
-      }) },
-    'AUTO', []);
+  // "Medications stopped or held" is gone. It restated, in its own table,
+  // what the Status column of Treatment given during the stay already says
+  // for the same drugs, and it printed as a second list of drug names on a
+  // document whose whole job is to be unambiguous about what the patient
+  // takes home.
 
   // -- HOSPITAL_COURSE -------------------------------------------------------
   var course = dsx_hospitalCourse_(bundle, replay, doa);
@@ -652,19 +653,24 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
 
   // -- CONDITION_AT_DISCHARGE ------------------------------------------------
   var lastVitals = dsx_lastVitals_(bundle.notes, cs);
-  sections.CONDITION_AT_DISCHARGE = dsx_newSection_('Condition at discharge', 'FIELDS', {
-    generalCondition: '',
-    vitals: lastVitals.text,
-    vitalsRecordedAt: lastVitals.at ? dsx_fmt_(lastVitals.at, 'dd-MMM-yyyy hh:mm a') : ''
-  }, 'AUTO', lastVitals.refs);
+  sections.CONDITION_AT_DISCHARGE = dsx_newSection_('Condition at discharge', 'FIELDS',
+    dsx_merge_({ generalCondition: '' },
+      dsx_splitVitalText_(lastVitals.text),
+      { vitalsRecordedAt: lastVitals.at ? dsx_fmt_(lastVitals.at, 'dd-MMM-yyyy hh:mm a') : '' }),
+    'AUTO', lastVitals.refs);
 
   // -- advice / follow-up / red flags — empty, phrase library fills them ------
+  // Manual, like the follow-up and the discharge script below it. It used to
+  // inherit the ADMISSION casesheet's Advice field, which is advice given on
+  // the way IN — carrying it to the summary put week-old instructions under a
+  // "what to do at home" heading. The editor offers the clinic's advice
+  // phrase library instead (ds_getPickers -> ADVICE), the same list OP and IP
+  // prescribe from.
   sections.ADVICE = dsx_newSection_('Advice on discharge', 'FIELDS',
-    { diet: '', activity: '', woundCare: '', other: dsx_str_(cs && cs.Advice) }, 'AUTO',
-    dsx_refsFrom_('CASESHEET', csRefs));
+    { diet: '', activity: '', woundCare: '', other: '' }, 'MANUAL', []);
 
   sections.FOLLOW_UP = dsx_newSection_('Follow-up', 'FIELDS',
-    { date: '', doctorOrDepartment: '', investigations: '', notRequired: '' }, 'AUTO', []);
+    { date: '', doctorOrDepartment: '', investigations: '', notRequired: '' }, 'MANUAL', []);
 
   sections.RED_FLAGS = dsx_newSection_('When to seek urgent care', 'LIST', [], 'AUTO', []);
 
@@ -731,6 +737,66 @@ function dsx_wardHistory_(bundle) {
   });
   push(bundle.admission._ward, bundle.admission._bed, null);
   return out.join(' → ');
+}
+
+/** Shallow-merges its arguments left to right into a new object. */
+function dsx_merge_() {
+  var out = {};
+  for (var i = 0; i < arguments.length; i++) {
+    var o = arguments[i] || {};
+    Object.keys(o).forEach(function (k) { out[k] = o[k]; });
+  }
+  return out;
+}
+
+/**
+ * The seven vitals as SEPARATE fields, in the order a chart records them.
+ *
+ * Keys carry their unit so the printed label reads "BP (mmHg)" without the
+ * renderer knowing anything about vitals, and so an empty box still says
+ * what belongs in it.
+ */
+function dsx_vitalFields_(cs) {
+  var bp = [dsx_str_(cs.Sys_BP), dsx_str_(cs.Dia_BP)].filter(String).join('/');
+  return {
+    bpMmHg:       bp,
+    pulsePerMin:  dsx_str_(cs.PR),
+    spo2Percent:  dsx_str_(cs.SpO2),
+    temperature:  dsx_str_(cs.Temp),
+    respRatePerMin: dsx_str_(cs.RR),
+    weightKg:     dsx_str_(cs.Weight),
+    heightCm:     dsx_str_(cs.Height)
+  };
+}
+
+/**
+ * Splits a "BP 120/80 · PR 88 · SpO2 97" line back into the same field names
+ * dsx_vitalFields_ produces.
+ *
+ * The discharge vitals come from a nursing note, whose stored shape is a
+ * single formatted line (dsx_lastVitals_). Rather than reach back into the
+ * note's JSON from here — it has several historic key spellings — the line is
+ * parsed once, so the two vitals blocks on the document present the identical
+ * set of boxes. Anything unrecognised is kept in `otherVitals` rather than
+ * dropped, because losing a recorded observation is worse than an odd label.
+ */
+function dsx_splitVitalText_(text) {
+  var out = { bpMmHg: '', pulsePerMin: '', spo2Percent: '', temperature: '',
+              respRatePerMin: '', otherVitals: '' };
+  var rest = [];
+  dsx_str_(text).split(/\s*[·|,]\s*/).forEach(function (bit) {
+    var s = dsx_str_(bit);
+    if (!s) return;
+    var m;
+    if ((m = /^BP\s+(.+?)(?:\s*mmHg)?$/i.exec(s)))        { out.bpMmHg = dsx_str_(m[1]); return; }
+    if ((m = /^(?:PR|Pulse|HR)\s+(.+?)(?:\s*\/min)?$/i.exec(s))) { out.pulsePerMin = dsx_str_(m[1]); return; }
+    if ((m = /^SpO2\s+(.+?)%?$/i.exec(s)))                  { out.spo2Percent = dsx_str_(m[1]); return; }
+    if ((m = /^Temp(?:erature)?\s+(.+)$/i.exec(s)))         { out.temperature = dsx_str_(m[1]); return; }
+    if ((m = /^RR\s+(.+?)(?:\s*\/min)?$/i.exec(s)))         { out.respRatePerMin = dsx_str_(m[1]); return; }
+    rest.push(s);
+  });
+  out.otherVitals = rest.join(' · ');
+  return out;
 }
 
 function dsx_admissionVitals_(cs) {
@@ -1083,7 +1149,48 @@ function dsx_readiness_(payload, bundle, header) {
   return { hard: hard, soft: soft };
 }
 
+/**
+ * Field keys whose camel-case spelling does not humanise into something a
+ * clinician would accept on a printed document. "bpMmHg" becomes
+ * "Bp mm hg" otherwise, and the unit belongs in the label so an empty box
+ * still says what goes in it.
+ *
+ * ds_getPickers() serves this same table to the editor, so the label over a
+ * box on screen and the label beside it on paper cannot drift apart.
+ */
+var DSX_FIELD_LABELS = {
+  bpMmHg:          'BP (mmHg)',
+  pulsePerMin:     'Pulse (/min)',
+  spo2Percent:     'SpO\u2082 (%)',
+  temperature:     'Temperature',
+  respRatePerMin:  'Resp. rate (/min)',
+  weightKg:        'Weight (kg)',
+  heightCm:        'Height (cm)',
+  otherVitals:     'Other vitals',
+  vitalsRecordedAt:'Vitals recorded at',
+  generalCondition:'General condition',
+  generalExamination: 'General examination',
+  cvs: 'CVS', rs: 'RS', pa: 'P/A', cns: 'CNS',
+  icd10: 'ICD-10',
+  dateOfAdmission: 'Date of admission',
+  dateOfDischarge: 'Date of discharge',
+  lengthOfStay:    'Length of stay',
+  admissionType:   'Admission type',
+  wardBed:         'Ward / bed',
+  wardHistory:     'Ward history',
+  referredBy:      'Referred by',
+  doctorOrDepartment: 'Doctor or department',
+  notRequired:     'Not required',
+  woundCare:       'Wound care',
+  ageSex:          'Age / sex',
+  patientId:       'Patient ID',
+  ipNumber:        'IP number',
+  bloodGroup:      'Blood group'
+};
+
 function dsx_humanise_(camel) {
+  var mapped = DSX_FIELD_LABELS[camel];
+  if (mapped) return mapped;
   var s = String(camel).replace(/([A-Z])/g, ' $1').toLowerCase().trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

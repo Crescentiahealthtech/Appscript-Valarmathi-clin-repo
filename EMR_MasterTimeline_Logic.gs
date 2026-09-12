@@ -125,28 +125,90 @@ function buildLongitudinalTimeline(patientId) {
     }
   }
 
-  // 3. Extract IP Admissions (Discharge Summary)
-  const ipSheet = ss.getSheetByName("Discharge_Summary");
-  if (ipSheet) {
-    const ipData = ipSheet.getDataRange().getValues();
-    for (let i = 1; i < ipData.length; i++) {
-      if (ipData[i][1] && ipData[i][1].toString().trim().toUpperCase() === pIdUpper) {
-        let rawDate = new Date(ipData[i][2]); 
-        if (isNaN(rawDate)) continue;
-        
-        response.events.push({
-          type: 'IP',
-          rawDateObj: rawDate.getTime(),
-          date: Utilities.formatDate(rawDate, Session.getScriptTimeZone(), "dd-MMM-yyyy"),
-          ipNumber: ipData[i][0] || "IP-N/A", 
-          ward: ipData[i][3] || "Discharged", 
-          diagnosis: ipData[i][4] || "Final Diagnosis Pending" 
-        });
-      }
-    }
-  }
+  // 3. Admissions and their discharge summaries.
+  //
+  // This used to read a sheet called "Discharge_Summary", which NOTHING in
+  // the project writes — see the same note in ipr_discharge_(). Every signed
+  // summary produced by the discharge module lives in DS_Summaries, so the
+  // patient's timeline showed no inpatient episode at all, however many
+  // times they had been admitted and discharged.
+  //
+  // It now reads the admissions register, which is authoritative for who was
+  // admitted when, and enriches each stay with its summary from the discharge
+  // engine: the status, the final diagnosis, who signed it and the hash that
+  // identifies the signed version.
+  mt_pushAdmissions_(ss, pIdUpper, response.events);
 
   // Sort Newest First
   response.events.sort((a, b) => b.rawDateObj - a.rawDateObj);
   return response;
+}
+
+/**
+ * One timeline event per admission, carrying its discharge summary when the
+ * discharge module has one.
+ *
+ * @param {Spreadsheet} ss
+ * @param {string} pIdUpper       canonical patient id
+ * @param {Array} events          appended to in place
+ */
+function mt_pushAdmissions_(ss, pIdUpper, events) {
+  const sheet = ss.getSheetByName("IP_Admissions");
+  if (!sheet || sheet.getLastRow() < 2) return;
+
+  const tz = Session.getScriptTimeZone();
+  const rows = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[1] || r[1].toString().trim().toUpperCase() !== pIdUpper) continue;   // Patient_ID
+
+    // A stay is placed on the timeline by its admission date, which always
+    // exists; the discharge date may not yet.
+    const doa = new Date(r[4]);
+    if (isNaN(doa)) continue;
+
+    const ipNumber = (r[0] || "").toString().trim();
+    const dod = new Date(r[12]);
+    const status = (r[11] || "").toString().trim().toUpperCase();
+
+    const ev = {
+      type: 'IP',
+      rawDateObj: doa.getTime(),
+      date: Utilities.formatDate(doa, tz, "dd-MMM-yyyy"),
+      ipNumber: ipNumber || "IP-N/A",
+      ward: (r[7] || r[8] || "").toString().trim() || "—",
+      admitted: Utilities.formatDate(doa, tz, "dd-MMM-yyyy"),
+      discharged: isNaN(dod) ? "" : Utilities.formatDate(dod, tz, "dd-MMM-yyyy"),
+      status: status || "ADMITTED",
+      diagnosis: (r[10] || "").toString().trim() || "Final Diagnosis Pending",
+      consultant: (r[9] || "").toString().trim(),
+      // filled in below when the discharge module has a summary
+      summaryId: "", summaryStatus: "", signedAt: "", signedBy: "",
+      signerRegNo: "", shortHash: "", summarySigned: false
+    };
+
+    // ipr_dischargeSummaryBlock_ (IP_Records_Logic.gs) already knows how to
+    // read the discharge engine for one admission, including the signed
+    // snapshot list and the final diagnosis. Reusing it keeps the timeline
+    // and the IP record file saying the same thing about the same stay.
+    try {
+      if (ipNumber && typeof ipr_dischargeSummaryBlock_ === "function") {
+        const ds = ipr_dischargeSummaryBlock_(ipNumber);
+        if (ds) {
+          ev.summaryId     = ds.summaryId || "";
+          ev.summaryStatus = ds.status || "";
+          ev.summarySigned = ds.status === "SIGNED";
+          ev.signedBy      = ds.signedBy || "";
+          ev.signerRegNo   = ds.signerRegNo || "";
+          ev.shortHash     = ds.shortHash || "";
+          ev.signedAt      = ds.date || "";
+          if (ds.diagnosis) ev.diagnosis = ds.diagnosis;
+          if (ds.outcome) ev.status = ds.outcome;
+        }
+      }
+    } catch (e) { /* the discharge module may not be on this deployment */ }
+
+    events.push(ev);
+  }
 }
