@@ -24,6 +24,7 @@
 
    /* --- Text --- */
    --text-main:      #f8fafc;
+   --text-main-rgb:  248, 250, 252;   /* Bootstrap needs the channels too */
    --text-secondary: #cbd5e1;
    --text-label:     #cbd5e1;
    --text-muted:     #94a3b8;
@@ -113,6 +114,7 @@
    --surface-active: rgba(15,23,42,0.08);
 
    --text-main:      #0f172a;
+   --text-main-rgb:  15, 23, 42;
    --text-secondary: #334155;
    --text-label:     #475569;
    --text-muted:     #5f6d82;
@@ -167,6 +169,46 @@
    --chart-1: #6366f1;  --chart-2: #059669;  --chart-3: #b45309;
    --chart-4: #0284c7;  --chart-5: #7e22ce;  --chart-6: #dc2626;
  }
+
+ /* ----------------------------------------------------------------------
+    Bootstrap's own text tokens, bound to ours.
+
+    Bootstrap 5.3 sets --bs-body-color: #212529 on :root and then re-asserts
+    it on .card, .list-group-item, .modal-content, .accordion and friends.
+    Nothing here ever overrode it, so every one of those containers reset its
+    text to near-black — and any child without an explicit colour class
+    inherited near-black ON A NEAR-BLACK CARD. That is why the dashboard's
+    figures (bed utilisation, inpatients, appointments, length of stay,
+    turnaround, attendance) were unreadable in dark mode while their labels,
+    which carry .label-bright, were fine.
+
+    Binding the Bootstrap tokens to the theme fixes it once for every
+    component in the application rather than per tile, and keeps the light
+    theme exactly as it looks today.
+    ---------------------------------------------------------------------- */
+ :root,
+ body.light-theme,
+ html.light-theme {
+   --bs-body-color:            var(--text-main);
+   --bs-body-color-rgb:        var(--text-main-rgb);
+   --bs-body-bg:               var(--bg-main);
+   --bs-emphasis-color:        var(--text-main);
+   --bs-secondary-color:       var(--text-label);
+   --bs-tertiary-color:        var(--text-muted);
+   --bs-heading-color:         var(--text-main);
+   --bs-border-color:          var(--border-color);
+   --bs-card-color:            var(--text-main);
+   --bs-card-bg:               var(--bg-card);
+   --bs-card-border-color:     var(--border-color);
+   --bs-card-cap-bg:           transparent;
+ }
+ /* Modals, dropdowns, list groups and accordions are already pinned with
+    !important rules in section 11.6 below, so they are left out here. */
+
+ /* .text-muted is Bootstrap's, and it resolves to a fixed slate that all but
+    vanishes on our dark surfaces. It is used across every module, so it is
+    bound to the token rather than hunted down call site by call site. */
+ .text-muted { color: var(--text-muted) !important; }
 
  /* ========================================= */
  /* 2. BASE STYLES & UTILITIES                */

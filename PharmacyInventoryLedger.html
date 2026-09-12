@@ -315,7 +315,7 @@
         if(response.success) {
           bootstrap.Modal.getInstance(document.getElementById('inventoryEditModal')).hide();
           loadPharmacyInventory(); 
-          if(typeof showToast === 'function') showToast('Updated', response.message, 'success');
+          showToast('Batch updated', response.message, 'success');
         } else {
           alert(response.message);
         }

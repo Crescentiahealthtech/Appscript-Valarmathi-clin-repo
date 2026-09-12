@@ -179,6 +179,64 @@
       : 'a server file is missing from the Apps Script project.');
   };
 
+  /**
+   * The null-safe wrapper every screen calls before putting a backend message
+   * on screen. Three byte-identical copies of this used to be declared in
+   * Admin_Appointments, IP_Casesheet_UI and IP_Notes_UI — all three global,
+   * so only the last one parsed ever existed. It belongs beside
+   * crescExplainError(), in the one file guaranteed to be parsed first.
+   * @param {string|Error} msg
+   * @returns {string}
+   */
+  window._crescExplain = function (msg) {
+    try {
+      return (typeof window.crescExplainError === 'function')
+        ? window.crescExplainError(msg)
+        : String(msg == null ? '' : msg);
+    } catch (e) { return String(msg == null ? '' : msg); }
+  };
+
+  /**
+   * The application's toast.
+   *
+   * Two pharmacy screens already called showToast() behind a
+   * `typeof showToast === 'function'` guard, but nothing in the project ever
+   * defined it. Adding stock fell back to a blocking alert(); saving an
+   * inventory edit had no fallback at all and confirmed nothing, so the only
+   * way to tell whether the edit had saved was to reopen the row.
+   *
+   * It follows the pattern the Accounts screens use — bottom-right, solid
+   * semantic fill, auto-dismiss — and stacks rather than overlapping, so a
+   * burst of saves stays readable.
+   *
+   * @param {string} title
+   * @param {string} [message]
+   * @param {'success'|'error'|'warning'|'info'} [type='info']
+   */
+  window.showToast = function (title, message, type) {
+    var fill = { success: 'var(--success)', error: 'var(--danger)',
+                 warning: 'var(--warning)', info: 'var(--info)' }[type] || 'var(--info)';
+
+    var stack = document.getElementById('cresc-toast-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.id = 'cresc-toast-stack';
+      stack.style.cssText = 'position:fixed;bottom:0;right:0;z-index:3000;display:flex;' +
+        'flex-direction:column;align-items:flex-end;gap:8px;padding:1.5rem;pointer-events:none;';
+      document.body.appendChild(stack);
+    }
+
+    var t = document.createElement('div');
+    t.className = 'px-4 py-3 rounded-3 shadow text-white toast-solid';
+    t.style.cssText = 'background:' + fill + ';max-width:min(360px, calc(100vw - 3rem));' +
+                      'pointer-events:auto;';
+    var esc = window.crescEsc;
+    t.innerHTML = '<div class="fw-bold small">' + esc(title) + '</div>' +
+      (message ? '<div class="small" style="opacity:.9;">' + esc(message) + '</div>' : '');
+    stack.appendChild(t);
+    setTimeout(function () { t.remove(); }, 3500);
+  };
+
   /** One sticky banner, not one toast per failed call. */
   window.crescDeployBanner = function (text) {
     var el = document.getElementById('cresc-deploy-banner');

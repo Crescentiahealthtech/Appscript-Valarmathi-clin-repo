@@ -121,32 +121,15 @@
         </div>
     </div>
 </div> <script>
-    // --- Custom Dropdown Engine ---
-    function toggleCustomDropdown(menuId) {
-        document.querySelectorAll('.custom-dropdown-menu').forEach(menu => {
-            if (menu.id !== menuId) menu.classList.add('d-none');
-        });
-        const menu = document.getElementById(menuId);
-        if (menu) menu.classList.toggle('d-none');
-    }
+    /* --- Custom Dropdown Engine ---
+       toggleCustomDropdown() and updateDropdownText() used to be declared
+       here as well as in OP_Module.html. Both were globals, OP_Module is
+       included later, and so OP_Module's pair won every time — nothing in
+       the application ever reached this copy. The two callers that exist
+       (OP_Module and EMR_MasterTimeline_UI) both drive OP_Module's
+       advice dropdown, so the dead pair is gone rather than renamed.
 
-    function updateDropdownText(menuId, btnId, defaultText) {
-        const menu = document.getElementById(menuId);
-        const btn = document.getElementById(btnId);
-        if (!menu || !btn) return;
-
-        const checkedBoxes = Array.from(menu.querySelectorAll('input[type="checkbox"]:checked'));
-        
-        if (checkedBoxes.length === 0) {
-            btn.innerHTML = defaultText + ' <i class="fa-solid fa-chevron-down ms-2"></i>';
-        } else if (checkedBoxes.length <= 2) {
-            const text = checkedBoxes.map(cb => cb.value).join(', ');
-            btn.innerHTML = text + ' <i class="fa-solid fa-chevron-down ms-2"></i>';
-        } else {
-            btn.innerHTML = checkedBoxes.length + ' Selected <i class="fa-solid fa-chevron-down ms-2"></i>';
-        }
-    }
-
+       The outside-click closer below is NOT a duplicate and still runs. */
     document.addEventListener('click', function(event) {
         const isClickInsideDropdown = event.target.closest('.position-relative');
         if (!isClickInsideDropdown) {

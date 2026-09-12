@@ -52,7 +52,17 @@ var DSX_ACTIONS = [
 var DSX_ROLE_MATRIX = {
   doctor: ['view', 'viewSigned', 'initiate', 'generate', 'edit', 'submit', 'return',
            'sign', 'amend', 'cancel', 'printDraft', 'printFinal'],
-  admin: ['view', 'viewSigned', 'cancel', 'printFinal'],
+  // The administrator is the system owner and is held back by nothing here.
+  // Withholding `edit` and `generate` was the reason an admin login opened the
+  // discharge desk read-only: every section rendered as text, with no way to
+  // prepare the document the ward was waiting on.
+  //
+  // This grants the ACTIONS, not an identity. `sign` still runs the
+  // signer-identity rule in ds_sign() — a registered doctor profile with a
+  // registration number — and that rule applies to a doctor login in exactly
+  // the same way. An admin who is also the consultant signs; one who is not
+  // is told precisely what is missing instead of finding the button gone.
+  admin: DSX_ACTIONS.slice(),
   receptionist: ['viewSigned', 'printFinal'],
   reception: ['viewSigned', 'printFinal'],
   accountant: ['viewSigned', 'printFinal'],
@@ -1875,8 +1885,12 @@ function ds_testTransitions() {
   check('nurse may not return', has('nurse', 'return'), false);
   check('nurse may not cancel', has('nurse', 'cancel'), false);
   check('admin may cancel', has('admin', 'cancel'), true);
-  check('admin may not edit', has('admin', 'edit'), false);
-  check('admin may not sign', has('admin', 'sign'), false);
+  // The administrator holds every action in the matrix. Signing is still
+  // gated on a doctor profile with a registration number, inside ds_sign().
+  check('admin may edit', has('admin', 'edit'), true);
+  check('admin may generate', has('admin', 'generate'), true);
+  check('admin may initiate', has('admin', 'initiate'), true);
+  check('admin holds every action', actorFor('admin').actions.length, DSX_ACTIONS.length);
   check('receptionist sees signed only', has('receptionist', 'view'), false);
   check('receptionist may print final', has('receptionist', 'printFinal'), true);
   check('pharmacist gets meds only', has('pharmacist', 'viewMedsOnly'), true);

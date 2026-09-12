@@ -121,12 +121,19 @@
             </div>
           </div>
 
-          <!-- FINANCIAL: pending credit -->
+          <!-- FINANCIAL: pending credit.
+               Unlike every other tile in this row, this one is NOT scoped to
+               today: it is every unpaid balance still open across hospital,
+               pharmacy and lab billing, whenever it was raised. The subtitle
+               says so, because a bare rupee figure here read as "today" and
+               nobody could tell where it came from. -->
           <div class="col-6 col-xl-3" id="dash-card-credit">
             <div class="card p-3 h-100">
               <i class="fa-solid fa-file-invoice-dollar mb-2" style="color: var(--warning-fg);"></i>
               <div class="fw-bold" style="font-size:1.6rem;" id="kpi-credit">—</div>
-              <div class="label-bright small">Pending Credit</div>
+              <div class="label-bright small">Pending Credit &middot; all unpaid</div>
+              <div class="small mt-1 label-bright" id="kpi-credit-split">&nbsp;</div>
+              <div class="small mt-1"><a href="#" onclick="gotoAccounts(event)" style="color: var(--accent-fg); text-decoration:none;">Receivables &rarr;</a></div>
             </div>
           </div>
 
@@ -284,9 +291,12 @@
   var loggedInUser = window.loggedInUser || "";
   var loggedInName = window.loggedInName || "";
 
-  // --- WORKING HOURS MODAL CONTROLLERS (preserved) ---
-  function openWorkingHours() { document.getElementById('workingHoursModal').classList.remove('d-none'); }
-  function closeWorkingHours() { document.getElementById('workingHoursModal').classList.add('d-none'); }
+  // The working-hours modal is owned by Modals.html, which defines
+  // openWorkingHours()/closeWorkingHours() and is included AFTER this file.
+  // The stubs that used to sit here were identical in name and re-declared
+  // both as globals, so the last one parsed won and these never ran — they
+  // only un-hid the dialog without loading a single doctor into it. The
+  // button above calls the real one.
 
   // ============================================================
   // DASHBOARD STATE  (var = hoisted, TDZ-safe)
@@ -418,6 +428,17 @@
     if (d.revenue) {
       document.getElementById('kpi-revenue').innerText = fmtMoney(d.revenue.totalToday);
       document.getElementById('kpi-credit').innerText  = fmtMoney(d.revenue.pendingCredit);
+
+      // Where the credit actually sits. Only streams carrying a balance are
+      // named, so the line stays short and never reads "₹0 pharmacy".
+      var splitEl = document.getElementById('kpi-credit-split');
+      if (splitEl) {
+        var parts = [];
+        if (d.revenue.creditHospital) parts.push(fmtMoney(d.revenue.creditHospital) + ' hospital');
+        if (d.revenue.creditPharmacy) parts.push(fmtMoney(d.revenue.creditPharmacy) + ' pharmacy');
+        if (d.revenue.creditLab)      parts.push(fmtMoney(d.revenue.creditLab) + ' lab');
+        splitEl.innerText = parts.length ? parts.join(' · ') : 'Nothing outstanding';
+      }
     }
 
     // ---- Alerts, Footfall, Analytics ----

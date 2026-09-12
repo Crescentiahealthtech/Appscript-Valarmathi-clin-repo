@@ -491,7 +491,13 @@ function saveIPNote(payload, sessionToken) {
 
     // C) Nurse note: mark administered meds. Scoped to THIS admission so a
     //    guessed queue id cannot touch another patient's chart.
-    if (roleType === 'NURSE' && w.role === 'nurse' &&
+    // effectiveRole, not role: an administrator recording a nursing note
+    // writes as a nurse (resolveIPWrite_ sets it), and the NURSE section
+    // filter already let markedMeds through on that basis. Testing the raw
+    // login role here meant their ticks passed validation and were then
+    // dropped in silence — the drug read as given on screen and was never
+    // recorded as administered.
+    if (roleType === 'NURSE' && w.effectiveRole === 'nurse' &&
         noteData.markedMeds && noteData.markedMeds.length) {
       _markMedsAdministered_(ss, noteData.markedMeds, w.authorLabel, timestamp,
                              payload.ipNumber);

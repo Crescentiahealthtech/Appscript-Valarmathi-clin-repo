@@ -530,7 +530,7 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
     : '';
   var wardHistory = dsx_wardHistory_(bundle);
   sections.ADMISSION_DETAILS = dsx_newSection_('Admission details', 'FIELDS', {
-    dateOfAdmission: dsx_fmt_(doa, 'dd-MMM-yyyy') + (dsx_str_(adm.TOA) ? ' ' + dsx_str_(adm.TOA) : ''),
+    dateOfAdmission: dsx_dateTime_(doa, adm.TOA),
     dateOfDischarge: dsx_fmt_(dod, 'dd-MMM-yyyy'),
     lengthOfStay: los === '' ? '' : (los + ' day' + (los === 1 ? '' : 's')),
     admissionType: dsx_str_(adm.Admission_Type),

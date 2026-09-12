@@ -548,9 +548,12 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData, opts) {
 
   } else if (IPC_ROLE_ACTS_AS.indexOf(role) !== -1 && type === "NURSE") {
     // Nursing observations recorded by the administrator stay the
-    // administrator's: there is no nurse to attribute them to, and a
-    // medication marked "given" is a nursing act (the NURSE section matrix
-    // already withholds markedMeds from anyone but a nurse).
+    // administrator's: there is no nurse to attribute them to, so the note
+    // carries their own name. The sections they may fill are the nurse's,
+    // markedMeds included — on a night with no nurse on the floor the
+    // administrator is who is at the keyboard, and a dose that was given
+    // must be recordable as given by whoever gave it. The author label on
+    // the row says who that was.
     effectiveRole = "nurse";
   }
 

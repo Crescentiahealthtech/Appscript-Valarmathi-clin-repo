@@ -1119,11 +1119,24 @@
   }
 
   // ===================================================================
-  // INIT
+  // INIT — on entry to the desk, not on page load.
+  //
+  // This work used to run from a setTimeout 300ms after the page loaded, so
+  // a full scan of the pharmacy inventory sheet fired on EVERY page load:
+  // for a doctor who never opens Pharmacy, for a lab technician, and even
+  // while the login screen was still up and nobody had signed in. It delayed
+  // the first screen every user sees in order to warm a table most of them
+  // never open.
+  //
+  // switchTab() now calls this when the billing desk is actually opened,
+  // which is the same router-hook pattern the pharmacy desk, the lab desk
+  // and the discharge desk already use. The stock is still fetched fresh on
+  // every entry, so a pharmacist never bills against a stale count.
   // ===================================================================
-  setTimeout(() => {
+  function openPharmacyBilling() {
     fetchLivePharmacyStock();
     const tbody = document.getElementById('phBillingBody');
     if (tbody && tbody.children.length === 0) addPharmacyRow();
-  }, 300);
+  }
+  window.openPharmacyBilling = openPharmacyBilling;
 </script>

@@ -190,11 +190,7 @@
       .withSuccessHandler((response) => {
         if(response.success) {
           form.reset();
-          if(typeof showToast === 'function') {
-             showToast('Success', response.message, 'success');
-          } else {
-             alert(response.message);
-          }
+          showToast('Stock added', response.message, 'success');
         } else {
           alert('Failed to add stock: ' + response.message);
         }
