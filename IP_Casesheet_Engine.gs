@@ -468,8 +468,11 @@ function ipc_routeAdmissionOrders_(ss, payload, patientId, encounterId, w, times
       // the drug stayed on the Continue list for every later note.
       dc_str_(md.drugName),
       dc_str_(md.dose) || dc_str_(md.strength),
-      dc_str_(md.freq) || dc_str_(md.sig),
-      dc_str_(md.route) || "Oral",
+      // For a drip the "frequency" the ward acts on is the infusion rate.
+      (dc_upper_(md.type || md.strength) === "IV" && dc_str_(md.rate))
+        ? dc_str_(md.rate)
+        : (dc_str_(md.freq) || dc_str_(md.sig)),
+      dc_str_(md.route) || (dc_upper_(md.type || md.strength) === "IV" ? "IV" : "Oral"),
       dc_str_(md.instructions) || dc_str_(md.comments),
       "Pending_Dispense",
       w.authorLabel,
@@ -632,15 +635,21 @@ function ipc_composeCasesheetHtml_(f, opts) {
   var medsTable = ipp_table_(
     [{ label: "#", cls: "ctr" }, "Drug", "Dose / Frequency", { label: "Route", cls: "ctr" }, { label: "Duration", cls: "ctr" }],
     meds.map(function (md, i) {
-      var name = [md.type, md.drugName || md.name, md.strength]
+      // An IV order's rate IS the order, and it has no oral route to default
+      // to. Both were being dropped: the rate never printed, and the fluid
+      // went out labelled "Oral".
+      var isIV = dc_upper_(md.type || md.strength) === "IV";
+      var name = [(isIV ? "" : md.type), md.drugName || md.name, (isIV ? "" : md.strength)]
         .map(dc_str_).filter(Boolean).join(" ");
       var note = dc_str_(md.comment || md.instructions);
+      var dose = [md.dose, md.freq || md.sig].map(dc_str_).filter(Boolean).join(" ");
+      if (isIV && dc_str_(md.rate)) dose = (dose ? dose + " " : "") + "@ " + dc_str_(md.rate);
       return [
         String(i + 1),
         '<strong>' + e(name) + '</strong>' +
           (note ? '<br><span class="muted">' + e(note) + '</span>' : ''),
-        e([md.dose, md.freq || md.sig].map(dc_str_).filter(Boolean).join(" ")),
-        e(md.route || "Oral"),
+        e(dose),
+        e(md.route || (isIV ? "IV" : "Oral")),
         e(md.duration || md.days || "")
       ];
     }),

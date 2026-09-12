@@ -428,6 +428,20 @@
             </thead>
             <tbody id="ipc-rx-tbody"></tbody>
           </table>
+          <!-- Offered on the drug-name field once the row is typed IV Fluid.
+               A datalist suggests without constraining, so a fluid the list
+               does not carry can still be written in full. -->
+          <datalist id="ipc-iv-fluid-list">
+            <option value="Normal Saline (NS) 500ml"></option>
+            <option value="Normal Saline (NS) 1000ml"></option>
+            <option value="DNS (Dextrose NS) 500ml"></option>
+            <option value="RL (Ringer's Lactate) 500ml"></option>
+            <option value="D5W (5% Dextrose) 500ml"></option>
+            <option value="D10W (10% Dextrose) 500ml"></option>
+            <option value="Isolyte P 500ml"></option>
+            <option value="Isolyte M 500ml"></option>
+            <option value="Mannitol 20% 100ml"></option>
+          </datalist>
         </div>
       </div>
 
@@ -2428,22 +2442,28 @@ function ipcAddIPCRxRow(pre) {
     const tr = document.createElement('tr');
     tr.innerHTML =
         '<td>' +
-            '<select class="hd-input ipc-rx-type" style="padding:0.1rem;">' +
+            '<select class="hd-input ipc-rx-type" style="padding:0.1rem;" onchange="ipcOnIPCRxTypeChange(this)">' +
                 '<option value="Tab">Tab</option><option value="Cap">Cap</option><option value="Syp">Syp</option>' +
                 '<option value="Inj">Inj</option><option value="Oint">Oint</option><option value="Drops">Drops</option>' +
+                // An inpatient is the patient most likely to be on a drip. Without
+                // this the fluid went into the Notes column as free text, so it
+                // reached neither the pharmacy nor the nursing chart as an order.
+                '<option value="IV">IV Fluid</option>' +
             '</select>' +
         '</td>' +
         '<td style="position:relative;">' +
           '<input type="text" class="hd-input ipc-rx-name" placeholder="Search drug / brand..." autocomplete="off" ' +
                  'data-source="EXTERNAL" style="border-left:3px solid var(--border-strong);" ' +
-                 'oninput="ipcOnIPCDrugType(this)" onfocus="ipcOnIPCDrugType(this)" onchange="ipcQueueSafetyCheck()">' +
+                 'oninput="ipcOnIPCDrugType(this)" onfocus="ipcOnIPCDrugType(this)" onchange="ipcQueueSafetyCheck()" ' +
+                 'list="ipc-iv-fluid-list">' +
           '<div class="autocomplete-items d-none"></div>' +
           '<div class="ipc-peds-slot"></div>' +
         '</td>' +
         '<td>' +
           '<div class="d-flex align-items-center gap-1">' +
             '<input type="text" class="hd-input dial-trigger ipc-rx-sig text-warning fw-bold text-center" placeholder="Dosage" onclick="ipcOpenIPCDialPad(this, \'rx\')">' +
-            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print" style="font-size:0.6rem;" title="Dose calculator" onclick="ipcOpenIPCDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>' +
+            '<input type="text" class="hd-input ipc-rx-rate text-info fw-bold text-center d-none" placeholder="ml/hr" title="Infusion rate in ml/hr">' +
+            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print ipc-rx-dosecalc" style="font-size:0.6rem;" title="Dose calculator" onclick="ipcOpenIPCDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>' +
           '</div>' +
         '</td>' +
         '<td><input type="text" class="hd-input dial-trigger ipc-rx-days text-info text-center" placeholder="Days" onclick="ipcOpenIPCDialPad(this, \'dur\')"></td>' +
@@ -2456,6 +2476,8 @@ function ipcAddIPCRxRow(pre) {
         if (pre.type) Array.from(typeSel.options).forEach(function (o) {
             if (o.value.toLowerCase() === String(pre.type).toLowerCase()) typeSel.value = o.value;
         });
+        ipcOnIPCRxTypeChange(typeSel);
+        if (pre.rate) tr.querySelector('.ipc-rx-rate').value = pre.rate;
         tr.querySelector('.ipc-rx-name').value = pre.drugName || '';
         tr.querySelector('.ipc-rx-sig').value = pre.sig || '';
         tr.querySelector('.ipc-rx-days').value = pre.duration || '';
@@ -2470,6 +2492,30 @@ function ipcAddIPCRxRow(pre) {
         }
     }
     return tr;
+}
+
+/**
+ * Retunes one prescription row for what is being ordered.
+ *
+ * A drip is not a dose. It has a volume and a rate, no tablet count and no
+ * mg/kg calculation, so the row swaps the calculator for a ml/hr field and
+ * relabels the columns rather than asking the doctor to write "NS 500ml @
+ * 75ml/hr" into a box built for "1-0-1".
+ */
+function ipcOnIPCRxTypeChange(typeSel) {
+    const tr = typeSel.closest('tr');
+    if (!tr) return;
+    const isIV = (typeSel.value === 'IV');
+
+    const rate = tr.querySelector('.ipc-rx-rate');
+    const sig  = tr.querySelector('.ipc-rx-sig');
+    const calc = tr.querySelector('.ipc-rx-dosecalc');
+    const name = tr.querySelector('.ipc-rx-name');
+
+    if (rate) { rate.classList.toggle('d-none', !isIV); if (isIV) rate.style.width = '72px'; }
+    if (calc) calc.classList.toggle('d-none', isIV);
+    if (sig)  sig.placeholder = isIV ? 'Volume' : 'Dosage';
+    if (name) name.placeholder = isIV ? 'Fluid (NS, RL, DNS...)' : 'Search drug / brand...';
 }
 
 // ============================================================================
@@ -2917,15 +2963,22 @@ function ipcCollectRxRows() {
             if (hit) src = 'INTERNAL';
         }
 
+        const type = row.querySelector('.ipc-rx-type')?.value || 'Tab';
         const med = {
-            type: row.querySelector('.ipc-rx-type')?.value || 'Tab',
-            strength: row.querySelector('.ipc-rx-type')?.value || 'Tab',
+            type: type,
+            strength: type,
             drugName: name,
             sig: row.querySelector('.ipc-rx-sig')?.value || '',
             duration: row.querySelector('.ipc-rx-days')?.value || '',
             comments: row.querySelector('.ipc-rx-comment')?.value || '',
             source: src
         };
+        // An IV order carries its rate. Normalised to "N ml/hr" so the printed
+        // case sheet and the nursing chart read the same however it was typed.
+        if (type === 'IV') {
+            const raw = (row.querySelector('.ipc-rx-rate')?.value || '').trim();
+            if (raw) med.rate = /^[\d.]+$/.test(raw) ? (raw + ' ml/hr') : raw;
+        }
         if (nameEl.dataset.taper) {
             try { med.taper = JSON.parse(nameEl.dataset.taper); } catch (e) {}
             med.computedQty = parseInt(nameEl.dataset.qty, 10) || 0;

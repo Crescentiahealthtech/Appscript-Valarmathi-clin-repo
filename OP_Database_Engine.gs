@@ -119,7 +119,11 @@ function saveOPEncounter(payload) {
           encounterId,                                         // C
           dateStr,                                             // D
           `${med.strength || ""} ${med.drugName || ""}`.trim(),// E
-          med.sig || "",                                       // F
+          // An infusion's rate IS its dosing instruction. Without it the
+          // counter reads only a volume and the drip has no prescribed speed.
+          (String(med.type || med.strength || "").toUpperCase() === "IV" && med.rate)
+            ? `${med.sig || ""} @ ${med.rate}`.trim()
+            : (med.sig || ""),                                 // F
           "Doctor",                                            // G
           "Pending",                                           // H
           med.duration || ""                                   // I  (days, for billing qty)

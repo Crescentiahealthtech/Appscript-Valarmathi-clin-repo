@@ -190,6 +190,66 @@
     document.getElementById('billing-workspace-records').classList.add('d-none');
 
     document.getElementById(`billing-workspace-${type}`).classList.remove('d-none');
+
+    // The ledger was only ever reachable through a Refresh button that called
+    // a function nobody had written, so it sat on "Click Refresh to load
+    // records..." forever. Load it on open as well, so arriving at the screen
+    // shows the ledger rather than an instruction.
+    if (type === 'records') loadBillingRecords();
+  }
+
+  // --- Master Billing Ledger ---
+  function billEsc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function billRow(colspan, cls, text) {
+    return '<tr><td colspan="' + colspan + '" class="text-center py-4 ' + cls + '">' +
+           billEsc(text) + '</td></tr>';
+  }
+
+  function loadBillingRecords() {
+    const tbody = document.getElementById('billing-records-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = billRow(6, 'text-muted', 'Loading the billing ledger...');
+
+    google.script.run
+      .withSuccessHandler(function (rows) {
+        if (!rows || !rows.length) {
+          tbody.innerHTML = billRow(6, 'text-muted', 'No invoices have been raised yet.');
+          return;
+        }
+        tbody.innerHTML = rows.map(function (r) {
+          const paid = String(r.status || '').toLowerCase() === 'paid';
+          return '<tr>' +
+            '<td class="fw-bold">' + billEsc(r.invoiceId) + '</td>' +
+            '<td>' + billEsc(r.date) + '</td>' +
+            '<td>' + billEsc(r.patientId) + '</td>' +
+            '<td>&#8377; ' + billEsc(r.total) + '</td>' +
+            '<td><span class="badge bg-' + (paid ? 'success' : 'warning') + '">' +
+              billEsc(r.status || 'Unpaid') + '</span></td>' +
+            '<td class="text-center">' + (paid
+              ? '<span class="text-muted small">Settled</span>'
+              : '<button class="btn btn-sm btn-outline-success" onclick="markBillingInvoicePaid(\'' +
+                billEsc(r.invoiceId) + '\')">Mark paid</button>') +
+            '</td></tr>';
+        }).join('');
+      })
+      .withFailureHandler(function (e) {
+        tbody.innerHTML = billRow(6, 'text-danger', 'Could not load the ledger: ' + e.message);
+      })
+      .getAllInvoices();
+  }
+
+  function markBillingInvoicePaid(invoiceId) {
+    if (!invoiceId) return;
+    if (!confirm('Record payment against ' + invoiceId + '?')) return;
+    google.script.run
+      .withSuccessHandler(function (msg) { alert(msg); loadBillingRecords(); })
+      .withFailureHandler(function (e) { alert('Could not record the payment: ' + e.message); })
+      .markInvoicePaid(invoiceId);
   }
 
   // --- Dynamic Billing Logic ---

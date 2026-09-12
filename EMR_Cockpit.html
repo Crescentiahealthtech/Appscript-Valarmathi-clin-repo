@@ -23,7 +23,6 @@
     .rx-table td { padding: 4px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
 
     /* Advanced Floating Dial Pad */
-    #dial-pad-popover { position: absolute; z-index: 1050; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; box-shadow: 0 10px 25px rgba(var(--shadow-rgb), 0.3); width: 260px; }
     .dial-btn { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 4px; padding: 6px 0; text-align: center; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: 0.1s; user-select: none; }
     .dial-btn:hover { background: var(--accent-purple); border-color: var(--accent-purple); color: var(--text-on-accent); }
     .dial-btn:active { transform: scale(0.95); }
@@ -57,35 +56,15 @@
             
             <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records'); fetchIPRecordsLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: var(--pink-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
 
-            <!-- Discharge Summary Engine. Lives here rather than behind a new
-                 top-level nav item because applyRBAC() grants a nurse only the
-                 Dashboard and EMR tabs, and the nurse is the preparer. -->
+            <!-- IP Ward and the Discharge Desk are reached from here, not from
+                 the sidebar: applyRBAC() grants a nurse only the Dashboard and
+                 EMR tabs, and the nurse is the ward's preparer. -->
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ip-ledger-view'); if (typeof loadIPLedger === 'function') loadIPLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-hospital fa-2xl" style="color: var(--violet-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Ward</h5></div></div>
+
             <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ds-desk-view'); dsOpenDesk();"><div class="emr-icon-wrap"><i class="fa-solid fa-file-circle-check fa-2xl" style="color: var(--teal-fg);"></i></div><h5 class="text-white fw-bold mt-2">Discharge Desk</h5></div></div>
         </div>
     </div>
     
-    <div id="dial-pad-popover" class="d-none no-print">
-        <div class="d-flex justify-content-between mb-2 pb-1 border-bottom border-secondary">
-            <span class="text-warning fw-bold" style="font-size: 0.75rem;">Set Dosage & Timing</span>
-            <i class="fa-solid fa-xmark text-danger cursor-pointer" onclick="closeDialPad()"></i>
-        </div>
-        <div class="row g-1 mb-2">
-            <div class="col-3"><div class="dial-btn" onclick="appendDial('0')">0</div></div>
-            <div class="col-3"><div class="dial-btn" onclick="appendDial('1')">1</div></div>
-            <div class="col-3"><div class="dial-btn" onclick="appendDial('2')">2</div></div>
-            <div class="col-3"><div class="dial-btn" onclick="appendDial('3')">3</div></div>
-            <div class="col-3"><div class="dial-btn" onclick="appendDial('6')">6</div></div>
-            <div class="col-3"><div class="dial-btn" onclick="appendDial('1/2')">1/2</div></div>
-            <div class="col-6"><div class="dial-btn text-warning border-warning" onclick="clearDial()">Clear Cell</div></div>
-        </div>
-        <div class="row g-1">
-            <div class="col-4"><div class="dial-btn" onclick="appendDial(' (AF)')">AF</div></div>
-            <div class="col-4"><div class="dial-btn" onclick="appendDial(' (BF)')">BF</div></div>
-            <div class="col-4"><div class="dial-btn" onclick="appendDial(' SOS')">SOS</div></div>
-            <div class="col-4"><div class="dial-btn" onclick="appendDial(' STAT')">STAT</div></div>
-        </div>
-    </div>
-
     <div id="print-rx-container" class="d-none d-print-block p-4 bg-white text-dark">
         <div class="text-center border-bottom border-dark pb-2 mb-3">
             <h2 class="fw-bold mb-0" style="color: var(--text-main); text-transform: uppercase;">Valarmathi Clinic</h2>

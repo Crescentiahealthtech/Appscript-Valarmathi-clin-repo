@@ -294,6 +294,27 @@ function dsx_unpackPayload_(rowObj) {
   }
 }
 
+/**
+ * Forces the Payload_* cells of one row to plain text BEFORE anything is
+ * written into them.
+ *
+ * setValue() parses what it is given the way the UI would: a chunk that
+ * happens to begin with "=", "+", "-" or "@" becomes a formula, and one that
+ * looks numeric becomes a number. Chunk 1 always starts with "{" and is safe,
+ * but chunk boundaries fall mid-JSON, so any payload over 45,000 characters
+ * can start a chunk on a character Sheets rewrites. The value then reads back
+ * a different length, Payload_Chars no longer matches, and the draft is
+ * declared corrupt — for a document that was stored perfectly well.
+ */
+function dsx_prepPayloadCells_(sheet, rowNumber) {
+  var map = dsx_headerMap_(sheet);
+  for (var i = 1; i <= DSX_CHUNKS; i++) {
+    var col = map['Payload_' + i];
+    if (col === undefined) continue;
+    try { sheet.getRange(rowNumber, col + 1).setNumberFormat('@'); } catch (e) { /* format is advisory */ }
+  }
+}
+
 /** Spreads a packed payload across the row fields a DS_* sheet expects. */
 function dsx_payloadFields_(jsonString) {
   var chunks = dsx_packPayload_(jsonString);
@@ -664,8 +685,11 @@ function dsx_putWorking_(summaryId, payload, baseSnapshotNo, username) {
   fields.Updated_By = dsx_str_(username);
 
   var row = dsx_findRowByKey_(sh, 'Summary_ID', dsx_upper_(summaryId));
-  if (row) dsx_writeRow_(sh, row, fields);
-  else row = dsx_appendRow_(sh, fields);
+  if (!row) {
+    row = dsx_appendRow_(sh, { Summary_ID: dsx_upper_(summaryId), Tenant_ID: dsx_tenant_() });
+  }
+  dsx_prepPayloadCells_(sh, row);
+  dsx_writeRow_(sh, row, fields);
   return row;
 }
 
@@ -689,7 +713,10 @@ function dsx_appendSnapshot_(summaryId, snapshotNo, type, payload, contentHash, 
   fields.Created_By = dsx_str_(username);
   fields.Verify_Token_Hash = dsx_str_(verifyTokenHash);
 
-  return dsx_appendRow_(sh, fields);
+  var row = dsx_appendRow_(sh, { Snapshot_Key: fields.Snapshot_Key, Tenant_ID: fields.Tenant_ID });
+  dsx_prepPayloadCells_(sh, row);
+  dsx_writeRow_(sh, row, fields);
+  return row;
 }
 
 /** Every snapshot row for a summary, payloads excluded, newest first. */

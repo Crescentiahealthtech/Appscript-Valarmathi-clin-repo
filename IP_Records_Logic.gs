@@ -29,7 +29,7 @@
 
 var IPR_NOTE_LABELS = {
   DOCTOR: "Progress Note", NURSE: "Nursing Note", CONSULTANT: "Consultant Opinion",
-  PROCEDURE: "Procedure Note", HANDOVER: "Shift Handover", QUICK: "Quick Note",
+  PROCEDURE: "Procedure Note", QUICK: "Quick Note",
   INVESTIGATION: "Investigation"
 };
 
@@ -502,10 +502,22 @@ function getIPRecordPrintHtml(encounterId, sessionToken, opts) {
     }
 
     if (want("notes")) {
-      sections.push(ipp_sec_("Progress Notes",
-        file.notes.length
-          ? file.notes.map(ipn_printNote_).join("")
-          : '<span class="muted">No progress notes were recorded.</span>',
+      // The nursing record and the medical record file separately, so the
+      // caller may ask for one without the other. No filter still means the
+      // complete record, which is what "Complete Inpatient Record" promises.
+      var notes = file.notes;
+      var notesTitle = "Progress Notes";
+      if (opts.roleTypes && opts.roleTypes.length) {
+        var keep = {};
+        opts.roleTypes.forEach(function (r) { keep[dc_upper_(r)] = true; });
+        notes = notes.filter(function (n) { return keep[dc_upper_(n.roleType)]; });
+        notesTitle = (opts.roleTypes.length === 1 && dc_upper_(opts.roleTypes[0]) === "NURSE")
+          ? "Nursing Notes" : "Progress Notes";
+      }
+      sections.push(ipp_sec_(notesTitle,
+        notes.length
+          ? notes.map(ipn_printNote_).join("")
+          : '<span class="muted">No ' + notesTitle.toLowerCase() + ' were recorded.</span>',
         { loose: true, keepEmpty: true }));
     }
 

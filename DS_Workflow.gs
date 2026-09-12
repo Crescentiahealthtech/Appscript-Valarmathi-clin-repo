@@ -55,9 +55,18 @@ var DSX_ROLE_MATRIX = {
   pharmacy: ['viewMedsOnly']
 };
 
-/** What a configured preparer role gains. */
+/**
+ * What a configured preparer role gains.
+ *
+ * `initiate` belongs here. Without it a preparer held `generate` — the verb
+ * that rebuilds an EXISTING summary — but had no way to bring one into
+ * existence, so a nurse could only ever wait for a doctor to press the first
+ * button. Preparing the draft is the whole reason the role exists, and it
+ * changes nothing about who may sign: signing stays a doctor action, and an
+ * unsigned summary is not a discharge.
+ */
 var DSX_PREPARER_ACTIONS =
-  ['view', 'viewSigned', 'generate', 'edit', 'submit', 'printDraft', 'printFinal'];
+  ['view', 'viewSigned', 'initiate', 'generate', 'edit', 'submit', 'printDraft', 'printFinal'];
 
 /**
  * Resolves the caller and asserts they hold at least one of `required`.
@@ -490,9 +499,96 @@ function ds_getStatusMap(token, ipNumbers) {
 }
 
 /** Everything the editor needs in one call. */
+/**
+ * The draft the editor should show, recovered rather than surrendered.
+ *
+ * A summary whose header exists but whose draft cannot be read is the one
+ * failure that strands a doctor completely: the desk lists the patient, the
+ * editor opens, and there is nothing to work on and no way forward. The
+ * document is reconstructible — the same clinical record that produced it the
+ * first time is still there — so it is reconstructed, in falling order of
+ * fidelity, and the caller is told which source it got.
+ *
+ * @return {{payload:Object|null, source:string, repaired:boolean, note:string}}
+ */
+function dsx_resolveDraft_(summaryId, header, actor) {
+  // 1. The working draft — the only source carrying unsaved human edits.
+  try {
+    var working = dsx_getWorking_(summaryId);
+    if (working && working.payload) {
+      return { payload: working.payload, source: 'WORKING', repaired: false, note: '' };
+    }
+  } catch (e) {
+    Logger.log('DS working draft unreadable for ' + summaryId + ': ' + e.message);
+  }
+
+  // 2. The newest frozen snapshot. Loses edits made since it was taken, which
+  //    is why it is second, but it is a real clinical document.
+  var snaps = [];
+  try { snaps = dsx_listSnapshots_(summaryId); } catch (e2) { snaps = []; }
+  var signedNo = dsx_int_(header.Last_Signed_Snapshot_No);
+  for (var i = 0; i < snaps.length; i++) {
+    try {
+      var got = dsx_getSnapshotPayload_(summaryId, snaps[i].snapshotNo);
+      if (!got || !got.payload) continue;
+
+      // Restoring a signed summary from its OWN signed snapshot is not a
+      // degradation — that snapshot IS the document. Only a draft loses work
+      // this way, and only then is there anything to warn about.
+      var isTheSignedOne = signedNo && snaps[i].snapshotNo === signedNo;
+      return {
+        payload: got.payload,
+        source: 'SNAPSHOT_' + snaps[i].snapshotNo,
+        repaired: true,
+        note: isTheSignedOne ? '' :
+              'The working draft could not be read, so snapshot ' + snaps[i].snapshotNo +
+              ' was restored. Edits made after that snapshot are not in it — check the ' +
+              'summary before submitting.'
+      };
+    } catch (e3) { /* try the next snapshot down */ }
+  }
+
+  // 3. Nothing stored survives. Rebuild from the clinical record itself —
+  //    but NEVER for a signed document. A signed summary is a specific set of
+  //    words a doctor put their name to; the record has moved since, so a
+  //    fresh assembly would differ from what was signed while still carrying
+  //    the signature block and the hash chain's claim to be that document.
+  //    Handing that to a pharmacist or a patient would be worse than handing
+  //    them nothing, so an unreadable signed snapshot is reported as the
+  //    integrity failure it is.
+  var status = dsx_upper_(header.Status);
+  if (status === DSX_STATUS.SIGNED || status === DSX_STATUS.AMENDMENT_IN_PROGRESS) {
+    return {
+      payload: null, source: 'NONE', repaired: false,
+      note: 'the signed version could not be read, and a signed summary is never ' +
+            'rebuilt from current data'
+    };
+  }
+
+  try {
+    if (typeof dsx_assemble_ !== 'function') {
+      return { payload: null, source: 'NONE', repaired: false, note: '' };
+    }
+    var rebuilt = dsx_assemble_(dsx_str_(header.IP_Number),
+                                dsx_upper_(header.Discharge_Type) || 'NORMAL', actor);
+    return {
+      payload: rebuilt.payload, source: 'REASSEMBLED', repaired: true,
+      note: 'No readable draft was stored, so the summary was rebuilt from the case sheet, ' +
+            'notes and orders. Any earlier hand-editing is not in it — read every section ' +
+            'before submitting.'
+    };
+  } catch (e4) {
+    Logger.log('DS reassembly failed for ' + summaryId + ': ' + e4.message);
+    return { payload: null, source: 'NONE', repaired: false, note: dsx_str_(e4.message) };
+  }
+}
+
 function ds_getSummary(token, summaryId) {
   try {
     var actor = dsx_requireRole_(token, ['view', 'viewSigned', 'viewMedsOnly']);
+    if (!dsx_str_(summaryId)) {
+      return dsx_err_('VALIDATION_FAILED', 'No summary was named. Open one from the Discharge Desk.');
+    }
     var header = dsx_getHeader_(summaryId);
     if (!header) return dsx_err_('VALIDATION_FAILED', 'No discharge summary found for ' + summaryId + '.');
 
@@ -502,12 +598,35 @@ function ds_getSummary(token, summaryId) {
       return dsx_err_('FORBIDDEN', 'This summary has not been signed yet.');
     }
 
-    var working = dsx_getWorking_(summaryId);
-    var payload = working ? working.payload : null;
+    var draft = dsx_resolveDraft_(summaryId, header, actor);
+    var payload = draft.payload;
 
-    if (payload) {
-      payload = dsx_trimPayloadForRole_(payload, actor);
+    if (!payload) {
+      return dsx_err_('VALIDATION_FAILED',
+        'The draft for ' + dsx_str_(header.Summary_ID) + ' could not be read and could not be ' +
+        'rebuilt from the record' + (draft.note ? ' (' + draft.note + ')' : '') +
+        '. Use Regenerate on the Discharge Desk, or cancel and re-initiate the summary.');
     }
+
+    // A repaired draft is persisted so the next reader, the print engine and
+    // the diff all see the same document this one is about to be edited from.
+    if (draft.repaired && canSeeDrafts) {
+      var lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(DSX_LOCK_MS);
+        dsx_putWorking_(summaryId, payload,
+                        dsx_int_(header.Current_Snapshot_No), actor.username);
+        dsx_logEvent_(summaryId, actor, 'DS_DRAFT_REPAIRED', status, status,
+                      dsx_int_(header.Current_Snapshot_No), '', draft.note,
+                      { source: draft.source });
+      } catch (eLock) {
+        Logger.log('DS draft repair could not be persisted: ' + eLock.message);
+      } finally {
+        try { lock.releaseLock(); } catch (eRel) {}
+      }
+    }
+
+    payload = dsx_trimPayloadForRole_(payload, actor);
 
     var readiness = { hard: [], soft: [] };
     if (payload && typeof dsx_readiness_ === 'function') {
@@ -517,6 +636,8 @@ function ds_getSummary(token, summaryId) {
     return dsx_ok_('', {
       header: dsx_headerForClient_(header),
       payload: payload,
+      draftSource: draft.source,
+      draftNote: draft.repaired ? draft.note : '',
       readiness: readiness,
       permissions: dsx_permissions_(actor, header),
       events: dsx_recentEvents_(summaryId, 50),
@@ -1454,8 +1575,20 @@ function ds_getDiff(token, summaryId, fromRef, toRef) {
 function dsx_resolveRef_(summaryId, ref) {
   var r = dsx_upper_(ref) || 'WORKING';
   if (r === 'WORKING') {
-    var w = dsx_getWorking_(summaryId);
-    return { label: 'WORKING', payload: w ? w.payload : null };
+    var w = null;
+    try { w = dsx_getWorking_(summaryId); } catch (eW) { w = null; }
+    if (w && w.payload) return { label: 'WORKING', payload: w.payload };
+
+    // An unreadable working row used to throw out of the print engine, or
+    // print nothing, while the editor recovered the same summary happily —
+    // so the screen and the paper disagreed about whether the document
+    // existed. Both now fall back the same way.
+    var hdr = dsx_getHeader_(summaryId);
+    if (hdr) {
+      var d = dsx_resolveDraft_(summaryId, hdr, { username: '', role: '' });
+      if (d.payload) return { label: d.source, payload: d.payload };
+    }
+    return { label: 'WORKING', payload: null };
   }
   var parts = r.split(':');
   var type = parts[0];
