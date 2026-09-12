@@ -1032,6 +1032,9 @@
   // ROUTING
   // ---------------------------------------------------------------------
   function openWorkspace(type) {
+    // Defaulted so the one router in ScriptsMV can open this screen with no
+    // arguments, the same way it opens every other screen.
+    type = type || 'hospital';
     $('billing-workspace-hospital').classList.add('d-none');
     $('billing-workspace-records').classList.add('d-none');
     var target = $('billing-workspace-' + type);

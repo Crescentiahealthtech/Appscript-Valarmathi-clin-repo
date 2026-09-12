@@ -84,63 +84,50 @@
 </script>
 </head>
 <body>
+  <!-- =================================================================
+       THE SHELL.
+
+       Everything here is on the critical path: the sign-in screen, the
+       rail, the modals, the router, and the landing screens the rail
+       drops you on. It is roughly 165 KB.
+
+       Everything else — the ward, the case sheet, ward notes, the OP
+       consult, the discharge desk, pharmacy, lab, accounts, hospital
+       billing, the patient portal and the barcode engine — is fetched
+       from Module_Loader.gs on first navigation into it, and prewarmed
+       in the background after sign-in for the role that signed in. That
+       is 1.4 MB this page no longer carries, and it used to be carried
+       by every user regardless of role before anything could paint.
+
+       CRESC_BUNDLES in Module_Loader.gs is the register of what moved
+       where; crescVerifyBundles() checks the split is still complete.
+       A new UI partial belongs in exactly one of the two places: here,
+       or in a bundle.
+       ================================================================= -->
   <?!= include('Auth'); ?>
-  
+
   <div id="app-screen" class="d-none">
     <?!= include('Sidebar'); ?>
     <div class="main-content">
-      <?!= include('PatientApp'); ?>
-      
       <?!= include('Admin_Dashboard'); ?>
+      <?!= include('Admin_Dashboard_Analytics'); ?>
+      <?!= include('EMR_Cockpit'); ?>
       <?!= include('Admin_Appointments_Workspace'); ?>
-      <?!= include('Admin_Appointments'); ?>
-      <?!= include('Admin_Availability'); ?>
       <?!= include('Admin_Patient_Workspace'); ?>
-      <?!= include('Admin_Patient_Register'); ?>
-      <?!= include('Admin_Patient_Search'); ?>
-      <?!= include('Admin_Hospital_Billing'); ?>
-      <?!= include('Admin_Lab_Workspace'); ?>
-      <?!= include('Admin_Accounts_Workspace'); ?>
-
-      <?!= include('EMR_Cockpit'); ?> 
-
-      <?!= include('IP_Admissions_UI'); ?>
-      <?!= include('IP_Ledger_UI'); ?>
-      <?!= include('IP_BedMap_UI'); ?>
-      <?!= include('IP_Casesheet_UI'); ?>
-      <?!= include('IP_Notes_UI'); ?>
-      <?!= include('EMR_MasterTimeline_UI'); ?>
-      <?!= include('OP_Module'); ?>
-      <?!= include('IP_Records_UI'); ?>
-      <?!= include('DS_Desk_UI'); ?>
       <?!= include('Pharmacy_Module'); ?>
-      <?!= include('PharmacyStockAddUI'); ?>
-      <?!= include('PharmacyInventoryLedger'); ?>
-      <?!= include('Pharmacy_Billing_UI'); ?>
-      <?!= include('PharmacyDeskReturnsUI'); ?>
-      <?!= include('PharmacyDashboardUI'); ?>
-      <?!= include('LabModuleUI'); ?>
-      <?!= include('LabBillingUI'); ?>
-      <?!= include('LabRecordsUI'); ?>
-      <?!= include('AccountsIPChargesUI'); ?>
-      <?!= include('Admin_Dashboard_Analytics'); ?> 
 
+      <!-- Lazy bundles land here, inside .main-content, so .page-section
+           and the workspace layout rules apply to them exactly as they
+           did when they were inlined above. -->
+      <div id="cresc-module-host"></div>
     </div>
     <?!= include('Modals'); ?>
   </div>
-  
+
   <?!= include('ScriptsMV'); ?>
-  <?!= include('Barcode_QR_Lib'); ?>
-  <?!= include('Barcode_Labels'); ?>
-  <?!= include('Barcode_Router'); ?>
-  <?!= include('Accounts_Scripts'); ?> 
-  <?!= include('Accounts_Shifts_Scripts'); ?>
-  <?!= include('Accounts_Dashboard_Scripts'); ?>  
-  <?!= include('Accounts_Discharge_Script'); ?>  
-  <?!= include('AccountsPayablesScripts'); ?>  
-  <?!= include('AccountsTaxAuditsScripts'); ?> 
-  <?!= include('AccountsInsuranceScripts'); ?> 
-  <?!= include('DS_Desk_Scripts'); ?>
-  <?!= include('DS_Discharge_Flow'); ?>
+
+  <!-- LAST: it wraps switchTab and openEMRWorkspace, so both must already
+       be defined when this is parsed. -->
+  <?!= include('Module_Loader_UI'); ?>
 </body>
 </html>

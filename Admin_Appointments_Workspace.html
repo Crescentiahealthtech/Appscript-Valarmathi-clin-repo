@@ -5,13 +5,13 @@
   
   <div class="row g-4">
     <div class="col-md-4 col-6">
-      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-appt'); initAdminLedger();">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-appt')">
         <i class="fa-solid fa-calendar-day fa-2x mb-3 text-info"></i>
         <h6 class="text-white fw-bold m-0">Appointments Ledger</h6>
       </div>
     </div>
     <div class="col-md-4 col-6">
-      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-avail'); initAvailability();">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-avail')">
         <i class="fa-solid fa-user-clock fa-2x mb-3" style="color: var(--violet-fg);"></i>
         <h6 class="text-white fw-bold m-0">Doctor Availability</h6>
       </div>
@@ -20,7 +20,7 @@
          roles without billing rights. The card carried no id, so the gate
          listed it and could never find it — a nurse saw the billing desk. -->
     <div class="col-md-4 col-12" id="card-hosp-billing">
-      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-billing'); openBillingWorkspace('hospital');">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-billing')">
         <i class="fa-solid fa-file-invoice-dollar fa-2x mb-3 text-warning"></i>
         <h6 class="text-white fw-bold m-0">Hospital Billing</h6>
         <small class="label-bright d-block mt-1">Consultations · procedures · packages</small>
@@ -31,7 +31,7 @@
   <h5 class="fw-bold m-0 text-white mt-5 mb-3 border-bottom border-secondary pb-2">Inpatient (IP) Management</h5>
   <div class="row g-4">
     <div class="col-md-4 col-6">
-      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('ip-ledger-view'); loadIPLedger();">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('ip-ledger-view')">
         <i class="fa-solid fa-folder-open fa-2x mb-3 text-primary"></i>
         <h6 class="text-white fw-bold m-0">IP Admissions</h6>
       </div>
@@ -39,14 +39,14 @@
 
     <div class="col-md-4 col-6">
         <div class="card p-4 text-center soft-glow h-100 style-workspace-btn"
-           onclick="switchTab('ip-history-view'); loadIPHistory();">
+           onclick="switchTab('ip-history-view')">
         <i class="fa-solid fa-book fa-2x mb-3 text-info"></i>
         <h6 class="text-white fw-bold m-0">IP Ledger</h6>
       </div>
     </div>
 
     <div class="col-md-4 col-6">
-      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('ip-bed-management-view'); initBedMap();">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('ip-bed-management-view')">
         <i class="fa-solid fa-map-location-dot fa-2x mb-3 text-success"></i>
         <h6 class="text-white fw-bold m-0">Bed Occupancy Map</h6>
       </div>

@@ -51,17 +51,17 @@
         <div class="row g-4">
             <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('op-consult')"><div class="emr-icon-wrap"><i class="fa-solid fa-stethoscope fa-2xl" style="color: var(--accent-fg);"></i></div><h5 class="text-white fw-bold mt-2">OP Consultation</h5></div></div>
             <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-casesheet')"><div class="emr-icon-wrap"><i class="fa-solid fa-bed-pulse fa-2xl" style="color: var(--info-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Casesheet</h5></div></div>
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-notes'); fetchIPNotesLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-clipboard-user fa-2xl" style="color: var(--success-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Notes</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-notes')"><div class="emr-icon-wrap"><i class="fa-solid fa-clipboard-user fa-2xl" style="color: var(--success-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Notes</h5></div></div>
             <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('records')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-medical fa-2xl" style="color: var(--warning-fg);"></i></div><h5 class="text-white fw-bold mt-2">Patient Records</h5></div></div>
             
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records'); fetchIPRecordsLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: var(--pink-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records')"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: var(--pink-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
 
             <!-- IP Ward and the Discharge Desk are reached from here, not from
                  the sidebar: applyRBAC() grants a nurse only the Dashboard and
                  EMR tabs, and the nurse is the ward's preparer. -->
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ip-ledger-view'); if (typeof loadIPLedger === 'function') loadIPLedger();"><div class="emr-icon-wrap"><i class="fa-solid fa-hospital fa-2xl" style="color: var(--violet-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Ward</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ip-ledger-view')"><div class="emr-icon-wrap"><i class="fa-solid fa-hospital fa-2xl" style="color: var(--violet-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Ward</h5></div></div>
 
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ds-desk-view'); dsOpenDesk();"><div class="emr-icon-wrap"><i class="fa-solid fa-file-circle-check fa-2xl" style="color: var(--teal-fg);"></i></div><h5 class="text-white fw-bold mt-2">Discharge Desk</h5></div></div>
+            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ds-desk-view')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-circle-check fa-2xl" style="color: var(--teal-fg);"></i></div><h5 class="text-white fw-bold mt-2">Discharge Desk</h5></div></div>
         </div>
     </div>
     
@@ -164,7 +164,12 @@ function openEMRWorkspace(workspaceId) {
         targetEl.classList.remove('d-none');
     }
     
-    if (workspaceId === 'op-consult') {
+    if (workspaceId === 'records') {
+        // Patient Records: refresh the master directory on entry. It used to
+        // ride a DOMContentLoaded listener inside the timeline module, which
+        // cannot fire for a module that arrives after the page has loaded.
+        if (typeof loadMasterLedger === 'function') loadMasterLedger();
+    } else if (workspaceId === 'op-consult') {
         if (typeof initializeOPWorkspaceState === 'function') {
             initializeOPWorkspaceState();
         }
@@ -183,6 +188,10 @@ function openEMRWorkspace(workspaceId) {
         // Ensures we always see the ledger (not a stuck detail view) when opening the workspace
         document.getElementById('ip-records-detail-view')?.classList.add('d-none');
         document.getElementById('ip-records-ledger-view')?.classList.remove('d-none');
+        // The fetch used to be a second call appended to this tile's onclick.
+        // It belongs here with the other four workspaces' fetches, so the
+        // module is loaded before it runs.
+        if (typeof fetchIPRecordsLedger === 'function') fetchIPRecordsLedger();
     }
 }
 

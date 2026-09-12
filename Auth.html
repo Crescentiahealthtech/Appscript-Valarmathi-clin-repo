@@ -237,6 +237,32 @@
     setTimeout(function () { t.remove(); }, 3500);
   };
 
+  /**
+   * Bounds every bookable date input in the application.
+   *
+   * The patient portal may book today or the next two days; the
+   * availability screen has no upper bound; the admin booking modal starts
+   * at today. Those three inputs live in three different bundles now, so
+   * this sits in the shell and simply skips whichever are not on the page.
+   * It is safe — and expected — to call after any of them appears.
+   */
+  window.setDateRestrictions = function () {
+    var today = new Date();
+    var maxDate = new Date();
+    maxDate.setDate(today.getDate() + 2);
+    var strToday = today.toISOString().split('T')[0];
+    var strMax = maxDate.toISOString().split('T')[0];
+
+    var book = document.getElementById('pat-book-date');
+    if (book) { book.setAttribute('min', strToday); book.setAttribute('max', strMax); }
+
+    var avail = document.getElementById('avail-date');
+    if (avail) { avail.setAttribute('min', strToday); avail.removeAttribute('max'); }
+
+    var ab = document.getElementById('ab-date');
+    if (ab) ab.setAttribute('min', strToday);
+  };
+
   /** One sticky banner, not one toast per failed call. */
   window.crescDeployBanner = function (text) {
     var el = document.getElementById('cresc-deploy-banner');
@@ -509,9 +535,21 @@
 
     if (typeof applyRBAC === 'function') applyRBAC(window.loggedInRole);
 
-    // Barcode scanner (Barcode_Router.html): staff only.
-    if (window.CrescScan) {
-      if (isPatient) window.CrescScan.stop(); else window.CrescScan.start();
+    // Start fetching this role's module bundles in the background, most-used
+    // first, while they look at their landing screen. By the time they click
+    // into a module it is normally already in the page; if they get there
+    // first, switchTab waits on it behind a brief overlay.
+    if (window.CrescModules) window.CrescModules.prewarmFor(window.loggedInRole);
+
+    // Barcode scanner (Barcode_Router.html): staff only. It lives in the
+    // `barcode` bundle now, so this waits for that bundle rather than
+    // testing for a global that has not arrived yet — the test used to be
+    // reliable only because every module was inlined.
+    if (window.CrescModules) {
+      window.CrescModules.onReady('barcode', function () {
+        if (!window.CrescScan) return;
+        if (isPatient) window.CrescScan.stop(); else window.CrescScan.start();
+      });
     }
 
     // Warm the doctor cache for clinical roles so the first picker paints fast.
@@ -544,8 +582,16 @@
       case 'patient': {
         const patHome = document.querySelector('#nav-patient .nav-link');
         switchTab('tab-pat-home', patHome);
-        if (typeof fetchProfileData === 'function') fetchProfileData();
-        if (typeof refreshPatientDashboard === 'function') refreshPatientDashboard();
+        // The portal is a lazy bundle, so these two cannot be called on the
+        // next line any more — they would not exist yet. onReady runs them
+        // the moment PatientApp is in the page.
+        if (window.CrescModules) {
+          window.CrescModules.onReady('patient', function () {
+            if (typeof setDateRestrictions === 'function') setDateRestrictions();
+            if (typeof fetchProfileData === 'function') fetchProfileData();
+            if (typeof refreshPatientDashboard === 'function') refreshPatientDashboard();
+          });
+        }
         break;
       }
       default:

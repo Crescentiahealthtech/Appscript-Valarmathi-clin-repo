@@ -112,7 +112,15 @@
   let currentActivePatientId = ""; 
   let currentPatientEvents = []; 
 
-  document.addEventListener("DOMContentLoaded", loadMasterLedger);
+  /* The directory used to be fetched from a DOMContentLoaded listener. This
+     module is downloaded on demand now, so that event has long since fired
+     by the time this runs and the listener would never have been called —
+     the ledger would have sat on its spinner for ever.
+
+     openEMRWorkspace('records') calls loadMasterLedger() instead, which is
+     how every other EMR workspace already starts, and it refreshes the
+     directory each time Patient Records is opened rather than once per page
+     load. */
 
   function loadMasterLedger() {
     document.getElementById('emr-timeline-ledger-tbody').innerHTML = '<tr><td colspan="5" class="text-center py-4" style="color: var(--text-main) !important; font-weight: bold;"><div class="spinner-border text-light mb-2"></div><br>Synchronizing Database...</td></tr>';

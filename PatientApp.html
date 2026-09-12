@@ -389,25 +389,10 @@
     }).submitNewAppointment(apptObj);
   }
 
-function setDateRestrictions() {
-    const today = new Date();
-    const maxDate = new Date();
-    maxDate.setDate(today.getDate() + 2);
-    const strToday = today.toISOString().split('T')[0];
-    const strMax = maxDate.toISOString().split('T')[0];
-
-    if(document.getElementById('pat-book-date')) {
-      document.getElementById('pat-book-date').setAttribute('min', strToday);
-      document.getElementById('pat-book-date').setAttribute('max', strMax);
-    }
-    if(document.getElementById('avail-date')) {
-      document.getElementById('avail-date').setAttribute('min', strToday);
-      document.getElementById('avail-date').removeAttribute('max');
-    }
-    if(document.getElementById('ab-date')) {
-      document.getElementById('ab-date').setAttribute('min', strToday);
-    }
-  }
+/* setDateRestrictions() moved to Auth.html. It bounds three different date
+   inputs — the portal's booking date (here), the availability screen's date
+   (appointments bundle) and the admin booking modal's (shell) — so with the
+   modules loading separately it cannot live in any one of them. */
 
    function renderCharts(force) {
     if(!document.getElementById('hba1cChart')) return;
