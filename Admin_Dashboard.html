@@ -166,9 +166,115 @@
       </div>
     </div>
 
-    <!-- ---- GATEWAY GRID (operational hubs) ---- -->
-    <h6 class="fw-bold text-white-force mb-2 mt-4">Operational Hubs</h6>
-    <div class="row g-3 mb-5" id="dash-gateway"></div>
+    <!-- ================= ANALYTICS =================
+         This is where the "Operational Hubs" grid used to be: eight cards
+         that did what the sidebar already does, taking the best space on
+         the busiest screen. Everything below is computed from sheets the
+         hospital already fills in — no new columns, no new data entry. -->
+
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-2 flex-wrap gap-2">
+      <h6 class="fw-bold text-white-force m-0">Analytics</h6>
+      <small class="label-bright">Rolling 30 days unless a panel says otherwise</small>
+    </div>
+
+    <!-- ---- analytic stat tiles ---- -->
+    <div class="row g-3 mb-3">
+      <div class="col-6 col-xl-3">
+        <div class="card p-3 h-100">
+          <i class="fa-solid fa-bed mb-2" style="color: var(--chart-1); font-size:1.1rem;"></i>
+          <div class="fw-bold" style="font-size:1.7rem;" id="an-alos">—</div>
+          <div class="label-bright small">Avg. length of stay (days)</div>
+          <div class="small mt-1 label-bright"><span id="an-alos-n">0</span> discharges &middot; 90 days</div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3">
+        <div class="card p-3 h-100">
+          <i class="fa-solid fa-file-circle-check mb-2" style="color: var(--chart-2); font-size:1.1rem;"></i>
+          <div class="fw-bold" style="font-size:1.7rem;" id="an-ds-tat">—</div>
+          <div class="label-bright small">Discharge summary turnaround</div>
+          <div class="small mt-1 label-bright"><span id="an-ds-pending">0</span> awaiting signature</div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3">
+        <div class="card p-3 h-100">
+          <i class="fa-solid fa-calendar-check mb-2" style="color: var(--chart-4); font-size:1.1rem;"></i>
+          <div class="fw-bold" style="font-size:1.7rem;" id="an-appt-rate">—</div>
+          <div class="label-bright small">Appointments attended</div>
+          <div class="small mt-1 label-bright"><span id="an-appt-noshow">0</span> did not attend</div>
+        </div>
+      </div>
+      <div class="col-6 col-xl-3" id="an-card-bill">
+        <div class="card p-3 h-100">
+          <i class="fa-solid fa-receipt mb-2" style="color: var(--chart-3); font-size:1.1rem;"></i>
+          <div class="fw-bold" style="font-size:1.7rem;" id="an-avg-bill">—</div>
+          <div class="label-bright small">Collected, 30 days</div>
+          <div class="small mt-1 label-bright" id="an-credit-note">&nbsp;</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- money: mix + daily collections ---- -->
+    <div class="row g-3 mb-3" id="an-money-row">
+      <div class="col-12 col-lg-5">
+        <div class="card p-4 h-100">
+          <h6 class="fw-bold text-white-force mb-1">Where the revenue comes from</h6>
+          <small class="label-bright d-block mb-3">Collected in the last 30 days, by stream</small>
+          <div id="an-mix-empty" class="text-center py-4 label-bright d-none">Nothing collected in this window.</div>
+          <div style="position:relative; height:240px;"><canvas id="an-mix-chart"></canvas></div>
+          <div id="an-mix-legend" class="mt-3"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-7">
+        <div class="card p-4 h-100">
+          <h6 class="fw-bold text-white-force mb-1">Collected vs credit</h6>
+          <small class="label-bright d-block mb-3">Daily, last 14 days &mdash; credit is billed but not yet received</small>
+          <div style="position:relative; height:260px;"><canvas id="an-coll-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- clinical: doctor load, diagnoses, ward stay ---- -->
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-lg-4">
+        <div class="card p-4 h-100">
+          <h6 class="fw-bold text-white-force mb-1">Consultation load</h6>
+          <small class="label-bright d-block mb-3">Appointments per doctor, 30 days</small>
+          <div id="an-doctors"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="card p-4 h-100">
+          <h6 class="fw-bold text-white-force mb-1">Commonest diagnoses</h6>
+          <small class="label-bright d-block mb-3">Admissions, 180 days</small>
+          <div id="an-diagnoses"></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="card p-4 h-100">
+          <h6 class="fw-bold text-white-force mb-1">Stay by ward</h6>
+          <small class="label-bright d-block mb-3">Average days, 90 days of discharges</small>
+          <div id="an-wards"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- registrations + payment mix ---- -->
+    <div class="row g-3 mb-5">
+      <div class="col-12 col-lg-7">
+        <div class="card p-4 h-100">
+          <h6 class="fw-bold text-white-force mb-1">New patient registrations</h6>
+          <small class="label-bright d-block mb-3">Last six months</small>
+          <div style="position:relative; height:220px;"><canvas id="an-reg-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-5" id="an-card-paymix">
+        <div class="card p-4 h-100">
+          <h6 class="fw-bold text-white-force mb-1">How patients pay</h6>
+          <small class="label-bright d-block mb-3">Collections by mode, 30 days</small>
+          <div id="an-paymix"></div>
+        </div>
+      </div>
+    </div>
 
   </div>
 </div>
@@ -314,10 +420,10 @@
       document.getElementById('kpi-credit').innerText  = fmtMoney(d.revenue.pendingCredit);
     }
 
-    // ---- Alerts, Footfall, Gateway ----
+    // ---- Alerts, Footfall, Analytics ----
     paintAlerts(o);
     renderFootfall();
-    paintGateway(d);
+    paintAnalytics(d);
   }
 
   // ============================================================
@@ -421,49 +527,265 @@
   }
 
   // ============================================================
-  // GATEWAY HUBS (Updated to use dedicated fn wrappers)
+  // ANALYTICS
+  // ------------------------------------------------------------
+  // Chart rules this section keeps:
+  //   - colours come from --chart-1..6, assigned in fixed order and never
+  //     cycled; the palette is validated for both themes (see Styles.html)
+  //   - every multi-series chart carries a legend AND a direct label, so
+  //     identity is never colour alone
+  //   - one y-axis per chart, always
+  //   - a canvas chart cannot read CSS variables, so each one re-reads the
+  //     resolved tokens and repaints on themechange
   // ============================================================
-  // The footfall chart is canvas-painted, so redraw it with the new tokens
-  // whenever the theme flips.
-  if (window.onThemeChange) {
-    window.onThemeChange(function () {
-      if (__ffChart) renderFootfall();
+  var __anCharts = { mix: null, coll: null, reg: null };
+
+  function anPalette() {
+    return window.chartPalette ? window.chartPalette()
+      : [cssVar('--chart-1'), cssVar('--chart-2'), cssVar('--chart-3'),
+         cssVar('--chart-4'), cssVar('--chart-5'), cssVar('--chart-6')];
+  }
+  function anEsc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function anSet(id, text) { var el = document.getElementById(id); if (el) el.textContent = text; }
+
+  function paintAnalytics(d) {
+    var a = d.analytics;
+    if (!a) return;
+
+    // ---- stat tiles ----
+    anSet('an-alos', a.stay.alosDays ? a.stay.alosDays.toFixed(1) : '—');
+    anSet('an-alos-n', a.stay.dischargesInWindow || 0);
+
+    if (a.discharge.available) {
+      var h = a.discharge.medianTatHours;
+      anSet('an-ds-tat', h ? (h < 48 ? h.toFixed(1) + ' h' : (h / 24).toFixed(1) + ' d') : '—');
+      anSet('an-ds-pending', a.discharge.pendingSignature || 0);
+    } else {
+      anSet('an-ds-tat', 'n/a');
+      anSet('an-ds-pending', 0);
+    }
+
+    anSet('an-appt-rate', a.appointments.completionPct ? a.appointments.completionPct + '%' : '—');
+    anSet('an-appt-noshow', a.appointments.noShow || 0);
+
+    // Money tiles and charts are for finance roles only; the server does not
+    // even send the figures to anyone else.
+    var billCard = document.getElementById('an-card-bill');
+    var moneyRow = document.getElementById('an-money-row');
+    var payCard = document.getElementById('an-card-paymix');
+    var showMoney = !!a.hasFinancial;
+    if (billCard) billCard.classList.toggle('d-none', !showMoney);
+    if (moneyRow) moneyRow.classList.toggle('d-none', !showMoney);
+    if (payCard) payCard.classList.toggle('d-none', !showMoney);
+
+    if (showMoney) {
+      var collected = (a.revenueMix || []).reduce(function (t, r) { return t + r.amount; }, 0);
+      anSet('an-avg-bill', fmtMoney(collected));
+      var credit = (d.revenue && d.revenue.pendingCredit) || 0;
+      anSet('an-credit-note', credit ? fmtMoney(credit) + ' still on credit' : 'Nothing on credit');
+      renderRevenueMix(a.revenueMix || []);
+      renderCollections(a.collections || { days: [], collected: [], credit: [] });
+      renderBars('an-paymix', (a.paymentMix || []).map(function (m) {
+        return { label: m.label, value: m.amount };
+      }), fmtMoney, 5);
+    }
+
+    // ---- clinical lists ----
+    renderBars('an-doctors', (a.doctorLoad || []).map(function (x) {
+      return { label: x.name, value: x.count };
+    }), function (v) { return v + ''; }, 0);
+
+    renderBars('an-diagnoses', (a.diagnoses || []).map(function (x) {
+      return { label: x.name, value: x.count };
+    }), function (v) { return v + ''; }, 2);
+
+    renderBars('an-wards', (a.stay.byWard || []).map(function (x) {
+      return { label: x.ward, value: x.alos, suffix: x.discharges + ' discharged' };
+    }), function (v) { return v.toFixed(1) + ' d'; }, 3);
+
+    renderRegistrations(a.registrations || { months: [], counts: [] });
+  }
+
+  /**
+   * A ranked list drawn as bars in the DOM rather than on a canvas.
+   *
+   * Six labelled categories in a card this size read better as rows than as a
+   * chart: every one is directly labelled with its name AND its value, so
+   * nothing depends on colour, and long doctor names and diagnoses wrap
+   * instead of being cut off by an axis.
+   */
+  function renderBars(hostId, rows, fmt, colourIndex) {
+    var host = document.getElementById(hostId);
+    if (!host) return;
+    if (!rows.length) {
+      host.innerHTML = '<div class="label-bright small py-3">Nothing recorded in this window.</div>';
+      return;
+    }
+    var palette = anPalette();
+    var colour = palette[colourIndex % palette.length];
+    var max = rows.reduce(function (m, r) { return Math.max(m, r.value); }, 0) || 1;
+
+    host.innerHTML = rows.map(function (r) {
+      var pct = Math.max(3, Math.round(r.value / max * 100));
+      return '<div class="mb-2">' +
+        '<div class="d-flex justify-content-between align-items-baseline small">' +
+          '<span style="color: var(--text-main);">' + anEsc(r.label) + '</span>' +
+          '<span class="fw-bold" style="color: var(--text-main);">' + anEsc(fmt(r.value)) + '</span>' +
+        '</div>' +
+        '<div style="height:8px; background: var(--bg-input); border-radius: 4px; overflow: hidden; margin-top:3px;">' +
+          '<div style="width:' + pct + '%; height:100%; background:' + colour + '; border-radius:4px;"></div>' +
+        '</div>' +
+        (r.suffix ? '<div class="label-bright" style="font-size:.72rem; margin-top:2px;">' +
+                    anEsc(r.suffix) + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function renderRevenueMix(mix) {
+    var canvas = document.getElementById('an-mix-chart');
+    var empty = document.getElementById('an-mix-empty');
+    var legend = document.getElementById('an-mix-legend');
+    if (!canvas) return;
+
+    if (!mix.length) {
+      empty.classList.remove('d-none');
+      canvas.style.display = 'none';
+      legend.innerHTML = '';
+      if (__anCharts.mix) { __anCharts.mix.destroy(); __anCharts.mix = null; }
+      return;
+    }
+    empty.classList.add('d-none');
+    canvas.style.display = 'block';
+
+    var palette = anPalette();
+    var colours = mix.map(function (_, i) { return palette[i % palette.length]; });
+    var total = mix.reduce(function (t, r) { return t + r.amount; }, 0) || 1;
+
+    if (__anCharts.mix) __anCharts.mix.destroy();
+    __anCharts.mix = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: mix.map(function (r) { return r.label; }),
+        datasets: [{
+          data: mix.map(function (r) { return r.amount; }),
+          backgroundColor: colours,
+          // A 2px ring in the surface colour keeps adjacent segments apart
+          // without a stroke that reads as another series.
+          borderColor: cssVar('--bg-card'),
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '62%',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (c) {
+                return c.label + ': ' + fmtMoney(c.parsed) +
+                       ' (' + Math.round(c.parsed / total * 100) + '%)';
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // The legend is also the direct label: name, amount and share in text, so
+    // the chart never has to be read by colour alone.
+    legend.innerHTML = mix.map(function (r, i) {
+      return '<div class="d-flex justify-content-between align-items-center small mb-1">' +
+        '<span style="color: var(--text-main);">' +
+          '<span style="display:inline-block;width:10px;height:10px;border-radius:3px;' +
+            'background:' + colours[i] + ';margin-right:7px;"></span>' + anEsc(r.label) + '</span>' +
+        '<span class="label-bright">' + fmtMoney(r.amount) + ' &middot; ' +
+          Math.round(r.amount / total * 100) + '%</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderCollections(c) {
+    var canvas = document.getElementById('an-coll-chart');
+    if (!canvas) return;
+    var palette = anPalette();
+    var grid = cssVar('--chart-grid'), tick = cssVar('--chart-tick');
+
+    if (__anCharts.coll) __anCharts.coll.destroy();
+    __anCharts.coll = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: c.days,
+        datasets: [
+          { label: 'Collected', data: c.collected, backgroundColor: palette[0],
+            borderRadius: 4, maxBarThickness: 20 },
+          { label: 'On credit', data: c.credit, backgroundColor: palette[2],
+            borderRadius: 4, maxBarThickness: 20 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: tick, usePointStyle: true, boxWidth: 8 } },
+          tooltip: {
+            mode: 'index', intersect: false,
+            callbacks: { label: function (x) { return x.dataset.label + ': ' + fmtMoney(x.parsed.y); } }
+          }
+        },
+        scales: {
+          x: { stacked: false, grid: { color: 'transparent' }, ticks: { color: tick, maxRotation: 0, autoSkip: true } },
+          y: { beginAtZero: true, grid: { color: grid },
+               ticks: { color: tick, callback: function (v) { return fmtMoney(v); } } }
+        }
+      }
     });
   }
 
-  function paintGateway(d) {
-    const hubs = [
-      { id:'', icon:'calendar-check', title:'Appointments', sub:(d.operations.apptToday||0)+' today', fn:'gotoApptsLedg' },
-      { id:'', icon:'hospital-user', title:'Patients', sub:'Registry & search', fn:'gotoPatients' },
-      { id:'', icon:'bed-pulse', title:'Inpatients', sub:(d.census.currentInpatients||0)+' admitted', fn:'gotoBeds' },
-      { id:'', icon:'laptop-medical', title:'EMR', sub:'Clinical records', fn:'gotoEMR' },
-      { id:'', icon:'flask-vial', title:'Laboratory', sub:(d.operations.labPending||0)+' pending', fn:'gotoLab' },
-      { id:'', icon:'pills', title:'Pharmacy', sub:(d.operations.lowStock||0)+' low stock', fn:'gotoPharmacy' },
-      { id:'dash-gateway-accounts', icon:'file-invoice-dollar', title:'Accounts', sub:'Billing & ledger', fn:'gotoAccounts' },
-      { id:'', icon:'chart-column', title:'Analytics', sub:'Trends & footfall', fn:'gotoAnalytics' }
-    ];
-    
-    const html = hubs.map(function (h) {
-      const idAttr = h.id ? ' id="' + h.id + '"' : '';
-      // We rely entirely on the assigned function (fn) now for precise routing
-      const click  = h.fn ? (h.fn + '(event)') : ''; 
-      return '<div class="col-6 col-md-4 col-xl-3"' + idAttr + '>' +
-        '<div class="card p-3 h-100" style="cursor:pointer;" onclick="' + click + '" ' +
-        'onmouseover="this.classList.add(\'soft-glow\')" onmouseout="this.classList.remove(\'soft-glow\')">' +
-          '<div class="d-flex align-items-center gap-3">' +
-            '<div class="rounded-circle d-flex justify-content-center align-items-center" ' +
-              'style="width:42px;height:42px;background:var(--accent-glow);">' +
-              '<i class="fa-solid fa-' + h.icon + '" style="color: var(--accent-fg);"></i>' +
-            '</div>' +
-            '<div>' +
-              '<div class="fw-bold text-white-force">' + h.title + '</div>' +
-              '<div class="label-bright small">' + h.sub + '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-    document.getElementById('dash-gateway').innerHTML = html;
+  function renderRegistrations(r) {
+    var canvas = document.getElementById('an-reg-chart');
+    if (!canvas) return;
+    var palette = anPalette();
+    var grid = cssVar('--chart-grid'), tick = cssVar('--chart-tick');
+
+    if (__anCharts.reg) __anCharts.reg.destroy();
+    __anCharts.reg = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: r.months,
+        datasets: [{
+          label: 'New patients',
+          data: r.counts,
+          borderColor: palette[1],
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: palette[1],
+          pointBorderColor: cssVar('--bg-card'),
+          pointBorderWidth: 2,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        // One series: the card title names it, so no legend box.
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+        scales: {
+          x: { grid: { color: 'transparent' }, ticks: { color: tick } },
+          y: { beginAtZero: true, grid: { color: grid }, ticks: { color: tick, precision: 0 } }
+        }
+      }
+    });
+  }
+
+  // Canvas cannot resolve CSS variables, so repaint on every theme switch.
+  if (window.onThemeChange) {
+    window.onThemeChange(function () {
+      if (__ffChart) renderFootfall();
+      if (__dashData) paintAnalytics(__dashData);
+    });
   }
 
   // ============================================================

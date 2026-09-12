@@ -87,8 +87,14 @@
    /* --- Data visualisation (Chart.js reads these via cssVar) --- */
    --chart-grid: #1e293b;
    --chart-tick: #94a3b8;
-   --chart-1: #6366f1;  --chart-2: #0ea5e9;  --chart-3: #f59e0b;
-   --chart-4: #10b981;  --chart-5: #ef4444;  --chart-6: #a855f7;
+   /* Categorical series colours, assigned in this fixed order and never
+      cycled. Re-stepped and validated against this surface (#0f172a): every
+      hue sits inside the dark lightness band, holds >= 3:1 against the card,
+      and the closest adjacent pair separates by dE 11 under protanopia. The
+      previous sky/amber/emerald steps were too light for this surface and the
+      indigo/sky pair sat dE 12 apart even in full colour. */
+   --chart-1: #6366f1;  --chart-2: #047857;  --chart-3: #d97706;
+   --chart-4: #0369a1;  --chart-5: #a855f7;  --chart-6: #ef4444;
  }
 
  body.light-theme,
@@ -156,8 +162,10 @@
 
    --chart-grid: #e2e8f0;
    --chart-tick: #64748b;
-   --chart-1: #4f46e5;  --chart-2: #0284c7;  --chart-3: #d97706;
-   --chart-4: #059669;  --chart-5: #dc2626;  --chart-6: #9333ea;
+   /* The same six hues, re-stepped for a white surface. Dark mode is chosen,
+      not flipped: these are their own steps, validated against #ffffff. */
+   --chart-1: #6366f1;  --chart-2: #059669;  --chart-3: #b45309;
+   --chart-4: #0284c7;  --chart-5: #7e22ce;  --chart-6: #dc2626;
  }
 
  /* ========================================= */

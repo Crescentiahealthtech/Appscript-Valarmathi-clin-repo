@@ -18,10 +18,15 @@
 
   function applyRBAC(role) {
   // 1. Define all restricted UI elements (Sidebar Links & Inner Cards)
+  // The money panels are listed here as well as gated on the server: the
+  // dashboard payload carries no revenue figures for a clinical role, and
+  // these ids keep the empty cards off their screen. 'dash-gateway-accounts'
+  // is gone with the Operational Hubs grid it belonged to.
   const restrictedElements = [
    'nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
     'nav-tab-pharmacy', 'nav-tab-lab', 'nav-tab-accounts', 'card-hosp-billing',
-    'dash-card-revenue', 'dash-card-credit', 'dash-gateway-accounts'   // NEW
+    'dash-card-revenue', 'dash-card-credit',
+    'an-card-bill', 'an-money-row', 'an-card-paymix'
   ];
 
   // 2. Hide everything by default for security
@@ -39,13 +44,20 @@
     case 'admin':
       allowedElements = restrictedElements;
       break;
+    case 'accounts':
+      allowedElements = ['nav-tab-dash', 'nav-tab-accounts', 'card-hosp-billing',
+                         'dash-card-revenue', 'dash-card-credit',
+                         'an-card-bill', 'an-money-row', 'an-card-paymix'];
+      break;
     case 'doctor':
       allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
                          'nav-tab-pharmacy', 'nav-tab-lab'];
       break;
     case 'receptionist':
     case 'reception':
-      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'card-hosp-billing'];
+      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'card-hosp-billing',
+                         'dash-card-revenue', 'dash-card-credit',
+                         'an-card-bill', 'an-money-row', 'an-card-paymix'];
       break;
     case 'nurse':
       // The ward and the discharge desk are both inside EMR, which is where a
@@ -57,9 +69,6 @@
       break;
     case 'lab':
       allowedElements = ['nav-tab-dash', 'nav-tab-lab'];
-      break;
-    case 'accounts':
-      allowedElements = ['nav-tab-dash', 'nav-tab-accounts'];
       break;
     default:
       allowedElements = ['nav-tab-dash'];
