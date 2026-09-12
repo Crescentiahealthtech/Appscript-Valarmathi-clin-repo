@@ -296,26 +296,11 @@ function getOpenAdmissions() {
 // payload = {ipNumber, packageCap, insuranceApproved, patientPayMode, reason, user}
 // payload = {ipNumber, wardCharges:[{category,multiplier,rate,remark}], discountPercent,
 //            packageCap, insuranceApproved, patientPayMode, reason, user}
-// payload also accepts dsOverrideReason — supplied by the client after the
-// discharge-summary gate returns DS_NOT_SIGNED. With DS_BILLING_GATE = OFF the
-// gate is a no-op, so this settlement behaves exactly as it did before.
 function settleDischarge(payload) {
   var lock = LockService.getScriptLock();
   try {
-    var ip0 = acc_str_(payload.ipNumber).trim();
-
-    // --- discharge summary gate (outside the lock: it only reads) ----------
-    var dsGate = null;
-    if (ip0 && typeof dsx_gateCheck_ === 'function') {
-      dsGate = dsx_gateCheck_(ip0, payload.dsOverrideReason);
-      if (!dsGate.allow) {
-        return { success: false, code: dsGate.code, message: dsGate.message,
-                 dsSummaryId: dsGate.summaryId, dsSummaryStatus: dsGate.status };
-      }
-    }
-
     lock.waitLock(10000);
-    var ip = ip0;
+    var ip = acc_str_(payload.ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };
     if (adm.status !== 'ACTIVE') return { success: false, message: "Admission already " + adm.status + "." };
@@ -412,15 +397,6 @@ function settleDischarge(payload) {
     acc_audit_(user, 'IP_DISCHARGE_SETTLE', IPC_CFG.SETTLEMENTS, setId, 'Gross: ' + grossTab, 'Net paid: ' + patientPaid,
       'Pkg: ' + acc_str_(payload.packageCode) + ' | Disc%: ' + discPct + ' | Ins: ' + insTotal + ' | Adv: ' + advApplied + (payload.reason ? ' | ' + payload.reason : ''));
     SpreadsheetApp.flush();
-
-    if (dsGate) {
-      if (dsGate.overridden && typeof dsx_logGateOverride_ === 'function') {
-        dsx_logGateOverride_(ip, dsGate, user, 'settleDischarge');
-      }
-      if (typeof dsx_logDischargeCompleted_ === 'function') {
-        dsx_logDischargeCompleted_(ip, user, 'settleDischarge');
-      }
-    }
 
     return {
       success: true, settlementId: setId,
