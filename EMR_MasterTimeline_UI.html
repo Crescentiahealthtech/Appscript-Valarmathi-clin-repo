@@ -261,6 +261,10 @@
       let drugName = (rx.drugName || '').trim();
       let sig = (rx.sig || '').trim();
       let days = (rx.duration || '').trim();
+      // An IV order's rate is half the instruction; without it the history
+      // shows a volume that was apparently infused at no particular speed.
+      const isIV = String(rx.type || rx.strength || '').toUpperCase() === 'IV';
+      if (isIV && (rx.rate || '').trim()) sig = `${sig} @ ${String(rx.rate).trim()}`.trim();
       let durationText = days ? ` X ${days} DAYS` : '';
       let sigText = sig ? `${sig}${durationText}` : (days ? `${durationText}` : '');
       html += `<li style="margin-bottom:6px;"><strong style="color:var(--text-main) !important; font-size: 1.05em;">${drugName}</strong> <span style="color:var(--text-secondary);">${sigText}</span></li>`;
