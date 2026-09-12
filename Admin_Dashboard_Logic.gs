@@ -255,8 +255,14 @@ function _dashOps_(ss, tz, todayKey, memo) {
 // Lab      = existing getLabDailyCollection().totalNet (today OP collection)
 // ------------------------------------------------------------
 function _dashRevenue_(ss, tz, todayKey, memo) {
+  // pendingCredit is the ONLY all-time figure on this tile: every unpaid
+  // balance still open, whenever it was raised. The three creditBy* buckets
+  // carry the same total split by stream, so the tile can say where the
+  // money is instead of showing a number nobody can place.
   var out = { consultToday: 0, hospitalToday: 0, pharmacyToday: 0, labToday: 0,
-              totalToday: 0, pendingCredit: 0, hasData: true };
+              totalToday: 0, pendingCredit: 0,
+              creditHospital: 0, creditPharmacy: 0, creditLab: 0,
+              hasData: true };
 
   // An appointment's Fee is the consultation TARIFF now, not money taken: the
   // receipt is a Hospital_Invoices row. Only a visit with no invoice still
@@ -290,6 +296,7 @@ function _dashRevenue_(ss, tz, todayKey, memo) {
       var paid = parseFloat(_dashCell_(hinv[h], hIdx, "paid")) || 0;
       var bal = parseFloat(_dashCell_(hinv[h], hIdx, "balance")) || 0;
       out.pendingCredit += bal;
+      out.creditHospital += bal;
       var hdt = _dashToDate_(_dashCell_(hinv[h], hIdx, "timestamp"));
       if (!hdt || Utilities.formatDate(hdt, tz, "yyyy-MM-dd") !== todayKey) continue;
       out.hospitalToday += paid;
@@ -304,7 +311,10 @@ function _dashRevenue_(ss, tz, todayKey, memo) {
       var net = parseFloat(pd[j][13]) || 0;
       // Credit is a balance, not an event: it is counted whenever it was
       // raised. Only the collection is scoped to today.
-      if (pay === "PENDING" || pay === "CREDIT") out.pendingCredit += net;
+      if (pay === "PENDING" || pay === "CREDIT") {
+        out.pendingCredit += net;
+        out.creditPharmacy += net;
+      }
       if (Utilities.formatDate(pdt, tz, "yyyy-MM-dd") !== todayKey) continue;
       if (pay === "PAID") out.pharmacyToday += net;
     }
@@ -322,7 +332,9 @@ function _dashRevenue_(ss, tz, todayKey, memo) {
       if (lstat === "PAID") continue;
       var lbal = parseFloat(_dashCell_(lb[l], lIdx, "balanceamount")) || 0;
       var lnet = parseFloat(_dashCell_(lb[l], lIdx, "netamount")) || 0;
-      out.pendingCredit += (lbal || (lstat === "ON_ACCOUNT" ? lnet : 0));
+      var labDue = (lbal || (lstat === "ON_ACCOUNT" ? lnet : 0));
+      out.pendingCredit += labDue;
+      out.creditLab += labDue;
     }
   }
 
@@ -337,7 +349,10 @@ function _dashRevenue_(ss, tz, todayKey, memo) {
   out.hospitalToday = Math.round(out.hospitalToday * 100) / 100;
   out.pharmacyToday = Math.round(out.pharmacyToday * 100) / 100;
   out.labToday      = Math.round(out.labToday * 100) / 100;
-  out.pendingCredit = Math.round(out.pendingCredit * 100) / 100;
+  out.pendingCredit  = Math.round(out.pendingCredit * 100) / 100;
+  out.creditHospital = Math.round(out.creditHospital * 100) / 100;
+  out.creditPharmacy = Math.round(out.creditPharmacy * 100) / 100;
+  out.creditLab      = Math.round(out.creditLab * 100) / 100;
   out.totalToday    = Math.round((out.consultToday + out.hospitalToday +
                                   out.pharmacyToday + out.labToday) * 100) / 100;
   return out;

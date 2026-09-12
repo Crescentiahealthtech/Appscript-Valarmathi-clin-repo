@@ -735,13 +735,10 @@
    translator; if this partial is newer than Auth.html in the deployed project,
    this returns the raw message instead of throwing inside a handler and
    leaving the screen stuck on "Loading...". */
-function _crescExplain(msg) {
-  try {
-    return (typeof window.crescExplainError === 'function')
-      ? window.crescExplainError(msg)
-      : String(msg == null ? '' : msg);
-  } catch (e) { return String(msg == null ? '' : msg); }
-}
+/* _crescExplain() lives in ScriptsMV.html now. Three byte-identical copies
+   used to be declared here and in the other two ward screens; all three were
+   globals, so only the last one parsed existed and the other two were dead
+   weight that still had to be downloaded and parsed on every page load. */
 
 // ============================================================================
 // HTML DIALOGS

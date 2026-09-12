@@ -927,7 +927,18 @@ function saveLabResultsDraft(d) {
     const ncols=LAB_SCHEMA.LAB_RESULTS.length;
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     const by=Session.getActiveUser().getEmail()||'SYSTEM';
-    const existingRows=_existingResultRowNums(sheet,map,order.orderId);
+    // Read the block ONCE, edit it in memory, write each touched row once.
+    //
+    // This used to issue seven setValue() calls per parameter for an existing
+    // row and an appendRow() per new one. A CBC is twenty-odd parameters, so
+    // saving one draft cost well over a hundred separate Sheets round trips
+    // and the technician waited through every one of them. Same writes, same
+    // order, one call per row.
+    const existing=_existingResultRows_(sheet,map,order.orderId);
+    const existingRows=existing.rowByParam;
+    const rowValues=existing.valuesByRow;
+    const touched={};
+    const appends=[];
     let critCount=0;
 
     d.results.forEach(function(res){
@@ -939,13 +950,15 @@ function saveLabResultsDraft(d) {
         ?(gender==='F'?_rngTxt(ref.femaleRefLow,ref.femaleRefHigh):_rngTxt(ref.maleRefLow,ref.maleRefHigh)):'';
       const exRow=existingRows[res.parameterId];
       if(exRow){
-        sheet.getRange(exRow,map['ResultValue']+1).setValue(String(res.value==null?'':res.value));
-        sheet.getRange(exRow,map['Flag']+1).setValue(flag);
-        sheet.getRange(exRow,map['RefRangeText']+1).setValue(refText);
-        sheet.getRange(exRow,map['Interpretation']+1).setValue(String(res.interpretation||''));
-        sheet.getRange(exRow,map['IsDraft']+1).setValue(true);
-        sheet.getRange(exRow,map['EnteredBy']+1).setValue(by);
-        sheet.getRange(exRow,map['EnteredAt']+1).setValue(nowStr);
+        const row=rowValues[exRow];
+        row[map['ResultValue']]=String(res.value==null?'':res.value);
+        row[map['Flag']]=flag;
+        row[map['RefRangeText']]=refText;
+        row[map['Interpretation']]=String(res.interpretation||'');
+        row[map['IsDraft']]=true;
+        row[map['EnteredBy']]=by;
+        row[map['EnteredAt']]=nowStr;
+        touched[exRow]=true;
       } else {
         const row=new Array(ncols).fill('');
         row[map['ResultID']]='LAB-RES-'+Utilities.getUuid().substring(0,8).toUpperCase();
@@ -955,9 +968,17 @@ function saveLabResultsDraft(d) {
         row[map['Unit']]=ref.unit||''; row[map['RefRangeText']]=refText; row[map['Flag']]=flag;
         row[map['IsDraft']]=true; row[map['EnteredBy']]=by; row[map['EnteredAt']]=nowStr;
         row[map['Interpretation']]=String(res.interpretation||''); row[map['Version']]=1; row[map['IsLatest']]=true;
-        sheet.appendRow(row);
+        appends.push(row);
       }
     });
+
+    Object.keys(touched).forEach(function(r){
+      const row=rowValues[r];
+      sheet.getRange(Number(r),1,1,row.length).setValues([row]);
+    });
+    if(appends.length){
+      sheet.getRange(sheet.getLastRow()+1,1,appends.length,ncols).setValues(appends);
+    }
     SpreadsheetApp.flush();
     labAudit('RESULTS_DRAFT_SAVED','RESULT',order.orderId,null,{count:d.results.length,critical:critCount});
     return {success:true,message:'Draft saved'+(critCount?' · '+critCount+' CRITICAL value(s)':'')+'.', criticalCount:critCount};
@@ -1046,12 +1067,17 @@ function verifyLabResults(d) {
     const digest=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,basis,Utilities.Charset.UTF_8);
     const hash=digest.map(function(b){return('0'+(b&0xFF).toString(16)).slice(-2);}).join('');
     
+    // `data` is already the whole block, read once above. Edit the cached row
+    // and write it back in one call instead of five per parameter — verifying
+    // a twenty-parameter panel was a hundred separate Sheets round trips.
     targetRows.forEach(function(rowNum){
-      sheet.getRange(rowNum,map['VerifiedBy']+1).setValue(verifier);
-      sheet.getRange(rowNum,map['VerifiedAt']+1).setValue(nowStr);
-      sheet.getRange(rowNum,map['AttestationHash']+1).setValue(hash);
-      sheet.getRange(rowNum,map['IsDraft']+1).setValue(false);
-      if(d.interpretation) sheet.getRange(rowNum,map['Interpretation']+1).setValue(String(d.interpretation));
+      const row=data[rowNum-2];
+      row[map['VerifiedBy']]=verifier;
+      row[map['VerifiedAt']]=nowStr;
+      row[map['AttestationHash']]=hash;
+      row[map['IsDraft']]=false;
+      if(d.interpretation) row[map['Interpretation']]=String(d.interpretation);
+      sheet.getRange(rowNum,1,1,row.length).setValues([row]);
     });
     
     _closeTat(d.orderId,nowStr);
@@ -1501,6 +1527,30 @@ function _priorValuesForPatient(patientId,excludeOrderId){
   });
   return out;
 }
+/**
+ * Latest result rows for an order, WITH their contents.
+ *
+ * _existingResultRowNums() below reads the same block and throws the values
+ * away, which forced every caller that wanted to edit a row to fetch cells
+ * back one at a time. This keeps them.
+ *
+ * @return {{rowByParam: Object, valuesByRow: Object}} 1-based sheet rows
+ */
+function _existingResultRows_(sheet,map,orderId){
+  const out={rowByParam:{},valuesByRow:{}};
+  if(sheet.getLastRow()<2) return out;
+  const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  data.forEach(function(r,i){
+    if(String(r[map['OrderID']])===String(orderId)&&
+       (r[map['IsLatest']]===true||String(r[map['IsLatest']]).toUpperCase()==='TRUE')){
+      const rowNum=i+2;
+      out.rowByParam[String(r[map['ParameterID']])]=rowNum;
+      out.valuesByRow[rowNum]=r;
+    }
+  });
+  return out;
+}
+
 function _existingResultRowNums(sheet,map,orderId){
   const out={};
   if(sheet.getLastRow()<2) return out;

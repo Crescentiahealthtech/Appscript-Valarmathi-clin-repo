@@ -15,6 +15,40 @@
       margin: 0 !important;
       font-size: 1.3rem !important;
   }
+
+  /* ------------------------------------------------------------------
+     ONE INSET DOWN THE WHOLE RAIL
+
+     The nav buttons sit directly in the rail and carry margin:4px 12px
+     (4px 8px collapsed). The theme toggle sat inside a px-2 wrapper ON
+     TOP of that margin, and the profile row inside px-3, so the bottom
+     of the rail was inset 8px and 16px further than every button above
+     it — the toggle read as a narrower, displaced button and the avatar
+     sat off the icon column instead of on it.
+
+     The wrappers now contribute nothing and the two blocks inherit the
+     nav-link geometry, so one vertical centre line runs from the
+     Dashboard icon to the avatar.
+     ------------------------------------------------------------------ */
+  #sidebar .sidebar-footer,
+  #sidebar .sidebar-profile {
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+  }
+  #sidebar .sidebar-profile .profile-row { padding: 0 12px; }
+  .sidebar.collapsed .sidebar-profile .profile-row {
+      justify-content: center !important;
+      padding: 0 8px !important;
+      gap: 0 !important;
+  }
+
+  @media (max-width: 768px) {
+    .sidebar:not(.mobile-open) .sidebar-profile .profile-row {
+        justify-content: center !important;
+        padding: 0 8px !important;
+        gap: 0 !important;
+    }
+  }
 </style>
 
 <div id="sidebar" class="sidebar py-3 d-flex flex-column h-100">
@@ -51,15 +85,15 @@
     <a class="nav-link" id="nav-tab-accounts" onclick="switchTab('workspace-accounts', this)"><i class="fa-solid fa-file-invoice-dollar"></i> <span class="sidebar-text">Accounts</span></a>
   </div>
 
-  <div class="mt-auto px-2">
+  <div class="mt-auto sidebar-footer">
     <div class="theme-toggle-btn" onclick="toggleTheme()">
         <i id="theme-icon" class="fa-solid fa-moon"></i>
         <span class="sidebar-text">Toggle Theme</span>
     </div>
   </div>
 
-  <div class="px-3 pt-3 mt-3 border-top border-secondary flex-shrink-0">
-    <div class="d-flex align-items-center gap-3">
+  <div class="sidebar-profile pt-3 mt-3 border-top border-secondary flex-shrink-0">
+    <div class="profile-row d-flex align-items-center gap-3">
       <div class="rounded-circle d-flex justify-content-center align-items-center text-white fw-bold on-accent" style="width: 35px; height: 35px; background-color: var(--accent-purple);" id="profile-initial">?</div>
       <div class="profile-details">
         <h6 id="display-user-name" class="m-0 text-white small">Loading...</h6>

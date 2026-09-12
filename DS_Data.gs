@@ -77,6 +77,30 @@ function dsx_fmt_(v, pattern) {
   catch (e) { return ''; }
 }
 
+/**
+ * A clock time, for printing beside a date.
+ *
+ * Sheets stores a time-only cell as a Date pinned to the spreadsheet epoch,
+ * so String() on it yields "Sat Dec 30 1899 23:31:00 GMT+0521" — which is
+ * exactly what appeared next to the date of admission on the summary. A Date
+ * is therefore FORMATTED, never stringified; text that is already a time
+ * ("05:34 PM") passes through untouched.
+ */
+function dsx_time_(v, pattern) {
+  if (v instanceof Date) {
+    return isNaN(v.getTime()) ? '' : dsx_fmt_(v, pattern || 'hh:mm a');
+  }
+  return dsx_str_(v);
+}
+
+/** "10-Sep-2026 05:34 PM" from a date cell and a separate time cell. */
+function dsx_dateTime_(dateVal, timeVal) {
+  var d = dsx_fmt_(dateVal, 'dd-MMM-yyyy');
+  var t = dsx_time_(timeVal);
+  if (!d) return t;
+  return t ? (d + ' ' + t) : d;
+}
+
 function dsx_newEventId_() {
   return 'DSE-' + Utilities.getUuid().replace(/-/g, '').substring(0, 16).toUpperCase();
 }

@@ -99,15 +99,12 @@ function switchTab(tabId, clickedElement) {
     
     if(tabId === 'tab-pat-home') { setTimeout(renderCharts, 100); }
 
+    // 📊 DASHBOARD ROUTER HOOK — refresh live metrics on entry (cached, cheap).
+    // This was two nested copies of the same `tabId === 'tab-admin-dash'`
+    // test, the outer one calling loadDashboardMetrics() — a function no
+    // file in the project defines. Only the inner call ever did anything.
     if (tabId === 'tab-admin-dash') {
-    if (typeof loadDashboardMetrics === 'function') {
-        loadDashboardMetrics();
-    }
-
-    // 📊 DASHBOARD ROUTER HOOK — refresh live metrics on entry (cached, cheap)
-    if (tabId === 'tab-admin-dash') {
-    if (typeof renderAdminDashboard === 'function') renderAdminDashboard();
-      }
+        if (typeof renderAdminDashboard === 'function') renderAdminDashboard();
     }
     
     // 🛡️ THE SAFETY CATCH (Restored original)
@@ -138,6 +135,14 @@ function switchTab(tabId, clickedElement) {
     if (tabId === 'pharmacy-desk-workspace') {
         if (typeof openPharmacyDesk === 'function') {
             openPharmacyDesk();
+        }
+    }
+
+    // 💊 PHARMACY BILLING HOOK — the inventory scan belongs here, on entry.
+    // It used to run from a timer on every page load, for every role.
+    if (tabId === 'pharmacy-billing-workspace') {
+        if (typeof openPharmacyBilling === 'function') {
+            openPharmacyBilling();
         }
     }
 
