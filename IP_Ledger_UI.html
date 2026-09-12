@@ -404,7 +404,7 @@
    */
   function iphDischarge(ipNumber, bedId, ward, patientName) {
     if (typeof window.crescOpenDischargeFlow !== 'function') {
-      alert('The discharge panel is not installed in this deployment ' +
+      crescAlert('The discharge panel is not installed in this deployment ' +
             '(DS_Discharge_Flow.html).');
       return;
     }

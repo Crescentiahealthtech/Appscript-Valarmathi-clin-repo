@@ -197,7 +197,7 @@
     google.script.run
       .withSuccessHandler(res => {
         pdashOverlay(false);
-        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Failed.")); return; }
+        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Failed.")); return; }
         pdashBills = res.bills || []; pdashTotals = res.totals; pdashRange = res.range;
         const t = res.totals;
         document.getElementById('kBills').innerText = t.bills;
@@ -212,7 +212,7 @@
         document.getElementById('pdashBody').innerHTML = pdashBills.map(b => pdashRowHtml(b, true)).join('') ||
           `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:18px;">No bills in this range.</td></tr>`;
       })
-      .withFailureHandler(() => { pdashOverlay(false); alert("❌ Network error."); })
+      .withFailureHandler(() => { pdashOverlay(false); crescAlert("❌ Network error."); })
       .getPharmacyDashboard(from, to);
   }
 
@@ -241,12 +241,12 @@
   // ---------- Search ----------
   function phsRun() {
     const q = document.getElementById('phsQuery').value.trim();
-    if (!q) return alert("Enter a Patient ID, name, mobile, or invoice number.");
+    if (!q) return crescAlert("Enter a Patient ID, name, mobile, or invoice number.");
     pdashOverlay(true, "Searching…");
     google.script.run
       .withSuccessHandler(res => {
         pdashOverlay(false);
-        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Failed.")); return; }
+        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Failed.")); return; }
         const rows = res.data || [];
         document.getElementById('phsCount').innerText = `(${rows.length}${rows.length === 200 ? '+' : ''})`;
         document.getElementById('phsBody').innerHTML = rows.map(b => {
@@ -266,28 +266,28 @@
           </tr>`;
         }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px;">No matching bills.</td></tr>`;
       })
-      .withFailureHandler(() => { pdashOverlay(false); alert("❌ Network error."); })
+      .withFailureHandler(() => { pdashOverlay(false); crescAlert("❌ Network error."); })
       .searchPharmacyInvoices(q);
   }
 
   // ---------- Reprint any past invoice ----------
   function phReprintInvoice(invoiceNo) {
-    if (typeof buildPrintInvoiceRaw !== 'function') { alert("Invoice print template not loaded on this page."); return; }
+    if (typeof buildPrintInvoiceRaw !== 'function') { crescAlert("Invoice print template not loaded on this page."); return; }
     pdashOverlay(true, "Preparing invoice…");
     google.script.run
       .withSuccessHandler(res => {
         pdashOverlay(false);
-        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Could not load invoice.")); return; }
+        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Could not load invoice.")); return; }
         document.getElementById('phs-print').innerHTML = buildPrintInvoiceRaw(res.print);
         phsDoPrint();
       })
-      .withFailureHandler(() => { pdashOverlay(false); alert("❌ Network error."); })
+      .withFailureHandler(() => { pdashOverlay(false); crescAlert("❌ Network error."); })
       .getInvoiceForPrint(invoiceNo);
   }
 
   // ---------- Print the day/range bill list (with summary) ----------
   function pdashPrintList() {
-    if (!pdashBills.length) return alert("Nothing to print — load a range with bills first.");
+    if (!pdashBills.length) return crescAlert("Nothing to print — load a range with bills first.");
     document.getElementById('phs-print').innerHTML = pdashBuildListPrint(pdashBills, pdashTotals, pdashRange);
     phsDoPrint();
   }

@@ -231,12 +231,15 @@ const AccX = (function () {
   }
   function lockPeriod() {
     if (!CURRENT_PERIOD) { toast('Open the hub first.', false); return; }
-    if (!confirm('Lock period ' + CURRENT_PERIOD + '? Expense edits in this period will be frozen permanently.')) return;
-    busy(true);
-    google.script.run
-      .withSuccessHandler(function (res) { busy(false); toast(res.message, !!res.success); if (res.success) load(); })
-      .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
-      .lockFinancialPeriod(CURRENT_PERIOD, who());
+    crescConfirm('Lock period ' + CURRENT_PERIOD + '? Expense edits in this period will be frozen permanently.',
+      { okLabel: 'Lock period' }).then(function (ok) {
+      if (!ok) return;
+      busy(true);
+      google.script.run
+        .withSuccessHandler(function (res) { busy(false); toast(res.message, !!res.success); if (res.success) load(); })
+        .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
+        .lockFinancialPeriod(CURRENT_PERIOD, who());
+    });
   }
 
   return { load, openEntry, lockPeriod, switchPage, filter, loadReceivables, settle };

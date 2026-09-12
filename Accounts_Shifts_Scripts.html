@@ -130,15 +130,18 @@ const AccShift = (function () {
     const v = num('acc-shift-act') - exp;
     const reason = $('acc-shift-reason') ? $('acc-shift-reason').value : '';
     if (Math.abs(v) >= 0.01 && !reason.trim()) { toast('A reason is required for the variance.', false); return; }
-    if (!confirm('Close ' + SELECTED + ' shift ' + OPEN_SHIFT.shiftId + '? This finalizes the reconciliation.')) return;
-    google.script.run
-      .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) load(); })
-      .withFailureHandler(function (err) { toast(err.message, false); })
-      .closeShift({
-        shiftId: OPEN_SHIFT.shiftId, cashCollected: num('acc-shift-col'), pettyExpenses: num('acc-shift-pet'),
-        refunds: num('acc-shift-ref'), actualCash: num('acc-shift-act'),
-        postAdjustment: $('acc-shift-adj') ? $('acc-shift-adj').checked : false, reason: reason, user: who()
-      });
+    crescConfirm('Close ' + SELECTED + ' shift ' + OPEN_SHIFT.shiftId + '? This finalizes the reconciliation.',
+      { okLabel: 'Close shift' }).then(function (ok) {
+      if (!ok) return;
+      google.script.run
+        .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) load(); })
+        .withFailureHandler(function (err) { toast(err.message, false); })
+        .closeShift({
+          shiftId: OPEN_SHIFT.shiftId, cashCollected: num('acc-shift-col'), pettyExpenses: num('acc-shift-pet'),
+          refunds: num('acc-shift-ref'), actualCash: num('acc-shift-act'),
+          postAdjustment: $('acc-shift-adj') ? $('acc-shift-adj').checked : false, reason: reason, user: who()
+        });
+    });
   }
 
   // builds the WHOLE table so it never depends on static <table> markup

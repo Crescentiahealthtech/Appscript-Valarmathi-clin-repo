@@ -215,17 +215,17 @@ function phdShowTab(name) {
   // ===================================================================
   function phrLoadInvoice() {
     const q = document.getElementById('phrInvoiceQuery').value.trim();
-    if (!q) return alert("Enter an invoice number.");
+    if (!q) return crescAlert("Enter an invoice number.");
     phdOverlay(true, "Loading invoice…");
     google.script.run
       .withSuccessHandler(res => {
         phdOverlay(false);
-        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Not found.")); return; }
+        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Not found.")); return; }
         phrInvoice = res;
         phrReturnUuid = newReturnUuid();
         phrRender();
       })
-      .withFailureHandler(() => { phdOverlay(false); alert("❌ Network error."); })
+      .withFailureHandler(() => { phdOverlay(false); crescAlert("❌ Network error."); })
       .getInvoiceForReturn(q);
   }
 
@@ -314,8 +314,8 @@ function phdShowTab(name) {
       const q = parseFloat(tr.querySelector('.phr-qty').value) || 0;
       if (q > 0) lines.push({ brand: it.brand, batch: it.batch, generic: it.generic, expiry: it.expiry, unit: it.unit, qty: q });
     });
-    if (!anyReturnable) return alert("Nothing left to return on this invoice.");
-    if (lines.length === 0) return alert("Enter at least one return quantity.");
+    if (!anyReturnable) return crescAlert("Nothing left to return on this invoice.");
+    if (lines.length === 0) return crescAlert("Enter at least one return quantity.");
 
     const totalQty = lines.reduce((s, l) => s + l.qty, 0);
     const allMax = phrInvoice.items.every(it => {
@@ -324,9 +324,17 @@ function phdShowTab(name) {
       return q >= it.returnableQty;
     });
 
-    if (!confirm(`Return ${totalQty} unit(s) across ${lines.length} line(s) and refund ${document.getElementById('phrSumRefund').innerText}?\n\nStock will be added back and this cannot be undone.`)) return;
-
+    // The button is resolved before the dialog opens, while `event` still
+    // refers to the click that started this.
     const btn = event.target.closest('button');
+
+    crescConfirm(`Return ${totalQty} unit(s) across ${lines.length} line(s) and refund ${document.getElementById('phrSumRefund').innerText}?\n\nStock will be added back and this cannot be undone.`,
+      { okLabel: 'Process return' }).then(ok => {
+      if (ok) phrProcessGo(lines, allMax, btn);
+    });
+  }
+
+  function phrProcessGo(lines, allMax, btn) {
     const original = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Processing…`;
@@ -345,15 +353,15 @@ function phdShowTab(name) {
       .withSuccessHandler(res => {
         btn.innerHTML = original; btn.disabled = false;
         if (res && res.success) {
-          if (res.duplicate) { alert("ℹ️ " + res.message); return; }
+          if (res.duplicate) { crescAlert("ℹ️ " + res.message); return; }
           document.getElementById('phd-print').innerHTML = phrBuildCreditNote(res.print);
-          if (confirm(`✅ Return ${res.returnNo} done. Refund ₹${res.refund.toFixed(2)} (${res.refundMode}).\n\nPrint the credit note now?`)) {
-            phrPrintCreditNote();
-          }
+          crescConfirm(`✅ Return ${res.returnNo} done. Refund ₹${res.refund.toFixed(2)} (${res.refundMode}).\n\nPrint the credit note now?`,
+            { title: 'Return processed', kind: 'info', okLabel: 'Print', cancelLabel: 'Not now' })
+            .then(print => { if (print) phrPrintCreditNote(); });
           phrLoadInvoice(); // reload to reflect new returnable quantities
-        } else alert("❌ " + ((res && res.message) || "Return failed."));
+        } else crescAlert("❌ " + ((res && res.message) || "Return failed."));
       })
-      .withFailureHandler(() => { btn.innerHTML = original; btn.disabled = false; alert("❌ Network error: please retry."); })
+      .withFailureHandler(() => { btn.innerHTML = original; btn.disabled = false; crescAlert("❌ Network error: please retry."); })
       .processPharmacyReturn(payload);
   }
 
@@ -439,7 +447,7 @@ function phdShowTab(name) {
     google.script.run
       .withSuccessHandler(res => {
         phdOverlay(false);
-        if (!res || !res.success) { alert("⚠️ " + ((res && res.message) || "Failed.")); return; }
+        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Failed.")); return; }
         document.getElementById('phdFinanceOut').classList.remove('d-none');
         const r2 = n => '₹' + (Math.round((n || 0) * 100) / 100).toFixed(2);
         document.getElementById('fNetSales').innerText = r2(res.sales.net);
@@ -461,7 +469,7 @@ function phdShowTab(name) {
           `<hr style="border-color:var(--border-color);margin:6px 0;">` +
           `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Credit outstanding</span><span style="color:var(--warning-fg);">${r2(res.creditOutstanding)} (${res.creditCount})</span></div>`;
       })
-      .withFailureHandler(() => { phdOverlay(false); alert("❌ Network error."); })
+      .withFailureHandler(() => { phdOverlay(false); crescAlert("❌ Network error."); })
       .getPharmacyFinanceSummary(from, to);
   }
 </script>

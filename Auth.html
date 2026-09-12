@@ -105,7 +105,7 @@
     clearInterval(sessionInterval);
     clearStoredSession();
 
-    if (message) alert(message);
+    if (message) crescAlert(message);
 
     const appScreen = document.getElementById('app-screen');
     if (appScreen) appScreen.classList.add('d-none');
@@ -130,6 +130,148 @@
     return String(s === null || s === undefined ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+
+  // ==========================================
+  //  SHARED IN-PAGE DIALOGS
+  // ------------------------------------------
+  // The application runs inside an Apps Script <iframe>, so every native
+  // alert() / confirm() / prompt() is rendered by the browser chrome and
+  // prefixed with the embedder's origin - the raw
+  // "<hash>-script.googleusercontent.com says" line - which leaks deployment
+  // detail to the patient portal and to every desk user, and cannot be
+  // styled or suppressed. These three build the same question out of DOM
+  // instead, so the URL never appears and the dialog matches the app.
+  //
+  // They live here, in the shell, because Auth.html is parsed before any
+  // module partial and before any lazily loaded bundle, so a bundle can
+  // call them the moment it is injected.
+  //
+  // Each returns a Promise AND accepts an `opts.done` callback, so a call
+  // site can use whichever fits its surrounding code. The answer is
+  // inherently asynchronous - unlike the natives, these do not block - so
+  // every caller must continue its work inside the callback.
+  // ==========================================
+
+  /** Builds (once) and returns the single dialog host element. */
+  function crescDialogHost() {
+    var host = document.getElementById('cresc-dialog-host');
+    if (host) return host;
+
+    host = document.createElement('div');
+    host.id = 'cresc-dialog-host';
+    // Above the toast stack (3000) and the Bootstrap modals (1050), because
+    // a confirmation raised from inside a modal must sit on top of it.
+    host.style.cssText = 'position:fixed; inset:0; background:var(--overlay-scrim, rgba(0,0,0,.6));' +
+      'z-index:20000; display:none; align-items:center; justify-content:center; padding:1rem;';
+    host.innerHTML =
+      '<div role="dialog" aria-modal="true" aria-labelledby="cresc-dialog-head"' +
+        ' style="background:var(--bg-elevated, #1e1e28); color:var(--text-main, #f1f1f5);' +
+        ' border:1px solid var(--border-color, #3a3a48); border-radius:12px;' +
+        ' width:min(460px, 100%); max-height:90vh; overflow:auto;' +
+        ' box-shadow:0 18px 48px rgba(0,0,0,.45);">' +
+        '<div id="cresc-dialog-head" style="padding:14px 18px; font-weight:700; font-size:.9rem;' +
+          ' border-bottom:1px solid var(--border-color, #3a3a48);"></div>' +
+        '<div style="padding:16px 18px;">' +
+          '<div id="cresc-dialog-msg" style="font-size:.85rem; line-height:1.5; white-space:pre-wrap;"></div>' +
+          '<input type="text" id="cresc-dialog-input" class="form-control mt-3 d-none" autocomplete="off">' +
+        '</div>' +
+        '<div style="padding:12px 18px; display:flex; justify-content:flex-end; gap:8px;' +
+          ' border-top:1px solid var(--border-color, #3a3a48);">' +
+          '<button type="button" id="cresc-dialog-cancel" class="btn btn-sm btn-outline-light">Cancel</button>' +
+          '<button type="button" id="cresc-dialog-ok" class="btn btn-sm btn-primary fw-bold">OK</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(host);
+    return host;
+  }
+
+  /**
+   * @param {{mode:'alert'|'confirm'|'prompt', message:string, title?:string,
+   *          kind?:'info'|'warn'|'err', value?:string, okLabel?:string,
+   *          cancelLabel?:string, done?:function}} opts
+   * @return {Promise} true/false for confirm, the string or null for prompt.
+   */
+  window.crescDialog = function (opts) {
+    opts = opts || {};
+    var mode = opts.mode || 'alert';
+
+    return new Promise(function (resolve) {
+      var host   = crescDialogHost();
+      var head   = document.getElementById('cresc-dialog-head');
+      var msg    = document.getElementById('cresc-dialog-msg');
+      var input  = document.getElementById('cresc-dialog-input');
+      var okBtn  = document.getElementById('cresc-dialog-ok');
+      var cancel = document.getElementById('cresc-dialog-cancel');
+
+      head.textContent = opts.title ||
+        (mode === 'confirm' ? 'Please confirm' : 'Crescentia');
+      head.style.color = opts.kind === 'err'  ? 'var(--danger-fg, #ff8b8b)'
+                       : opts.kind === 'warn' ? 'var(--warning-fg, #ffcc66)'
+                       : 'var(--accent-purple, #a78bfa)';
+      // textContent, not innerHTML: server messages reach these dialogs and
+      // must never be parsed as markup.
+      msg.textContent = opts.message == null ? '' : String(opts.message);
+
+      input.classList.toggle('d-none', mode !== 'prompt');
+      if (mode === 'prompt') input.value = opts.value == null ? '' : String(opts.value);
+
+      cancel.classList.toggle('d-none', mode === 'alert');
+      cancel.textContent = opts.cancelLabel || 'Cancel';
+      okBtn.textContent  = opts.okLabel || 'OK';
+
+      host.style.display = 'flex';
+      setTimeout(function () { (mode === 'prompt' ? input : okBtn).focus(); }, 30);
+
+      // The host is reused, so handlers are replaced rather than added: a
+      // stale listener from the previous dialog would answer this one too.
+      var close = function (result) {
+        host.style.display = 'none';
+        document.removeEventListener('keydown', onKey);
+        okBtn.onclick = cancel.onclick = host.onmousedown = null;
+        if (typeof opts.done === 'function') { try { opts.done(result); } catch (e) { console.error(e); } }
+        resolve(result);
+      };
+      var dismissed = function () { return mode === 'confirm' ? false : (mode === 'alert' ? true : null); };
+      var accepted  = function () { return mode === 'prompt' ? input.value : true; };
+      var onKey = function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(dismissed()); }
+        else if (e.key === 'Enter' && mode !== 'confirm') { e.preventDefault(); close(accepted()); }
+      };
+
+      okBtn.onclick    = function () { close(accepted()); };
+      cancel.onclick   = function () { close(dismissed()); };
+      host.onmousedown = function (e) { if (e.target === host) close(dismissed()); };
+      document.addEventListener('keydown', onKey);
+    });
+  };
+
+  /** Drop-in for alert(). Fire and forget, or await the acknowledgement. */
+  window.crescAlert = function (message, kind, title) {
+    return window.crescDialog({
+      mode: 'alert', message: message, kind: kind || 'info',
+      title: title || (kind === 'err' ? 'Error' : kind === 'warn' ? 'Warning' : 'Notice')
+    });
+  };
+
+  /** Drop-in for confirm(); the answer arrives via the promise or opts.done. */
+  window.crescConfirm = function (message, opts) {
+    opts = opts || {};
+    return window.crescDialog({
+      mode: 'confirm', message: message, kind: opts.kind || 'warn',
+      title: opts.title || 'Please confirm', okLabel: opts.okLabel || 'Continue',
+      cancelLabel: opts.cancelLabel, done: opts.done
+    });
+  };
+
+  /** Drop-in for prompt(); resolves with the string, or null if cancelled. */
+  window.crescPrompt = function (message, value, opts) {
+    opts = opts || {};
+    return window.crescDialog({
+      mode: 'prompt', message: message, value: value || '',
+      title: opts.title || 'Crescentia', okLabel: opts.okLabel || 'Save',
+      kind: opts.kind, done: opts.done
+    });
   };
 
   // ==========================================
@@ -301,7 +443,7 @@
         if (!res || !res.success) {
           window.crescDoctorCtx = { success: false, doctors: [], locked: true,
                                     selfDoctorId: '', mode: 'SET' };
-          alert((res && res.message) || 'Could not load the doctor list.');
+          crescAlert((res && res.message) || 'Could not load the doctor list.');
         } else {
           window.crescDoctorCtx = res;
         }
@@ -310,7 +452,7 @@
       .withFailureHandler(function (err) {
         window.crescDoctorCtx = { success: false, doctors: [], locked: true,
                                   selfDoctorId: '', mode: 'SET' };
-        alert('Network error loading doctors: ' + err.message);
+        crescAlert('Network error loading doctors: ' + err.message);
         if (done) done(window.crescDoctorCtx);
       })
       .getDoctorPickerContext(window.sessionToken);
@@ -372,12 +514,12 @@
             btn.innerHTML = originalHtml;
             btn.disabled = false;
             if (res.success) triggerMFAOrRoute(res, res.username);
-            else alert(res.message);
+            else crescAlert(res.message);
           })
           .withFailureHandler(function (err) {
             btn.innerHTML = originalHtml;
             btn.disabled = false;
-            alert("Network Verification Error: " + err.message);
+            crescAlert("Network Verification Error: " + err.message);
           })
           .verifyGoogleLogin(userEmail);
       })
@@ -396,7 +538,7 @@
     const passwordInput = document.getElementById('in-password').value.trim();
 
     if (!usernameInput || !passwordInput) {
-      return alert("Please enter both ID and Password.");
+      return crescAlert("Please enter both ID and Password.");
     }
 
     const originalHtml = btn.innerHTML;
@@ -408,12 +550,12 @@
         btn.innerHTML = originalHtml;
         btn.disabled = false;
         if (res.success) triggerMFAOrRoute(res, usernameInput);
-        else alert(res.message);
+        else crescAlert(res.message);
       })
       .withFailureHandler(function (err) {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
-        alert("Network Error: " + err.message);
+        crescAlert("Network Error: " + err.message);
       })
       .verifyLogin({ username: usernameInput, password: passwordInput });
   }
@@ -436,7 +578,7 @@
     const btn = document.getElementById('btn-verify-mfa');
     const code = document.getElementById('in-mfa-code').value.trim();
 
-    if (!code || code.length !== 6) return alert("Enter the 6 digit code.");
+    if (!code || code.length !== 6) return crescAlert("Enter the 6 digit code.");
 
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Checking...';
     btn.disabled = true;
@@ -460,14 +602,14 @@
                  'code you typed. Ask an administrator to re-enrol your ' +
                  'authenticator (enrolMFA in the Apps Script editor).';
         }
-        alert(msg);
+        crescAlert(msg);
         document.getElementById('in-mfa-code').value = '';
         document.getElementById('in-mfa-code').focus();
       })
       .withFailureHandler(function (err) {
         btn.innerHTML = 'Verify & Login';
         btn.disabled = false;
-        alert("Network error: " + err.message);
+        crescAlert("Network error: " + err.message);
       })
       .verifyMFA(pendingAuthName, code);
   }

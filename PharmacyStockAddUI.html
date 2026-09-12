@@ -192,13 +192,13 @@
           form.reset();
           showToast('Stock added', response.message, 'success');
         } else {
-          alert('Failed to add stock: ' + response.message);
+          crescAlert('Failed to add stock: ' + response.message);
         }
         fabBtn.innerHTML = originalIcon;
         fabBtn.disabled = false;
       })
       .withFailureHandler((error) => {
-        alert('Connection Error: ' + error.message);
+        crescAlert('Connection Error: ' + error.message);
         fabBtn.innerHTML = originalIcon;
         fabBtn.disabled = false;
       })

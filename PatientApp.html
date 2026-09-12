@@ -246,7 +246,7 @@
       username: loggedInUser, name: document.getElementById('e-name').value, age: document.getElementById('e-age').value, gender: document.getElementById('e-gender').value, dob: document.getElementById('e-dob').value, mobile: document.getElementById('e-mobile').value, whatsapp: document.getElementById('e-whatsapp').value, address: document.getElementById('e-address').value, comorb: document.getElementById('e-comorb').value
     };
     google.script.run.withSuccessHandler(res => {
-      alert(res); btn.innerText = "Save Changes"; fetchProfileData(); toggleEditProfile();
+      crescAlert(res); btn.innerText = "Save Changes"; fetchProfileData(); toggleEditProfile();
     }).saveUserProfile(data);
   }
 
@@ -382,9 +382,9 @@
     const apptObj = { patientId: loggedInUser, patientName: loggedInName, date: document.getElementById('pat-book-date').value, time: selectedTimeSlot, purpose: document.getElementById('pat-book-reason').value, fee: 0 };
     google.script.run.withSuccessHandler(res => {
       if(res.success) { 
-        alert("Appointment Confirmed!"); loadPatientSlots(); refreshPatientDashboard(); 
+        crescAlert("Appointment Confirmed!"); loadPatientSlots(); refreshPatientDashboard(); 
       } else { 
-        alert("Error: " + res.message); btn.innerText = `Confirm Booking • ${selectedTimeSlot}`; btn.disabled = false; 
+        crescAlert("Error: " + res.message); btn.innerText = `Confirm Booking • ${selectedTimeSlot}`; btn.disabled = false; 
       }
     }).submitNewAppointment(apptObj);
   }

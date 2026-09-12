@@ -207,10 +207,10 @@ var LabRecordsApp = (function () {
     
     google.script.run.withSuccessHandler(function(res){
       btn.innerHTML = originalHtml;
-      if(!res || !res.success){ alert((res&&res.message)||'Report not ready.'); return; }
+      if(!res || !res.success){ crescAlert((res&&res.message)||'Report not ready.'); return; }
       
       var w = window.open('','_blank','width=900,height=1100');
-      if(!w){ alert('Pop-up blocked. Allow pop-ups for this site, then retry.'); return; }
+      if(!w){ crescAlert('Pop-up blocked. Allow pop-ups for this site, then retry.'); return; }
       w.document.open();
       w.document.write(res.html);
       w.document.close();
@@ -218,42 +218,56 @@ var LabRecordsApp = (function () {
       setTimeout(function(){ try{ w.print(); }catch(e){} }, 800); 
     }).withFailureHandler(function(e){
       btn.innerHTML = originalHtml;
-      alert("Failed to load report: " + e.message);
+      crescAlert("Failed to load report: " + e.message);
     }).getLabReportHtml(orderId);
   }
 
   function dispatchEmail(orderId, patientEmail) {
-    if (!patientEmail || patientEmail === "undefined") {
-      patientEmail = prompt("No email on file. Please enter the patient's email address:");
-      if (!patientEmail) return;
-    } else {
-      if (!confirm("Send Lab Report to " + patientEmail + "?")) return;
-    }
-
+    // The button is read here, while the click is still the current event:
+    // the in-page dialog answers asynchronously, and by then `event` is gone.
     var btn = event.currentTarget;
+
+    var ask = (!patientEmail || patientEmail === "undefined")
+      ? crescPrompt("No email on file. Please enter the patient's email address:", '',
+                    { title: 'Email lab report', okLabel: 'Send' })
+      : crescConfirm("Send Lab Report to " + patientEmail + "?", { okLabel: 'Send', kind: 'info' })
+          .then(function (ok) { return ok ? patientEmail : null; });
+
+    ask.then(function (addr) {
+      if (!addr) return;
+      sendReportEmail(orderId, addr, btn);
+    });
+  }
+
+  function sendReportEmail(orderId, patientEmail, btn) {
     var originalHtml = btn.innerHTML;
     btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
     
     google.script.run.withSuccessHandler(function(res){
       btn.innerHTML = originalHtml;
-      if(res.success) { alert("✅ Report emailed successfully to " + patientEmail); } 
-      else { alert("❌ Failed to send email: " + res.message); }
+      if(res.success) { crescAlert("✅ Report emailed successfully to " + patientEmail); } 
+      else { crescAlert("❌ Failed to send email: " + res.message); }
     }).withFailureHandler(function(e){
       btn.innerHTML = originalHtml;
-      alert("❌ Server Error: " + e.message);
+      crescAlert("❌ Server Error: " + e.message);
     }).emailLabReportPDF(orderId, patientEmail);
   }
 
   function dispatchWhatsApp(orderId, patientName, mobileNumber) {
+    var btn = event.currentTarget || document.activeElement;
     if (!mobileNumber || mobileNumber === "undefined" || mobileNumber.trim() === "") {
-      mobileNumber = prompt("No mobile number on file. Enter number (with country code):");
-      if (!mobileNumber) return; 
+      crescPrompt("No mobile number on file. Enter number (with country code):", '',
+                  { title: 'Send on WhatsApp', okLabel: 'Continue' })
+        .then(function (num) { if (num) sendReportWhatsApp(orderId, patientName, num, btn); });
+      return;
     }
-    
+    sendReportWhatsApp(orderId, patientName, mobileNumber, btn);
+  }
+
+  function sendReportWhatsApp(orderId, patientName, mobileNumber, btn) {
     var cleanNum = mobileNumber.replace(/\D/g,'');
     if (cleanNum.length === 10) cleanNum = "91" + cleanNum;
 
-    var btn = event.currentTarget || document.activeElement;
     var originalHtml = btn.innerHTML;
     btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
     btn.disabled = true; 
@@ -262,7 +276,7 @@ var LabRecordsApp = (function () {
       if (btn.disabled) {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
-        alert("⏳ Server is taking too long. Please try again.");
+        crescAlert("⏳ Server is taking too long. Please try again.");
       }
     }, 25000);
 
@@ -272,7 +286,7 @@ var LabRecordsApp = (function () {
       btn.disabled = false;
 
       if(!res.success) {
-        alert("❌ Failed to generate secure link: " + res.message);
+        crescAlert("❌ Failed to generate secure link: " + res.message);
         return;
       }
 
@@ -290,7 +304,7 @@ var LabRecordsApp = (function () {
       clearTimeout(timeoutId); 
       btn.innerHTML = originalHtml;
       btn.disabled = false;
-      alert("❌ Server Error: " + e.message);
+      crescAlert("❌ Server Error: " + e.message);
     }).generateAndStoreLabReportPDF(orderId);
   }
 
@@ -298,61 +312,76 @@ var LabRecordsApp = (function () {
 
   function printArchiveInvoice(orderId) {
     google.script.run.withSuccessHandler(function(res) {
-      if(!res || !res.success) { alert((res && res.message) || 'Invoice not found.'); return; }
+      if(!res || !res.success) { crescAlert((res && res.message) || 'Invoice not found.'); return; }
       var w = window.open('', '_blank', 'width=820,height=900');
-      if(!w) { alert("Pop-up blocked. Please allow popups."); return; }
+      if(!w) { crescAlert("Pop-up blocked. Please allow popups."); return; }
       w.document.open();
       w.document.write(res.html); 
       w.document.close();
       setTimeout(function() { w.print(); }, 500);
     }).withFailureHandler(function(err){
-      alert("Failed to load invoice: " + err.message);
+      crescAlert("Failed to load invoice: " + err.message);
     }).getLabBillHtml(orderId);
   }
 
   function waArchiveInvoice(orderId, mobileNumber) {
+    var btn = event.currentTarget || document.activeElement;
     if (!mobileNumber || mobileNumber === "undefined" || mobileNumber.trim() === "") {
-      mobileNumber = prompt("No WhatsApp number on file. Enter WhatsApp number (no country code):", "");
-      if (!mobileNumber || mobileNumber.trim().length < 10) return;
+      crescPrompt("No WhatsApp number on file. Enter WhatsApp number (no country code):", "",
+                  { title: 'Send invoice on WhatsApp', okLabel: 'Continue' })
+        .then(function (num) {
+          if (!num || num.trim().length < 10) return;
+          sendArchiveInvoiceWhatsApp(orderId, num, btn);
+        });
+      return;
     }
-    
+    sendArchiveInvoiceWhatsApp(orderId, mobileNumber, btn);
+  }
+
+  function sendArchiveInvoiceWhatsApp(orderId, mobileNumber, btn) {
     var cleanNum = mobileNumber.replace(/\D/g,'');
     if (cleanNum.length === 10) cleanNum = "91" + cleanNum;
-    
-    var btn = event.currentTarget || document.activeElement;
+
     var ogHtml = btn.innerHTML;
     btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
     
     google.script.run.withSuccessHandler(function(res) {
       btn.innerHTML = ogHtml;
-      if (!res || !res.success) { alert(res.message); return; }
+      if (!res || !res.success) { crescAlert(res.message); return; }
       var text = "Hello,%0A%0APlease find your laboratory tax invoice attached below:%0A" + encodeURIComponent(res.link) + "%0A%0A- Crescentia Clinic";
       window.open("https://wa.me/" + cleanNum + "?text=" + text, '_blank');
     }).withFailureHandler(function(err){
       btn.innerHTML = ogHtml;
-      alert("Network Error: " + err.message);
+      crescAlert("Network Error: " + err.message);
     }).getArchiveInvoiceLink(orderId);
   }
 
   function emailArchiveInvoiceJS(orderId, patientEmail) {
-    if (!patientEmail || patientEmail === "undefined" || patientEmail.trim() === "") {
-      patientEmail = prompt("No email on file. Please enter patient email address:", "");
-      if (!patientEmail || patientEmail.trim() === "") return;
-    } else {
-      if (!confirm("Send Invoice to " + patientEmail + "?")) return;
-    }
-    
     var btn = event.currentTarget || document.activeElement;
+
+    var ask = (!patientEmail || patientEmail === "undefined" || patientEmail.trim() === "")
+      ? crescPrompt("No email on file. Please enter patient email address:", "",
+                    { title: 'Email invoice', okLabel: 'Send' })
+      : crescConfirm("Send Invoice to " + patientEmail + "?", { okLabel: 'Send', kind: 'info' })
+          .then(function (ok) { return ok ? patientEmail : null; });
+
+    ask.then(function (addr) {
+      if (!addr || addr.trim() === "") return;
+      sendArchiveInvoiceEmail(orderId, addr, btn);
+    });
+  }
+
+  function sendArchiveInvoiceEmail(orderId, patientEmail, btn) {
     var ogHtml = btn.innerHTML;
     btn.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
 
     google.script.run.withSuccessHandler(function(res) {
       btn.innerHTML = ogHtml;
-      if (res && res.success) alert(res.message); 
-      else alert('Failed: ' + (res && res.message));
+      if (res && res.success) crescAlert(res.message); 
+      else crescAlert('Failed: ' + (res && res.message));
     }).withFailureHandler(function(err){
       btn.innerHTML = ogHtml;
-      alert("Network Error: " + err.message);
+      crescAlert("Network Error: " + err.message);
     }).emailArchiveInvoice(orderId, patientEmail.trim());
   }
 
