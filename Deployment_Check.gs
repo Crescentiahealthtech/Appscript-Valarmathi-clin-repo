@@ -79,12 +79,20 @@ var DEP_MAP = {
   // The discharge summary engine. Its absence used to surface as
   // "ds_getStatusMap is not a function" on the IP Admissions screen and as a
   // Discharge Desk that spun for ever, neither of which names a file.
-  "DS_Data.gs":             ["dsx_summariesSheet_", "dsx_headerMap_", "dsx_newSection_"],
+  "DS_Data.gs":             ["dsx_summariesSheet_", "dsx_headerMap_", "dsx_newSection_",
+                             "dsx_wire_", "dsx_readColumns_", "dsx_jsonNormalize_"],
   "DS_Workflow.gs":         ["ds_getQueue", "ds_getStatusMap", "ds_getSummary",
+                             "ds_getSummaryLite", "ds_getSnapshots",
                              "ds_initiateDischarge", "ds_saveWorking", "ds_sign",
                              "ds_getDiff", "ds_getSourceItem", "ds_heartbeatEditing",
-                             "dsx_requireRole_", "dsx_permissions_", "dsx_userRow_"],
+                             "dsx_requireRole_", "dsx_permissions_", "dsx_userRow_",
+                             "dsx_fitForWire_"],
   "DS_Assembly.gs":         ["dsx_assemble_", "dsx_admissionRow_"],
+  // Hospital billing. Without this file the billing desk boots into
+  // "hb_getBootstrap is not a function", which names nothing useful.
+  "Hospital_Billing.gs":    ["setupHospitalBilling", "hb_getBootstrap", "hb_getPatientContext",
+                             "hb_saveInvoice", "hb_getInvoices", "hb_getInvoice",
+                             "hb_recordPayment", "acc_hospitalRows_", "hb_billedApptIds_"],
   "DS_Print.gs":            ["ds_getPrintHtml"],
   "DS_Gate.gs":             ["dsx_gateCheck_", "ds_getGateStatus"]
 };

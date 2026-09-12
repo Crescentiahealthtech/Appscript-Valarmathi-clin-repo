@@ -1,382 +1,1083 @@
+<!-- =====================================================================
+     Admin_Hospital_Billing.html — Crescentia HealthTech / CresRx
+     OP / procedure / package billing desk. Backend: Hospital_Billing.gs.
+
+     The previous version of this screen was a standalone form whose Save
+     button alerted "Ready to route to Google Sheets in Phase 2", whose
+     particulars were eight hard-coded options with the rate in the value
+     attribute, and which had never heard of a package. Everything on this
+     screen now comes from, or goes to, the rest of the hospital:
+
+       the patient        from the Patients registry
+       the visit          from the Appointments ledger (and its tariff)
+       the admission      from the live IP ward
+       the particulars    from Service_Master, which the clinic edits
+       the packages       from Package_Master, shared with IP settlement
+       the other dues     pharmacy and lab open balances for this patient
+       the bill           Hospital_Invoices + Hospital_Invoice_Items, which
+                          the Finance Hub reads as income and the receivables
+                          tab reads as a due
+     ===================================================================== -->
 <style>
-  .table-billing th { background-color: var(--surface-3); color: var(--text-main); border-bottom: 2px solid var(--accent-purple); }
-  .table-billing td { border-color: var(--border-hover); vertical-align: middle; }
-  .form-control-billing, .form-select-billing { background-color: var(--surface-2); color: var(--text-main); border: 1px solid var(--border-hover); }
-  .form-control-billing:focus, .form-select-billing:focus { background-color: var(--surface-2); color: var(--text-main); border-color: var(--accent-purple); box-shadow: none; }
-  
-  @media print {
-    body * { visibility: hidden; }
-    #printableInvoice, #printableInvoice * { visibility: visible; }
-    #printableInvoice { position: absolute; left: 0; top: 0; width: 100%; background-color: var(--bg-card) !important; color: var(--text-main) !important; }
-    .no-print { display: none !important; }
-    .form-control-billing, .form-select-billing { border: none !important; background: transparent !important; color: var(--text-main) !important; box-shadow: none !important; padding: 0 !important; -webkit-appearance: none; appearance: none; }
-    .table-billing th { background-color: var(--bg-input) !important; color: var(--text-main) !important; border-bottom: 2px solid var(--border-color) !important; }
-    .table-billing td { border-color: var(--border-color) !important; }
-    .table-billing select::-ms-expand { display: none; }
-    .theme-text { color: var(--text-main) !important; } 
+  #tab-admin-billing .hb-panel {
+    background: var(--bg-card); border: 1px solid var(--border-color);
+    border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 1rem;
   }
-  
-  .style-workspace-btn:hover {
-    border-color: var(--accent-purple) !important;
-    transform: translateY(-4px);
-    box-shadow: 0 8px 20px rgba(99, 91, 255, 0.15) !important;
+  #tab-admin-billing .hb-panel-title {
+    font-size: .72rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: .75rem;
+  }
+  #tab-admin-billing .hb-label {
+    font-size: .68rem; font-weight: 600; letter-spacing: .4px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 2px; display: block;
+  }
+  #tab-admin-billing .hb-input {
+    background: var(--bg-input); color: var(--text-main);
+    border: 1px solid var(--border-color); border-radius: 7px; padding: .4rem .55rem;
+    font-size: .9rem; width: 100%;
+  }
+  #tab-admin-billing .hb-input:focus { outline: none; border-color: var(--accent-purple); }
+  #tab-admin-billing .hb-input[readonly] { opacity: .75; }
+  #tab-admin-billing table.hb-table { width: 100%; border-collapse: collapse; }
+  #tab-admin-billing table.hb-table th {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--text-muted); border-bottom: 1px solid var(--border-color);
+    padding: .4rem .35rem; text-align: left; font-weight: 700;
+  }
+  #tab-admin-billing table.hb-table td { padding: .3rem .35rem; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+  #tab-admin-billing .hb-money { font-variant-numeric: tabular-nums; }
+  #tab-admin-billing .hb-total-row { display: flex; justify-content: space-between; padding: .25rem 0; }
+  #tab-admin-billing .hb-total-net { font-size: 1.35rem; font-weight: 800; color: var(--accent-fg); }
+  #tab-admin-billing .hb-chip {
+    display: inline-block; border-radius: 6px; padding: .12rem .45rem;
+    font-size: .7rem; font-weight: 700; letter-spacing: .3px;
+  }
+  #tab-admin-billing .hb-chip-PAID      { background: var(--success-bg); color: var(--success); }
+  #tab-admin-billing .hb-chip-PART_PAID { background: var(--warning-bg); color: var(--warning); }
+  #tab-admin-billing .hb-chip-UNPAID    { background: var(--danger-bg);  color: var(--danger); }
+  #tab-admin-billing .hb-chip-CANCELLED { background: var(--bg-input);   color: var(--text-muted); }
+  #tab-admin-billing .hb-visit {
+    border: 1px solid var(--border-color); border-radius: 8px;
+    padding: .45rem .6rem; margin-bottom: .35rem; background: var(--bg-input); cursor: pointer;
+  }
+  #tab-admin-billing .hb-visit:hover { border-color: var(--accent-purple); }
+  #tab-admin-billing .hb-visit.hb-used { opacity: .55; cursor: default; }
+  #hb-print { display: none; }
+
+  @media print {
+    body * { visibility: hidden !important; }
+    #hb-print, #hb-print * { visibility: visible !important; }
+    #hb-print { display: block !important; position: absolute; left: 0; top: 0; width: 100%;
+                background: #fff; color: #000; padding: 10px 4px; font-family: Arial, sans-serif; }
   }
 </style>
 
 <div id="tab-admin-billing" class="page-section d-none">
 
+  <!-- ==================== THE BILLING DESK ==================== -->
   <div id="billing-workspace-hospital" class="d-none mt-4">
-      <div class="d-flex align-items-center mb-4 no-print">
-          <button class="btn btn-outline-secondary btn-sm me-3" onclick="switchTab('workspace-appointments')"><i class="fa-solid fa-arrow-left"></i> Back</button>
-          <h4 class="fw-bold m-0 text-white">Hospital Master Billing</h4>
+
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="d-flex align-items-center">
+        <button class="btn btn-outline-secondary btn-sm me-3" onclick="switchTab('workspace-appointments')">
+          <i class="fa-solid fa-arrow-left"></i> Back
+        </button>
+        <div>
+          <h4 class="fw-bold m-0" style="color: var(--text-main);">Hospital Billing</h4>
+          <small class="label-bright">Consultations, procedures and packages</small>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-info" onclick="openBillingWorkspace('records')">
+          <i class="fa-solid fa-list"></i> Billing ledger
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="hbClearBill()">
+          <i class="fa-solid fa-eraser"></i> Clear
+        </button>
+      </div>
+    </div>
+
+    <div id="hb-setup-warning" class="alert alert-warning py-2 px-3 d-none small"></div>
+
+    <!-- ---- 1. PATIENT ---- -->
+    <div class="hb-panel">
+      <div class="hb-panel-title">1 &middot; Patient</div>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="hb-label">Patient ID or mobile</label>
+          <div class="d-flex gap-1">
+            <input type="text" id="hb-query" class="hb-input" placeholder="LMTVS0001 / 98765…"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();hbFetchPatient();}">
+            <button class="btn btn-sm btn-primary" onclick="hbFetchPatient()"><i class="fa-solid fa-magnifying-glass"></i></button>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="hb-label">Name</label>
+          <input type="text" id="hb-name" class="hb-input" placeholder="Walk-in patient">
+        </div>
+        <div class="col-md-2">
+          <label class="hb-label">Age / Sex</label>
+          <input type="text" id="hb-agesex" class="hb-input" placeholder="—">
+        </div>
+        <div class="col-md-2">
+          <label class="hb-label">Mobile</label>
+          <input type="text" id="hb-mobile" class="hb-input">
+        </div>
+        <div class="col-md-2">
+          <label class="hb-label">Doctor</label>
+          <select id="hb-doctor" class="hb-input" onchange="hbDoctorChanged()">
+            <option value="">—</option>
+          </select>
+        </div>
+      </div>
+      <div class="row g-2 align-items-end mt-1">
+        <div class="col-md-6">
+          <label class="hb-label">Address</label>
+          <input type="text" id="hb-address" class="hb-input">
+        </div>
+        <div class="col-md-3">
+          <label class="hb-label">Appointment settled by this bill</label>
+          <input type="text" id="hb-appt" class="hb-input" readonly placeholder="none">
+        </div>
+        <div class="col-md-3">
+          <label class="hb-label">Admission</label>
+          <input type="text" id="hb-ip" class="hb-input" readonly placeholder="not admitted">
+        </div>
       </div>
 
-      <div class="card p-4 border-secondary shadow-lg" id="printableInvoice" style="background-color: var(--surface-2);">
-          <div class="row border-bottom border-secondary pb-3 mb-4">
-            <div class="col-md-8">
-              <h3 class="mb-0 fw-bold theme-text" style="color: var(--accent-fg);">CRESCENTIA HEALTHTECH</h3>
-              <p class="text-white mb-0">Master Billing Invoice</p>
+      <div id="hb-context" class="row g-3 mt-1 d-none">
+        <div class="col-md-6">
+          <div class="hb-label mt-2">Recent visits &mdash; click one to bill its consultation</div>
+          <div id="hb-visits"></div>
+        </div>
+        <div class="col-md-6">
+          <div class="hb-label mt-2">Outstanding elsewhere</div>
+          <div id="hb-outstanding"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- 2. PARTICULARS ---- -->
+    <div class="hb-panel">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="hb-panel-title m-0">2 &middot; Particulars</div>
+        <div class="d-flex gap-2 align-items-end flex-wrap">
+          <div>
+            <label class="hb-label">Package (optional)</label>
+            <select id="hb-package" class="hb-input" style="min-width: 260px;" onchange="hbApplyPackage()">
+              <option value="">No package &mdash; itemised bill</option>
+            </select>
+          </div>
+          <button class="btn btn-sm btn-outline-primary" onclick="hbAddRow()">
+            <i class="fa-solid fa-plus"></i> Add particular
+          </button>
+        </div>
+      </div>
+
+      <div id="hb-package-note" class="small label-bright d-none mb-2"></div>
+
+      <div class="table-responsive mt-2">
+        <table class="hb-table">
+          <thead>
+            <tr>
+              <th style="width:4%">#</th>
+              <th style="width:38%">Particular</th>
+              <th style="width:10%" class="text-end">Qty</th>
+              <th style="width:14%" class="text-end">Rate</th>
+              <th style="width:14%" class="text-end">Discount</th>
+              <th style="width:16%" class="text-end">Amount</th>
+              <th style="width:4%"></th>
+            </tr>
+          </thead>
+          <tbody id="hb-items"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---- 3. PAYMENT ---- -->
+    <div class="row g-3">
+      <div class="col-md-7">
+        <div class="hb-panel h-100">
+          <div class="hb-panel-title">3 &middot; Payment</div>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="hb-label">Bill discount (&#8377;)</label>
+              <input type="number" id="hb-bill-discount" class="hb-input text-end" value="0" min="0" oninput="hbRecalc()">
             </div>
-            <div class="col-md-4 text-end">
-              <p class="mb-0 text-white theme-text"><strong>Date:</strong> <span id="invoiceDate"></span></p>
+            <div class="col-md-4">
+              <label class="hb-label">Amount received (&#8377;)</label>
+              <input type="number" id="hb-paid" class="hb-input text-end" value="0" min="0" oninput="hbPaidInput()">
+            </div>
+            <div class="col-md-4">
+              <label class="hb-label">Mode</label>
+              <select id="hb-mode" class="hb-input" onchange="hbModeChanged()">
+                <option value="Cash">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="Card">Card</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Credit">Credit (settle later)</option>
+              </select>
             </div>
           </div>
-
-          <div class="row mb-4 no-print align-items-end">
-            <div class="col-md-4">
-              <label class="form-label text-white-force small text-uppercase">Patient ID *</label>
-              <input type="text" id="billPatientId" class="form-control form-control-billing text-white-force" placeholder="e.g. LMTVS0001">
+          <div class="row g-2 mt-1">
+            <div class="col-md-6">
+              <label class="hb-label">Reference (UPI / card / txn)</label>
+              <input type="text" id="hb-ref" class="hb-input">
             </div>
-            <div class="col-md-4">
-              <label class="form-label text-white small text-uppercase">Appointment ID</label>
-              <input type="text" id="billApptId" class="form-control form-control-billing text-white-force" placeholder="(Optional)">
-            </div>
-            <div class="col-md-4">
-              <button type="button" class="btn w-100 fw-bold text-white shadow-sm on-accent" style="background-color: var(--accent-purple);" onclick="fetchBillingPatientData()">
-               <i class="fa-solid fa-magnifying-glass me-1"></i> Fetch Patient
-             </button>
+            <div class="col-md-6">
+              <label class="hb-label">Notes</label>
+              <input type="text" id="hb-notes" class="hb-input">
             </div>
           </div>
-
-          <div class="row mb-4">
-            <div class="col-md-4 mb-2">
-              <label class="form-label text-white small text-uppercase">Patient Name</label>
-              <input type="text" id="pName" class="form-control form-control-billing text-white-force" readonly>
-            </div>
-            <div class="col-md-2 mb-2">
-              <label class="form-label text-white small text-uppercase">Age / Sex</label>
-              <input type="text" id="pAgeGender" class="form-control form-control-billing text-white-force" readonly>
-            </div>
-            <div class="col-md-6 mb-2">
-              <label class="form-label text-white small text-uppercase">Address</label>
-              <input type="text" id="pAddress" class="form-control form-control-billing text-white-force" readonly>
-            </div>
-          </div>
-
-          <div class="table-responsive mb-3">
-            <table class="table table-dark table-billing table-bordered m-0" id="billingTable">
-              <thead>
-                <tr>
-                  <th width="5%" class="text-center">S.No</th>
-                  <th width="40%">Particulars</th>
-                  <th width="15%" class="text-end">Rate (₹)</th>
-                  <th width="15%" class="text-end">Discount (₹)</th>
-                  <th width="20%" class="text-end">Amount (₹)</th>
-                  <th width="5%" class="text-center no-print">Act</th>
-                </tr>
-              </thead>
-              <tbody id="billingTbody">
-                </tbody>
-            </table>
-            <button class="btn btn-outline-secondary btn-sm mt-2 no-print w-100" onclick="addBillingRow()">
-              <i class="fa-solid fa-plus"></i> Add Particular
+          <div class="d-flex gap-2 mt-3">
+            <button id="hb-save" class="btn btn-success fw-bold flex-grow-1 py-2" onclick="hbSaveInvoice()">
+              <i class="fa-solid fa-floppy-disk me-1"></i> Save &amp; collect
+            </button>
+            <button class="btn btn-outline-secondary py-2 px-3" onclick="hbPrintCurrent()" title="Print what is on screen">
+              <i class="fa-solid fa-print"></i>
             </button>
           </div>
-
-          <div class="row mt-4">
-            <div class="col-md-6 mb-3 no-print">
-              <div class="p-3 rounded" style="background-color: var(--surface-2); border: 1px solid var(--border-hover);">
-                <h6 class="text-white text-uppercase mb-3 small fw-bold">Payment Details</h6>
-                <div class="row mb-2 align-items-center">
-                  <div class="col-5"><label class="form-label text-white m-0">Amount Paid</label></div>
-                  <div class="col-7">
-                    <input type="number" id="amountPaid" class="form-control form-control-billing text-end" placeholder="0.00">
-                  </div>
-                </div>
-                <div class="row align-items-center">
-                  <div class="col-5"><label class="form-label text-white m-0">Paid By</label></div>
-                  <div class="col-7">
-                    <select id="paymentMode" class="form-select form-select-billing">
-                      <option value="Cash">Cash</option>
-                      <option value="UPI">UPI</option>
-                      <option value="Card">Credit/Debit Card</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <table class="table table-borderless text-white m-0">
-                <tr>
-                  <td class="text-end fw-bold align-middle">Gross Total :</td>
-                  <td class="text-end" width="40%"><input type="number" id="grossTotal" class="form-control form-control-billing text-end fw-bold" readonly value="0.00"></td>
-                </tr>
-                <tr>
-                  <td class="text-end fw-bold align-middle">Total Discount :</td>
-                  <td class="text-end"><input type="number" id="totalDiscount" class="form-control form-control-billing text-end fw-bold" readonly value="0.00"></td>
-                </tr>
-                <tr>
-                  <td class="text-end fw-bold align-middle id-5 theme-text" style="color: var(--accent-fg);">Nett Amount :</td>
-                  <td class="text-end"><input type="number" id="nettAmount" class="form-control form-control-billing text-end fw-bold fs-5 theme-text" style="color: var(--accent-fg);" readonly value="0.00"></td>
-                </tr>
-              </table>
-            </div>
-          </div>
-
-          <div class="row mt-4 pt-3 border-top border-secondary no-print">
-            <div class="col-12 text-end">
-              <button class="btn btn-success me-2 fw-bold" onclick="saveInvoiceToDB()"><i class="fa-solid fa-floppy-disk"></i> Save to Ledger</button>
-              <button class="btn fw-bold text-white on-accent" style="background-color: var(--accent-purple); border: none;" onclick="window.print()">
-                <i class="fa-solid fa-print"></i> Print Invoice
-              </button>
-            </div>
-          </div>
+          <div id="hb-save-msg" class="small mt-2"></div>
+        </div>
       </div>
+
+      <div class="col-md-5">
+        <div class="hb-panel h-100">
+          <div class="hb-panel-title">Bill</div>
+          <div class="hb-total-row"><span class="label-bright">Gross</span><span id="hb-gross" class="hb-money">&#8377; 0.00</span></div>
+          <div class="hb-total-row"><span class="label-bright">Discount</span><span id="hb-discount" class="hb-money">&#8377; 0.00</span></div>
+          <div class="hb-total-row"><span class="label-bright">Tax</span><span id="hb-tax" class="hb-money">&#8377; 0.00</span></div>
+          <hr style="border-color: var(--border-color);">
+          <div class="hb-total-row align-items-center">
+            <span class="fw-bold" style="color: var(--text-main);">Net payable</span>
+            <span id="hb-net" class="hb-total-net hb-money">&#8377; 0.00</span>
+          </div>
+          <div class="hb-total-row"><span class="label-bright">Received</span><span id="hb-recv" class="hb-money">&#8377; 0.00</span></div>
+          <div class="hb-total-row"><span class="label-bright">Balance</span><span id="hb-balance" class="hb-money fw-bold">&#8377; 0.00</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <!-- ==================== THE LEDGER ==================== -->
   <div id="billing-workspace-records" class="d-none mt-4">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-          <div class="d-flex align-items-center">
-              <button class="btn btn-outline-secondary btn-sm me-3" onclick="switchTab('workspace-accounts')"><i class="fa-solid fa-arrow-left"></i> Back to Accounts</button>
-              <h4 class="fw-bold m-0 text-white">Master Billing Ledger</h4>
-          </div>
-          <button class="btn btn-sm btn-outline-info" onclick="loadBillingRecords()"><i class="fa-solid fa-rotate-right"></i> Refresh Ledger</button>
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+      <div class="d-flex align-items-center">
+        <button class="btn btn-outline-secondary btn-sm me-3" onclick="openBillingWorkspace('hospital')">
+          <i class="fa-solid fa-arrow-left"></i> Back to the desk
+        </button>
+        <h4 class="fw-bold m-0" style="color: var(--text-main);">Billing ledger</h4>
       </div>
-      <div class="card overflow-hidden border-secondary">
-          <table class="table table-dark table-hover mb-0">
-              <thead>
-                  <tr>
-                      <th>Invoice ID</th>
-                      <th>Date</th>
-                      <th>Patient ID</th>
-                      <th>Grand Total</th>
-                      <th>Status</th>
-                      <th class="text-center">Action</th>
-                  </tr>
-              </thead>
-              <tbody id="billing-records-tbody">
-                  <tr><td colspan="6" class="text-center text-white py-4">Click Refresh to load records...</td></tr>
-              </tbody>
-          </table>
+      <button class="btn btn-sm btn-outline-info" onclick="hbLoadLedger()"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+    </div>
+
+    <div class="hb-panel">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="hb-label">From</label>
+          <input type="date" id="hb-f-from" class="hb-input" onchange="hbLoadLedger()">
+        </div>
+        <div class="col-md-3">
+          <label class="hb-label">To</label>
+          <input type="date" id="hb-f-to" class="hb-input" onchange="hbLoadLedger()">
+        </div>
+        <div class="col-md-3">
+          <label class="hb-label">Payment status</label>
+          <select id="hb-f-status" class="hb-input" onchange="hbLoadLedger()">
+            <option value="ALL">All</option>
+            <option value="UNPAID">Unpaid</option>
+            <option value="PART_PAID">Part paid</option>
+            <option value="PAID">Paid</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="hb-label">Search</label>
+          <input type="text" id="hb-f-search" class="hb-input" placeholder="Invoice / patient / IP"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();hbLoadLedger();}">
+        </div>
       </div>
+    </div>
+
+    <div class="hb-panel">
+      <div id="hb-ledger-totals" class="small label-bright mb-2"></div>
+      <div class="table-responsive">
+        <table class="hb-table">
+          <thead>
+            <tr>
+              <th>Invoice</th><th>Date</th><th>Patient</th><th>Type</th>
+              <th class="text-end">Net</th><th class="text-end">Paid</th><th class="text-end">Balance</th>
+              <th>Status</th><th class="text-end">Action</th>
+            </tr>
+          </thead>
+          <tbody id="hb-ledger-body">
+            <tr><td colspan="9" class="text-center label-bright py-4">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
+
+  <div id="hb-print"></div>
 </div>
 
 <script>
-  // Setup logic on load
-  document.addEventListener('DOMContentLoaded', () => {
-    const dateSpan = document.getElementById('invoiceDate');
-    if(dateSpan) dateSpan.innerText = new Date().toLocaleDateString('en-IN');
-    
-    if(document.getElementById('billingTbody')) {
-      addBillingRow(); 
-    }
-  });
+(function () {
+  'use strict';
 
-  // UI Workspace Routing
-  function openBillingWorkspace(type) {
-    document.getElementById('billing-workspace-hospital').classList.add('d-none');
-    document.getElementById('billing-workspace-records').classList.add('d-none');
+  // ---------------------------------------------------------------------
+  // STATE
+  // ---------------------------------------------------------------------
+  var HB = {
+    services: [],
+    packages: [],
+    doctors: [],
+    canWrite: false,
+    booted: false,
+    patient: null,
+    appointments: [],
+    admission: null,
+    items: [],          // {key, serviceCode, particulars, category, qty, rate, discount, taxPct, source}
+    apptId: '',
+    packageCode: '',
+    seq: 0,
+    totals: { gross: 0, discount: 0, tax: 0, net: 0, paid: 0, balance: 0 },
+    lastSaved: null
+  };
 
-    document.getElementById(`billing-workspace-${type}`).classList.remove('d-none');
-
-    // The ledger was only ever reachable through a Refresh button that called
-    // a function nobody had written, so it sat on "Click Refresh to load
-    // records..." forever. Load it on open as well, so arriving at the screen
-    // shows the ledger rather than an instruction.
-    if (type === 'records') loadBillingRecords();
-  }
-
-  // --- Master Billing Ledger ---
-  function billEsc(v) {
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
     return String(v === null || v === undefined ? '' : v)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  function money(n) {
+    return '₹ ' + (Number(n) || 0).toLocaleString('en-IN',
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function num(id) { var e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; }
+  function token() { return window.sessionToken || ''; }
 
-  function billRow(colspan, cls, text) {
-    return '<tr><td colspan="' + colspan + '" class="text-center py-4 ' + cls + '">' +
-           billEsc(text) + '</td></tr>';
+  function msg(text, tone) {
+    var el = $('hb-save-msg');
+    if (!el) return;
+    el.className = 'small mt-2 ' + (tone ? 'text-' + tone : 'label-bright');
+    el.textContent = text || '';
   }
 
-  function loadBillingRecords() {
-    const tbody = document.getElementById('billing-records-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = billRow(6, 'text-muted', 'Loading the billing ledger...');
-
+  // ---------------------------------------------------------------------
+  // BOOT — the tariff, the packages and the doctors
+  // ---------------------------------------------------------------------
+  function boot(then) {
+    if (HB.booted) { if (then) then(); return; }
     google.script.run
-      .withSuccessHandler(function (rows) {
-        if (!rows || !rows.length) {
-          tbody.innerHTML = billRow(6, 'text-muted', 'No invoices have been raised yet.');
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          warnSetup((res && res.message) || 'Hospital billing could not start.');
+          if (then) then();
           return;
         }
-        tbody.innerHTML = rows.map(function (r) {
-          const paid = String(r.status || '').toLowerCase() === 'paid';
+        HB.services = res.data.services || [];
+        HB.packages = res.data.packages || [];
+        HB.doctors = res.data.doctors || [];
+        HB.canWrite = !!res.data.canWrite;
+        HB.booted = true;
+
+        $('hb-doctor').innerHTML = '<option value="">—</option>' + HB.doctors.map(function (d) {
+          return '<option value="' + esc(d.doctorId) + '" data-fee="' + (d.consultFee || 0) + '">' +
+                 esc(d.name) + '</option>';
+        }).join('');
+
+        $('hb-package').innerHTML = '<option value="">No package &mdash; itemised bill</option>' +
+          HB.packages.map(function (p) {
+            return '<option value="' + esc(p.code) + '">' + esc(p.name) +
+                   ' (₹' + (Number(p.cap) || 0).toLocaleString('en-IN') + ')</option>';
+          }).join('');
+
+        if (!res.data.servicesConfigured) {
+          warnSetup('Service_Master is empty, so there are no particulars to pick from. ' +
+                    'An administrator should run setupHospitalBilling() once from the Apps Script editor.');
+        } else {
+          warnSetup('');
+        }
+        if (!HB.canWrite) {
+          $('hb-save').disabled = true;
+          msg('Your role can view bills but not raise them.', 'warning');
+        }
+        if (then) then();
+      })
+      .withFailureHandler(function (err) {
+        warnSetup('Hospital billing could not start: ' + (err && err.message ? err.message : err));
+        if (then) then();
+      })
+      .hb_getBootstrap(token());
+  }
+
+  function warnSetup(text) {
+    var el = $('hb-setup-warning');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.toggle('d-none', !text);
+  }
+
+  // ---------------------------------------------------------------------
+  // PATIENT
+  // ---------------------------------------------------------------------
+  function fetchPatient() {
+    var q = ($('hb-query').value || '').trim();
+    if (!q) { msg('Enter a patient ID or mobile number.', 'warning'); return; }
+    msg('Looking up ' + q + '…');
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { msg((res && res.message) || 'Lookup failed.', 'danger'); return; }
+        var d = res.data;
+        HB.patient = d.patient;
+        HB.appointments = d.appointments || [];
+        HB.admission = d.admission || null;
+
+        $('hb-name').value = d.patient.name || '';
+        $('hb-agesex').value = (d.patient.age || '—') + ' / ' + (d.patient.gender || '—');
+        $('hb-mobile').value = d.patient.mobile || '';
+        $('hb-address').value = d.patient.address || '';
+        $('hb-ip').value = d.admission ? (d.admission.ipNumber + ' · ' + (d.admission.ward || '')) : '';
+
+        renderVisits();
+        renderOutstanding(d.outstanding);
+        $('hb-context').classList.remove('d-none');
+        msg('');
+
+        // An unbilled visit today is almost always why the patient is at the
+        // counter, so its consultation is put on the bill straight away.
+        var today = new Date().toISOString().slice(0, 10);
+        var todays = HB.appointments.filter(function (a) { return a.date === today && !a.billed; })[0];
+        if (todays && !HB.items.length) useAppointment(todays.apptId);
+      })
+      .withFailureHandler(function (err) { msg('Lookup failed: ' + (err && err.message), 'danger'); })
+      .hb_getPatientContext(token(), q);
+  }
+
+  function renderVisits() {
+    var box = $('hb-visits');
+    if (!HB.appointments.length) {
+      box.innerHTML = '<div class="label-bright small">No appointments on record.</div>';
+      return;
+    }
+    box.innerHTML = HB.appointments.slice(0, 5).map(function (a) {
+      return '<div class="hb-visit' + (a.billed ? ' hb-used' : '') + '"' +
+             (a.billed ? '' : ' onclick="hbUseAppointment(\'' + esc(a.apptId) + '\')"') + '>' +
+        '<div class="d-flex justify-content-between align-items-center">' +
+          '<span class="fw-semibold" style="color: var(--text-main);">' + esc(a.dateText) + ' · ' + esc(a.time || '') + '</span>' +
+          (a.billed ? '<span class="hb-chip hb-chip-PAID">billed</span>'
+                    : '<span class="label-bright small">₹' + (a.tariff || 0) + '</span>') +
+        '</div>' +
+        '<div class="label-bright small">' + esc(a.doctorName || a.doctorId || '—') +
+          (a.purpose ? ' · ' + esc(a.purpose) : '') + ' · ' + esc(a.status) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderOutstanding(o) {
+    var box = $('hb-outstanding');
+    o = o || { total: 0, bills: [] };
+    if (!o.total) {
+      box.innerHTML = '<div class="label-bright small">' +
+        '<i class="fa-solid fa-check me-1" style="color: var(--success-fg);"></i>' +
+        'Nothing outstanding in pharmacy, lab or billing.</div>';
+      return;
+    }
+    box.innerHTML =
+      '<div class="fw-bold mb-1" style="color: var(--danger-fg);">' + money(o.total) + ' outstanding</div>' +
+      o.bills.slice(0, 6).map(function (b) {
+        return '<div class="d-flex justify-content-between small label-bright">' +
+          '<span>' + esc(b.source) + ' · ' + esc(b.billId) + '</span>' +
+          '<span class="hb-money">' + money(b.amount) + '</span></div>';
+      }).join('') +
+      '<div class="small label-bright mt-1">Settle these on the pharmacy, lab or receivables desk.</div>';
+  }
+
+  /** Puts an appointment's consultation on the bill and links the two. */
+  function useAppointment(apptId) {
+    var appt = HB.appointments.filter(function (a) { return a.apptId === apptId; })[0];
+    if (!appt || appt.billed) return;
+
+    HB.apptId = appt.apptId;
+    $('hb-appt').value = appt.apptId + ' · ' + appt.dateText;
+    if (appt.doctorId) $('hb-doctor').value = appt.doctorId;
+
+    // The tariff snapshotted on the booking wins, because it is what the
+    // patient was quoted; the service master is the fallback.
+    var svc = serviceFor(appt.purpose);
+    addRow({
+      serviceCode: svc ? svc.code : 'CONS-GEN',
+      particulars: (svc ? svc.name : 'Consultation') +
+                   (appt.doctorName ? ' — ' + appt.doctorName : ''),
+      category: 'CONSULTATION',
+      qty: 1,
+      rate: appt.tariff || (svc ? svc.rate : 0),
+      discount: 0,
+      taxPct: svc ? svc.taxPct : 0,
+      source: 'APPT'
+    });
+    renderItems();
+    recalc();
+  }
+
+  /** Maps an appointment purpose onto the closest consultation service. */
+  function serviceFor(purpose) {
+    var p = String(purpose || '').toLowerCase();
+    var want = 'CONS-GEN';
+    if (p.indexOf('follow') !== -1 || p.indexOf('review') !== -1) want = 'CONS-REV';
+    else if (p.indexOf('emergenc') !== -1) want = 'CONS-EMER';
+    else if (p.indexOf('procedure') !== -1) want = 'PROC-DRESS';
+    return HB.services.filter(function (s) { return s.code === want; })[0] ||
+           HB.services.filter(function (s) { return s.category === 'CONSULTATION'; })[0] || null;
+  }
+
+  function doctorChanged() {
+    // Repricing an untouched consultation line when the doctor changes saves
+    // the cashier from re-picking the rate; an edited line is left alone.
+    var sel = $('hb-doctor');
+    var fee = Number(sel.options[sel.selectedIndex] &&
+                     sel.options[sel.selectedIndex].getAttribute('data-fee')) || 0;
+    if (!fee) return;
+    HB.items.forEach(function (it) {
+      if (it.category === 'CONSULTATION' && it.source !== 'EDITED') it.rate = fee;
+    });
+    renderItems();
+    recalc();
+  }
+
+  // ---------------------------------------------------------------------
+  // ITEMS
+  // ---------------------------------------------------------------------
+  function addRow(seed) {
+    HB.items.push({
+      key: 'r' + (++HB.seq),
+      serviceCode: (seed && seed.serviceCode) || '',
+      particulars: (seed && seed.particulars) || '',
+      category: (seed && seed.category) || 'OTHER',
+      qty: (seed && seed.qty) || 1,
+      rate: (seed && seed.rate) || 0,
+      discount: (seed && seed.discount) || 0,
+      taxPct: (seed && seed.taxPct) || 0,
+      source: (seed && seed.source) || 'MANUAL'
+    });
+  }
+
+  function addRowAndRender() { addRow(null); renderItems(); recalc(); }
+
+  function removeRow(key) {
+    HB.items = HB.items.filter(function (it) { return it.key !== key; });
+    renderItems();
+    recalc();
+  }
+
+  function setField(key, field, value) {
+    var it = HB.items.filter(function (x) { return x.key === key; })[0];
+    if (!it) return;
+    if (field === 'serviceCode') {
+      it.serviceCode = value;
+      var svc = HB.services.filter(function (s) { return s.code === value; })[0];
+      if (svc) {
+        it.particulars = svc.name;
+        it.category = svc.category;
+        it.rate = svc.rate;
+        it.taxPct = svc.taxPct;
+      } else if (value === '__OTHER__') {
+        it.particulars = '';
+        it.category = 'OTHER';
+      }
+      renderItems();
+    } else if (field === 'particulars') {
+      it.particulars = value;
+    } else {
+      it[field] = Number(value) || 0;
+      if (field === 'rate') it.source = (it.source === 'APPT') ? 'EDITED' : it.source;
+    }
+    recalc();
+  }
+
+  function lineAmount(it) {
+    var base = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+    var after = Math.max(0, base - (Number(it.discount) || 0));
+    return after + (after * (Number(it.taxPct) || 0) / 100);
+  }
+
+  function serviceOptions(selected) {
+    var byCat = {};
+    HB.services.forEach(function (s) { (byCat[s.category] = byCat[s.category] || []).push(s); });
+    var html = '<option value="">Select…</option>';
+    Object.keys(byCat).sort().forEach(function (cat) {
+      html += '<optgroup label="' + esc(cat) + '">' + byCat[cat].map(function (s) {
+        return '<option value="' + esc(s.code) + '"' + (s.code === selected ? ' selected' : '') + '>' +
+               esc(s.name) + '</option>';
+      }).join('') + '</optgroup>';
+    });
+    html += '<option value="__OTHER__"' + (selected === '__OTHER__' ? ' selected' : '') + '>Other (type it)</option>';
+    return html;
+  }
+
+  function renderItems() {
+    var body = $('hb-items');
+    if (!HB.items.length) {
+      body.innerHTML = '<tr><td colspan="7" class="text-center label-bright py-3">' +
+                       'No particulars yet. Pick a visit above, choose a package, or add a line.</td></tr>';
+      return;
+    }
+    body.innerHTML = HB.items.map(function (it, i) {
+      var freeText = (!it.serviceCode || it.serviceCode === '__OTHER__' || it.source === 'PACKAGE');
+      var nameCell = (it.source === 'PACKAGE')
+        ? '<input type="text" class="hb-input" value="' + esc(it.particulars) + '" readonly>'
+        : '<select class="hb-input mb-1" onchange="hbSet(\'' + it.key + '\',\'serviceCode\',this.value)">' +
+            serviceOptions(it.serviceCode) + '</select>' +
+          (freeText
+            ? '<input type="text" class="hb-input" placeholder="Describe the particular" value="' +
+              esc(it.particulars) + '" oninput="hbSet(\'' + it.key + '\',\'particulars\',this.value)">'
+            : '');
+
+      return '<tr>' +
+        '<td class="label-bright">' + (i + 1) + '</td>' +
+        '<td>' + nameCell + '</td>' +
+        '<td><input type="number" min="0" step="1" class="hb-input text-end" value="' + it.qty +
+            '" oninput="hbSet(\'' + it.key + '\',\'qty\',this.value)"></td>' +
+        '<td><input type="number" min="0" step="0.01" class="hb-input text-end" value="' + it.rate +
+            '" oninput="hbSet(\'' + it.key + '\',\'rate\',this.value)"></td>' +
+        '<td><input type="number" min="0" step="0.01" class="hb-input text-end" value="' + it.discount +
+            '" oninput="hbSet(\'' + it.key + '\',\'discount\',this.value)"></td>' +
+        '<td class="text-end hb-money" style="color: var(--text-main);">' + money(lineAmount(it)) + '</td>' +
+        '<td class="text-end"><button class="btn btn-sm btn-outline-danger py-0 px-2" ' +
+            'onclick="hbRemove(\'' + it.key + '\')"><i class="fa-solid fa-xmark"></i></button></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // ---------------------------------------------------------------------
+  // PACKAGES
+  // ---------------------------------------------------------------------
+  /**
+   * A package is one priced line at its cap, plus a note naming what it
+   * covers and what it does not. Exclusions are billed on top as ordinary
+   * lines — which is what "exclusion" means — so the cashier adds them
+   * deliberately rather than the bill inventing them.
+   */
+  function applyPackage() {
+    var code = $('hb-package').value;
+    HB.packageCode = code;
+    HB.items = HB.items.filter(function (it) { return it.source !== 'PACKAGE'; });
+
+    var note = $('hb-package-note');
+    if (!code) {
+      note.classList.add('d-none');
+      renderItems(); recalc();
+      return;
+    }
+
+    var pkg = HB.packages.filter(function (p) { return p.code === code; })[0];
+    if (!pkg) { note.classList.add('d-none'); renderItems(); recalc(); return; }
+
+    HB.items.unshift({
+      key: 'r' + (++HB.seq),
+      serviceCode: pkg.code,
+      particulars: pkg.name + ' — package',
+      category: 'PACKAGE',
+      qty: 1,
+      rate: Number(pkg.cap) || Number(pkg.min) || 0,
+      discount: 0,
+      taxPct: 0,
+      source: 'PACKAGE'
+    });
+
+    note.classList.remove('d-none');
+    note.innerHTML =
+      '<strong>' + esc(pkg.name) + '</strong> · cap ₹' + (Number(pkg.cap) || 0).toLocaleString('en-IN') +
+      ' (band ₹' + (Number(pkg.min) || 0).toLocaleString('en-IN') + '–₹' +
+      (Number(pkg.max) || 0).toLocaleString('en-IN') + ')' +
+      (pkg.stayDays ? ' · ' + pkg.stayDays + ' day(s) ' + esc(pkg.roomType || '') : '') +
+      '<br><span style="color: var(--success-fg);">Includes:</span> ' + esc(pkg.inclusions || '—') +
+      '<br><span style="color: var(--warning-fg);">Not included (bill separately):</span> ' + esc(pkg.exclusions || '—') +
+      '<br>The cap is editable on the line below — use the band above when negotiating.';
+
+    renderItems();
+    recalc();
+  }
+
+  // ---------------------------------------------------------------------
+  // TOTALS
+  // ---------------------------------------------------------------------
+  function recalc() {
+    var gross = 0, lineDisc = 0, tax = 0;
+    HB.items.forEach(function (it) {
+      var base = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+      var d = Math.min(Number(it.discount) || 0, base);
+      var after = Math.max(0, base - d);
+      gross += base;
+      lineDisc += d;
+      tax += after * (Number(it.taxPct) || 0) / 100;
+    });
+
+    var billDisc = Math.max(0, num('hb-bill-discount'));
+    var subtotal = gross - lineDisc;
+    if (billDisc > subtotal) billDisc = subtotal;
+
+    var discount = lineDisc + billDisc;
+    var net = Math.max(0, gross - discount + tax);
+
+    var mode = $('hb-mode').value;
+    var paidInput = $('hb-paid');
+    // Cash at the counter means the full amount unless the cashier says
+    // otherwise; credit means nothing was taken.
+    if (mode === 'Credit') paidInput.value = 0;
+    else if (!HB.paidTouched) paidInput.value = net.toFixed(2);
+
+    var paid = Math.min(Math.max(0, num('hb-paid')), net);
+    var balance = net - paid;
+
+    HB.totals = { gross: gross, discount: discount, tax: tax, net: net, paid: paid, balance: balance };
+
+    $('hb-gross').textContent = money(gross);
+    $('hb-discount').textContent = money(discount);
+    $('hb-tax').textContent = money(tax);
+    $('hb-net').textContent = money(net);
+    $('hb-recv').textContent = money(paid);
+    $('hb-balance').textContent = money(balance);
+    $('hb-balance').style.color = balance > 0 ? 'var(--danger-fg)' : 'var(--success-fg)';
+    renderItemAmounts();
+  }
+
+  function renderItemAmounts() {
+    var cells = document.querySelectorAll('#hb-items tr');
+    Array.prototype.forEach.call(cells, function (tr, i) {
+      var it = HB.items[i];
+      if (!it) return;
+      var cell = tr.children[5];
+      if (cell) cell.textContent = money(lineAmount(it));
+    });
+  }
+
+  function modeChanged() { HB.paidTouched = false; recalc(); }
+
+  // ---------------------------------------------------------------------
+  // SAVE
+  // ---------------------------------------------------------------------
+  function saveInvoice() {
+    if (!HB.canWrite) { msg('Your role cannot raise a bill.', 'danger'); return; }
+    var name = ($('hb-name').value || '').trim();
+    if (!name) { msg('A patient name is required.', 'warning'); return; }
+    if (!HB.items.length) { msg('Add at least one particular.', 'warning'); return; }
+    if (HB.totals.net <= 0) { msg('The net amount is zero — price at least one line.', 'warning'); return; }
+
+    var priced = HB.items.filter(function (it) {
+      return (!it.particulars && !it.serviceCode);
+    });
+    if (priced.length) { msg('Every line needs a particular. Remove the blank ones.', 'warning'); return; }
+
+    var pkg = HB.packages.filter(function (p) { return p.code === HB.packageCode; })[0];
+    var docSel = $('hb-doctor');
+
+    var payload = {
+      patientId: HB.patient ? HB.patient.id : '',
+      patientName: name,
+      ageSex: $('hb-agesex').value,
+      mobile: $('hb-mobile').value,
+      address: $('hb-address').value,
+      apptId: HB.apptId,
+      ipNumber: HB.admission ? HB.admission.ipNumber : '',
+      doctorId: docSel.value,
+      doctorName: docSel.value ? docSel.options[docSel.selectedIndex].textContent : '',
+      billType: HB.packageCode ? 'PACKAGE' : (HB.admission ? 'IP' : 'OP'),
+      packageCode: HB.packageCode,
+      packageName: pkg ? pkg.name : '',
+      items: HB.items.map(function (it) {
+        return {
+          serviceCode: it.serviceCode === '__OTHER__' ? '' : it.serviceCode,
+          particulars: it.particulars || it.serviceCode,
+          category: it.category, qty: it.qty, rate: it.rate,
+          discount: it.discount, taxPct: it.taxPct, source: it.source
+        };
+      }),
+      billDiscount: num('hb-bill-discount'),
+      paid: num('hb-paid'),
+      paymentMode: $('hb-mode').value,
+      paymentRef: $('hb-ref').value,
+      notes: $('hb-notes').value
+    };
+
+    var btn = $('hb-save');
+    var original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving…';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.disabled = false; btn.innerHTML = original;
+        if (!res || !res.success) { msg((res && res.message) || 'The bill could not be saved.', 'danger'); return; }
+        HB.lastSaved = res.data;
+        msg(res.message + ' Printing…', 'success');
+        printInvoice(res.data.invoiceNo);
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false; btn.innerHTML = original;
+        msg('The bill could not be saved: ' + (err && err.message ? err.message : err), 'danger');
+      })
+      .hb_saveInvoice(token(), payload);
+  }
+
+  // ---------------------------------------------------------------------
+  // PRINT
+  // ---------------------------------------------------------------------
+  function printInvoice(invoiceNo) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { msg('Saved, but it could not be re-read for printing.', 'warning'); return; }
+        $('hb-print').innerHTML = invoiceHtml(res.data.invoice, res.data.items);
+        window.print();
+        clearBill(true);
+      })
+      .withFailureHandler(function () { msg('Saved. Open it from the ledger to print.', 'warning'); })
+      .hb_getInvoice(token(), invoiceNo);
+  }
+
+  /** Prints what is on screen, before anything is saved. */
+  function printCurrent() {
+    var invoice = {
+      invoiceNo: 'PROVISIONAL', date: new Date().toLocaleDateString('en-IN'),
+      patientId: HB.patient ? HB.patient.id : '', patientName: $('hb-name').value,
+      ageSex: $('hb-agesex').value, mobile: $('hb-mobile').value, address: $('hb-address').value,
+      doctorName: $('hb-doctor').options[$('hb-doctor').selectedIndex].textContent,
+      ipNumber: HB.admission ? HB.admission.ipNumber : '',
+      gross: HB.totals.gross, discount: HB.totals.discount, tax: HB.totals.tax,
+      net: HB.totals.net, paid: HB.totals.paid, balance: HB.totals.balance,
+      mode: $('hb-mode').value, notes: $('hb-notes').value, payStatus: 'UNPAID'
+    };
+    var items = HB.items.map(function (it, i) {
+      return { lineNo: i + 1, particulars: it.particulars || it.serviceCode, qty: it.qty,
+               rate: it.rate, discount: it.discount, amount: lineAmount(it) };
+    });
+    $('hb-print').innerHTML = invoiceHtml(invoice, items, true);
+    window.print();
+  }
+
+  function invoiceHtml(inv, items, provisional) {
+    var rows = (items || []).map(function (it) {
+      return '<tr><td>' + it.lineNo + '</td><td>' + esc(it.particulars) + '</td>' +
+        '<td style="text-align:center">' + (it.qty || '') + '</td>' +
+        '<td style="text-align:right">' + money(it.rate) + '</td>' +
+        '<td style="text-align:right">' + (it.discount ? money(it.discount) : '') + '</td>' +
+        '<td style="text-align:right">' + money(it.amount) + '</td></tr>';
+    }).join('');
+
+    return '' +
+      '<div style="font-family:Arial,sans-serif;color:#000;">' +
+      '<h2 style="margin:0;font-size:20px;">CRESCENTIA HEALTHTECH</h2>' +
+      '<div style="font-size:13px;color:#555;margin-bottom:12px;">' +
+        (provisional ? 'Provisional Estimate' : 'Hospital Bill') + '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;">' +
+        '<div><strong>' + esc(inv.patientName) + '</strong><br>' + esc(inv.patientId || '') +
+          (inv.ageSex ? ' · ' + esc(inv.ageSex) : '') +
+          (inv.mobile ? '<br>' + esc(inv.mobile) : '') +
+          (inv.address ? '<br>' + esc(inv.address) : '') + '</div>' +
+        '<div style="text-align:right;">Invoice: <strong>' + esc(inv.invoiceNo) + '</strong><br>' +
+          'Date: ' + esc(inv.date) + '<br>' +
+          (inv.doctorName ? 'Doctor: ' + esc(inv.doctorName) + '<br>' : '') +
+          (inv.ipNumber ? 'IP: ' + esc(inv.ipNumber) : '') + '</div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+        '<thead><tr style="background:#f1f1f1;">' +
+          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:left;">#</th>' +
+          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:left;">Particulars</th>' +
+          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:center;">Qty</th>' +
+          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:right;">Rate</th>' +
+          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:right;">Disc.</th>' +
+          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:right;">Amount</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<table style="width:100%;margin-top:8px;font-size:12px;">' +
+        row2('Gross', inv.gross) + row2('Discount', -inv.discount) +
+        (inv.tax ? row2('Tax', inv.tax) : '') +
+        '<tr><td style="text-align:right;padding:4px;font-weight:bold;font-size:14px;">Net payable</td>' +
+          '<td style="text-align:right;padding:4px;font-weight:bold;font-size:14px;width:130px;">' +
+          money(inv.net) + '</td></tr>' +
+        row2('Received (' + esc(inv.mode || '') + ')', inv.paid) +
+        row2('Balance', inv.balance) +
+      '</table>' +
+      (inv.notes ? '<div style="font-size:11px;margin-top:8px;">' + esc(inv.notes) + '</div>' : '') +
+      (provisional
+        ? '<div style="margin-top:14px;border:2px solid #b91c1c;color:#b91c1c;display:inline-block;' +
+          'padding:3px 10px;font-weight:bold;">PROVISIONAL — NOT A RECEIPT</div>'
+        : '<div style="font-size:11px;margin-top:18px;color:#555;">Computer-generated bill. ' +
+          'Thank you.</div>') +
+      '</div>';
+  }
+
+  function row2(label, value) {
+    return '<tr><td style="text-align:right;padding:3px;">' + label + '</td>' +
+      '<td style="text-align:right;padding:3px;width:130px;">' + money(value) + '</td></tr>';
+  }
+
+  // ---------------------------------------------------------------------
+  // CLEAR
+  // ---------------------------------------------------------------------
+  function clearBill(silent) {
+    var dirty = HB.items.length || ($('hb-name').value || '').trim();
+    if (!silent && dirty &&
+        !confirm('Clear this bill?\n\nThe patient and the particulars on screen are discarded. ' +
+                 'Bills already saved are not affected.')) return;
+
+    HB.patient = null; HB.appointments = []; HB.admission = null;
+    HB.items = []; HB.apptId = ''; HB.packageCode = ''; HB.lastSaved = null;
+    HB.paidTouched = false;
+
+    ['hb-query', 'hb-name', 'hb-agesex', 'hb-mobile', 'hb-address', 'hb-appt', 'hb-ip', 'hb-ref', 'hb-notes']
+      .forEach(function (id) { $(id).value = ''; });
+    $('hb-bill-discount').value = '0';
+    $('hb-paid').value = '0';
+    $('hb-mode').value = 'Cash';
+    $('hb-doctor').value = '';
+    $('hb-package').value = '';
+    $('hb-package-note').classList.add('d-none');
+    $('hb-context').classList.add('d-none');
+    renderItems();
+    recalc();
+    if (!silent) msg('');
+    $('hb-query').focus();
+  }
+
+  // ---------------------------------------------------------------------
+  // LEDGER
+  // ---------------------------------------------------------------------
+  function loadLedger() {
+    var body = $('hb-ledger-body');
+    body.innerHTML = '<tr><td colspan="9" class="text-center label-bright py-4">Loading…</td></tr>';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          body.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">' +
+                           esc((res && res.message) || 'The ledger could not be loaded.') + '</td></tr>';
+          return;
+        }
+        var rows = res.data.rows || [];
+        var t = res.data.totals || { net: 0, paid: 0, balance: 0 };
+        $('hb-ledger-totals').innerHTML =
+          res.data.count + ' invoice(s) · billed <strong>' + money(t.net) +
+          '</strong> · collected <strong>' + money(t.paid) +
+          '</strong> · outstanding <strong style="color:var(--danger-fg);">' + money(t.balance) + '</strong>';
+
+        if (!rows.length) {
+          body.innerHTML = '<tr><td colspan="9" class="text-center label-bright py-4">' +
+                           'No invoices match these filters.</td></tr>';
+          return;
+        }
+        body.innerHTML = rows.map(function (r) {
+          var chipClass = r.status === 'CANCELLED' ? 'CANCELLED' : r.payStatus;
           return '<tr>' +
-            '<td class="fw-bold">' + billEsc(r.invoiceId) + '</td>' +
-            '<td>' + billEsc(r.date) + '</td>' +
-            '<td>' + billEsc(r.patientId) + '</td>' +
-            '<td>&#8377; ' + billEsc(r.total) + '</td>' +
-            '<td><span class="badge bg-' + (paid ? 'success' : 'warning') + '">' +
-              billEsc(r.status || 'Unpaid') + '</span></td>' +
-            '<td class="text-center">' + (paid
-              ? '<span class="text-muted small">Settled</span>'
-              : '<button class="btn btn-sm btn-outline-success" onclick="markBillingInvoicePaid(\'' +
-                billEsc(r.invoiceId) + '\')">Mark paid</button>') +
+            '<td class="fw-bold">' + esc(r.invoiceNo) + '</td>' +
+            '<td>' + esc(r.date) + '</td>' +
+            '<td>' + esc(r.patientName) + '<br><small class="label-bright">' + esc(r.patientId) + '</small></td>' +
+            '<td>' + esc(r.packageName || r.billType) + '</td>' +
+            '<td class="text-end hb-money">' + money(r.net) + '</td>' +
+            '<td class="text-end hb-money">' + money(r.paid) + '</td>' +
+            '<td class="text-end hb-money">' + money(r.balance) + '</td>' +
+            '<td><span class="hb-chip hb-chip-' + esc(chipClass) + '">' +
+              esc(String(chipClass).replace('_', ' ')) + '</span></td>' +
+            '<td class="text-end text-nowrap">' +
+              '<button class="btn btn-sm btn-outline-secondary me-1" title="Print" onclick="hbReprint(\'' +
+                esc(r.invoiceNo) + '\')"><i class="fa-solid fa-print"></i></button>' +
+              (r.balance > 0 && r.status !== 'CANCELLED'
+                ? '<button class="btn btn-sm btn-outline-success" title="Record payment" onclick="hbCollect(\'' +
+                  esc(r.invoiceNo) + '\',' + r.balance + ')"><i class="fa-solid fa-indian-rupee-sign"></i></button>'
+                : '') +
             '</td></tr>';
         }).join('');
       })
-      .withFailureHandler(function (e) {
-        tbody.innerHTML = billRow(6, 'text-danger', 'Could not load the ledger: ' + e.message);
+      .withFailureHandler(function (err) {
+        body.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">' +
+                         esc('The ledger could not be loaded: ' + (err && err.message)) + '</td></tr>';
       })
-      .getAllInvoices();
+      .hb_getInvoices(token(), {
+        from: $('hb-f-from').value, to: $('hb-f-to').value,
+        payStatus: $('hb-f-status').value, search: $('hb-f-search').value, limit: 300
+      });
   }
 
-  function markBillingInvoicePaid(invoiceId) {
-    if (!invoiceId) return;
-    if (!confirm('Record payment against ' + invoiceId + '?')) return;
+  function reprint(invoiceNo) {
     google.script.run
-      .withSuccessHandler(function (msg) { alert(msg); loadBillingRecords(); })
-      .withFailureHandler(function (e) { alert('Could not record the payment: ' + e.message); })
-      .markInvoicePaid(invoiceId);
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { alert((res && res.message) || 'Could not load that invoice.'); return; }
+        $('hb-print').innerHTML = invoiceHtml(res.data.invoice, res.data.items);
+        window.print();
+      })
+      .withFailureHandler(function (err) { alert('Could not load that invoice: ' + (err && err.message)); })
+      .hb_getInvoice(token(), invoiceNo);
   }
 
-  // --- Dynamic Billing Logic ---
-  function fetchBillingPatientData() {
-   const pId = document.getElementById('billPatientId').value.trim();
-   if (!pId) return alert("Please enter a Patient ID");
+  function collect(invoiceNo, balance) {
+    var raw = prompt('Record a payment against ' + invoiceNo +
+                     '.\n\nOutstanding: ' + money(balance) + '\nAmount received:', balance);
+    if (raw === null) return;
+    var amount = Number(raw);
+    if (!amount || amount <= 0) { alert('Enter an amount greater than zero.'); return; }
+    var mode = prompt('Payment mode (Cash / UPI / Card / Bank Transfer):', 'Cash');
+    if (mode === null) return;
 
-   document.getElementById('pName').value = "Fetching...";
-   document.getElementById('pAgeGender').value = "...";
-   document.getElementById('pAddress').value = "...";
-
-   google.script.run
-     .withSuccessHandler(function(data) {
-       try {
-         if (data) {
-           document.getElementById('pName').value = data.name || "-";
-           document.getElementById('pAgeGender').value = (data.age || "-") + " / " + (data.gender || "-");
-           document.getElementById('pAddress').value = data.address || "-";
-         } else {
-           document.getElementById('pName').value = "";
-           document.getElementById('pAgeGender').value = "";
-           document.getElementById('pAddress').value = "";
-           alert("Patient ID not found in database.");
-         }
-       } catch (e) {
-         alert("Error displaying patient data.");
-       }
-     })
-     .withFailureHandler(function(err) {
-       document.getElementById('pName').value = "";
-       document.getElementById('pAgeGender').value = "";
-       document.getElementById('pAddress').value = "";
-       alert("Backend Network Error: Could not connect to Google Servers. " + err.message);
-     })
-     .getUserProfile(pId, window.sessionToken);
- }
-
-  function addBillingRow() {
-    const tbody = document.getElementById('billingTbody');
-    const rowCount = tbody.rows.length + 1;
-    const tr = document.createElement('tr');
-
-    tr.innerHTML = `
-      <td class="text-center align-middle row-sno fw-bold">${rowCount}</td>
-      <td>
-        <select class="form-select form-select-sm form-select-billing mb-1 particular-dropdown" onchange="handleParticularChange(this)">
-          <option value="">Select Particular...</option>
-          <option value="100">IP - Admission Charges (100)</option>
-          <option value="200">Room Charges (200)</option>
-          <option value="300">RMO Charges (300)</option>
-          <option value="400">Nursing Charges (400)</option>
-          <option value="500">Consultant Visit Charges (500)</option>
-          <option value="600">Specialist Visit Charges (600)</option>
-          <option value="700">ICU Monitoring Charges (700)</option>
-          <option value="OTHERS">OTHERS</option>
-        </select>
-        <input type="text" class="form-control form-control-sm form-control-billing other-particular-input d-none mt-1" placeholder="Specify Details...">
-      </td>
-      <td><input type="number" class="form-control form-control-sm form-control-billing text-end row-rate" value="0" oninput="calculateBillingTotals()"></td>
-      <td><input type="number" class="form-control form-control-sm form-control-billing text-end row-discount" value="0" oninput="calculateBillingTotals()"></td>
-      <td><input type="number" class="form-control form-control-sm form-control-billing text-end row-amount" value="0" readonly></td>
-      <td class="text-center align-middle no-print">
-        <button class="btn btn-sm btn-outline-danger" onclick="removeBillingRow(this)"><i class="fa-solid fa-xmark"></i></button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-    updateBillingSerialNumbers();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        alert((res && res.message) || 'Done.');
+        if (res && res.success) loadLedger();
+      })
+      .withFailureHandler(function (err) { alert('Could not record the payment: ' + (err && err.message)); })
+      .hb_recordPayment(token(), invoiceNo, amount, mode, '');
   }
 
-  function handleParticularChange(selectEl) {
-    const otherInput = selectEl.nextElementSibling;
-    if (selectEl.value === "OTHERS") {
-      otherInput.classList.remove('d-none');
-    } else {
-      otherInput.classList.add('d-none');
-      otherInput.value = ""; 
-    }
-  }
+  // ---------------------------------------------------------------------
+  // ROUTING
+  // ---------------------------------------------------------------------
+  function openWorkspace(type) {
+    $('billing-workspace-hospital').classList.add('d-none');
+    $('billing-workspace-records').classList.add('d-none');
+    var target = $('billing-workspace-' + type);
+    if (target) target.classList.remove('d-none');
 
-  function removeBillingRow(btn) {
-    const tbody = document.getElementById('billingTbody');
-    if(tbody.rows.length <= 1) {
-       alert("Cannot remove the last row.");
-       return;
-    }
-    const row = btn.closest('tr');
-    row.remove();
-    updateBillingSerialNumbers();
-    calculateBillingTotals();
-  }
-
-  function updateBillingSerialNumbers() {
-    const rows = document.querySelectorAll('#billingTbody tr');
-    rows.forEach((row, index) => {
-      row.querySelector('.row-sno').innerText = index + 1;
+    boot(function () {
+      if (type === 'records') {
+        if (!$('hb-f-from').value) {
+          var d = new Date(); d.setDate(d.getDate() - 30);
+          $('hb-f-from').value = d.toISOString().slice(0, 10);
+          $('hb-f-to').value = new Date().toISOString().slice(0, 10);
+        }
+        loadLedger();
+      } else {
+        if (!HB.items.length) renderItems();
+        recalc();
+      }
     });
   }
 
-  function calculateBillingTotals() {
-    let grossTotal = 0;
-    let totalDiscount = 0;
-    const rows = document.querySelectorAll('#billingTbody tr');
+  /**
+   * The cashier typing in "received" must win over the auto-fill.
+   *
+   * This has to be the field's OWN handler. A listener on `document` runs
+   * after the element's oninput, so recalc() would already have overwritten
+   * the first keystroke before the flag was set.
+   */
+  function paidInput() { HB.paidTouched = true; recalc(); }
 
-    rows.forEach(row => {
-      const rate = parseFloat(row.querySelector('.row-rate').value) || 0;
-      const discount = parseFloat(row.querySelector('.row-discount').value) || 0;
-      
-      const amount = rate - discount;
-      row.querySelector('.row-amount').value = amount > 0 ? amount.toFixed(2) : "0.00";
-
-      grossTotal += rate;
-      totalDiscount += discount;
-    });
-
-    const nett = grossTotal - totalDiscount;
-
-    document.getElementById('grossTotal').value = grossTotal.toFixed(2);
-    document.getElementById('totalDiscount').value = totalDiscount.toFixed(2);
-    document.getElementById('nettAmount').value = nett > 0 ? nett.toFixed(2) : "0.00";
-    
-    const amtPaidInput = document.getElementById('amountPaid');
-    if (!amtPaidInput.value || parseFloat(amtPaidInput.value) === 0) {
-        amtPaidInput.value = nett > 0 ? nett.toFixed(2) : "0.00";
-    }
-  }
-
-  function saveInvoiceToDB() {
-    alert("Invoice validated. Ready to route to Google Sheets (Billing_Ledger) in Phase 2.");
-  }
+  // ---- exports (inline handlers above address these) --------------------
+  window.openBillingWorkspace = openWorkspace;
+  window.hbFetchPatient       = fetchPatient;
+  window.hbUseAppointment     = useAppointment;
+  window.hbDoctorChanged      = doctorChanged;
+  window.hbAddRow             = addRowAndRender;
+  window.hbRemove             = removeRow;
+  window.hbSet                = setField;
+  window.hbApplyPackage       = applyPackage;
+  window.hbRecalc             = recalc;
+  window.hbPaidInput          = paidInput;
+  window.hbModeChanged        = modeChanged;
+  window.hbSaveInvoice        = saveInvoice;
+  window.hbPrintCurrent       = printCurrent;
+  window.hbClearBill          = function () { clearBill(false); };
+  window.hbLoadLedger         = loadLedger;
+  window.hbReprint            = reprint;
+  window.hbCollect            = collect;
+})();
 </script>

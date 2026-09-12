@@ -4,9 +4,15 @@
     <button class="btn btn-outline-secondary btn-sm" onclick="returnToPharmacyMenu()">
       <i class="fa-solid fa-arrow-left"></i> Back to Workspace
     </button>
-    <button class="btn btn-outline-warning btn-sm" onclick="openCreditPanel()">
-      <i class="fa-solid fa-file-invoice-dollar"></i> Settle Credit Bills
-    </button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-danger btn-sm" onclick="clearPharmacyBill()"
+              title="Empty this bill and start a fresh one">
+        <i class="fa-solid fa-eraser"></i> Clear Bill
+      </button>
+      <button class="btn btn-outline-warning btn-sm" onclick="openCreditPanel()">
+        <i class="fa-solid fa-file-invoice-dollar"></i> Settle Credit Bills
+      </button>
+    </div>
   </div>
 
   <style>
@@ -214,9 +220,13 @@
               </select>
               <input type="text" id="phTxnId" class="hd-input w-100 p-2 d-none" placeholder="Enter UPI/Card Ref Number">
             </div>
-            <div class="col-md-6 d-flex align-items-end">
+            <div class="col-md-6 d-flex align-items-end gap-2">
               <button id="phSaveBtn" class="btn btn-success w-100 py-3" style="font-weight: bold; font-size: 1.05rem;" onclick="savePharmacyInvoice(event)">
                 <i class="fa-solid fa-floppy-disk me-1"></i> Save Bill
+              </button>
+              <button id="phClearBtn" class="btn btn-outline-danger py-3 px-3" style="font-weight: bold;"
+                      onclick="clearPharmacyBill()" title="Empty this bill and start a fresh one">
+                <i class="fa-solid fa-eraser"></i>
               </button>
             </div>
           </div>
@@ -1009,12 +1019,37 @@
     resetPharmacyBilling();
   }
 
+  /**
+   * The cashier's Clear.
+   *
+   * A wrong patient, an abandoned counter, a bill started against the previous
+   * customer: until now the only way out was to reload the app, which also
+   * threw away the stock cache. This empties the desk in place and confirms
+   * first whenever there is something to lose — priced lines or a patient
+   * already loaded.
+   */
+  function clearPharmacyBill() {
+    const hasPatient = ['phSearchQuery','phPatientName','phMobile','phAddress','phAge']
+      .some(id => (document.getElementById(id).value || "").trim() !== "");
+    if ((hasUnsavedItems() || hasPatient) &&
+        !confirm("Clear this bill?\n\nThe items and patient details on screen are discarded. Bills already saved are not affected.")) {
+      return;
+    }
+    resetPharmacyBilling();
+    const q = document.getElementById('phSearchQuery');
+    if (q) q.focus();
+  }
+
   function resetPharmacyBilling() {
     ['phSearchQuery','phPatientName','phMobile','phAddress','phAge','phTxnId'].forEach(id => document.getElementById(id).value = "");
     document.getElementById('phDiscount').value = "0";
     document.getElementById('phPayMode').value = "CASH";
     document.getElementById('phBillType').value = "WALK-IN";
     document.getElementById('phSex').value = "M";
+    // Left stale by every earlier reset: the next walk-in inherited the last
+    // patient's prescriber, which then printed on their bill.
+    document.getElementById('phDoctor').value = "Self / OTC";
+    document.getElementById('phRxPanel').style.display = 'none';
     toggleTxnID();
     document.getElementById('phBillingBody').innerHTML = "";
     phRowCounter = 0;

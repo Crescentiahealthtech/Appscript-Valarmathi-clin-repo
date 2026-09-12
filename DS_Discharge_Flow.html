@@ -1,0 +1,304 @@
+<!-- =====================================================================
+     DS_Discharge_Flow.html — Crescentia HealthTech / CresRx
+     ONE discharge control panel, shared by every screen that discharges.
+
+     WHY THIS FILE EXISTS
+       Discharging a patient used to be four unrelated buttons on three
+       screens, each one a complete path on its own:
+
+         IP Admissions   door-open icon -> processPatientDischarge()
+         IP Ledger       door-open icon -> processPatientDischarge()  (and it
+                         did not even handle the summary gate, so a gated
+                         discharge dead-ended on "Discharge failed.")
+         IP Admissions   file icon      -> the discharge summary
+         Finance Hub     "Discharges"   -> settleDischarge()
+
+       Two of them end the admission. Which one a member of staff pressed
+       decided whether the bill was raised, and nothing on screen said so.
+
+       There is only one clinical workflow, and it has an order:
+
+         1  SUMMARY    the doctor writes and signs the discharge summary
+         2  BILL       accounts settles it  <- ends the admission, frees the bed
+         3  RELEASE    the ward closes the admission directly — the exception,
+                       for a discharge with no bill to settle
+
+       This panel is that workflow, drawn once. Every screen now opens it
+       instead of carrying its own discharge button, so the order is visible
+       and the ward path is plainly the exception rather than a second
+       equally-valid door.
+
+     Include in Index.html AFTER DS_Desk_Scripts (needs dsOpenForAdmission)
+     and after Accounts_Discharge_Script (needs openDischargeDesk).
+     ===================================================================== -->
+<style>
+  #cresc-df-modal .df-step {
+    border: 1px solid var(--border-color); border-radius: 10px;
+    padding: .85rem 1rem; margin-bottom: .6rem; background: var(--bg-input);
+  }
+  #cresc-df-modal .df-step.df-now { border-color: var(--accent-purple); box-shadow: 0 0 0 1px var(--accent-purple); }
+  #cresc-df-modal .df-step.df-done { opacity: .75; }
+  #cresc-df-modal .df-num {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .78rem; font-weight: 700;
+    background: var(--bg-card); color: var(--text-muted); border: 1px solid var(--border-color);
+  }
+  #cresc-df-modal .df-step.df-now .df-num { background: var(--accent-purple); color: var(--text-on-accent); border-color: var(--accent-purple); }
+  #cresc-df-modal .df-step.df-done .df-num { background: var(--success-solid, var(--success)); color: var(--text-on-accent); border-color: transparent; }
+  #cresc-df-modal .df-title { font-weight: 700; color: var(--text-main); }
+  #cresc-df-modal .df-sub { color: var(--text-muted); font-size: .82rem; }
+  #cresc-df-modal .df-gate { font-size: .78rem; color: var(--text-muted); }
+</style>
+
+<div id="cresc-df-modal" class="d-none"
+     style="position: fixed; inset: 0; background: var(--overlay-scrim); z-index: 3600;
+            display: flex; align-items: center; justify-content: center;">
+  <div class="card p-4 shadow-lg" style="width: 94%; max-width: 620px; background-color: var(--bg-card); max-height: 92vh; overflow-y: auto;">
+    <div class="d-flex justify-content-between align-items-start mb-3 pb-2 border-bottom border-secondary">
+      <div>
+        <h5 class="fw-bold m-0" style="color: var(--text-main);">
+          <i class="fa-solid fa-door-open me-2" style="color: var(--warning-fg);"></i>Discharge
+        </h5>
+        <div id="df-patient" class="df-sub mt-1"></div>
+      </div>
+      <button class="btn-close btn-close-white" onclick="crescCloseDischargeFlow()"></button>
+    </div>
+
+    <div id="df-body">
+      <div class="text-center py-4 df-sub">
+        <span class="spinner-border spinner-border-sm me-2"></span>Reading the discharge state…
+      </div>
+    </div>
+
+    <div id="df-gate" class="df-gate mt-2"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DF = { ip: '', name: '', bed: '', ward: '', onDone: null, summary: null, gate: null, pending: 0 };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /**
+   * @param {string} ipNumber
+   * @param {string=} patientName
+   * @param {string=} bedId
+   * @param {string=} ward
+   * @param {Function=} onDone  called after the admission is actually closed,
+   *        so the calling screen can refresh its own list.
+   */
+  function openDischargeFlow(ipNumber, patientName, bedId, ward, onDone) {
+    DF.ip = String(ipNumber || '').trim().toUpperCase();
+    DF.name = patientName || '';
+    DF.bed = bedId || '';
+    DF.ward = ward || '';
+    DF.onDone = (typeof onDone === 'function') ? onDone : null;
+    DF.summary = null;
+    DF.gate = null;
+
+    if (!DF.ip) { alert('No admission was named.'); return; }
+
+    $('df-patient').innerHTML =
+      (DF.name ? '<strong>' + esc(DF.name) + '</strong> &middot; ' : '') +
+      'IP ' + esc(DF.ip) + (DF.bed ? ' &middot; bed ' + esc(DF.bed) : '');
+    $('df-gate').innerHTML = '';
+    $('df-body').innerHTML =
+      '<div class="text-center py-4 df-sub"><span class="spinner-border spinner-border-sm me-2"></span>' +
+      'Reading the discharge state…</div>';
+    $('cresc-df-modal').classList.remove('d-none');
+
+    loadState();
+  }
+
+  function closeDischargeFlow() { $('cresc-df-modal').classList.add('d-none'); }
+
+  /**
+   * Both lookups are optional. A deployment without the discharge-summary
+   * module must still be able to discharge, so a missing backend leaves the
+   * panel usable with the summary step marked unavailable rather than
+   * stranding the ward behind a spinner.
+   */
+  function loadState() {
+    DF.pending = 2;
+    var settle = function () { if (--DF.pending <= 0) render(); };
+
+    var statusRunner = null, gateRunner = null;
+    try {
+      if (window.google && google.script && google.script.run) {
+        statusRunner = google.script.run
+          .withSuccessHandler(function (res) {
+            try {
+              var map = (res && res.success) ? (res.data || {}) : {};
+              DF.summary = map[DF.ip] || null;
+            } catch (e) { DF.summary = null; }
+            settle();
+          })
+          .withFailureHandler(function () { DF.summary = null; settle(); });
+
+        gateRunner = google.script.run
+          .withSuccessHandler(function (res) {
+            DF.gate = (res && res.success) ? res.data : null;
+            settle();
+          })
+          .withFailureHandler(function () { DF.gate = null; settle(); });
+      }
+    } catch (e) { /* fall through to the not-deployed branches below */ }
+
+    if (statusRunner && typeof statusRunner.ds_getStatusMap === 'function') {
+      statusRunner.ds_getStatusMap(window.sessionToken || '', [DF.ip]);
+    } else { DF.summary = null; settle(); }
+
+    if (gateRunner && typeof gateRunner.ds_getGateStatus === 'function') {
+      gateRunner.ds_getGateStatus(window.sessionToken || '', DF.ip);
+    } else { DF.gate = null; settle(); }
+  }
+
+  function step(n, state, title, sub, buttonHtml) {
+    return '<div class="df-step ' + state + '">' +
+      '<div class="d-flex align-items-start gap-3">' +
+        '<div class="df-num">' + (state === 'df-done' ? '<i class="fa-solid fa-check"></i>' : n) + '</div>' +
+        '<div class="flex-grow-1">' +
+          '<div class="df-title">' + title + '</div>' +
+          '<div class="df-sub mt-1">' + sub + '</div>' +
+          (buttonHtml ? '<div class="mt-2">' + buttonHtml + '</div>' : '') +
+        '</div>' +
+      '</div></div>';
+  }
+
+  function render() {
+    var s = DF.summary;
+    var status = s ? String(s.status || '').toUpperCase() : '';
+    var signed = (status === 'SIGNED');
+    var started = !!s && status !== 'CANCELLED';
+    var mode = DF.gate ? String(DF.gate.mode || '').toUpperCase() : '';
+
+    // ---- step 1: the summary ------------------------------------------
+    var sumState = signed ? 'df-done' : 'df-now';
+    var sumSub, sumBtn;
+    if (typeof window.dsOpenForAdmission !== 'function') {
+      sumState = '';
+      sumSub = 'The discharge summary module is not installed in this deployment.';
+      sumBtn = '';
+    } else if (signed) {
+      sumSub = 'Signed' + (s.signedBy ? ' by ' + esc(s.signedBy) : '') + '.';
+      sumBtn = '<button class="btn btn-sm btn-outline-secondary" onclick="crescDischargeStep(\'summary\')">' +
+               '<i class="fa-solid fa-file-circle-check me-1"></i>View summary</button>';
+    } else if (started) {
+      sumSub = 'Started and currently <strong>' + esc(status.replace(/_/g, ' ').toLowerCase()) +
+               '</strong>. A consultant must sign it.';
+      sumBtn = '<button class="btn btn-sm btn-primary" onclick="crescDischargeStep(\'summary\')">' +
+               '<i class="fa-solid fa-file-pen me-1"></i>Continue the summary</button>';
+    } else {
+      sumSub = 'Not started. Write it while discharge is planned — at the billing counter it is always late.';
+      sumBtn = '<button class="btn btn-sm btn-primary" onclick="crescDischargeStep(\'summary\')">' +
+               '<i class="fa-solid fa-file-circle-plus me-1"></i>Start the summary</button>';
+    }
+
+    // ---- step 2: the bill ---------------------------------------------
+    var billState = signed ? 'df-now' : '';
+    var billSub = 'Post the ward charges, apply the package and any insurance, take payment. ' +
+                  '<strong>Settling the bill is what closes the admission and frees the bed.</strong>';
+    var billBtn = '<button class="btn btn-sm btn-warning" onclick="crescDischargeStep(\'bill\')">' +
+                  '<i class="fa-solid fa-file-invoice-dollar me-1"></i>Open the settlement</button>';
+
+    // ---- step 3: the ward's own release --------------------------------
+    var relSub = 'Closes the admission and frees bed ' + esc(DF.bed || '—') +
+                 ' without a settlement. Use this only when there is no bill to raise — ' +
+                 'a death, an absconded patient, or a stay already settled.';
+    var relBtn = '<button class="btn btn-sm btn-outline-danger" onclick="crescDischargeStep(\'release\')">' +
+                 '<i class="fa-solid fa-door-open me-1"></i>Close the admission</button>';
+
+    $('df-body').innerHTML =
+      step(1, sumState, 'Discharge summary', sumSub, sumBtn) +
+      step(2, billState, 'Final bill &amp; settlement', billSub, billBtn) +
+      step(3, '', 'Close without settling <span class="badge text-bg-secondary ms-1">exception</span>', relSub, relBtn);
+
+    var gateLine = '';
+    if (mode === 'BLOCK') {
+      gateLine = '<i class="fa-solid fa-lock me-1"></i>A signed summary is required before this patient ' +
+                 'can be discharged (deaths and absconded patients excepted).';
+    } else if (mode === 'WARN') {
+      gateLine = '<i class="fa-solid fa-triangle-exclamation me-1"></i>Discharging without a signed summary ' +
+                 'asks for a reason, and that reason is recorded in the clinical and accounts audit trails.';
+    } else if (mode === 'OFF') {
+      gateLine = '<i class="fa-solid fa-circle-info me-1"></i>The summary gate is off: discharge is not ' +
+                 'checked against the summary.';
+    }
+    $('df-gate').innerHTML = gateLine;
+  }
+
+  function dischargeStep(which) {
+    if (which === 'summary') {
+      if (typeof window.dsOpenForAdmission !== 'function') {
+        alert('The discharge summary module is not installed in this deployment.');
+        return;
+      }
+      closeDischargeFlow();
+      window.dsOpenForAdmission(DF.ip, DF.name);
+      return;
+    }
+    if (which === 'bill') {
+      if (typeof window.openDischargeDesk !== 'function') {
+        alert('The settlement desk is not available to your account.');
+        return;
+      }
+      closeDischargeFlow();
+      window.openDischargeDesk(DF.ip);
+      return;
+    }
+    if (which === 'release') releaseAdmission('');
+  }
+
+  /**
+   * The ward's direct close. One implementation for every screen, including
+   * the summary gate's ask-once-then-record-a-reason handshake that the IP
+   * Ledger's copy never had.
+   */
+  function releaseAdmission(overrideReason) {
+    if (!overrideReason &&
+        !confirm('Close admission ' + DF.ip + ' without settling a bill?\n\n' +
+                 'This frees bed ' + (DF.bed || '(unassigned)') + ' and moves the admission ' +
+                 'to the IP Ledger. No charges are posted.')) return;
+
+    var body = $('df-body');
+    body.innerHTML = '<div class="text-center py-4 df-sub">' +
+      '<span class="spinner-border spinner-border-sm me-2"></span>Closing the admission…</div>';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success === false && res.code === 'DS_NOT_SIGNED') {
+          var reason = prompt(res.message + '\n\nWhy is this patient being discharged ' +
+                              'without a signed discharge summary?');
+          if (reason && reason.trim()) { releaseAdmission(reason.trim()); return; }
+          render();
+          return;
+        }
+        if (!res || res.success === false) {
+          alert((res && res.message) || 'Discharge failed.');
+          render();
+          return;
+        }
+        closeDischargeFlow();
+        if (DF.onDone) { try { DF.onDone(); } catch (e) { /* the caller's refresh */ } }
+      })
+      .withFailureHandler(function (err) {
+        alert('Discharge failed: ' + (err && err.message ? err.message : err));
+        render();
+      })
+      .processPatientDischarge(DF.ip, DF.bed, overrideReason || '');
+  }
+
+  window.crescOpenDischargeFlow  = openDischargeFlow;
+  window.crescCloseDischargeFlow = closeDischargeFlow;
+  window.crescDischargeStep      = dischargeStep;
+})();
+</script>

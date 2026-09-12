@@ -20,6 +20,12 @@
 // ============================================================================
 
 var DSX_LOCK_MS = 15000;
+
+// How much of one google.script.run reply we are prepared to spend, and how
+// many workflow events the editor's timeline draws. Both exist so a long stay
+// cannot make ds_getSummary un-returnable — see dsx_fitForWire_().
+var DSX_WIRE_MAX_BYTES  = 400000;
+var DSX_TIMELINE_EVENTS = 25;
 var DSX_PRESENCE_TTL = 120;     // seconds
 var DSX_SIGN_FAIL_WINDOW = 900; // 15 minutes, in seconds
 var DSX_SIGN_FAIL_MAX = 5;
@@ -386,13 +392,13 @@ function ds_getQueue(token, filter) {
 
     var awaiting = canSeeDrafts ? dsx_admissionsWithoutSummary_(rows) : [];
 
-    return dsx_ok_('', {
+    return dsx_ok_('', dsx_wire_({
       rows: out,
       counts: counts,
       awaitingInitiation: awaiting,
       permissions: dsx_permissions_(actor, null),
       config: { tatAmberMin: actor.cfg.tatAmberMin, tatRedMin: actor.cfg.tatRedMin }
-    });
+    }));
   } catch (e) {
     return dsx_fromError_(e);
   }
@@ -489,10 +495,14 @@ function ds_getStatusMap(token, ipNumbers) {
         summaryId: dsx_str_(values[i][map['Summary_ID']]),
         status: dsx_upper_(values[i][map['Status']]),
         dischargeType: dsx_upper_(values[i][map['Discharge_Type']]) || 'NORMAL',
-        rowVersion: dsx_int_(values[i][map['Row_Version']])
+        rowVersion: dsx_int_(values[i][map['Row_Version']]),
+        // The ward's discharge panel says who signed and when, so nobody has
+        // to open the summary to find out whether stage 1 is finished.
+        signedBy: dsx_str_(values[i][map['Signed_By']]),
+        signedAt: dsx_fmt_(values[i][map['Signed_At']], 'dd-MMM hh:mm a')
       };
     }
-    return dsx_ok_('', out);
+    return dsx_ok_('', dsx_wire_(out));
   } catch (e) {
     return dsx_fromError_(e);
   }
@@ -571,8 +581,12 @@ function dsx_resolveDraft_(summaryId, header, actor) {
     }
     var rebuilt = dsx_assemble_(dsx_str_(header.IP_Number),
                                 dsx_upper_(header.Discharge_Type) || 'NORMAL', actor);
+    // Assembly output is live JavaScript — Date objects, and any NaN a
+    // division produced. Every other path hands back JSON read from a cell, so
+    // normalise through JSON here and the editor sees one shape whichever
+    // route the draft arrived by.
     return {
-      payload: rebuilt.payload, source: 'REASSEMBLED', repaired: true,
+      payload: dsx_jsonNormalize_(rebuilt.payload), source: 'REASSEMBLED', repaired: true,
       note: 'No readable draft was stored, so the summary was rebuilt from the case sheet, ' +
             'notes and orders. Any earlier hand-editing is not in it — read every section ' +
             'before submitting.'
@@ -633,24 +647,166 @@ function ds_getSummary(token, summaryId) {
       try { readiness = dsx_readiness_(payload, null, header); } catch (e) { /* advisory */ }
     }
 
-    return dsx_ok_('', {
+    // The snapshot list used to ride along here. No screen has ever read it,
+    // and building it cost a sheet read per snapshot on the one call a doctor
+    // waits for. ds_getSnapshots() serves the audit view that wants it.
+    var envelope = {
       header: dsx_headerForClient_(header),
       payload: payload,
       draftSource: draft.source,
       draftNote: draft.repaired ? draft.note : '',
       readiness: readiness,
       permissions: dsx_permissions_(actor, header),
-      events: dsx_recentEvents_(summaryId, 50),
+      events: dsx_timelineEvents_(summaryId),
       editors: dsx_presenceOthers_(dsx_presenceList_(summaryId), actor.username),
-      snapshots: dsx_listSnapshots_(summaryId).map(function (s) {
-        return { snapshotNo: s.snapshotNo, type: s.type,
-                 at: dsx_fmt_(s.createdAt, 'dd-MMM hh:mm a'), by: s.createdBy,
-                 shortHash: dsx_shortHash_(s.contentHash) };
-      })
-    });
+      truncated: ''
+    };
+
+    return dsx_ok_('', dsx_fitForWire_(envelope));
   } catch (e) {
     return dsx_fromError_(e);
   }
+}
+
+/**
+ * The header, the document and nothing else.
+ *
+ * The fallback the editor retries with when the full reply does not arrive.
+ * A doctor who can read and sign the summary is better served by a stripped
+ * screen than by an error, so this deliberately drops everything advisory —
+ * the timeline, presence, readiness — and keeps only what the document itself
+ * needs.
+ */
+function ds_getSummaryLite(token, summaryId) {
+  try {
+    var actor = dsx_requireRole_(token, ['view', 'viewSigned', 'viewMedsOnly']);
+    if (!dsx_str_(summaryId)) {
+      return dsx_err_('VALIDATION_FAILED', 'No summary was named. Open one from the Discharge Desk.');
+    }
+    var header = dsx_getHeader_(summaryId);
+    if (!header) return dsx_err_('VALIDATION_FAILED', 'No discharge summary found for ' + summaryId + '.');
+
+    var status = dsx_upper_(header.Status);
+    if (actor.actions.indexOf('view') === -1 && status !== DSX_STATUS.SIGNED) {
+      return dsx_err_('FORBIDDEN', 'This summary has not been signed yet.');
+    }
+
+    var draft = dsx_resolveDraft_(summaryId, header, actor);
+    if (!draft.payload) {
+      return dsx_err_('VALIDATION_FAILED',
+        'The draft for ' + dsx_str_(header.Summary_ID) + ' could not be read' +
+        (draft.note ? ' (' + draft.note + ')' : '') + '.');
+    }
+
+    return dsx_ok_('', dsx_fitForWire_({
+      header: dsx_headerForClient_(header),
+      payload: dsx_trimPayloadForRole_(draft.payload, actor),
+      draftSource: draft.source,
+      draftNote: draft.repaired ? draft.note : '',
+      readiness: { hard: [], soft: [] },
+      permissions: dsx_permissions_(actor, header),
+      events: [],
+      editors: [],
+      truncated: 'Loaded in reduced mode: the workflow timeline and the ' +
+                 'readiness checks are not shown. The document itself is complete.'
+    }));
+  } catch (e) {
+    return dsx_fromError_(e);
+  }
+}
+
+/** The snapshot list, for the audit view that actually wants it. */
+function ds_getSnapshots(token, summaryId) {
+  try {
+    dsx_requireRole_(token, ['view', 'viewSigned']);
+    var header = dsx_getHeader_(summaryId);
+    if (!header) return dsx_err_('VALIDATION_FAILED', 'No discharge summary found for ' + summaryId + '.');
+    return dsx_ok_('', dsx_wire_(dsx_listSnapshots_(summaryId).map(function (s) {
+      return { snapshotNo: s.snapshotNo, type: s.type,
+               at: dsx_fmt_(s.createdAt, 'dd-MMM hh:mm a'), by: s.createdBy,
+               shortHash: dsx_shortHash_(s.contentHash) };
+    })));
+  } catch (e) {
+    return dsx_fromError_(e);
+  }
+}
+
+/**
+ * The workflow timeline the editor draws, kept small on purpose.
+ *
+ * The log's Meta_JSON carries whatever the action wanted to record — the
+ * assembly warnings on DS_INITIATE can be pages of them. The editor reads
+ * exactly one thing out of meta: the section comments pinned by the last
+ * RETURN. So that is the only meta that travels.
+ */
+function dsx_timelineEvents_(summaryId) {
+  var events;
+  try { events = dsx_recentEvents_(summaryId, DSX_TIMELINE_EVENTS); }
+  catch (e) { return []; }
+
+  return events.map(function (e) {
+    var meta = {};
+    if (e.action === 'DS_RETURN' && e.meta && e.meta.sectionComments) {
+      meta.sectionComments = e.meta.sectionComments;
+    }
+    return {
+      eventId: e.eventId, atText: e.atText, actor: e.actor, role: e.role,
+      action: e.action, fromStatus: e.fromStatus, toStatus: e.toStatus,
+      snapshotNo: e.snapshotNo, comment: e.comment, meta: meta
+    };
+  });
+}
+
+/**
+ * Makes an envelope safe to return, and small enough to arrive.
+ *
+ * Two failure modes produce the same symptom at the browser — a success
+ * handler called with null:
+ *
+ *   1. the graph holds something the transport cannot carry (dsx_wire_), and
+ *   2. the reply is simply too big.
+ *
+ * (2) is real here: a payload is allowed up to 360,000 characters by the
+ * storage layer, and a long ICU stay with a full investigations table gets
+ * there. The document is what the doctor came for, so when the envelope is
+ * over the ceiling the advisory parts are shed in order of how little they
+ * are missed, and the screen is told plainly what it is not showing rather
+ * than being handed nothing.
+ */
+function dsx_fitForWire_(envelope) {
+  var wired = dsx_wire_(envelope);
+  var size = dsx_wireSize_(wired);
+  if (size >= 0 && size <= DSX_WIRE_MAX_BYTES) return wired;
+
+  var shed = [];
+  var steps = [
+    ['events',   'the workflow timeline'],
+    ['editors',  'who else has it open'],
+    ['readiness', 'the readiness checks']
+  ];
+  for (var i = 0; i < steps.length; i++) {
+    if (size >= 0 && size <= DSX_WIRE_MAX_BYTES) break;
+    if (steps[i][0] === 'readiness') wired.readiness = { hard: [], soft: [] };
+    else wired[steps[i][0]] = [];
+    shed.push(steps[i][1]);
+    size = dsx_wireSize_(wired);
+  }
+
+  // Still over after shedding everything optional: the document alone is that
+  // large. It still goes — a summary that cannot be opened is worse than a
+  // slow one — but the log records it, because a payload this size means the
+  // hospital course or the investigations table needs shortening.
+  if (size < 0 || size > DSX_WIRE_MAX_BYTES) {
+    Logger.log('DS envelope is ' + size + ' characters for ' +
+               ((wired.header && wired.header.summaryId) || '?') +
+               ' — over the ' + DSX_WIRE_MAX_BYTES + ' ceiling with nothing left to shed.');
+  }
+
+  if (shed.length) {
+    wired.truncated = 'This summary is large, so ' + shed.join(', ') +
+                      ' could not be loaded with it. The document itself is complete.';
+  }
+  return wired;
 }
 
 function dsx_headerForClient_(h) {
@@ -743,6 +899,22 @@ function ds_initiateDischarge(token, ipNumber, dischargeType, plannedDischargeAt
         'The clinical assembly engine is not installed. Add DS_Assembly.gs.');
     }
     var built = dsx_assemble_(ip, type, actor);   // {payload, warnings, timings}
+
+    // Storage takes at most DSX_CHUNKS * DSX_MAX_CHUNK characters, and the
+    // check used to happen inside dsx_appendSnapshot_ — AFTER the summary row
+    // had been written. That left a GENERATED summary with no snapshot and no
+    // working draft, which every later open then tried to rebuild from the
+    // record, producing the same oversized document again. Fail here instead,
+    // before the lock and before anything is written.
+    var assembledChars = 0;
+    try { assembledChars = JSON.stringify(built.payload).length; } catch (eLen) { assembledChars = 0; }
+    var storageLimit = DSX_MAX_CHUNK * DSX_CHUNKS;
+    if (assembledChars > storageLimit) {
+      return dsx_err_('PAYLOAD_TOO_LARGE',
+        'The assembled summary for ' + ip + ' is ' + assembledChars + ' characters and the ' +
+        'limit is ' + storageLimit + '. Nothing has been created. Shorten the hospital ' +
+        'course or the investigations table on the case sheet, then generate again.');
+    }
 
     // ---- commit ------------------------------------------------------------
     lock.waitLock(DSX_LOCK_MS);
@@ -1562,11 +1734,11 @@ function ds_getDiff(token, summaryId, fromRef, toRef) {
 
     sections.sort(function (x, y) { return (y.changed ? 1 : 0) - (x.changed ? 1 : 0); });
 
-    return dsx_ok_('', {
+    return dsx_ok_('', dsx_wire_({
       from: a.label, to: b.label,
       changedCount: sections.filter(function (s) { return s.changed; }).length,
       sections: sections
-    });
+    }));
   } catch (e) {
     return dsx_fromError_(e);
   }
@@ -1626,7 +1798,7 @@ function ds_getSourceItem(token, ref) {
     }
     var item = dsx_readSourceItem_(ip, type, id);
     if (!item) return dsx_err_('VALIDATION_FAILED', 'That source record could not be found for this admission.');
-    return dsx_ok_('', item);
+    return dsx_ok_('', dsx_wire_(item));
   } catch (e) {
     return dsx_fromError_(e);
   }

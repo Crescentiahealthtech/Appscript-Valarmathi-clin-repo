@@ -71,65 +71,80 @@
 </div>
 
 <script>
-  // 1. Sidebar Toggle Logic
-  function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.toggle('mobile-open');
-    } else {
-        sidebar.classList.toggle('collapsed');
-        // An explicit click is a preference: remember it, and stop auto-
-        // collapsing until the user chooses again this session.
-        window.crescSidebarPinned = !sidebar.classList.contains('collapsed');
-        try {
-            localStorage.setItem('sidebarCollapsed',
-                sidebar.classList.contains('collapsed') ? '1' : '0');
-        } catch (e) { /* a full localStorage must not break navigation */ }
-    }
+  /* ===================================================================
+     SIDEBAR STATE — collapsed is the only resting state
+     -------------------------------------------------------------------
+     The rail costs 260px on every screen, and the screens that matter —
+     the consult, the case sheet, the ward, the billing desks — are the
+     ones least able to spare it. So the rail is collapsed to its icon
+     strip everywhere, all the time. The bars button is the one thing
+     that opens it, and the moment the user navigates somewhere the rail
+     closes again: opening it is a glance at the labels, not a mode the
+     app stays in.
+
+     Nothing is persisted. A reload starts collapsed, always, because a
+     remembered "open" is exactly the state the user asked us to stop
+     producing.
+     =================================================================== */
+
+  function crescIsMobileRail() { return window.innerWidth <= 768; }
+
+  /** Opens the rail. Mobile slides the overlay in; desktop widens it. */
+  function crescOpenSidebar() {
+    var sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    if (crescIsMobileRail()) sidebar.classList.add('mobile-open');
+    else sidebar.classList.remove('collapsed');
   }
 
-  /**
-   * Collapses the sidebar when the user moves into a working screen.
-   *
-   * Clinical screens — the OP consult, the IP casesheet, IP notes, the lab and
-   * pharmacy desks — are dense, and 260px of navigation is 260px not spent on
-   * the chart. The rail stays, so nothing becomes unreachable, and an explicit
-   * click on the toggle pins it open for the rest of the session.
-   */
-  window.crescAutoCollapseSidebar = function (collapse) {
-    const sidebar = document.getElementById('sidebar');
+  /** Returns the rail to its resting state. Safe to call from anywhere. */
+  function crescCollapseSidebar() {
+    var sidebar = document.getElementById('sidebar');
     if (!sidebar) return;
-    if (window.innerWidth <= 768) return;      // mobile uses the overlay
-    if (window.crescSidebarPinned) return;     // the user asked for it open
-    sidebar.classList.toggle('collapsed', collapse !== false);
-  };
+    sidebar.classList.remove('mobile-open');
+    // Mobile draws its own 65px strip from the media query; leaving `collapsed`
+    // on there would out-specify it and give the phone an 85px rail.
+    sidebar.classList.toggle('collapsed', !crescIsMobileRail());
+  }
+  window.crescCollapseSidebar = crescCollapseSidebar;
+
+  /** True while the rail is showing its labels. */
+  function crescSidebarIsOpen() {
+    var sidebar = document.getElementById('sidebar');
+    if (!sidebar) return false;
+    return crescIsMobileRail() ? sidebar.classList.contains('mobile-open')
+                               : !sidebar.classList.contains('collapsed');
+  }
+
+  // 1. The bars button — the only thing that opens the rail.
+  function toggleSidebar() {
+    if (crescSidebarIsOpen()) crescCollapseSidebar();
+    else crescOpenSidebar();
+  }
+  window.toggleSidebar = toggleSidebar;
 
   /**
-   * Collapsed is the resting state.
-   *
-   * The rail costs 260px on every screen in the app, and the screens that
-   * matter — the consult, the case sheet, the ward — are the ones least able
-   * to spare it. Icons remain, so nothing is unreachable, and one click on the
-   * toggle pins it open and keeps it open across reloads. Only an explicit
-   * "0" written by that click opens it; no stored preference means collapsed.
+   * Kept so older call sites (ScriptsMV, the EMR cockpit) keep working.
+   * Every screen is now a working screen, so whatever it is asked to do it
+   * collapses — the rail never opens itself.
    */
+  window.crescAutoCollapseSidebar = function () { crescCollapseSidebar(); };
+
+  // An open rail is a glance, not a mode: navigating anywhere closes it.
+  document.addEventListener('click', function (ev) {
+    var link = ev.target && ev.target.closest ? ev.target.closest('#sidebar .nav-link') : null;
+    if (link) setTimeout(crescCollapseSidebar, 0);
+  });
+
+  // Collapsed from the first paint, and after any resize across the
+  // mobile/desktop boundary.
   (function () {
-    var pinnedOpen = false;
-    try { pinnedOpen = (localStorage.getItem('sidebarCollapsed') === '0'); } catch (e) { /* private mode */ }
-    window.crescSidebarPinned = pinnedOpen;
-
-    function applyInitialSidebarState() {
-      var sidebar = document.getElementById('sidebar');
-      if (!sidebar) return;
-      if (window.innerWidth <= 768) return;   // mobile uses the overlay, never the rail
-      sidebar.classList.toggle('collapsed', !pinnedOpen);
-    }
-
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', applyInitialSidebarState);
+      document.addEventListener('DOMContentLoaded', crescCollapseSidebar);
     } else {
-      applyInitialSidebarState();
+      crescCollapseSidebar();
     }
+    window.addEventListener('resize', crescCollapseSidebar);
   })();
 
   // 2. Theme control

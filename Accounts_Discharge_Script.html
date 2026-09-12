@@ -19,7 +19,13 @@ const AccDischarge = (function () {
   const num = (id) => { const e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; };
   const amt = (r) => r.kind === 'AUTO' ? r.amount : (Number(r.count) || 0) * (Number(r.rate) || 0);
 
-  function load() {
+  /**
+   * @param {string=} preselectIp  an IP number handed over by the ward's
+   *        discharge panel. When it is one of the open admissions the bill is
+   *        loaded straight away, so arriving here from the ward does not mean
+   *        finding the same patient again in a dropdown.
+   */
+  function load(preselectIp) {
     const root = $('acc-discharge-root'); if (!root) return;
     root.innerHTML = '<div class="text-center text-body-secondary py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading…</div>';
     google.script.run.withSuccessHandler(function (pk) {
@@ -36,6 +42,14 @@ const AccDischarge = (function () {
               (a.length ? '<select id="acc-dis-ip" class="form-select">' + a.map(x => '<option value="' + esc(x.ipNumber) + '">' + esc(x.ipNumber) + ' — ' + esc(x.patientName) + ' (' + esc(x.bed || '—') + ')</option>').join('') + '</select>' : '<input id="acc-dis-ip" class="form-control" placeholder="No active admissions">') +
               '</div><button class="btn btn-primary fw-semibold" onclick="AccDischarge.open()"><i class="fas fa-file-invoice-dollar me-1"></i>Load Bill</button></div>' +
               '<div id="acc-dis-body"></div><div id="acc-dis-modal"></div>';
+
+            const want = String(preselectIp || '').trim().toUpperCase();
+            if (want && a.some(x => String(x.ipNumber).toUpperCase() === want)) {
+              const sel = $('acc-dis-ip');
+              if (sel) { sel.value = a.filter(x => String(x.ipNumber).toUpperCase() === want)[0].ipNumber; open(); }
+            } else if (want) {
+              toast(want + ' is not an open admission — it may already be discharged.', false);
+            }
           })
           .withFailureHandler(function (e) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc(e.message || 'Server error.') + '</div>'; })
           .getOpenAdmissions();
@@ -285,6 +299,18 @@ const AccDischarge = (function () {
   return { load, open, calc, addRow, del, setCat, step, setCount, setRate, setExcl, setRemark, toggleAuto, applyPackage, insToggle, insAdd, insDel, insSet, visits, closeVisits, addVisit, saveDraft, finalize, print };
 })();
 
-function openDischargeDesk() { if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-discharge'); AccDischarge.load(); }
+/**
+ * The settlement desk — stage 3 of the discharge workflow.
+ *
+ * Reachable from the Finance Hub and, with an IP number, straight from the
+ * ward's discharge panel. switchTab runs first because the accounts pages are
+ * siblings of the ward screens: without it the ward list stays active
+ * underneath and both render at once.
+ */
+function openDischargeDesk(ipNumber) {
+  if (typeof switchTab === 'function') switchTab('workspace-accounts');
+  if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-discharge');
+  AccDischarge.load(ipNumber);
+}
 (function () { if (window.__accDischargeWired) return; var o = window.switchAccountsPage; window.switchAccountsPage = function (p) { if (typeof o === 'function') o(p); if (p === 'workspace-accounts-discharge') { try { AccDischarge.load(); } catch (e) {} } }; window.__accDischargeWired = true; })();
 </script>

@@ -473,9 +473,16 @@
       case 'pharmacy':
         switchTab('tab-admin-pharmacy', document.getElementById('nav-tab-pharmacy')); break;
       case 'lab':
-        switchTab('tab-admin-lab', document.getElementById('nav-tab-lab')); break;
+        // 'tab-admin-lab' is not an element in this app — the lab's landing
+        // screen is workspace-lab. The old id matched nothing, so switchTab
+        // hid every section and activated none: a lab user signed in to a
+        // blank page.
+        switchTab('workspace-lab', document.getElementById('nav-tab-lab')); break;
       case 'accounts':
-        switchTab('tab-admin-billing', document.getElementById('nav-tab-accounts')); break;
+        // The Finance Hub, not the billing tab. tab-admin-billing exists but
+        // both of its workspaces start hidden, so landing there also showed
+        // nothing; and accounts' own rail entry is the hub.
+        switchTab('workspace-accounts', document.getElementById('nav-tab-accounts')); break;
       case 'patient': {
         const patHome = document.querySelector('#nav-patient .nav-link');
         switchTab('tab-pat-home', patHome);

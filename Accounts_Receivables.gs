@@ -9,7 +9,13 @@
 // READ: open dues grouped into running tabs.
 function getReceivables() {
   try {
-    var open = acc_pharmaRows_().concat(acc_labRows_()).filter(function (r) { return r.open && r.balance > 0; });
+    // Hospital invoices (OP consultations, procedures, packages) join pharmacy
+    // and lab here: a part-paid or credit bill raised at the billing desk is a
+    // receivable like any other, and used to be invisible to this screen.
+    var open = acc_pharmaRows_()
+      .concat(acc_labRows_())
+      .concat(acc_hospitalRowsSafe_())
+      .filter(function (r) { return r.open && r.balance > 0; });
     var groups = {}, today = Date.now();
 
     open.forEach(function (r) {
@@ -92,6 +98,18 @@ function settleReceivableBill(payload) {
         return { success: true, message: "Lab bill " + payload.billId + " settled." };
       }
       return { success: false, message: "Lab bill " + payload.billId + " not found." };
+    }
+
+    if (source === 'HOSPITAL') {
+      if (typeof hb_recordPayment !== 'function')
+        return { success: false, message: "Hospital billing module unavailable." };
+      // hb_recordPayment does its own session and role check, writes the
+      // payment against the invoice and audits it, so settling from here and
+      // settling from the billing desk cannot drift apart.
+      var hres = hb_recordPayment(acc_str_(payload.sessionToken), payload.billId,
+                                  acc_money_(payload.amount) || acc_money_(payload.balance),
+                                  mode, acc_str_(payload.txnId));
+      return hres;
     }
 
     return { success: false, message: "Unknown source: " + source };

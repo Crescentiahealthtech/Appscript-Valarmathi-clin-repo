@@ -294,6 +294,7 @@
 
       var ipArg = '&#39;' + esc(row.ipNumber) + '&#39;';
       var wardArgs = ipArg + ',&#39;' + esc(row.bed) + '&#39;,&#39;' + esc(row.ward) + '&#39;';
+      var dischargeArgs = wardArgs + ',&#39;' + esc(row.patientName) + '&#39;';
 
       // Live rows keep their ward actions here too, so staff don't have to
       // switch screens after finding a patient in the archive.
@@ -304,7 +305,7 @@
           ? '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
               'onclick="openChangeBedModal(' + wardArgs + ')"><i class="fa-solid fa-right-left"></i></button>' +
             '<button class="btn btn-sm btn-outline-danger" title="Discharge" ' +
-              'onclick="iphDischarge(' + wardArgs + ')"><i class="fa-solid fa-door-open"></i></button>'
+              'onclick="iphDischarge(' + dischargeArgs + ')"><i class="fa-solid fa-door-open"></i></button>'
           : '');
 
       html += '<tr>' +
@@ -392,18 +393,23 @@
 
   // ---- discharge from the archive ----------------------------------------
 
-  function iphDischarge(ipNumber, bedId) {
-    if (!confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
-                 ' and closes the admission.')) return;
-    message('<div class="spinner-border text-primary"></div><br>Processing discharge...');
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        if (!res || res.success === false) alert((res && res.message) || 'Discharge failed.');
-        loadIPHistory();
-      })
-      .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPHistory(); })
-      .processPatientDischarge(ipNumber, bedId);
+  /**
+   * Opens the shared discharge panel.
+   *
+   * This used to call processPatientDischarge() directly — and, unlike the IP
+   * Admissions copy, it did not handle the summary gate: with the gate on,
+   * every discharge from this screen ended on "Discharge failed." with no way
+   * to say why the patient was going without a signed summary. There is now
+   * one implementation of that handshake, in DS_Discharge_Flow.html.
+   */
+  function iphDischarge(ipNumber, bedId, ward, patientName) {
+    if (typeof window.crescOpenDischargeFlow !== 'function') {
+      alert('The discharge panel is not installed in this deployment ' +
+            '(DS_Discharge_Flow.html).');
+      return;
+    }
+    window.crescOpenDischargeFlow(ipNumber, patientName || '', bedId, ward,
+                                  function () { loadIPHistory(); });
   }
 
   // ---- exports ------------------------------------------------------------

@@ -151,27 +151,58 @@ function acc_labRows_() {
   });
 }
 
-// 3. OP Consultation Income Normalizer 
+// 3. OP Consultation Income Normalizer
+//
+// An appointment's Fee column is now the consultation TARIFF, not a receipt:
+// the booking modal no longer asks for a figure, and the money is taken on the
+// Hospital Billing desk, which writes a real invoice (Hospital_Billing.gs).
+// Counting both would bill the hospital twice for one consultation.
+//
+// So a completed appointment contributes its fee ONLY while no hospital
+// invoice names it. That keeps every historic visit — which has a fee and no
+// invoice, because there was nowhere to raise one — counted exactly as it was,
+// while every visit billed the new way is counted once, from its invoice.
 function acc_opRows_() {
+  var billed = {};
+  try { if (typeof hb_billedApptIds_ === 'function') billed = hb_billedApptIds_() || {}; }
+  catch (e) { billed = {}; }
+
   return acc_readObjects_('Appointments').map(function (r) {
     var status = acc_str_(r['Status']).toUpperCase();
     var fee = acc_money_(r['Fee']);
     var d = acc_toDate_(r['Timestamp'] || r['Date']);
+    var billId = acc_str_(r['Appt_ID'] || r['Appt ID'] || r['ApptId']);
+    var invoiced = !!billed[billId.toUpperCase()];
     return {
       source: 'OP_Consultation', 
-      billId: acc_str_(r['Appt_ID'] || r['Appt ID'] || r['ApptId']),
+      billId: billId,
       patientId: acc_str_(r['Patient_ID'] || r['Patient ID']), 
       name: acc_str_(r['Patient_Name'] || r['Patient Name']),
       admissionId: '', 
-      net: fee, 
+      net: invoiced ? 0 : fee,
       balance: 0, 
       mode: 'Cash', // Default OP collections to Cash
       billDate: d, realizedDate: d,
-      realized: (status === 'COMPLETED' && fee > 0),
+      realized: (!invoiced && status === 'COMPLETED' && fee > 0),
       open: false,
       _row: r._row
     };
   });
+}
+
+/**
+ * 4. Hospital Billing Income Normalizer.
+ *
+ * The reader itself lives beside its schema in Hospital_Billing.gs. This
+ * wrapper exists so a deployment that has not copied that file across still
+ * loads the Finance Hub — with no hospital income in it — rather than failing
+ * on "acc_hospitalRows_ is not defined".
+ */
+function acc_hospitalRowsSafe_() {
+  try {
+    if (typeof acc_hospitalRows_ !== 'function') return [];
+    return acc_hospitalRows_() || [];
+  } catch (e) { return []; }
 }
 
 // =========================================================================
@@ -206,7 +237,13 @@ function getAccountsDashboard() {
     } catch(e) {}
 
     // 2. Pull Clinical Income (Virtual Merge)
-    var virtualIncome = acc_pharmaRows_().concat(acc_labRows_()).concat(acc_opRows_());
+    //    Hospital_Invoices joins pharmacy, lab and OP as a fourth source: OP
+    //    consultations, procedures and package bills are raised there now, and
+    //    the ledger would not otherwise see any of them.
+    var virtualIncome = acc_pharmaRows_()
+      .concat(acc_labRows_())
+      .concat(acc_opRows_())
+      .concat(acc_hospitalRowsSafe_());
     virtualIncome.forEach(function(inc) {
       if (inc.realized) {
         var ts = inc.realizedDate;
@@ -217,7 +254,10 @@ function getAccountsDashboard() {
           category: inc.source,
           entity: inc.name || inc.patientId || "Walk-In",
           mode: inc.mode,
-          amtIn: inc.net,
+          // A part-paid bill realises only what was taken. Sources that settle
+          // in full (pharmacy, lab) leave realizedAmount unset and keep using
+          // the net, exactly as before.
+          amtIn: (inc.realizedAmount === undefined) ? inc.net : inc.realizedAmount,
           amtOut: 0,
           locked: acc_isLocked_(acc_period_(ts)),
           isToday: Utilities.formatDate(ts, ACC_CFG.TZ, "yyyy-MM-dd") === todayStr
