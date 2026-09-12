@@ -3953,12 +3953,18 @@ function ipn_prompt(message, value, done, opts) {
       .replace(/'/g,'&#39;');
   }
 
+  /**
+   * The signed-in name, for the optimistic label on a note that has been sent
+   * but not yet acknowledged. The server decides the stored author; this only
+   * fills the gap before permissions arrive.
+   *
+   * It read three element ids, none of which exist in the staff shell — the
+   * sidebar's name is `display-user-name` — so it always returned "Staff".
+   */
   function _getCurrentUser() {
-    // Pull from whatever global auth your system sets
-    const nameEl = document.getElementById('top-bar-username') ||
-                   document.getElementById('welcome-name') ||
-                   document.getElementById('sidebar-username');
-    return nameEl ? nameEl.innerText.trim() : 'Staff';
+    const nameEl = document.getElementById('display-user-name');
+    const name = nameEl ? nameEl.innerText.trim() : '';
+    return (name && name !== 'Loading...') ? name : 'Staff';
   }
 
   function _getShift() {
