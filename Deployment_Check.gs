@@ -88,6 +88,11 @@ var DEP_MAP = {
                              "dsx_requireRole_", "dsx_permissions_", "dsx_userRow_",
                              "dsx_fitForWire_"],
   "DS_Assembly.gs":         ["dsx_assemble_", "dsx_admissionRow_"],
+  // Hospital billing. Without this file the billing desk boots into
+  // "hb_getBootstrap is not a function", which names nothing useful.
+  "Hospital_Billing.gs":    ["setupHospitalBilling", "hb_getBootstrap", "hb_getPatientContext",
+                             "hb_saveInvoice", "hb_getInvoices", "hb_getInvoice",
+                             "hb_recordPayment", "acc_hospitalRows_", "hb_billedApptIds_"],
   "DS_Print.gs":            ["ds_getPrintHtml"],
   "DS_Gate.gs":             ["dsx_gateCheck_", "ds_getGateStatus"]
 };

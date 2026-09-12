@@ -234,6 +234,11 @@ function initializeDatabase() {
       sheet.getRange(1, 1, 1, schema.headers.length).setFontWeight("bold").setBackground("#22262d").setFontColor("#ffffff");
     }
   });
+
+  // Hospital billing owns its own schema and seeds the service tariff, so it
+  // sets itself up rather than being listed above. Without this the billing
+  // desk opens on "Service_Master is empty" after a fresh install.
+  try { if (typeof setupHospitalBilling === 'function') setupHospitalBilling(); } catch (e) {}
 }
 
 /**

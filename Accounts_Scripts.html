@@ -181,15 +181,23 @@ const AccX = (function () {
         '</div></div>';
     }).join('');
   }
+  // The outstanding amount is remembered alongside the bill: a hospital
+  // invoice can be part-paid, so its settler needs to be told how much is
+  // being collected, not just which bill.
+  let SETTLE_AMOUNT = 0;
   function settle(source, billId, amount) {
     injectModals();
+    SETTLE_AMOUNT = Number(amount) || 0;
     $('acc-settle-source').value = source;
     $('acc-settle-bill').value = billId;
     $('acc-settle-info').textContent = source + ' bill ' + billId + ' · collecting ' + inr(amount);
     new bootstrap.Modal($('acc-settle-modal')).show();
   }
   function confirmSettle() {
-    const payload = { source: $('acc-settle-source').value, billId: $('acc-settle-bill').value, payMode: $('acc-settle-mode').value, loggedBy: who() };
+    const payload = { source: $('acc-settle-source').value, billId: $('acc-settle-bill').value,
+                      payMode: $('acc-settle-mode').value, loggedBy: who(),
+                      amount: SETTLE_AMOUNT, balance: SETTLE_AMOUNT,
+                      sessionToken: window.sessionToken || '' };
     busy(true);
     google.script.run
       .withSuccessHandler(function (res) {
