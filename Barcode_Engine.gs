@@ -43,11 +43,16 @@ var BC_CFG = {
   // is the fastest route into that patient's chart, and it was the one thing
   // the scanner could not do: it could open an OP consult for an inpatient,
   // but not their case sheet.
+  // NEW_APPOINTMENT is offered to everyone who may write the appointment
+  // ledger. The front desk's commonest job is "scan the card, book the next
+  // visit", and until now the scan panel could check a patient in but not
+  // book them — the card was scanned, then the ID was typed again into the
+  // booking modal.
   ROLE_ACTIONS: {
-    'admin':          ['CHECK_IN', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD', 'IP_CASESHEET', 'IP_NOTE'],
-    'doctor':         ['CHECK_IN', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD', 'IP_CASESHEET', 'IP_NOTE'],
-    'receptionist':   ['CHECK_IN', 'PRINT_CARD'],
-    'reception':      ['CHECK_IN', 'PRINT_CARD'],
+    'admin':          ['CHECK_IN', 'NEW_APPOINTMENT', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD', 'IP_CASESHEET', 'IP_NOTE'],
+    'doctor':         ['CHECK_IN', 'NEW_APPOINTMENT', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD', 'IP_CASESHEET', 'IP_NOTE'],
+    'receptionist':   ['CHECK_IN', 'NEW_APPOINTMENT', 'PRINT_CARD'],
+    'reception':      ['CHECK_IN', 'NEW_APPOINTMENT', 'PRINT_CARD'],
     'nurse':          ['TIMELINE', 'IP_NOTE'],
     'pharmacy':       ['PHARMACY_BILL'],
     'pharmacist':     ['PHARMACY_BILL'],

@@ -182,13 +182,91 @@ function dsx_findRowsByKey_(sheet, headerName, key) {
     return out;
   }
 
-  for (var j = 0; j < found.length; j++) {
-    var r = found[j].getRow();
-    var cell = dsx_upper_(sheet.getRange(r, col + 1).getDisplayValue());
-    if (cell === needle && out.indexOf(r) === -1) out.push(r);
+  // One bounded read spanning the candidate rows, not one read per candidate.
+  // A summary with fifty workflow events used to cost fifty round trips here
+  // alone, and those seconds are the difference between a reply and a
+  // request that dies on the way back.
+  var rows = [];
+  for (var j = 0; j < found.length; j++) rows.push(found[j].getRow());
+  rows.sort(function (a, b) { return a - b; });
+
+  var first = rows[0], last = rows[rows.length - 1];
+  var block = sheet.getRange(first, col + 1, last - first + 1, 1).getDisplayValues();
+  for (var k = 0; k < rows.length; k++) {
+    var r = rows[k];
+    if (dsx_upper_(block[r - first][0]) === needle && out.indexOf(r) === -1) out.push(r);
   }
   out.sort(function (a, b) { return a - b; });
   return out;
+}
+
+/**
+ * The named columns of every data row, in as few round trips as the layout
+ * allows.
+ *
+ * Reading a row at a time is what makes the discharge screens slow, but
+ * getDataRange() on DS_Snapshots would drag eight payload chunks per row into
+ * memory. So: take the columns actually wanted, group them into contiguous
+ * runs, and read one range per run. For DS_Snapshots that is two reads
+ * (the metadata before the payload, and the two columns after it) instead of
+ * one per snapshot, and the payload columns are never touched.
+ *
+ * @param {Sheet} sheet
+ * @param {Array<string>} headerNames
+ * @param {Array<number>=} rowNumbers  1-based; omit for every data row
+ * @return {Array<Object>} row objects keyed by header name, plus _row
+ */
+function dsx_readColumns_(sheet, headerNames, rowNumbers) {
+  var map = dsx_headerMap_(sheet);
+  var wanted = [];
+  headerNames.forEach(function (h) {
+    if (map[h] !== undefined && wanted.indexOf(map[h]) === -1) wanted.push(map[h]);
+  });
+  if (!wanted.length) return [];
+  wanted.sort(function (a, b) { return a - b; });
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  var rows;
+  if (rowNumbers && rowNumbers.length) {
+    rows = rowNumbers.slice().sort(function (a, b) { return a - b; });
+  } else {
+    rows = [];
+    for (var r = 2; r <= lastRow; r++) rows.push(r);
+  }
+  if (!rows.length) return [];
+
+  var top = rows[0], bottom = rows[rows.length - 1];
+  var height = bottom - top + 1;
+
+  // Contiguous runs of columns, tolerating a gap of one so two adjacent-ish
+  // fields do not cost two round trips.
+  var runs = [], cur = [wanted[0], wanted[0]];
+  for (var i = 1; i < wanted.length; i++) {
+    if (wanted[i] - cur[1] <= 2) cur[1] = wanted[i];
+    else { runs.push(cur); cur = [wanted[i], wanted[i]]; }
+  }
+  runs.push(cur);
+
+  var blocks = runs.map(function (run) {
+    return sheet.getRange(top, run[0] + 1, height, run[1] - run[0] + 1).getValues();
+  });
+
+  return rows.map(function (rowNum) {
+    var obj = { _row: rowNum };
+    headerNames.forEach(function (h) {
+      var col = map[h];
+      if (col === undefined) return;
+      for (var b = 0; b < runs.length; b++) {
+        if (col >= runs[b][0] && col <= runs[b][1]) {
+          obj[h] = blocks[b][rowNum - top][col - runs[b][0]];
+          return;
+        }
+      }
+    });
+    return obj;
+  });
 }
 
 /** The first matching row number, or 0. */
@@ -723,20 +801,21 @@ function dsx_appendSnapshot_(summaryId, snapshotNo, type, payload, contentHash, 
 function dsx_listSnapshots_(summaryId) {
   var sh = dsx_snapshotsSheet_();
   var rows = dsx_findRowsByKey_(sh, 'Summary_ID', dsx_upper_(summaryId));
-  var map = dsx_headerMap_(sh);
-  var out = [];
-  rows.forEach(function (r) {
-    var width = Math.max(1, sh.getLastColumn());
-    var vals = sh.getRange(r, 1, 1, width).getValues()[0];
-    out.push({
-      row: r,
-      snapshotNo: dsx_int_(vals[map['Snapshot_No']]),
-      type: dsx_upper_(vals[map['Snapshot_Type']]),
-      contentHash: dsx_str_(vals[map['Content_Hash']]),
-      prevSignedHash: dsx_str_(vals[map['Prev_Signed_Hash']]),
-      createdAt: dsx_toDate_(vals[map['Created_At']]),
-      createdBy: dsx_str_(vals[map['Created_By']])
-    });
+  if (!rows.length) return [];
+
+  var out = dsx_readColumns_(sh,
+    ['Snapshot_No', 'Snapshot_Type', 'Content_Hash', 'Prev_Signed_Hash',
+     'Created_At', 'Created_By'], rows
+  ).map(function (v) {
+    return {
+      row: v._row,
+      snapshotNo: dsx_int_(v['Snapshot_No']),
+      type: dsx_upper_(v['Snapshot_Type']),
+      contentHash: dsx_str_(v['Content_Hash']),
+      prevSignedHash: dsx_str_(v['Prev_Signed_Hash']),
+      createdAt: dsx_toDate_(v['Created_At']),
+      createdBy: dsx_str_(v['Created_By'])
+    };
   });
   out.sort(function (a, b) { return b.snapshotNo - a.snapshotNo; });
   return out;
@@ -789,24 +868,29 @@ function dsx_recentEvents_(summaryId, limit) {
   var rows = dsx_findRowsByKey_(sh, 'Summary_ID', dsx_upper_(summaryId));
   rows.reverse();
   if (limit > 0) rows = rows.slice(0, limit);
+  if (!rows.length) return [];
 
-  var map = dsx_headerMap_(sh);
-  var width = Math.max(1, sh.getLastColumn());
-  return rows.map(function (r) {
-    var v = sh.getRange(r, 1, 1, width).getValues()[0];
+  // dsx_readColumns_ hands rows back in ascending row order; an append-only
+  // log means descending row order is newest first, which is what callers want.
+  var raw = dsx_readColumns_(sh,
+    ['Event_ID', 'Timestamp', 'Actor_Username', 'Actor_Role', 'Action',
+     'From_Status', 'To_Status', 'Snapshot_No', 'Comment', 'Meta_JSON'], rows);
+  raw.sort(function (a, b) { return b._row - a._row; });
+
+  return raw.map(function (v) {
     var meta = {};
-    try { meta = JSON.parse(dsx_str_(v[map['Meta_JSON']]) || '{}'); } catch (e) {}
+    try { meta = JSON.parse(dsx_str_(v['Meta_JSON']) || '{}'); } catch (e) {}
     return {
-      eventId: dsx_str_(v[map['Event_ID']]),
-      at: dsx_toDate_(v[map['Timestamp']]),
-      atText: dsx_fmt_(v[map['Timestamp']], 'dd-MMM-yyyy hh:mm a'),
-      actor: dsx_str_(v[map['Actor_Username']]),
-      role: dsx_str_(v[map['Actor_Role']]),
-      action: dsx_str_(v[map['Action']]),
-      fromStatus: dsx_str_(v[map['From_Status']]),
-      toStatus: dsx_str_(v[map['To_Status']]),
-      snapshotNo: dsx_int_(v[map['Snapshot_No']]),
-      comment: dsx_str_(v[map['Comment']]),
+      eventId: dsx_str_(v['Event_ID']),
+      at: dsx_toDate_(v['Timestamp']),
+      atText: dsx_fmt_(v['Timestamp'], 'dd-MMM-yyyy hh:mm a'),
+      actor: dsx_str_(v['Actor_Username']),
+      role: dsx_str_(v['Actor_Role']),
+      action: dsx_str_(v['Action']),
+      fromStatus: dsx_str_(v['From_Status']),
+      toStatus: dsx_str_(v['To_Status']),
+      snapshotNo: dsx_int_(v['Snapshot_No']),
+      comment: dsx_str_(v['Comment']),
       meta: meta
     };
   });
@@ -831,6 +915,83 @@ function dsx_audit_(actor, actionType, summaryId, details) {
 
 function dsx_ok_(message, data) {
   return { success: true, message: dsx_str_(message), data: data === undefined ? null : data };
+}
+
+// ---------------------------------------------------------------------------
+// SECTION H2 — the transport boundary
+// ---------------------------------------------------------------------------
+//
+// WHY THIS EXISTS
+//   google.script.run serialises whatever a server function returns. When the
+//   graph contains something it cannot carry — an Invalid Date, a NaN or an
+//   Infinity from a division, a function, a cycle — the client's SUCCESS
+//   handler is called with null. Not an error, not a message: null. That is
+//   exactly the "The server returned nothing for DS-IP...." the discharge
+//   editor reports, and it is indistinguishable at the browser from a dropped
+//   connection, which is why it has been so hard to pin down.
+//
+//   Every read endpoint therefore hands its envelope through dsx_wire_ before
+//   returning it. Dates survive as Dates (Apps Script carries those natively)
+//   so no client contract changes; everything the transport cannot represent
+//   is turned into something it can.
+
+var DSX_WIRE_MAX_DEPTH = 32;
+
+/** A deep copy of `v` containing only values google.script.run can carry. */
+function dsx_wire_(v) { return dsx_wireValue_(v, 0, []); }
+
+function dsx_wireValue_(v, depth, stack) {
+  if (v === null || v === undefined) return null;
+
+  // A Date is carried natively — but an Invalid Date is not, and one
+  // unparsable cell anywhere in the graph would sink the whole reply.
+  // Tested by tag rather than instanceof so a Date built in another context
+  // (or a subclass) is still recognised as one.
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return isNaN(v.getTime()) ? null : v;
+  }
+
+  var t = typeof v;
+  if (t === 'string' || t === 'boolean') return v;
+  if (t === 'number') return isFinite(v) ? v : null;   // NaN / ±Infinity
+  if (t === 'function' || t === 'undefined') return null;
+  if (t !== 'object') return String(v);                // symbol and friends
+
+  if (depth >= DSX_WIRE_MAX_DEPTH) return null;
+  if (stack.indexOf(v) !== -1) return null;            // cycle
+  stack.push(v);
+
+  var out;
+  if (Object.prototype.toString.call(v) === '[object Array]') {
+    out = [];
+    for (var i = 0; i < v.length; i++) out.push(dsx_wireValue_(v[i], depth + 1, stack));
+  } else {
+    out = {};
+    var keys = Object.keys(v);
+    for (var k = 0; k < keys.length; k++) {
+      if (!keys[k]) continue;                          // an unaddressable key
+      out[keys[k]] = dsx_wireValue_(v[keys[k]], depth + 1, stack);
+    }
+  }
+  stack.pop();
+  return out;
+}
+
+/**
+ * The JSON form of a value, as a value.
+ *
+ * The store holds every payload as JSON, so anything rebuilt in memory is
+ * put through the same round trip before it is used as a payload — otherwise
+ * a freshly assembled draft carries Date objects and non-finite numbers that
+ * a stored one never has, and the two disagree about what the document says.
+ */
+function dsx_jsonNormalize_(v) {
+  try { return JSON.parse(JSON.stringify(v)); } catch (e) { return v; }
+}
+
+/** Serialised length of a reply, or -1 when it cannot be measured. */
+function dsx_wireSize_(v) {
+  try { return JSON.stringify(v).length; } catch (e) { return -1; }
 }
 
 function dsx_err_(code, message, data) {

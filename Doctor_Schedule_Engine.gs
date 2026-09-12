@@ -626,6 +626,10 @@ function bookAppointmentScoped(payload, sessionToken) {
     row[4] = String(dc_to12_(time24));                    // legacy display format
     row[5] = String(dc_str_(payload.purpose) || "Consultation");
     row[6] = String(dc_str_(payload.status) || "Booked");
+    // The doctor's standard consult fee, snapshotted as the TARIFF for this
+    // visit — not as money collected. The booking modal no longer asks for a
+    // figure; the Hospital Billing desk reads this to pre-fill the
+    // consultation line, and the receipt it raises is what Accounts counts.
     row[7] = dc_money_(payload.fee !== undefined ? payload.fee : doc.consultFee);
     row[8] = new Date();
     row[docCol] = String(doc.doctorId);

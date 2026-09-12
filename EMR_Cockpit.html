@@ -163,9 +163,8 @@
 // ========================================================
 
 function openEMRWorkspace(workspaceId) {
-    // Every EMR sub-workspace is a working screen; the cockpit menu is not.
-    if (typeof window.crescAutoCollapseSidebar === 'function') {
-        window.crescAutoCollapseSidebar(workspaceId !== 'cockpit');
+    if (typeof window.crescCollapseSidebar === 'function') {
+        window.crescCollapseSidebar();
     }
     const landingMenu = document.getElementById('emr-landing-menu');
     if (landingMenu) landingMenu.classList.add('d-none');

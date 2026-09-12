@@ -341,6 +341,9 @@
 
       var args = '&#39;' + esc(row.ipNumber) + '&#39;,&#39;' + esc(row.bed) +
                  '&#39;,&#39;' + esc(row.ward) + '&#39;';
+      // The discharge panel names the patient in its header, so it takes one
+      // argument the bed-transfer modal does not.
+      var dischargeArgs = args + ',&#39;' + esc(row.patientName) + '&#39;';
 
       var losBadge = row.los
         ? '<span class="badge text-bg-light">Day ' + esc(row.los) + '</span>'
@@ -363,24 +366,26 @@
           '<button class="btn btn-sm btn-outline-warning me-1" title="Transfer bed" ' +
             'onclick="openChangeBedModal(' + args + ')"><i class="fa-solid fa-right-left"></i></button>' +
           '<button class="btn btn-sm btn-outline-danger" title="Discharge" ' +
-            'onclick="confirmDischarge(' + args + ')"><i class="fa-solid fa-door-open"></i></button>' +
+            'onclick="confirmDischarge(' + dischargeArgs + ')"><i class="fa-solid fa-door-open"></i></button>' +
         '</td></tr>';
+      // One discharge button per row. It opens the shared discharge panel
+      // (summary -> bill -> release), not a bare "close the admission" call:
+      // see DS_Discharge_Flow.html.
     });
 
     $('ipw-tbody').innerHTML = html;
     ipwLoadDischargeBadges(rows);
   }
 
-  /* ---- Discharge Summary entry point -------------------------------------
-     The clinical summary is started here, when discharge is PLANNED, not at
-     the billing counter — by then the patient is already at the desk and the
-     summary is always late. The badge is filled in asynchronously so the ward
-     list never waits on the discharge module. */
+  /* ---- Discharge state badge ---------------------------------------------
+     The row shows where the summary has got to; the discharge button opens
+     the panel that acts on it. There used to be a second button here that
+     jumped straight to the summary — the panel's first step is that same
+     jump, with the rest of the workflow visible around it. The badge is
+     filled in asynchronously so the ward list never waits on the discharge
+     module. */
   function ipwDischargeSummaryCell(row) {
-    return '<span class="me-1" data-ipw-ds="' + esc(row.ipNumber) + '"></span>' +
-           '<button class="btn btn-sm btn-outline-info me-1" title="Discharge summary" ' +
-           'onclick="ipwOpenDischargeSummary(&#39;' + esc(row.ipNumber) + '&#39;,&#39;' +
-           esc(row.patientName) + '&#39;)"><i class="fa-solid fa-file-circle-check"></i></button>';
+    return '<span class="me-1" data-ipw-ds="' + esc(row.ipNumber) + '"></span>';
   }
 
   function ipwOpenDischargeSummary(ipNumber, patientName) {
@@ -633,29 +638,22 @@
 
   // ---- discharge ----------------------------------------------------------
 
-  function confirmDischarge(ipNumber, bedId, dsOverrideReason) {
-    if (!dsOverrideReason &&
-        !confirm('Discharge ' + ipNumber + '?\n\nThis frees bed ' + bedId +
-                 ', closes the admission, and moves it to the IP Ledger.')) return;
-    message('<div class="spinner-border text-primary"></div><br>Processing discharge...');
-
-    google.script.run
-      .withSuccessHandler(function (res) {
-        // The discharge-summary gate refuses once, names the summary's state,
-        // and completes on a second call carrying a reason. With the gate off
-        // this branch never runs.
-        if (res && res.success === false && res.code === 'DS_NOT_SIGNED') {
-          var reason = prompt(res.message + '\n\nWhy is this patient being discharged ' +
-                              'without a signed discharge summary?');
-          if (reason && reason.trim()) { confirmDischarge(ipNumber, bedId, reason.trim()); return; }
-          loadIPLedger();
-          return;
-        }
-        if (!res || res.success === false) alert((res && res.message) || 'Discharge failed.');
-        loadIPLedger();
-      })
-      .withFailureHandler(function (err) { alert('Discharge failed: ' + err.message); loadIPLedger(); })
-      .processPatientDischarge(ipNumber, bedId, dsOverrideReason || '');
+  /**
+   * The ward's discharge button.
+   *
+   * It no longer ends the admission by itself. Discharge is an ordered
+   * workflow — summary, bill, release — and this opens the one panel that
+   * shows all three and where this patient has got to. The direct close is
+   * still in there, as step 3, marked as the exception it is.
+   */
+  function confirmDischarge(ipNumber, bedId, ward, patientName) {
+    if (typeof window.crescOpenDischargeFlow !== 'function') {
+      alert('The discharge panel is not installed in this deployment ' +
+            '(DS_Discharge_Flow.html).');
+      return;
+    }
+    window.crescOpenDischargeFlow(ipNumber, patientName || '', bedId, ward,
+                                  function () { loadIPLedger(); });
   }
 
   // ---- consultants --------------------------------------------------------

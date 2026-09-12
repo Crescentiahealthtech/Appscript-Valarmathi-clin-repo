@@ -88,12 +88,11 @@
       <div id="ab-selected-label" class="label-bright small mt-2">No slot selected</div>
     </div>
 
-    <div class="row g-2 mb-4">
-      <div class="col-6">
-        <label class="label-bright small mb-1">Fee (&#8377;)</label>
-        <input type="number" id="ab-fee" class="form-control text-white-force border-secondary" value="0">
-      </div>
-    </div>
+    <!-- No fee field. A booking is a slot, not a bill: the consultation is
+         charged on the Hospital Billing desk, which prices it from
+         Service_Master, can bundle it into a package, and posts the receipt to
+         the accounts ledger. Collecting a number here produced a second,
+         unreconciled price for the same visit. -->
 
     <button id="btn-admin-save" class="btn btn-success w-100 fw-bold py-2" onclick="saveAdminBooking()">Confirm Booking</button>
   </div>
@@ -129,12 +128,18 @@
 let abSelectedTime = "";   // "HH:mm" chosen from the slot grid
 let abSlotCache    = [];
 
-function openAdminBookingModal(preFillDate, preFillDoctorId) {
+/**
+ * @param {string=} preFillDate      yyyy-MM-dd
+ * @param {string=} preFillDoctorId
+ * @param {string=} preFillPatientId when given (a barcode scan, a patient
+ *        screen) the modal opens on that patient and fetches their details,
+ *        so booking from a scan is one click rather than a retyped ID.
+ */
+function openAdminBookingModal(preFillDate, preFillDoctorId, preFillPatientId) {
   ['ab-id', 'ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
     document.getElementById(id).value = '';
   });
   document.getElementById('ab-purpose').value = 'Consultation';
-  document.getElementById('ab-fee').value = '0';
   document.getElementById('ab-force-off').checked = false;
   document.getElementById('ab-manual-time-wrap').classList.add('d-none');
   document.getElementById('ab-time').value = '';
@@ -160,6 +165,11 @@ function openAdminBookingModal(preFillDate, preFillDoctorId) {
 
     document.getElementById('admin-book-modal').classList.remove('d-none');
     loadBookingSlots();
+
+    if (preFillPatientId) {
+      document.getElementById('ab-id').value = String(preFillPatientId).trim().toUpperCase();
+      autoFetchPatient();
+    }
   });
 }
 
@@ -321,7 +331,6 @@ function saveAdminBooking() {
     time:        time,
     purpose:     document.getElementById('ab-purpose').value || 'Consultation',
     status:      'Booked',
-    fee:         document.getElementById('ab-fee').value || 0,
     forceOffSchedule: forceOff
   };
 

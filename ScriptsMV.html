@@ -73,18 +73,12 @@
   });
 }
  
-// Screens dense enough to want the full width. The dashboard and the landing
-// menus are not on this list — they are where the navigation is the point.
-var CRESC_WORKING_TABS = [
-    'tab-admin-emr', 'tab-admin-pharmacy', 'tab-admin-labs',
-    'pharmacy-desk-workspace', 'workspace-pharmacy-billing',
-    'workspace-lab-billing', 'workspace-lab-records',
-    'workspace-accounts', 'workspace-hospital-billing'
-];
-
 function switchTab(tabId, clickedElement) {
-    if (typeof window.crescAutoCollapseSidebar === 'function') {
-        window.crescAutoCollapseSidebar(CRESC_WORKING_TABS.indexOf(tabId) !== -1);
+    // The rail rests collapsed on every screen. Navigating is the end of a
+    // glance at the labels, so it closes here too — including the routes that
+    // never went through a rail click (handoffs, cockpit cards, deep links).
+    if (typeof window.crescCollapseSidebar === 'function') {
+        window.crescCollapseSidebar();
     }
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active-section'));
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));

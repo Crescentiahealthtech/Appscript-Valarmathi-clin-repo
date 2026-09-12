@@ -57,6 +57,7 @@
   var DEDUPE_MS = 1500;
   var IDLE_COMMIT_MS = 150;
   var ACTION_LABELS = {
+    NEW_APPOINTMENT: 'Book new appointment',
     PRINT_CARD: 'Print patient card',
     START_CONSULT: 'Start OP consultation',
     TIMELINE: 'Clinical timeline',
@@ -466,6 +467,14 @@
         function (btn) { startConsult(btn, pid, appts); });
       added++;
     }
+    // Booking the next visit is the other half of a front-desk scan. It goes
+    // below the clinical actions so a bedside scan does not land on it, and
+    // above the read-only routes because it is something the desk does daily.
+    if (actions.indexOf('NEW_APPOINTMENT') !== -1) {
+      addButton(box, 'btn btn-sm btn-warning', 'fa-solid fa-calendar-plus', ACTION_LABELS.NEW_APPOINTMENT,
+        function () { hidePanel(); goNewAppointment(pid, res); });
+      added++;
+    }
     if (actions.indexOf('PRINT_CARD') !== -1) {
       addButton(box, 'btn btn-sm btn-outline-secondary', 'fa-solid fa-id-card', ACTION_LABELS.PRINT_CARD,
         function (btn) { printCard(btn, pid); });
@@ -594,6 +603,27 @@
   function goTimeline(pid) {
     if (typeof routeToEMRTimeline === 'function') routeToEMRTimeline(pid);
     else toast('Clinical timeline is not available.', 'err');
+  }
+
+  /**
+   * Opens the manual booking modal on the scanned patient.
+   *
+   * The modal lives on the appointments ledger, so the ledger is shown first —
+   * otherwise the booking saves into a screen the user cannot see refresh. The
+   * doctor of today's appointment is carried across when there is one, because
+   * a follow-up is nearly always with the same doctor.
+   */
+  function goNewAppointment(pid, res) {
+    if (typeof openAdminBookingModal !== 'function') {
+      toast('The booking screen is not available.', 'err'); return;
+    }
+    if (!isSectionActive('tab-admin-appt') && typeof switchTab === 'function') {
+      switchTab('tab-admin-appt', $('nav-tab-appt'));
+      if (typeof initAdminLedger === 'function') initAdminLedger();
+    }
+    var appts = (res && res.appointments) || [];
+    var doctorId = appts.length ? (appts[appts.length - 1].doctorId || '') : '';
+    openAdminBookingModal('', doctorId, pid);
   }
 
   /**
