@@ -39,7 +39,7 @@ var BC_CFG = {
   // Server-side action matrix. Mirrors applyRBAC() nav visibility so a role
   // is never offered a screen its sidebar hides.
   // IP_CASESHEET and IP_NOTE are offered only when the scan resolves to a LIVE
-  // admission — see bc_ipActionsFor_(). Scanning the wristband at the bedside
+  // admission — see bc_scanActions_(). Scanning the wristband at the bedside
   // is the fastest route into that patient's chart, and it was the one thing
   // the scanner could not do: it could open an OP consult for an inpatient,
   // but not their case sheet.

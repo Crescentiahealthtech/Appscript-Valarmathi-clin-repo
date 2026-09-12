@@ -34,6 +34,29 @@ function acc_period_(d) {
   if (isNaN(dt.getTime())) dt = new Date();
   return Utilities.formatDate(dt, ACC_CFG.TZ, "yyyy-MM");
 }
+
+/**
+ * A bill's date, and a day on its own.
+ *
+ * Both are called by the receivables screen and neither existed, so every
+ * call to getReceivablesAgeing() died on "acc_fmtTs_ is not defined" and the
+ * outer catch reported that as the reason there were no receivables. A bad
+ * or missing date returns "" rather than "Invalid Date": an unknown bill date
+ * should read as unknown, not as a value someone might chase.
+ */
+function acc_fmtTs_(d) {
+  if (!d) return "";
+  var dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt.getTime())) return "";
+  return Utilities.formatDate(dt, ACC_CFG.TZ, "dd-MMM-yyyy hh:mm a");
+}
+
+function acc_dayStr_(d) {
+  if (!d) return "";
+  var dt = (d instanceof Date) ? d : new Date(d);
+  if (isNaN(dt.getTime())) return "";
+  return Utilities.formatDate(dt, ACC_CFG.TZ, "dd-MMM-yyyy");
+}
 function acc_toDate_(v) {
   if (v instanceof Date) return v;
   var d = new Date(v);
