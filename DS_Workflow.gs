@@ -1316,11 +1316,18 @@ function dsx_verifyCredential_(actor, credential) {
     if (!hasTotp) {
       return { ok: false, message: 'You have no authenticator enrolled. Sign with your password instead.' };
     }
-    var ok = false;
-    try { ok = (typeof processTOTP === 'function') && processTOTP(user.mfaSecret, value) === true; }
-    catch (e) { ok = false; }
-    return ok ? { ok: true, method: 'TOTP' }
-              : { ok: false, message: 'That authenticator code is not valid.' };
+    // processTOTP returns an ENVELOPE ({success, message, code}), never the
+    // boolean true. Comparing it with === true made every TOTP signature fail,
+    // so a clinic that had enrolled MFA could not sign a discharge summary at
+    // all — and the message blamed the doctor's code for it.
+    var res = null;
+    try {
+      if (typeof processTOTP === 'function') res = processTOTP(user.mfaSecret, value);
+    } catch (e) { res = { success: false, message: 'Verification error: ' + e.message }; }
+
+    if (res && res.success === true) return { ok: true, method: 'TOTP' };
+    return { ok: false,
+             message: (res && res.message) || 'That authenticator code is not valid.' };
   }
 
   if (!actor.cfg.signAllowPassword) {

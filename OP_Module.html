@@ -369,6 +369,20 @@
             </thead>
             <tbody id="op-rx-tbody"></tbody>
           </table>
+          <!-- Suggestions for an IV row's name field. A datalist, not a hard
+               list: a fluid the clinic stocks under another name must still be
+               typeable. -->
+          <datalist id="op-iv-fluid-list">
+            <option value="Normal Saline (NS) 500ml"></option>
+            <option value="Normal Saline (NS) 1000ml"></option>
+            <option value="DNS (Dextrose NS) 500ml"></option>
+            <option value="RL (Ringer's Lactate) 500ml"></option>
+            <option value="D5W (5% Dextrose) 500ml"></option>
+            <option value="D10W (10% Dextrose) 500ml"></option>
+            <option value="Isolyte P 500ml"></option>
+            <option value="Isolyte M 500ml"></option>
+            <option value="Mannitol 20% 100ml"></option>
+          </datalist>
         </div>
       </div>
 
@@ -2321,22 +2335,29 @@ function addOPRxRow(pre) {
     const tr = document.createElement('tr');
     tr.innerHTML =
         '<td>' +
-            '<select class="hd-input op-rx-type" style="padding:0.1rem;">' +
+            '<select class="hd-input op-rx-type" style="padding:0.1rem;" onchange="onOPRxTypeChange(this)">' +
                 '<option value="Tab">Tab</option><option value="Cap">Cap</option><option value="Syp">Syp</option>' +
                 '<option value="Inj">Inj</option><option value="Oint">Oint</option><option value="Drops">Drops</option>' +
+                // IV fluids are prescribed in OP too — a day-care infusion, a
+                // dehydrated child, a pre-transfer drip. Without this the
+                // fluid was written into the Notes column as free text and
+                // never reached the pharmacy or the printed plan as an order.
+                '<option value="IV">IV Fluid</option>' +
             '</select>' +
         '</td>' +
         '<td style="position:relative;">' +
           '<input type="text" class="hd-input op-rx-name" placeholder="Search drug / brand..." autocomplete="off" ' +
                  'data-source="EXTERNAL" style="border-left:3px solid var(--border-strong);" ' +
-                 'oninput="onOPDrugType(this)" onfocus="onOPDrugType(this)" onchange="queueSafetyCheck()">' +
+                 'oninput="onOPDrugType(this)" onfocus="onOPDrugType(this)" onchange="queueSafetyCheck()" ' +
+                 'list="op-iv-fluid-list">' +
           '<div class="autocomplete-items d-none"></div>' +
           '<div class="op-peds-slot"></div>' +
         '</td>' +
         '<td>' +
           '<div class="d-flex align-items-center gap-1">' +
             '<input type="text" class="hd-input dial-trigger op-rx-sig text-warning fw-bold text-center" placeholder="Dosage" onclick="openOPDialPad(this, \'rx\')">' +
-            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print" style="font-size:0.6rem;" title="Dose calculator" onclick="openOPDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>' +
+            '<input type="text" class="hd-input op-rx-rate text-info fw-bold text-center d-none" placeholder="ml/hr" title="Infusion rate in ml/hr">' +
+            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print op-rx-dosecalc" style="font-size:0.6rem;" title="Dose calculator" onclick="openOPDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>' +
           '</div>' +
         '</td>' +
         '<td><input type="text" class="hd-input dial-trigger op-rx-days text-info text-center" placeholder="Days" onclick="openOPDialPad(this, \'dur\')"></td>' +
@@ -2349,6 +2370,8 @@ function addOPRxRow(pre) {
         if (pre.type) Array.from(typeSel.options).forEach(function (o) {
             if (o.value.toLowerCase() === String(pre.type).toLowerCase()) typeSel.value = o.value;
         });
+        onOPRxTypeChange(typeSel);
+        if (pre.rate) tr.querySelector('.op-rx-rate').value = pre.rate;
         tr.querySelector('.op-rx-name').value = pre.drugName || '';
         tr.querySelector('.op-rx-sig').value = pre.sig || '';
         tr.querySelector('.op-rx-days').value = pre.duration || '';
@@ -2363,6 +2386,31 @@ function addOPRxRow(pre) {
         }
     }
     return tr;
+}
+
+/**
+ * Switches one prescription row between a drug and an IV fluid.
+ *
+ * A fluid is ordered by RATE, not by a 1-0-1 dosage: "NS 500 ml at 75 ml/hr"
+ * is the whole order. So for an IV row the dosage box becomes the volume and
+ * a rate box appears beside it; the dose calculator, which computes mg/kg,
+ * is hidden because it has nothing to say about a litre of saline.
+ */
+function onOPRxTypeChange(typeSel) {
+    const tr = typeSel.closest('tr');
+    if (!tr) return;
+    const isIV = (typeSel.value === 'IV');
+
+    const rate = tr.querySelector('.op-rx-rate');
+    const sig  = tr.querySelector('.op-rx-sig');
+    const calc = tr.querySelector('.op-rx-dosecalc');
+    const name = tr.querySelector('.op-rx-name');
+
+    if (rate) rate.classList.toggle('d-none', !isIV);
+    if (calc) calc.classList.toggle('d-none', isIV);
+    if (sig)  sig.placeholder = isIV ? 'Volume' : 'Dosage';
+    if (name) name.placeholder = isIV ? 'Fluid (NS, RL, DNS...)' : 'Search drug / brand...';
+    if (isIV && rate) { rate.style.width = '72px'; }
 }
 
 // ============================================================================
@@ -2801,15 +2849,22 @@ function collectRxRows() {
             if (hit) src = 'INTERNAL';
         }
 
+        const type = row.querySelector('.op-rx-type')?.value || 'Tab';
         const med = {
-            type: row.querySelector('.op-rx-type')?.value || 'Tab',
-            strength: row.querySelector('.op-rx-type')?.value || 'Tab',
+            type: type,
+            strength: type,
             drugName: name,
             sig: row.querySelector('.op-rx-sig')?.value || '',
             duration: row.querySelector('.op-rx-days')?.value || '',
             comments: row.querySelector('.op-rx-comment')?.value || '',
             source: src
         };
+        // An IV order carries its rate. Normalised to "N ml/hr" so the printed
+        // prescription and the nursing chart read the same however it was typed.
+        if (type === 'IV') {
+            const raw = (row.querySelector('.op-rx-rate')?.value || '').trim();
+            if (raw) med.rate = /^[\d.]+$/.test(raw) ? (raw + ' ml/hr') : raw;
+        }
         if (nameEl.dataset.taper) {
             try { med.taper = JSON.parse(nameEl.dataset.taper); } catch (e) {}
             med.computedQty = parseInt(nameEl.dataset.qty, 10) || 0;

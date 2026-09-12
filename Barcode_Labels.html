@@ -172,25 +172,40 @@
   ].join('');
 
   /** 86 x 54 mm — CR80, the size of a bank card, so it fits a wallet. */
+  /**
+   * 86 x 54 mm patient card.
+   *
+   * ONE SYMBOLOGY EVERYWHERE. The card used to carry a QR while the chart
+   * sticker, the tube label and every printed document carry Code 128, so the
+   * front desk needed a 2D imager to read the card and a 1D reader would not
+   * touch it. Code 128 here means one scanner reads the card, the
+   * prescription, the case sheet, the discharge summary and the lab report
+   * alike — and it means a patient who has lost the card can be identified
+   * from any document they kept, which is the whole point of putting the
+   * barcode on the documents in the first place.
+   *
+   * The code carries the bare patient ID, exactly as printed beneath it and
+   * exactly as the documents carry it: no name, age or diagnosis ever goes
+   * into the symbol. bc_classify_() accepts both the bare ID and the older
+   * "P-" prefixed form, so cards already in patients' wallets keep working.
+   */
   function patientCardHtml(p) {
     p = p || {};
-    var qr = qrSvg('P-' + (p.id || ''), { size: 22 });
+    var bars = code128Svg(p.id || '', { height: 10, moduleWidth: 0.33, text: false });
     return '<div class="lb" style="width:86mm;height:54mm;padding:4mm;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
-        '<div style="max-width:54mm;">' +
-          '<div style="font-size:8pt;font-weight:700;letter-spacing:.4px;">' + esc(p.clinic || 'CRESCENTIA HEALTHTECH') + '</div>' +
-          '<div style="font-size:5.5pt;margin-bottom:2.5mm;">PATIENT IDENTIFICATION CARD</div>' +
-          '<div class="nm" style="font-size:13pt;">' + esc(p.name || '-') + '</div>' +
-          '<div style="font-size:7.5pt;margin-top:.8mm;">' + esc(p.age || '-') + ' Y &nbsp;·&nbsp; ' + esc(p.gender || '-') +
-            (p.bloodGroup ? ' &nbsp;·&nbsp; <strong>' + esc(p.bloodGroup) + '</strong>' : '') + '</div>' +
-        '</div>' +
-        '<div style="text-align:center;">' + qr + '</div>' +
+      '<div style="max-width:78mm;">' +
+        '<div style="font-size:8pt;font-weight:700;letter-spacing:.4px;">' + esc(p.clinic || 'CRESCENTIA HEALTHTECH') + '</div>' +
+        '<div style="font-size:5.5pt;margin-bottom:2.5mm;">PATIENT IDENTIFICATION CARD</div>' +
+        '<div class="nm" style="font-size:13pt;">' + esc(p.name || '-') + '</div>' +
+        '<div style="font-size:7.5pt;margin-top:.8mm;">' + esc(p.age || '-') + ' Y &nbsp;·&nbsp; ' + esc(p.gender || '-') +
+          (p.bloodGroup ? ' &nbsp;·&nbsp; <strong>' + esc(p.bloodGroup) + '</strong>' : '') + '</div>' +
       '</div>' +
       '<div style="position:absolute;left:4mm;right:4mm;bottom:3.5mm;">' +
-        '<div class="rule" style="padding-top:1.5mm;display:flex;justify-content:space-between;align-items:flex-end;">' +
+        '<div style="text-align:center;margin-bottom:.8mm;">' + bars + '</div>' +
+        '<div class="rule" style="padding-top:1.2mm;display:flex;justify-content:space-between;align-items:flex-end;">' +
           '<div><div style="font-size:5pt;">PATIENT ID</div>' +
           '<div class="mono" style="font-size:11pt;font-weight:700;letter-spacing:1px;">' + esc(p.id || '') + '</div></div>' +
-          '<div style="font-size:5pt;text-align:right;">' + esc(p.footer || 'Present this card at every visit') + '</div>' +
+          '<div style="font-size:5pt;text-align:right;max-width:34mm;">' + esc(p.footer || 'Present this card, or any CresRx printout, at every visit') + '</div>' +
         '</div>' +
       '</div>' +
     '</div>';

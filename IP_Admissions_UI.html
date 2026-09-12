@@ -158,10 +158,20 @@
               <select class="form-select" id="adm-doctor">
                <option value="">Loading consultants...</option>
               </select>
+              <div class="form-text small" id="adm-doctor-hint"></div>
             </div>
+            <!-- Provisional diagnosis is deliberately NOT collected here.
+                 Admission is a desk action; the working diagnosis belongs to
+                 the doctor who examines the patient and is recorded on the
+                 admission casesheet, where it carries their signature and can
+                 be amended with a version trail. The discharge summary reads
+                 it from there, so nothing downstream loses it. -->
             <div class="col-12">
-              <label class="form-label small text-body-secondary">Provisional Diagnosis</label>
-              <textarea class="form-control" id="adm-diagnosis" rows="2"></textarea>
+              <div class="alert alert-secondary py-2 px-3 mb-0 small d-flex align-items-center gap-2">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>The working diagnosis is recorded on the admission casesheet
+                      by the consultant, not here.</span>
+              </div>
             </div>
           </div>
         </form>
@@ -381,24 +391,38 @@
     window.dsOpenForAdmission(ipNumber, patientName);
   }
 
+  /* The discharge badges are decoration on top of the ward list. Everything
+     here is therefore defensive, and deliberately so: this function used to
+     call .ds_getStatusMap() unconditionally, and in a deployment where
+     DS_Workflow.gs had not been copied across, google.script.run has no such
+     method. The resulting TypeError propagated out of renderWard(), whose
+     caller replaces the whole table with an error — so a missing discharge
+     badge wiped out the entire IP Admissions screen ("Render error:
+     ...ds_getStatusMap is not a function"). A ward list must never be lost
+     to a badge. */
   function ipwLoadDischargeBadges(rows) {
-    if (typeof window.dsStatusBadge !== 'function') return;
-    var ips = rows.map(function (r) { return r.ipNumber; }).filter(Boolean);
-    if (!ips.length) return;
+    try {
+      if (typeof window.dsStatusBadge !== 'function') return;
+      var ips = rows.map(function (r) { return r.ipNumber; }).filter(Boolean);
+      if (!ips.length) return;
+      if (!bridgeReady()) return;
 
-    google.script.run
-      .withSuccessHandler(function (res) {
-        try {
-          if (!res || res.success === false) return;
-          Array.prototype.forEach.call(
-            document.querySelectorAll('[data-ipw-ds]'), function (el) {
-              var entry = res.data[String(el.getAttribute('data-ipw-ds')).toUpperCase()];
-              if (entry) el.innerHTML = window.dsStatusBadge(entry);
-            });
-        } catch (e) { /* a badge is never worth breaking the ward list for */ }
-      })
-      .withFailureHandler(function () { /* silent: the badge is decoration */ })
-      .ds_getStatusMap(window.sessionToken || '', ips);
+      var runner = google.script.run
+        .withSuccessHandler(function (res) {
+          try {
+            if (!res || res.success === false || !res.data) return;
+            Array.prototype.forEach.call(
+              document.querySelectorAll('[data-ipw-ds]'), function (el) {
+                var entry = res.data[String(el.getAttribute('data-ipw-ds')).toUpperCase()];
+                if (entry) el.innerHTML = window.dsStatusBadge(entry);
+              });
+          } catch (e) { /* a badge is never worth breaking the ward list for */ }
+        })
+        .withFailureHandler(function () { /* silent: the badge is decoration */ });
+
+      if (typeof runner.ds_getStatusMap !== 'function') return;   // backend not deployed
+      runner.ds_getStatusMap(window.sessionToken || '', ips);
+    } catch (e) { /* ditto */ }
   }
 
   // ---- wards / beds -------------------------------------------------------
@@ -536,12 +560,20 @@
     if (!val('adm-doctor')) { admAlert('Select the admitting consultant.'); return; }
     admAlert('');
 
+    // The select carries the Doctor_ID as its value and the display name as
+    // its label, so the admission is attributed to a real doctor profile.
+    // Legacy name-only rows have an empty value and fall back to the label.
+    var docSel  = $('adm-doctor');
+    var docOpt  = docSel ? docSel.options[docSel.selectedIndex] : null;
+    var docId   = (docOpt && docOpt.dataset.doctorId) || '';
+    var docName = (docOpt && docOpt.dataset.doctorName) || val('adm-doctor');
+
     var payload = {
       patientId: val('adm-pat-id'), patientName: val('adm-pat-name'),
       ageSex: val('adm-pat-age') + ' / ' + val('adm-pat-sex'),
       doa: val('adm-doa'), toa: val('adm-toa'), type: val('adm-type'),
       ward: val('adm-ward'), bed: val('adm-bed'),
-      consultant: val('adm-doctor'), diagnosis: val('adm-diagnosis')
+      consultantId: docId, consultant: docName
     };
 
     var btn = $('btn-submit-admit');
@@ -630,34 +662,74 @@
 
   var ipwConsultantCache = null;   // session cache; one fetch per page load
 
+  function admDoctorHint(msg, tone) {
+    var el = $('adm-doctor-hint');
+    if (!el) return;
+    el.className = 'form-text small' + (tone ? ' text-' + tone : '');
+    el.textContent = msg || '';
+  }
+
+  /**
+   * The consultant list comes from the Doctors sheet (DOC001, DOC002...), so
+   * the name on the admission is a real doctor profile and not a string the
+   * form invented. getConsultantList() returns objects; the pre-Doctors-sheet
+   * shape (plain strings) is still accepted so a half-updated deployment
+   * cannot leave the admission form empty.
+   */
   function loadConsultantOptions() {
     var sel = $('adm-doctor');
     if (!sel) return;
 
-    var render = function (list) {
+    var render = function (list, source) {
       var current = sel.value;
-      sel.innerHTML = '<option value="">-- Select Consultant --</option>' +
-        list.map(function (n) {
-          return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
-        }).join('');
+      sel.innerHTML = '<option value="">-- Select Consultant --</option>';
+      list.forEach(function (d) {
+        var opt = document.createElement('option');
+        opt.value = d.doctorId || d.name;        // an identifier the server can resolve
+        opt.textContent = d.label || d.name;
+        opt.dataset.doctorId = d.doctorId || '';
+        opt.dataset.doctorName = d.name;
+        sel.appendChild(opt);
+      });
       if (current) sel.value = current;
+
+      if (source === 'master_doctors' || source === 'fallback') {
+        admDoctorHint('These names are not linked to a Doctor ID. Add your ' +
+                      'consultants to the Doctors sheet so admissions can be ' +
+                      'attributed to them.', 'warning');
+      } else {
+        admDoctorHint('');
+      }
     };
 
-    if (ipwConsultantCache) { render(ipwConsultantCache); return; }
+    var normalise = function (raw) {
+      return (raw || []).map(function (d) {
+        if (d && typeof d === 'object') {
+          return { doctorId: d.doctorId || '', name: d.name || '',
+                   label: d.label || d.name || '' };
+        }
+        return { doctorId: '', name: String(d), label: String(d) };
+      }).filter(function (d) { return d.name; });
+    };
+
+    if (ipwConsultantCache) { render(ipwConsultantCache.list, ipwConsultantCache.source); return; }
 
     sel.innerHTML = '<option value="">Loading consultants...</option>';
     google.script.run
       .withSuccessHandler(function (res) {
-        var list = (res && Array.isArray(res.data)) ? res.data : [];
+        var list = normalise(res && res.data);
         if (!list.length) {
           sel.innerHTML = '<option value="">No consultants configured</option>';
+          admDoctorHint('Run setupDoctorsSheet() and add your consultants to the ' +
+                        'Doctors sheet.', 'danger');
           return;
         }
-        ipwConsultantCache = list;
-        render(list);
+        ipwConsultantCache = { list: list, source: (res && res.source) || '' };
+        render(list, ipwConsultantCache.source);
       })
       .withFailureHandler(function () {
         sel.innerHTML = '<option value="">Error loading consultants</option>';
+        admDoctorHint('The consultant list could not be loaded.', 'danger');
       })
       .getConsultantList();
   }

@@ -447,6 +447,28 @@
       .sysex-row { display: grid; grid-template-columns: 50px 1fr 1fr; gap: 8px; align-items: center; margin-bottom: 10px; }
       .sysex-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 700; text-align: right; }
 
+      /* ---- General examination: one horizontal strip, wrapping ---- */
+      .ipn-ge-strip   { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+                        background: var(--surface-2); border: 1px solid var(--ip-border-soft);
+                        border-radius: 10px; padding: 12px 14px; }
+      .ipn-ge-item    { display: inline-flex; align-items: center; gap: 6px; margin: 0;
+                        font-size: 0.8rem; color: var(--text-main); cursor: pointer;
+                        white-space: nowrap; }
+      .ipn-ge-item input { width: 15px; height: 15px; accent-color: var(--warning-solid);
+                           cursor: pointer; }
+      .ipn-ge-item input:checked + span { color: var(--warning-fg); font-weight: 700; }
+      .ipn-ge-note    { flex: 1 1 200px; min-width: 180px; }
+      .ipn-ge-hint    { font-size: 0.68rem; color: var(--text-faint); margin-top: 5px; }
+
+      /* ---- Acting-as picker (administrators recording for a doctor) ---- */
+      .ipn-actas        { display: none; }
+      .ipn-actas.show   { display: inline-flex !important; }
+      .ipn-actas-select { min-width: 190px; padding: 3px 8px; font-size: 0.74rem; }
+
+      /* ---- Advice template picker ---- */
+      .ipn-advice-wrap   { display: flex; gap: 8px; align-items: center; }
+      .ipn-advice-picker { flex: 1; font-size: 0.8rem; }
+
       .med-order-row {
         background: var(--surface-2);
         border: 1px solid var(--ip-border-soft);
@@ -796,6 +818,14 @@
                   id="dr-author-identity" style="font-size:0.72rem;">
               <i class="fas fa-id-badge me-1"></i>Signing as: --
             </span>
+            <!-- Shown only for roles that record on behalf of a doctor
+                 (administrators). A doctor signs as themselves and never
+                 sees this. -->
+            <span class="d-none align-items-center gap-1 ipn-actas" id="dr-actas-wrap">
+              <span class="small" style="color:var(--text-faint);">Acting as</span>
+              <select class="ip-form-select ipn-actas-select" id="dr-actas"
+                      onchange="ipnSetActingDoctor(this.value)"></select>
+            </span>
             <button class="wnl-btn" onclick="setAllWNL()">⚡ All WNL</button>
             <button class="btn btn-sm btn-outline-secondary" onclick="copyPreviousNote()">
               <i class="fas fa-copy me-1"></i> Copy Prev
@@ -809,6 +839,26 @@
             <label class="ip-form-label">Subjective / Objective</label>
             <textarea class="ip-form-input" id="dr-soap-text" rows="4"
               placeholder="Enter clinical findings, patient complaints, examination findings..."></textarea>
+          </div>
+
+          <!-- General Examination — one horizontal row, the way it is said
+               on a ward round ("no pallor, no icterus, no cyanosis, no
+               clubbing, no oedema"). Stacking these five as separate fields
+               made a five-second observation into a five-line form, which is
+               why it was going unrecorded. -->
+          <div class="mb-4">
+            <label class="ip-form-label">General Examination</label>
+            <div class="ipn-ge-strip">
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="dr" value="pallor"><span>Pallor</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="dr" value="icterus"><span>Icterus</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="dr" value="cyanosis"><span>Cyanosis</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="dr" value="clubbing"><span>Clubbing</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="dr" value="lymphadenopathy"><span>Lymphadenopathy</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="dr" value="dehydration"><span>Dehydration</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="dr" value="edema"><span>Pedal Edema</span></label>
+              <input type="text" class="ip-form-input ipn-ge-note" id="dr-ge-note" placeholder="Other general findings">
+            </div>
+            <div class="ipn-ge-hint">Ticked = present. Anything left unticked prints as absent.</div>
           </div>
 
           <!-- System Examination -->
@@ -949,7 +999,7 @@
           <div class="mb-4">
             <label class="ip-form-label">Order Investigations</label>
             <input type="text" class="ip-form-input mb-2" id="ipn-lab-search"
-                   placeholder="Search the lab catalogue..." oninput="ipnRenderLabPicker()">
+                   placeholder="Search the lab catalogue..." oninput="ipnRenderLabPicker('dr')">
             <div id="ipn-lab-catalog"
                  style="max-height:190px; overflow-y:auto; background:var(--surface-2);
                         border:1px solid var(--ip-border-soft); border-radius:8px; padding:8px;">
@@ -974,10 +1024,18 @@
             </details>
           </div>
 
-          <!-- Notes / Advice -->
+          <!-- Notes / Advice — the same standard-advice library the OP
+               consult uses (seeded + learned, scoped to the doctor), so the
+               ward round does not retype what the clinic already has phrased. -->
           <div>
             <label class="ip-form-label">Additional Notes / Advice</label>
-            <textarea class="ip-form-input" id="dr-advice-text" rows="2"
+            <div class="ipn-advice-wrap">
+              <select class="ip-form-select ipn-advice-picker" id="dr-advice-picker"
+                      onchange="ipnApplyAdviceTemplate(this, 'dr-advice-text')">
+                <option value="">Insert standard advice...</option>
+              </select>
+            </div>
+            <textarea class="ip-form-input mt-2" id="dr-advice-text" rows="2"
               placeholder="Diet orders, nursing instructions, follow-up plans..."></textarea>
           </div>
         </div>
@@ -1068,7 +1126,7 @@
         </div>
         <div class="ip-modal-footer">
           <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="sign-btn nurse-sign" style="width:auto; padding:10px 28px;" onclick="saveNursingNote()">
+          <button class="sign-btn nurse-sign" id="btn-save-nr-note" style="width:auto; padding:10px 28px;" onclick="saveNursingNote()">
             <i class="fas fa-check me-2"></i> Save Nursing Note
           </button>
         </div>
@@ -1159,15 +1217,33 @@
           <div class="ip-modal-title" style="color:var(--warning-fg);">
             <i class="fas fa-stethoscope me-2"></i> Consultant / Visiting Doctor Note
           </div>
-          <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <span class="badge bg-dark border border-warning text-warning px-2 py-1"
+                  id="cons-author-identity" style="font-size:0.72rem;">
+              <i class="fas fa-id-badge me-1"></i>Signing as: --
+            </span>
+            <span class="d-none align-items-center gap-1 ipn-actas" id="cons-actas-wrap">
+              <span class="small" style="color:var(--text-faint);">Acting as</span>
+              <select class="ip-form-select ipn-actas-select" id="cons-actas"
+                      onchange="ipnSetActingDoctor(this.value)"></select>
+            </span>
+            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
         </div>
+        <!-- The consultant opinion follows the SAME order as the progress
+             note — identity, reason, subjective/objective, general exam,
+             system exam, findings, drug orders, investigations, advice — so
+             the two read alike on the timeline and print alike in the file.
+             Its med and lab orders reach the pharmacy queue and the lab
+             engine exactly as a doctor's do; the server has always allowed
+             it (IPC_SECTION_RBAC.CONSULTANT), the form simply never asked. -->
         <div class="ip-modal-body">
           <div class="row g-3 mb-3">
-            <div class="col-6">
+            <div class="col-md-5">
               <label class="ip-form-label">Consultant Name</label>
               <input type="text" class="ip-form-input" id="cons-name" placeholder="Dr. Name">
             </div>
-            <div class="col-6">
+            <div class="col-md-4">
               <label class="ip-form-label">Specialty</label>
               <select class="ip-form-select" id="cons-specialty">
                 <option value="">-- Select Specialty --</option>
@@ -1189,21 +1265,195 @@
                 <option>Other</option>
               </select>
             </div>
+            <div class="col-md-3">
+              <label class="ip-form-label">Reason for Referral</label>
+              <input type="text" class="ip-form-input" id="cons-reason" placeholder="e.g. Uncontrolled sugars">
+            </div>
           </div>
-          <div class="mb-3">
-            <label class="ip-form-label">Clinical Findings</label>
-            <textarea class="ip-form-input" id="cons-findings" rows="4"
+
+          <!-- 1. Subjective / Objective -->
+          <div class="mb-4">
+            <label class="ip-form-label">Subjective / Objective</label>
+            <textarea class="ip-form-input" id="cons-soap-text" rows="3"
+              placeholder="History elicited at the bedside, current status, interval events..."></textarea>
+          </div>
+
+          <!-- 2. General Examination -->
+          <div class="mb-4">
+            <label class="ip-form-label">General Examination</label>
+            <div class="ipn-ge-strip">
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="cons" value="pallor"><span>Pallor</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="cons" value="icterus"><span>Icterus</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="cons" value="cyanosis"><span>Cyanosis</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="cons" value="clubbing"><span>Clubbing</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="cons" value="lymphadenopathy"><span>Lymphadenopathy</span></label>
+              <label class="ipn-ge-item"><input type="checkbox" class="ipn-ge-chk" data-ge-scope="cons" value="edema"><span>Pedal Edema</span></label>
+              <input type="text" class="ip-form-input ipn-ge-note" id="cons-ge-note" placeholder="Other general findings">
+            </div>
+          </div>
+
+          <!-- 3. System Examination -->
+          <div class="mb-4">
+            <label class="ip-form-label">System Examination</label>
+            <div style="background:var(--surface-2); border:1px solid var(--ip-border-soft); border-radius:10px; padding:14px;">
+              <div class="sysex-row">
+                <div class="sysex-label">CVS</div>
+                <select class="ip-form-select" id="cons-se-cvs">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="S1S2 heard, no murmurs">S1S2 heard, no murmurs</option>
+                  <option value="Murmur present">Murmur present</option>
+                  <option value="Irregular rhythm">Irregular rhythm</option>
+                  <option value="Reduced heart sounds">Reduced heart sounds</option>
+                </select>
+                <input type="text" class="ip-form-input" id="cons-se-cvs-detail" placeholder="Additional details">
+              </div>
+              <div class="sysex-row">
+                <div class="sysex-label">RS</div>
+                <select class="ip-form-select" id="cons-se-rs">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="NVBS bilateral">NVBS bilateral</option>
+                  <option value="Crepitations present">Crepitations present</option>
+                  <option value="Wheeze present">Wheeze present</option>
+                  <option value="Reduced air entry">Reduced air entry</option>
+                  <option value="Pleural rub">Pleural rub</option>
+                </select>
+                <input type="text" class="ip-form-input" id="cons-se-rs-detail" placeholder="Additional details">
+              </div>
+              <div class="sysex-row">
+                <div class="sysex-label">PA</div>
+                <select class="ip-form-select" id="cons-se-pa">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="Soft, non-tender">Soft, non-tender</option>
+                  <option value="Tenderness present">Tenderness present</option>
+                  <option value="Distended">Distended</option>
+                  <option value="Organomegaly present">Organomegaly present</option>
+                  <option value="Guarding/rigidity">Guarding / Rigidity</option>
+                </select>
+                <input type="text" class="ip-form-input" id="cons-se-pa-detail" placeholder="Additional details">
+              </div>
+              <div class="sysex-row" style="margin-bottom:0;">
+                <div class="sysex-label">CNS</div>
+                <select class="ip-form-select" id="cons-se-cns">
+                  <option value="">-- Select --</option>
+                  <option value="WNL">Within Normal Limits</option>
+                  <option value="Conscious, oriented">Conscious, oriented</option>
+                  <option value="Altered sensorium">Altered sensorium</option>
+                  <option value="GCS documented separately">GCS documented separately</option>
+                  <option value="Focal deficit present">Focal deficit present</option>
+                </select>
+                <input type="text" class="ip-form-input" id="cons-se-cns-detail" placeholder="Additional details">
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Opinion -->
+          <div class="mb-4">
+            <label class="ip-form-label">Clinical Findings / Impression</label>
+            <textarea class="ip-form-input" id="cons-findings" rows="3"
               placeholder="Consultant's clinical findings and assessment..."></textarea>
           </div>
-          <div>
+
+          <!-- 5. Medication orders — same pharmacy route as the doctor note -->
+          <div class="mb-4">
+            <label class="ip-form-label">Medication Orders</label>
+            <div id="cons-new-orders-container"></div>
+            <div class="add-drug-row mt-2" id="cons-add-drug-section">
+              <div class="position-relative" style="flex:2; min-width:160px;">
+                <input type="text" class="ip-form-input" id="cons-new-drug-name"
+                  placeholder="Search drug name..." oninput="handleIPDrugSearch(this, 'cons')" autocomplete="off">
+                <div class="drug-autocomplete-list d-none" id="cons-drug-autocomplete"></div>
+              </div>
+              <input type="text" class="ip-form-input" id="cons-new-drug-dose" placeholder="Dose" style="flex:1; min-width:70px;">
+              <select class="ip-form-select" id="cons-new-drug-freq" style="flex:1; min-width:80px;">
+                <option value="1-0-0">1-0-0</option>
+                <option value="0-1-0">0-1-0</option>
+                <option value="0-0-1">0-0-1</option>
+                <option value="1-0-1">1-0-1</option>
+                <option value="1-1-1">1-1-1</option>
+                <option value="SOS">SOS</option>
+                <option value="STAT">STAT</option>
+                <option value="OD">OD</option>
+                <option value="BD">BD</option>
+                <option value="TDS">TDS</option>
+                <option value="QID">QID</option>
+              </select>
+              <select class="ip-form-select" id="cons-new-drug-route" style="flex:1; min-width:90px;" onchange="toggleIVFluidFields(this, 'cons')">
+                <option value="Oral">Oral</option>
+                <option value="IV">IV</option>
+                <option value="IM">IM</option>
+                <option value="SC">SC</option>
+                <option value="IV Fluid">IV Fluid</option>
+                <option value="Nebulisation">Nebulisation</option>
+                <option value="Topical">Topical</option>
+                <option value="Per Rectal">Per Rectal</option>
+              </select>
+              <input type="text" class="ip-form-input" id="cons-new-drug-instructions" placeholder="Instructions" style="flex:2; min-width:100px;">
+              <button class="action-fab" style="padding:8px 14px; flex-shrink:0; flex-direction:row; gap:4px;"
+                      onclick="addNewDrugOrder('cons')">+ Add</button>
+              <div id="cons-iv-extra-fields" class="d-none" style="width:100%; display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                <select class="ip-form-select" id="cons-iv-fluid-type" style="flex:2; min-width:160px;">
+                  <option value="">-- Select IV Fluid --</option>
+                  <option value="Normal Saline (NS)">Normal Saline (NS)</option>
+                  <option value="DNS (Dextrose NS)">DNS (Dextrose NS)</option>
+                  <option value="RL (Ringer's Lactate)">RL (Ringer's Lactate)</option>
+                  <option value="D5W (5% Dextrose)">D5W (5% Dextrose)</option>
+                  <option value="D10W (10% Dextrose)">D10W (10% Dextrose)</option>
+                  <option value="Isolyte P">Isolyte P</option>
+                  <option value="Isolyte S">Isolyte S</option>
+                  <option value="Mannitol 20%">Mannitol 20%</option>
+                  <option value="Albumin 25%">Albumin 25%</option>
+                </select>
+                <select class="ip-form-select" id="cons-iv-pints" style="flex:1; min-width:100px;">
+                  <option value="1 Pint (500ml)">1 Pint (500ml)</option>
+                  <option value="2 Pints (1000ml)">2 Pints (1000ml)</option>
+                  <option value="Half Pint (250ml)">Half Pint (250ml)</option>
+                  <option value="100ml">100ml</option>
+                  <option value="150ml">150ml</option>
+                </select>
+                <input type="text" class="ip-form-input" id="cons-iv-rate" placeholder="Rate in ml/hr (e.g. 75 ml/hr)" style="flex:1; min-width:150px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. Investigations — same lab catalogue as the doctor note -->
+          <div class="mb-4">
+            <label class="ip-form-label">Order Investigations</label>
+            <input type="text" class="ip-form-input mb-2" id="cons-lab-search"
+                   placeholder="Search the lab catalogue..." oninput="ipnRenderLabPicker('cons')">
+            <div id="cons-lab-catalog"
+                 style="max-height:170px; overflow-y:auto; background:var(--surface-2);
+                        border:1px solid var(--ip-border-soft); border-radius:8px; padding:8px;">
+              <div style="color:var(--text-faint); font-size:.78rem;">Loading catalogue...</div>
+            </div>
+            <div id="cons-lab-selected" style="color:var(--text-faint); font-size:.72rem; margin-top:6px;">
+              No investigations selected.
+            </div>
+          </div>
+
+          <!-- 7. Recommendations + templated advice -->
+          <div class="mb-3">
             <label class="ip-form-label">Recommendations</label>
             <textarea class="ip-form-input" id="cons-recommendations" rows="3"
               placeholder="Further investigations, medication changes, follow-up..."></textarea>
           </div>
+          <div>
+            <label class="ip-form-label">Advice</label>
+            <div class="ipn-advice-wrap">
+              <select class="ip-form-select ipn-advice-picker" id="cons-advice-picker"
+                      onchange="ipnApplyAdviceTemplate(this, 'cons-advice-text')">
+                <option value="">Insert standard advice...</option>
+              </select>
+            </div>
+            <textarea class="ip-form-input mt-2" id="cons-advice-text" rows="2"
+              placeholder="Diet, nursing instructions, follow-up plan..."></textarea>
+          </div>
         </div>
         <div class="ip-modal-footer">
           <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,var(--warning-deep),var(--warning-solid));" onclick="saveConsultantNote()">
+          <button class="sign-btn" id="btn-save-cons-note" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,var(--warning-deep),var(--warning-solid));" onclick="saveConsultantNote()">
             <i class="fas fa-signature me-2"></i> Save Consultant Note
           </button>
         </div>
@@ -1245,7 +1495,7 @@
         </div>
         <div class="ip-modal-footer">
           <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button class="sign-btn" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,var(--violet-deep),var(--violet-solid));" onclick="saveProcedureNote()">
+          <button class="sign-btn" id="btn-save-proc-note" style="width:auto; padding:10px 28px; background:linear-gradient(135deg,var(--violet-deep),var(--violet-solid));" onclick="saveProcedureNote()">
             <i class="fas fa-signature me-2"></i> Save Procedure Note
           </button>
         </div>
@@ -1414,12 +1664,98 @@ function ipn_prompt(message, value, done, opts) {
     activeMeds: [],       // IP_Pharmacy_Queue data
     drugMaster: [],       // Pharmacy inventory for autocomplete
     newDrugOrders: [],    // New drugs to add in current Doctor note session
+    consNewDrugOrders: [],// New drugs in the current Consultant note session
+    consSelectedLabs: [], // Investigations chosen in the Consultant note
     activeFilter: 'ALL',
     permissions:  null,   // { role, noteTypes[], displayName } — from the server
     careTeam:     null,   // care-team panel payload for the open admission
     readOnly:     false,  // doctor viewing an admission they are not on
+    actingDoctorId: '',   // admin only: the doctor a note is recorded for
+    adviceTemplates: null,// shared OP/IP advice phrase library
+    saving: {},           // save-button id -> in-flight
+    clientNoteIds: {},    // save-button id -> idempotency key for the attempt
     modals: {}
   };
+
+  // ── SAVE GUARD ──────────────────────────────────────────
+  //
+  // Two identical progress notes in the timeline, ten seconds apart, because
+  // the first click gave no sign it had done anything. Three things fix it,
+  // and all three are needed:
+  //
+  //   1. the button locks and says "Saving…", so the click is visibly taken;
+  //   2. an in-flight flag, so a second click cannot start a second request
+  //      even in the instant before the browser repaints the button;
+  //   3. an idempotency key that survives a RETRY — regenerated only once the
+  //      save succeeds — so a genuine network retry is collapsed server-side
+  //      instead of writing the note twice.
+  //
+  // A failed save keeps its key: retrying the same note must not become a
+  // second note, and the server returns the original result if the first
+  // attempt actually landed.
+
+  /** Stable per-attempt key. Survives failures; rotated on success. */
+  function ipnClientNoteId(btnId) {
+    if (!IPNotesModule.clientNoteIds[btnId]) {
+      IPNotesModule.clientNoteIds[btnId] =
+        btnId + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    }
+    return IPNotesModule.clientNoteIds[btnId];
+  }
+
+  function ipnClearClientNoteId(btnId) { delete IPNotesModule.clientNoteIds[btnId]; }
+
+  /**
+   * @param {string} btnId   id of the save button to lock
+   * @param {string} busy    label while the request is in flight
+   * @param {Function} run   run(done) — call done() when the request settles
+   * @return {boolean} false when a save was already running
+   */
+  function ipnGuardedSave(btnId, busy, run) {
+    if (IPNotesModule.saving[btnId]) return false;
+    IPNotesModule.saving[btnId] = true;
+
+    const btn = document.getElementById(btnId);
+    const restore = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i>' + busy;
+    }
+
+    let settled = false;
+    const done = function () {
+      if (settled) return;          // a handler that fires twice must not unlock twice
+      settled = true;
+      IPNotesModule.saving[btnId] = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = restore; }
+    };
+
+    try { run(done); }
+    catch (e) { done(); ipnToast('Could not save: ' + e.message, 'err'); }
+    return true;
+  }
+
+  /**
+   * Every note payload carries the acting doctor. The server decides whether
+   * this session is allowed to use it — for a doctor it is ignored outright.
+   */
+  function ipnStampPayload(payload, btnId) {
+    payload.onBehalfOfDoctorId = IPNotesModule.actingDoctorId || '';
+    if (btnId) payload.clientNoteId = ipnClientNoteId(btnId);
+    return payload;
+  }
+
+  /**
+   * True when this session must name a doctor before writing this note type
+   * and has not. Checked here so the user is stopped before filling the form,
+   * not at the signature.
+   */
+  function ipnNeedsActingDoctor(noteType) {
+    const perm = IPNotesModule.permissions || {};
+    if (!perm.actsOnBehalf) return false;
+    if ((perm.onBehalfTypes || []).indexOf(noteType) === -1) return false;
+    return !IPNotesModule.actingDoctorId;
+  }
 
   // ── MODAL INSTANCES ──────────────────────────────────────
   function _getModal_(id) {
@@ -1547,13 +1883,25 @@ function ipn_prompt(message, value, done, opts) {
    */
   function _renderAuthorIdentity_() {
     const perm = IPNotesModule.permissions || {};
-    const label = perm.displayName
+    let label = perm.displayName
       ? (perm.role === 'doctor' ? 'Dr. ' + perm.displayName.replace(/^Dr\.?\s+/i, '')
          : perm.role === 'nurse' ? 'Staff Nurse ' + perm.displayName
          : perm.displayName)
       : _getCurrentUser();
 
-    ['dr-author-identity', 'nr-author-identity'].forEach(function (id) {
+    // When an administrator has named a doctor, say whose signature the note
+    // will carry — that, not the typist, is what a reader of the chart needs.
+    if (perm.actsOnBehalf && IPNotesModule.actingDoctorId) {
+      const chosen = (perm.doctors || []).filter(function (d) {
+        return d.doctorId === IPNotesModule.actingDoctorId;
+      })[0];
+      if (chosen) {
+        label = 'Dr. ' + String(chosen.name).replace(/^Dr\.?\s+/i, '') +
+                ' — recorded by ' + (perm.displayName || _getCurrentUser());
+      }
+    }
+
+    ['dr-author-identity', 'nr-author-identity', 'cons-author-identity'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) el.innerHTML = '<i class="fas fa-id-badge me-1"></i>Signing as: ' + _esc(label);
     });
@@ -1564,6 +1912,63 @@ function ipn_prompt(message, value, done, opts) {
    * anyway; this stops a nurse filling in a full progress note only to be
    * told at the signature that she may not author one.
    */
+  /**
+   * The "Acting as" picker. Administrators may author a doctor's note, but
+   * only for a named doctor — the note is then signed with that doctor's
+   * snapshot and carries the administrator's username as the recorder.
+   * A doctor never sees this control: they sign as themselves.
+   */
+  function _renderActingDoctorPicker_() {
+    const perm = IPNotesModule.permissions || {};
+    const wraps = ['dr-actas-wrap', 'cons-actas-wrap'];
+    const sels  = ['dr-actas', 'cons-actas'];
+
+    if (!perm.actsOnBehalf) {
+      wraps.forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) { el.classList.remove('show'); el.classList.add('d-none'); }
+      });
+      return;
+    }
+
+    const doctors = perm.doctors || [];
+    const options = '<option value="">-- choose a doctor --</option>' +
+      doctors.map(function (d) {
+        return '<option value="' + _esc(d.doctorId) + '">' + _esc(d.name) +
+               (d.specialty ? ' (' + _esc(d.specialty) + ')' : '') + '</option>';
+      }).join('');
+
+    // Pick up a choice already made on the casesheet screen.
+    if (!IPNotesModule.actingDoctorId && window.crescActingDoctorId) {
+      IPNotesModule.actingDoctorId = window.crescActingDoctorId;
+    }
+    sels.forEach(function (id) {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      sel.innerHTML = doctors.length ? options
+        : '<option value="">No active doctors on file</option>';
+      sel.value = IPNotesModule.actingDoctorId || '';
+    });
+    wraps.forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) { el.classList.remove('d-none'); el.classList.add('show'); }
+    });
+  }
+
+  function ipnSetActingDoctor(doctorId) {
+    IPNotesModule.actingDoctorId = doctorId || '';
+    // Shared with IP_Casesheet_UI: choosing a doctor once should hold for the
+    // whole session, not per screen.
+    window.crescActingDoctorId = IPNotesModule.actingDoctorId;
+    ['dr-actas', 'cons-actas'].forEach(function (id) {
+      const sel = document.getElementById(id);
+      if (sel && sel.value !== IPNotesModule.actingDoctorId) {
+        sel.value = IPNotesModule.actingDoctorId;
+      }
+    });
+    _renderAuthorIdentity_();
+  }
+
   function _applyNotePermissions_() {
     const perm = IPNotesModule.permissions || {};
     const allowed = perm.noteTypes || [];
@@ -1590,6 +1995,7 @@ function ipn_prompt(message, value, done, opts) {
         : (locked ? 'You are not on this care team — chart is read-only.'
                   : 'Your role cannot post notes on this chart.');
     }
+    _renderActingDoctorPicker_();
     _renderAuthorIdentity_();
   }
 
@@ -1810,35 +2216,71 @@ function ipn_prompt(message, value, done, opts) {
 
     let bodyHTML = '';
 
-    if (roleType === 'DOCTOR') {
-      if (nd.subjectiveObjective) {
-        bodyHTML += `<div class="feed-text mb-2">${_esc(nd.subjectiveObjective)}</div>`;
-      }
-      // System exam summary. Notes written before the section name was
-      // canonicalised may still carry the old "systemExam" key.
-      const se = nd.sysExam || nd.systemExam || {};
-      const seItems = [
+    /* Shared renderers: a consultant opinion carries the same clinical
+       sections a progress note does, so it is drawn with the same code. */
+    const geLine = function (ge) {
+      if (!ge || typeof ge !== 'object') return '';
+      const present = Object.keys(ge)
+        .filter(function (k) { return k !== 'notes' && String(ge[k]).toLowerCase() === 'yes'; })
+        .map(function (k) { return k.charAt(0).toUpperCase() + k.slice(1); });
+      const parts = [];
+      // "No pallor, no icterus…" is the finding a clinician wants to read,
+      // so an all-negative examination is reported, not silently omitted.
+      parts.push(present.length ? present.join(', ') + ' present' : 'No abnormal general findings');
+      if (ge.notes) parts.push(ge.notes);
+      return `<div style="font-size:0.76rem; color:var(--text-faint); margin-bottom:6px;">` +
+             `<strong style="color:var(--text-muted);">Gen Exam:</strong> ${_esc(parts.join(' — '))}</div>`;
+    };
+
+    const seLine = function (nd2) {
+      // Notes written before the section name was canonicalised may still
+      // carry the old "systemExam" key.
+      const se = nd2.sysExam || nd2.systemExam || {};
+      const items = [
         se.cvs ? 'CVS: ' + se.cvs : null,
         se.rs  ? 'RS: '  + se.rs  : null,
         se.pa  ? 'P/A: ' + se.pa  : null,
         se.cns ? 'CNS: ' + se.cns : null
       ].filter(Boolean);
-      if (seItems.length > 0) {
-        bodyHTML += `<div style="font-size:0.78rem; color:var(--text-faint); margin-bottom:8px;">${seItems.map(_esc).join(' &nbsp;|&nbsp; ')}</div>`;
+      return items.length
+        ? `<div style="font-size:0.78rem; color:var(--text-faint); margin-bottom:8px;">${items.map(_esc).join(' &nbsp;|&nbsp; ')}</div>`
+        : '';
+    };
+
+    const medChips = function (orders) {
+      if (!orders || !orders.length) return '';
+      let out = '<div class="med-action-chips">';
+      orders.forEach(function(m) {
+        const aClass = { CONT:'mac-cont', STOP:'mac-stop', HOLD:'mac-hold', MODIFY:'mac-mod', NEW:'mac-cont' }[m.action] || 'mac-cont';
+        const aLabel = { CONT:'Cont', STOP:'Stop', HOLD:'Hold', MODIFY:'Modified', NEW:'New' }[m.action] || m.action;
+        out += `<span class="mac ${aClass}">${_esc(aLabel)}: ${_esc(m.drugName)} ${_esc(m.dose||'')} ${_esc(m.freq||'')}${m.instructions ? ' — ' + _esc(m.instructions) : ''}</span>`;
+      });
+      return out + '</div>';
+    };
+
+    const labChips = function (orders) {
+      if (!orders || !orders.length) return '';
+      return '<div class="med-action-chips">' + orders.map(function (o) {
+        return `<span class="mac mac-cont" style="background:var(--teal-bg); color:var(--teal-fg);">` +
+               `<i class="fas fa-flask me-1"></i>${_esc(o.testName || o.testId)}</span>`;
+      }).join('') + '</div>';
+    };
+
+    const adviceLine = function (text) {
+      return text
+        ? `<div style="font-size:0.8rem; color:var(--text-faint); margin-top:8px; font-style:italic;">${_esc(text)}</div>`
+        : '';
+    };
+
+    if (roleType === 'DOCTOR') {
+      if (nd.subjectiveObjective) {
+        bodyHTML += `<div class="feed-text mb-2">${_esc(nd.subjectiveObjective)}</div>`;
       }
-      // Med orders
-      if (nd.medOrders && nd.medOrders.length > 0) {
-        bodyHTML += '<div class="med-action-chips">';
-        nd.medOrders.forEach(function(m) {
-          const aClass = { CONT:'mac-cont', STOP:'mac-stop', HOLD:'mac-hold', MODIFY:'mac-mod', NEW:'mac-cont' }[m.action] || 'mac-cont';
-          const aLabel = { CONT:'Cont', STOP:'Stop', HOLD:'Hold', MODIFY:'Modified', NEW:'New' }[m.action] || m.action;
-          bodyHTML += `<span class="mac ${aClass}">${_esc(aLabel)}: ${_esc(m.drugName)} ${_esc(m.dose||'')} ${_esc(m.freq||'')}</span>`;
-        });
-        bodyHTML += '</div>';
-      }
-      if (nd.adviceText) {
-        bodyHTML += `<div style="font-size:0.8rem; color:var(--text-faint); margin-top:8px; font-style:italic;">${_esc(nd.adviceText)}</div>`;
-      }
+      bodyHTML += geLine(nd.genExam);
+      bodyHTML += seLine(nd);
+      bodyHTML += medChips(nd.medOrders);
+      bodyHTML += labChips(nd.investigationOrders);
+      bodyHTML += adviceLine(nd.adviceText);
     }
 
     if (roleType === 'NURSE') {
@@ -1859,10 +2301,23 @@ function ipn_prompt(message, value, done, opts) {
     }
 
     if (roleType === 'CONSULTANT') {
+      // Same order as the progress note: who and why, then the examination,
+      // then the opinion, then what was ordered off the back of it.
       const specialty = nd.specialty ? ` <span style="color:var(--warning-fg);font-size:0.75rem;">[${_esc(nd.specialty)}]</span>` : '';
       bodyHTML += `<div style="font-size:0.82rem; color:var(--warning-fg); font-weight:600; margin-bottom:4px;">${_esc(nd.consultantName||'')}${specialty}</div>`;
+      if (nd.reason) {
+        bodyHTML += `<div style="font-size:0.74rem; color:var(--text-faint); margin-bottom:4px;">Referred for: ${_esc(nd.reason)}</div>`;
+      }
+      if (nd.subjectiveObjective) {
+        bodyHTML += `<div class="feed-text mb-2">${_esc(nd.subjectiveObjective)}</div>`;
+      }
+      bodyHTML += geLine(nd.genExam);
+      bodyHTML += seLine(nd);
       if (nd.findings) bodyHTML += `<div class="feed-text mb-1">${_esc(nd.findings)}</div>`;
       if (nd.recommendations) bodyHTML += `<div style="font-size:0.8rem; color:var(--text-faint); font-style:italic;">${_esc(nd.recommendations)}</div>`;
+      bodyHTML += medChips(nd.medOrders);
+      bodyHTML += labChips(nd.investigationOrders);
+      bodyHTML += adviceLine(nd.adviceText);
     }
 
     if (roleType === 'PROCEDURE') {
@@ -1941,12 +2396,18 @@ function ipn_prompt(message, value, done, opts) {
     const ctx = IPNotesModule.context;
     if (!ctx.ipNumber) return;
 
-    const payload = {
+    // A quick note has no save button to lock, so the input is what gets
+    // locked — Enter pressed twice on the same text was its own duplicate.
+    if (IPNotesModule.saving.quick) return;
+    IPNotesModule.saving.quick = true;
+    input.disabled = true;
+
+    const payload = ipnStampPayload({
       ipNumber:  ctx.ipNumber,
       patientId: ctx.patientId,
       roleType:  'QUICK',
       noteData:  { text: text }
-    };
+    }, 'quick-note');
 
     // Optimistic UI update
     const noteObj = {
@@ -1959,11 +2420,29 @@ function ipn_prompt(message, value, done, opts) {
     injectTimelineItem(noteObj);
     input.value = '';
 
+    const unlock = function () {
+      IPNotesModule.saving.quick = false;
+      input.disabled = false;
+      input.focus();
+    };
+
     google.script.run
       .withSuccessHandler(function(resp) {
-        if (!resp.success) console.error('Quick note save failed:', resp.message);
+        unlock();
+        if (!resp || !resp.success) {
+          ipnToast('Quick note not saved: ' + ((resp && resp.message) || 'no response'), 'err');
+          input.value = text;                 // give the text back, do not lose it
+          loadIPTimeline(ctx.ipNumber);       // drop the optimistic entry
+          return;
+        }
+        ipnClearClientNoteId('quick-note');
       })
-      .withFailureHandler(function(e) { console.error('Quick note error:', e); })
+      .withFailureHandler(function(e) {
+        unlock();
+        ipnToast('Quick note not saved: ' + e.message, 'err');
+        input.value = text;
+        loadIPTimeline(ctx.ipNumber);
+      })
       .saveIPNote(payload, window.sessionToken);
   }
 
@@ -1996,7 +2475,9 @@ function ipn_prompt(message, value, done, opts) {
   // ── 7. DOCTOR NOTE MODAL ────────────────────────────────
   function openDoctorNoteModal() {
     IPNotesModule.selectedLabs = [];
-    ipnLoadLabCatalog(ipnRenderLabPicker);
+    ipnResetGenExam('dr');
+    ipnLoadLabCatalog(function () { ipnRenderLabPicker('dr'); });
+    ipnLoadAdviceTemplates();
     ipnRunSafetyCheck();
     // Populate active orders
     const cont = document.getElementById('dr-active-orders-container');
@@ -2193,8 +2674,35 @@ function ipn_prompt(message, value, done, opts) {
     cont.appendChild(row);
   }
 
-  function toggleIVFluidFields(routeSelect) {
-    const extra = document.getElementById('ip-iv-extra-fields');
+  /* The drug-order composer is shared between the progress note and the
+     consultant note. `scope` selects which set of controls it is driving:
+     'dr'   -> ip-new-drug-*   / ip-iv-*   / dr-active-orders-container
+     'cons' -> cons-new-drug-* / cons-iv-* / cons-new-orders-container
+     A consultant opinion orders drugs and investigations exactly as a ward
+     round does, so it uses the same code rather than a second copy of it. */
+  const IPN_ORDER_SCOPES = {
+    dr: {
+      name: 'ip-new-drug-name', dose: 'ip-new-drug-dose', freq: 'ip-new-drug-freq',
+      route: 'ip-new-drug-route', instructions: 'ip-new-drug-instructions',
+      extra: 'ip-iv-extra-fields', fluid: 'ip-iv-fluid-type', pints: 'ip-iv-pints',
+      rate: 'ip-iv-rate', autocomplete: 'ip-drug-autocomplete',
+      container: 'dr-active-orders-container', store: 'newDrugOrders'
+    },
+    cons: {
+      name: 'cons-new-drug-name', dose: 'cons-new-drug-dose', freq: 'cons-new-drug-freq',
+      route: 'cons-new-drug-route', instructions: 'cons-new-drug-instructions',
+      extra: 'cons-iv-extra-fields', fluid: 'cons-iv-fluid-type', pints: 'cons-iv-pints',
+      rate: 'cons-iv-rate', autocomplete: 'cons-drug-autocomplete',
+      container: 'cons-new-orders-container', store: 'consNewDrugOrders'
+    }
+  };
+
+  function ipnScope(scope) { return IPN_ORDER_SCOPES[scope] || IPN_ORDER_SCOPES.dr; }
+  function ipnEl(scope, key) { return document.getElementById(ipnScope(scope)[key]); }
+
+  function toggleIVFluidFields(routeSelect, scope) {
+    const extra = ipnEl(scope, 'extra');
+    if (!extra) return;
     if (routeSelect.value === 'IV Fluid') {
       extra.classList.remove('d-none');
       extra.style.display = 'flex';
@@ -2204,40 +2712,49 @@ function ipn_prompt(message, value, done, opts) {
     }
   }
 
-  function addNewDrugOrder() {
-    const route = document.getElementById('ip-new-drug-route').value;
+  function addNewDrugOrder(scope) {
+    scope = scope || 'dr';
+    const cfg = ipnScope(scope);
+    const route = ipnEl(scope, 'route').value;
     let drugName, dose, instructions;
 
     if (route === 'IV Fluid') {
-      const fluidType = document.getElementById('ip-iv-fluid-type').value;
-      const pints     = document.getElementById('ip-iv-pints').value;
-      const rate      = document.getElementById('ip-iv-rate').value.trim();
+      const fluidType = ipnEl(scope, 'fluid').value;
+      const pints     = ipnEl(scope, 'pints').value;
+      const rate      = ipnEl(scope, 'rate').value.trim();
       if (!fluidType) { ipnToast('Select an IV fluid type.', 'warn'); return; }
+      if (!rate) { ipnToast('Enter the infusion rate in ml/hr.', 'warn'); return; }
       drugName     = fluidType + ' — ' + pints;
       dose         = pints;
-      instructions = rate ? rate : document.getElementById('ip-new-drug-instructions').value.trim();
+      // The rate IS the order for a fluid. Keep it first in the instruction
+      // so the nursing queue and the printed chart lead with it.
+      instructions = ipnNormaliseRate(rate);
+      const extraNote = ipnEl(scope, 'instructions').value.trim();
+      if (extraNote) instructions += ' — ' + extraNote;
     } else {
-      drugName = document.getElementById('ip-new-drug-name').value.trim();
+      drugName = ipnEl(scope, 'name').value.trim();
       if (!drugName) { ipnToast('Enter a drug name.', 'warn'); return; }
-      dose         = document.getElementById('ip-new-drug-dose').value.trim();
-      instructions = document.getElementById('ip-new-drug-instructions').value.trim();
+      dose         = ipnEl(scope, 'dose').value.trim();
+      instructions = ipnEl(scope, 'instructions').value.trim();
     }
 
     const order = {
       drugName:     drugName,
       dose:         dose,
-      freq:         document.getElementById('ip-new-drug-freq').value,
+      freq:         ipnEl(scope, 'freq').value,
       route:        route,
       instructions: instructions,
       action:       'NEW'
     };
-    IPNotesModule.newDrugOrders.push(order);
+    const store = IPNotesModule[cfg.store];
+    store.push(order);
+    const idx = store.length - 1;
 
-    const cont = document.getElementById('dr-active-orders-container');
+    const cont = document.getElementById(cfg.container);
     const newRow = document.createElement('div');
     newRow.className = 'med-order-row';
     newRow.style.borderLeft = '3px solid var(--success-fg)';
-    newRow.dataset.newIdx = IPNotesModule.newDrugOrders.length - 1;
+    newRow.dataset.newIdx = idx;
     const routeTag = (route === 'IV Fluid' || route === 'IV')
       ? '<span style="font-size:0.72rem; color:var(--teal-fg); margin-left:6px;">IV</span>'
       : '';
@@ -2246,24 +2763,33 @@ function ipn_prompt(message, value, done, opts) {
         <div class="drug-label">${_esc(drugName)}${routeTag} <span style="font-size:0.72rem; color:var(--success-fg); margin-left:4px;">NEW</span></div>
         <div class="drug-freq">${_esc(dose)} &bull; ${_esc(order.freq)} &bull; ${_esc(route)}${instructions ? ' — ' + _esc(instructions) : ''}</div>
       </div>
-      <button class="compose-btn" onclick="removeNewDrugOrder(this, ${IPNotesModule.newDrugOrders.length-1})" style="width:28px;height:28px;font-size:0.7rem;">✕</button>
+      <button class="compose-btn" onclick="removeNewDrugOrder(this, ${idx}, '${scope}')" style="width:28px;height:28px;font-size:0.7rem;">✕</button>
     </div>`;
     cont.appendChild(newRow);
 
     // Clear input fields
-    document.getElementById('ip-new-drug-name').value = '';
-    document.getElementById('ip-new-drug-dose').value = '';
-    document.getElementById('ip-new-drug-instructions').value = '';
-    document.getElementById('ip-new-drug-route').value = 'Oral';
-    const extra = document.getElementById('ip-iv-extra-fields');
+    ipnEl(scope, 'name').value = '';
+    ipnEl(scope, 'dose').value = '';
+    ipnEl(scope, 'instructions').value = '';
+    ipnEl(scope, 'route').value = 'Oral';
+    const extra = ipnEl(scope, 'extra');
     extra.classList.add('d-none'); extra.style.display = '';
-    document.getElementById('ip-iv-fluid-type').value = '';
-    document.getElementById('ip-iv-rate').value = '';
-    document.getElementById('ip-drug-autocomplete').classList.add('d-none');
+    ipnEl(scope, 'fluid').value = '';
+    ipnEl(scope, 'rate').value = '';
+    ipnEl(scope, 'autocomplete').classList.add('d-none');
   }
 
-  function handleIPDrugSearch(input) {
-    const list = document.getElementById('ip-drug-autocomplete');
+  /** "75" -> "75 ml/hr"; "75ml/hr" and "75 ml/hr" are left as typed. */
+  function ipnNormaliseRate(rate) {
+    const r = String(rate || '').trim();
+    if (!r) return '';
+    return /^[\d.]+$/.test(r) ? (r + ' ml/hr') : r;
+  }
+
+  function handleIPDrugSearch(input, scope) {
+    scope = scope || 'dr';
+    const cfg = ipnScope(scope);
+    const list = document.getElementById(cfg.autocomplete);
     const val = input.value.trim().toLowerCase();
     list.innerHTML = '';
     if (val.length < 2) { list.classList.add('d-none'); return; }
@@ -2278,7 +2804,7 @@ function ipn_prompt(message, value, done, opts) {
       const div = document.createElement('div');
       div.innerHTML = `<strong>${_esc(drug.brand)}</strong> <span style="color:var(--text-faint);">(${_esc(drug.generic)}) — ${_esc(drug.type)}</span>`;
       div.onclick = function() {
-        document.getElementById('ip-new-drug-name').value = drug.brand + ' ' + (drug.unit||'');
+        document.getElementById(cfg.name).value = drug.brand + ' ' + (drug.unit||'');
         list.classList.add('d-none');
       };
       list.appendChild(div);
@@ -2287,15 +2813,46 @@ function ipn_prompt(message, value, done, opts) {
   }
 
   document.addEventListener('click', function(e) {
-    const list = document.getElementById('ip-drug-autocomplete');
-    if (list && !list.contains(e.target) && e.target.id !== 'ip-new-drug-name') {
-      list.classList.add('d-none');
-    }
+    Object.keys(IPN_ORDER_SCOPES).forEach(function (k) {
+      const cfg = IPN_ORDER_SCOPES[k];
+      const list = document.getElementById(cfg.autocomplete);
+      if (list && !list.contains(e.target) && e.target.id !== cfg.name) {
+        list.classList.add('d-none');
+      }
+    });
   });
 
-  function removeNewDrugOrder(btn, idx) {
-    IPNotesModule.newDrugOrders.splice(idx, 1);
+  function removeNewDrugOrder(btn, idx, scope) {
+    const cfg = ipnScope(scope || 'dr');
+    IPNotesModule[cfg.store].splice(idx, 1);
     btn.closest('.med-order-row').remove();
+    // The remaining rows' indices have shifted; redraw rather than leave
+    // buttons that delete the wrong order.
+    ipnRedrawNewOrders(scope || 'dr');
+  }
+
+  function ipnRedrawNewOrders(scope) {
+    const cfg = ipnScope(scope);
+    const cont = document.getElementById(cfg.container);
+    if (!cont) return;
+    cont.querySelectorAll('.med-order-row[data-new-idx]').forEach(function (r) { r.remove(); });
+    IPNotesModule[cfg.store].forEach(function (o, i) {
+      const row = document.createElement('div');
+      row.className = 'med-order-row';
+      row.style.borderLeft = '3px solid var(--success-fg)';
+      row.dataset.newIdx = i;
+      const routeTag = (o.route === 'IV Fluid' || o.route === 'IV')
+        ? '<span style="font-size:0.72rem; color:var(--teal-fg); margin-left:6px;">IV</span>'
+        : '';
+      row.innerHTML = `<div class="d-flex justify-content-between align-items-center">
+        <div>
+          <div class="drug-label">${_esc(o.drugName)}${routeTag} <span style="font-size:0.72rem; color:var(--success-fg); margin-left:4px;">NEW</span></div>
+          <div class="drug-freq">${_esc(o.dose)} &bull; ${_esc(o.freq)} &bull; ${_esc(o.route)}${o.instructions ? ' — ' + _esc(o.instructions) : ''}</div>
+        </div>
+        <button class="compose-btn" onclick="removeNewDrugOrder(this, ${i}, '${scope}')" style="width:28px;height:28px;font-size:0.7rem;">✕</button>
+      </div>`;
+      cont.appendChild(row);
+    });
   }
 
   function saveDoctorNote() {
@@ -2306,9 +2863,10 @@ function ipn_prompt(message, value, done, opts) {
     // only holds a label for the optimistic timeline entry.
     const noteAuthor = _signingAs();
 
-    const btn = document.getElementById('btn-save-dr-note');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i> Saving...';
+    if (ipnNeedsActingDoctor('DOCTOR')) {
+      ipnToast('Choose the doctor this note is recorded for (top of the form).', 'warn');
+      return;
+    }
 
     // Collect med actions for existing active meds
     const medOrders = [];
@@ -2355,6 +2913,7 @@ function ipn_prompt(message, value, done, opts) {
 
     const noteData = {
       subjectiveObjective: document.getElementById('dr-soap-text').value.trim(),
+      genExam:             ipnCollectGenExam('dr'),
       // Canonical section name. This used to be posted as "systemExam", which
       // the server's section RBAC did not recognise and therefore stripped —
       // the exam findings never reached the record or the printout.
@@ -2369,48 +2928,81 @@ function ipn_prompt(message, value, done, opts) {
       adviceText:         document.getElementById('dr-advice-text').value.trim()
     };
 
-    const payload = {
+    const btnId = 'btn-save-dr-note';
+    const payload = ipnStampPayload({
       ipNumber:  ctx.ipNumber,
       patientId: ctx.patientId,
       roleType:  'DOCTOR',
       noteData:  noteData
-    };
+    }, btnId);
 
-    google.script.run
-      .withSuccessHandler(function(resp) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-signature me-2"></i> Sign & Push to Timeline';
-        if (!resp.success) {
-          ipnToast('Error saving note: ' + resp.message, 'err');
-          return;
-        }
-        // The server strips any section this role may not author. Say so —
-        // silently dropping a med order would be far worse than an alert.
-        if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
-        _getModal_('modalIPDoctorNote').hide();
+    ipnGuardedSave(btnId, 'Saving...', function (done) {
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          done();
+          if (!resp || !resp.success) {
+            ipnToast('Error saving note: ' + ((resp && resp.message) || 'no response'), 'err');
+            return;
+          }
+          ipnClearClientNoteId(btnId);
+          if (resp.duplicate) {
+            ipnToast(resp.message, 'warn');
+            _getModal_('modalIPDoctorNote').hide();
+            loadIPTimeline(ctx.ipNumber);
+            return;
+          }
+          // The server strips any section this role may not author. Say so —
+          // silently dropping a med order would be far worse than an alert.
+          if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
+          else ipnToast('Progress note signed and added to the timeline.', 'ok');
+          _getModal_('modalIPDoctorNote').hide();
 
-        // Inject into timeline optimistically
-        injectTimelineItem({
-          author:    resp.author || noteAuthor,
-          signature: resp.signature || '',
-          timestamp: new Date().toLocaleString(),
-          roleType:  'DOCTOR',
-          shift:     _getShift(),
-          noteData:  noteData
-        });
+          // Inject into timeline optimistically
+          injectTimelineItem({
+            author:    resp.author || noteAuthor,
+            signature: resp.signature || '',
+            timestamp: new Date().toLocaleString(),
+            roleType:  'DOCTOR',
+            shift:     _getShift(),
+            noteData:  noteData
+          });
 
-        // Refresh context (active meds may have changed)
-        loadClinicalContext(ctx.ipNumber);
-        IPNotesModule.newDrugOrders = [];
-        IPNotesModule.selectedLabs = [];
-        ipnRunSafetyCheck();
-      })
-      .withFailureHandler(function(e) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-signature me-2"></i> Sign & Push to Timeline';
-        ipnToast('Failed to save note: ' + e.message, 'err');
-      })
-      .saveIPNote(payload, window.sessionToken);
+          // Refresh context (active meds may have changed)
+          loadClinicalContext(ctx.ipNumber);
+          IPNotesModule.newDrugOrders = [];
+          IPNotesModule.selectedLabs = [];
+          ipnRunSafetyCheck();
+        })
+        .withFailureHandler(function(e) {
+          done();
+          // The key is deliberately KEPT: if this note did reach the server,
+          // the retry is collapsed instead of duplicated.
+          ipnToast('Failed to save note: ' + e.message + ' — press Sign again to retry.', 'err');
+        })
+        .saveIPNote(payload, window.sessionToken);
+    });
+  }
+
+  /**
+   * General examination, as a horizontal strip of switches. Recorded as
+   * { pallor:'Yes'|'No', ... } so it prints as a row and reads at a glance —
+   * the same five signs the OP consult records, in the same order.
+   */
+  function ipnCollectGenExam(prefix) {
+    const out = {};
+    document.querySelectorAll('.ipn-ge-chk[data-ge-scope="' + prefix + '"]').forEach(function (c) {
+      out[c.value] = c.checked ? 'Yes' : 'No';
+    });
+    const note = document.getElementById(prefix + '-ge-note');
+    if (note && note.value.trim()) out.notes = note.value.trim();
+    return out;
+  }
+
+  function ipnResetGenExam(prefix) {
+    document.querySelectorAll('.ipn-ge-chk[data-ge-scope="' + prefix + '"]')
+      .forEach(function (c) { c.checked = false; });
+    const note = document.getElementById(prefix + '-ge-note');
+    if (note) note.value = '';
   }
 
   // ── 8. NURSING NOTE MODAL ───────────────────────────────
@@ -2482,63 +3074,168 @@ function ipn_prompt(message, value, done, opts) {
       markedMeds:    markedMeds
     };
 
-    const payload = {
+    const btnId = 'btn-save-nr-note';
+    const payload = ipnStampPayload({
       ipNumber:  ctx.ipNumber,
       patientId: ctx.patientId,
       roleType:  'NURSE',
       noteData:  noteData
-    };
+    }, btnId);
 
-    google.script.run
-      .withSuccessHandler(function(resp) {
-        if (!resp.success) { ipnToast('Error: ' + resp.message, 'err'); return; }
-        if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
-        _getModal_('modalIPNurseNote').hide();
-        injectTimelineItem({
-          author:    resp.author || nurseAuthor,
-          timestamp: new Date().toLocaleString(),
-          roleType:  'NURSE',
-          shift:     _getShift(),
-          noteData:  noteData
-        });
-        // Refresh vitals in left panel
-        if (noteData.vitals.bp) {
-          document.getElementById('vc-bp').innerHTML = noteData.vitals.bp;
-          document.getElementById('vc-pulse').innerText = noteData.vitals.pulse || '--';
-          document.getElementById('vc-spo2').innerText = (noteData.vitals.spo2 || '--') + '%';
-          document.getElementById('vc-temp').innerText = noteData.vitals.temp || '--';
-          ['vc-bp-time','vc-pulse-time','vc-spo2-time','vc-temp-time'].forEach(function(id) {
-            document.getElementById(id).innerText = 'Just now';
+    ipnGuardedSave(btnId, 'Saving...', function (done) {
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          done();
+          if (!resp || !resp.success) {
+            ipnToast('Error: ' + ((resp && resp.message) || 'no response'), 'err');
+            return;
+          }
+          ipnClearClientNoteId(btnId);
+          if (resp.duplicate) {
+            ipnToast(resp.message, 'warn');
+            _getModal_('modalIPNurseNote').hide();
+            loadIPTimeline(ctx.ipNumber);
+            return;
+          }
+          if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
+          else ipnToast('Nursing note saved.', 'ok');
+          _getModal_('modalIPNurseNote').hide();
+          injectTimelineItem({
+            author:    resp.author || nurseAuthor,
+            timestamp: new Date().toLocaleString(),
+            roleType:  'NURSE',
+            shift:     _getShift(),
+            noteData:  noteData
           });
-        }
-      })
-      .withFailureHandler(function(e) { ipnToast('Failed: ' + e.message, 'err'); })
-      .saveIPNote(payload, window.sessionToken);
+          // Refresh vitals in left panel
+          if (noteData.vitals.bp) {
+            document.getElementById('vc-bp').innerHTML = noteData.vitals.bp;
+            document.getElementById('vc-pulse').innerText = noteData.vitals.pulse || '--';
+            document.getElementById('vc-spo2').innerText = (noteData.vitals.spo2 || '--') + '%';
+            document.getElementById('vc-temp').innerText = noteData.vitals.temp || '--';
+            ['vc-bp-time','vc-pulse-time','vc-spo2-time','vc-temp-time'].forEach(function(id) {
+              document.getElementById(id).innerText = 'Just now';
+            });
+          }
+        })
+        .withFailureHandler(function(e) {
+          done();
+          ipnToast('Failed: ' + e.message + ' — press Save again to retry.', 'err');
+        })
+        .saveIPNote(payload, window.sessionToken);
+    });
   }
 
   // ── 9. CONSULTANT NOTE MODAL ─────────────────────────────
-  function openConsultantNoteModal() { _getModal_('modalIPConsultantNote').show(); }
+  function openConsultantNoteModal() {
+    // A consultant opinion now composes like a progress note, so it needs the
+    // same three things loaded before the form is usable.
+    IPNotesModule.consSelectedLabs = [];
+    IPNotesModule.consNewDrugOrders = [];
+    const cont = document.getElementById('cons-new-orders-container');
+    if (cont) cont.innerHTML = '';
+    const labSum = document.getElementById('cons-lab-selected');
+    if (labSum) labSum.textContent = 'No investigations selected.';
+
+    ipnResetGenExam('cons');
+    ['cons-reason', 'cons-soap-text', 'cons-findings',
+     'cons-recommendations', 'cons-advice-text', 'cons-lab-search'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    ['cons-se-cvs', 'cons-se-rs', 'cons-se-pa', 'cons-se-cns',
+     'cons-se-cvs-detail', 'cons-se-rs-detail', 'cons-se-pa-detail',
+     'cons-se-cns-detail'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // Pre-fill the consultant's own name when a doctor is composing, and the
+    // chosen doctor's name when an administrator is recording for one.
+    const perm = IPNotesModule.permissions || {};
+    const nameEl = document.getElementById('cons-name');
+    if (nameEl && !nameEl.value) {
+      if (perm.actsOnBehalf && IPNotesModule.actingDoctorId) {
+        const chosen = (perm.doctors || []).filter(function (d) {
+          return d.doctorId === IPNotesModule.actingDoctorId;
+        })[0];
+        if (chosen) nameEl.value = 'Dr. ' + String(chosen.name).replace(/^Dr\.?\s+/i, '');
+      } else if (perm.role === 'doctor' && perm.displayName) {
+        nameEl.value = 'Dr. ' + String(perm.displayName).replace(/^Dr\.?\s+/i, '');
+      }
+    }
+
+    ipnLoadLabCatalog(function () { ipnRenderLabPicker('cons'); });
+    ipnLoadAdviceTemplates();
+    _getModal_('modalIPConsultantNote').show();
+  }
 
   function saveConsultantNote() {
     const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber) return;
+
+    if (ipnNeedsActingDoctor('CONSULTANT')) {
+      ipnToast('Choose the doctor this opinion is recorded for.', 'warn');
+      return;
+    }
+
+    const investigationOrders = (IPNotesModule.consSelectedLabs || []).map(function (c) {
+      return { testId: c.testId, testName: c.testName, priority: 'ROUTINE' };
+    });
+
     const noteData = {
       consultantName:  document.getElementById('cons-name').value.trim(),
       specialty:       document.getElementById('cons-specialty').value,
+      reason:          document.getElementById('cons-reason').value.trim(),
+      subjectiveObjective: document.getElementById('cons-soap-text').value.trim(),
+      genExam:         ipnCollectGenExam('cons'),
+      sysExam: {
+        cvs: (document.getElementById('cons-se-cvs').value + ' ' + document.getElementById('cons-se-cvs-detail').value).trim(),
+        rs:  (document.getElementById('cons-se-rs').value  + ' ' + document.getElementById('cons-se-rs-detail').value).trim(),
+        pa:  (document.getElementById('cons-se-pa').value  + ' ' + document.getElementById('cons-se-pa-detail').value).trim(),
+        cns: (document.getElementById('cons-se-cns').value + ' ' + document.getElementById('cons-se-cns-detail').value).trim()
+      },
       findings:        document.getElementById('cons-findings').value.trim(),
-      recommendations: document.getElementById('cons-recommendations').value.trim()
+      recommendations: document.getElementById('cons-recommendations').value.trim(),
+      medOrders:       (IPNotesModule.consNewDrugOrders || []).slice(),
+      investigationOrders: investigationOrders,
+      adviceText:      document.getElementById('cons-advice-text').value.trim()
     };
     if (!noteData.consultantName) { ipnToast('Enter the consultant name.', 'warn'); return; }
+    if (!noteData.findings && !noteData.recommendations) {
+      ipnToast('Record the findings or the recommendations before signing.', 'warn');
+      return;
+    }
 
-    const payload = { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'CONSULTANT', noteData };
-    google.script.run
-      .withSuccessHandler(function(resp) {
-        if (!resp.success) { ipnToast(resp.message, 'err'); return; }
-        if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
-        _getModal_('modalIPConsultantNote').hide();
-        injectTimelineItem({ author: resp.author || _signingAs(), timestamp: new Date().toLocaleString(), roleType: 'CONSULTANT', shift: _getShift(), noteData });
-      })
-      .withFailureHandler(function(e) { ipnToast(e.message, 'err'); })
-      .saveIPNote(payload, window.sessionToken);
+    const btnId = 'btn-save-cons-note';
+    const payload = ipnStampPayload(
+      { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'CONSULTANT', noteData }, btnId);
+
+    ipnGuardedSave(btnId, 'Saving...', function (done) {
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          done();
+          if (!resp || !resp.success) { ipnToast((resp && resp.message) || 'no response', 'err'); return; }
+          ipnClearClientNoteId(btnId);
+          _getModal_('modalIPConsultantNote').hide();
+          if (resp.duplicate) { ipnToast(resp.message, 'warn'); loadIPTimeline(ctx.ipNumber); return; }
+          if (resp.stripped && resp.stripped.length) ipnToast(resp.message, 'warn');
+          else ipnToast('Consultant opinion signed and added to the timeline.', 'ok');
+          injectTimelineItem({ author: resp.author || _signingAs(), signature: resp.signature || '',
+                               timestamp: new Date().toLocaleString(), roleType: 'CONSULTANT',
+                               shift: _getShift(), noteData });
+          // Its drug and lab orders have reached the pharmacy queue and the
+          // lab, so the left-hand panel is now out of date.
+          loadClinicalContext(ctx.ipNumber);
+          IPNotesModule.consNewDrugOrders = [];
+          IPNotesModule.consSelectedLabs = [];
+        })
+        .withFailureHandler(function(e) {
+          done();
+          ipnToast(e.message + ' — press Save again to retry.', 'err');
+        })
+        .saveIPNote(payload, window.sessionToken);
+    });
   }
 
   // ── 10. PROCEDURE NOTE MODAL ─────────────────────────────
@@ -2554,15 +3251,32 @@ function ipn_prompt(message, value, done, opts) {
     };
     if (!noteData.procedureName) { ipnToast('Enter the procedure name.', 'warn'); return; }
 
-    const payload = { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'PROCEDURE', noteData };
-    google.script.run
-      .withSuccessHandler(function(resp) {
-        if (!resp.success) { ipnToast(resp.message, 'err'); return; }
-        _getModal_('modalIPProcedureNote').hide();
-        injectTimelineItem({ author: resp.author || _signingAs(), timestamp: new Date().toLocaleString(), roleType: 'PROCEDURE', shift: _getShift(), noteData });
-      })
-      .withFailureHandler(function(e) { ipnToast(e.message, 'err'); })
-      .saveIPNote(payload, window.sessionToken);
+    if (ipnNeedsActingDoctor('PROCEDURE')) {
+      ipnToast('Choose the doctor this procedure note is recorded for.', 'warn');
+      return;
+    }
+
+    const btnId = 'btn-save-proc-note';
+    const payload = ipnStampPayload(
+      { ipNumber: ctx.ipNumber, patientId: ctx.patientId, roleType: 'PROCEDURE', noteData }, btnId);
+
+    ipnGuardedSave(btnId, 'Saving...', function (done) {
+      google.script.run
+        .withSuccessHandler(function(resp) {
+          done();
+          if (!resp || !resp.success) { ipnToast((resp && resp.message) || 'no response', 'err'); return; }
+          ipnClearClientNoteId(btnId);
+          _getModal_('modalIPProcedureNote').hide();
+          if (resp.duplicate) { ipnToast(resp.message, 'warn'); loadIPTimeline(ctx.ipNumber); return; }
+          ipnToast('Procedure note saved.', 'ok');
+          injectTimelineItem({ author: resp.author || _signingAs(), timestamp: new Date().toLocaleString(), roleType: 'PROCEDURE', shift: _getShift(), noteData });
+        })
+        .withFailureHandler(function(e) {
+          done();
+          ipnToast(e.message + ' — press Save again to retry.', 'err');
+        })
+        .saveIPNote(payload, window.sessionToken);
+    });
   }
 
   // ── 11. HANDOVER MODAL ───────────────────────────────────
@@ -2840,6 +3554,10 @@ function ipn_prompt(message, value, done, opts) {
     const btn = document.getElementById('dx-save-btn');
     const text = document.getElementById('dx-editor').value.trim();
     if (!text) { _showErr_('dx-error', 'Enter at least one diagnosis.'); return; }
+    if (ipnNeedsActingDoctor('DOCTOR')) {
+      _showErr_('dx-error', 'Choose the doctor this revision is recorded for first.');
+      return;
+    }
 
     _hideErr_('dx-error');
     btn.disabled = true;
@@ -2860,7 +3578,8 @@ function ipn_prompt(message, value, done, opts) {
       .updateIPDiagnosis({
         ipNumber:  ctx.ipNumber,
         diagnosis: text,
-        reason:    document.getElementById('dx-reason').value.trim()
+        reason:    document.getElementById('dx-reason').value.trim(),
+        onBehalfOfDoctorId: IPNotesModule.actingDoctorId || ''
       }, window.sessionToken);
   }
 
@@ -2870,7 +3589,8 @@ function ipn_prompt(message, value, done, opts) {
     if (!btn) return;
     const perm = IPNotesModule.permissions || {};
     const ct   = IPNotesModule.careTeam;
-    const may  = perm.role === 'doctor' && !IPNotesModule.readOnly &&
+    const may  = (perm.role === 'doctor' || perm.actsOnBehalf) &&
+                 !IPNotesModule.readOnly &&
                  (!ct || ct.canWrite !== false);
     btn.classList.toggle('d-none', !may);
   }
@@ -3074,11 +3794,26 @@ function ipn_prompt(message, value, done, opts) {
       .getIPNotesLabCatalog(window.sessionToken);
   }
 
-  function ipnRenderLabPicker() {
-    const host = document.getElementById('ipn-lab-catalog');
+  /* The lab picker, like the drug composer, serves both the progress note and
+     the consultant note. The two keep SEPARATE selections: a consultant's
+     orders are theirs, and must not silently ride along on the next ward
+     round note. */
+  const IPN_LAB_SCOPES = {
+    dr:   { host: 'ipn-lab-catalog',  search: 'ipn-lab-search',
+            summary: 'ipn-lab-selected',  store: 'selectedLabs' },
+    cons: { host: 'cons-lab-catalog', search: 'cons-lab-search',
+            summary: 'cons-lab-selected', store: 'consSelectedLabs' }
+  };
+  function ipnLabScope(scope) { return IPN_LAB_SCOPES[scope] || IPN_LAB_SCOPES.dr; }
+
+  function ipnRenderLabPicker(scope) {
+    scope = scope || 'dr';
+    const cfg = ipnLabScope(scope);
+    const host = document.getElementById(cfg.host);
     if (!host) return;
     const cat = IPNotesModule.labCatalog || { panels: [], tests: [], packages: [] };
-    const q = (document.getElementById('ipn-lab-search')?.value || '').toLowerCase().trim();
+    const searchEl = document.getElementById(cfg.search);
+    const q = ((searchEl && searchEl.value) || '').toLowerCase().trim();
 
     const all = [].concat(
       (cat.panels || []).map(function (t) { return { t: t, kind: 'Panel' }; }),
@@ -3095,37 +3830,106 @@ function ipn_prompt(message, value, done, opts) {
       return;
     }
 
-    const chosen = IPNotesModule.selectedLabs || [];
+    const chosen = IPNotesModule[cfg.store] || [];
     host.innerHTML = all.slice(0, 120).map(function (x) {
       const on = chosen.some(function (c) { return c.testId === x.t.testId; });
       return '<label class="d-flex align-items-center gap-2 py-1" style="font-size:.78rem; cursor:pointer;">' +
              '<input type="checkbox" ' + (on ? 'checked' : '') +
                ' data-test-id="' + _esc(x.t.testId) + '"' +
                ' data-test-name="' + _esc(x.t.testName) + '"' +
-               ' onchange="ipnToggleLab(this)">' +
+               ' onchange="ipnToggleLab(this, \'' + scope + '\')">' +
              '<span>' + _esc(x.t.testName) +
              ' <span style="color:var(--text-faint); font-size:.68rem;">' + x.kind + '</span></span></label>';
     }).join('');
   }
 
-  function ipnToggleLab(chk) {
-    IPNotesModule.selectedLabs = IPNotesModule.selectedLabs || [];
+  function ipnToggleLab(chk, scope) {
+    const cfg = ipnLabScope(scope || 'dr');
+    IPNotesModule[cfg.store] = IPNotesModule[cfg.store] || [];
     const id = chk.dataset.testId, name = chk.dataset.testName;
     if (chk.checked) {
-      if (!IPNotesModule.selectedLabs.some(function (c) { return c.testId === id; })) {
-        IPNotesModule.selectedLabs.push({ testId: id, testName: name });
+      if (!IPNotesModule[cfg.store].some(function (c) { return c.testId === id; })) {
+        IPNotesModule[cfg.store].push({ testId: id, testName: name });
       }
     } else {
-      IPNotesModule.selectedLabs = IPNotesModule.selectedLabs.filter(function (c) {
+      IPNotesModule[cfg.store] = IPNotesModule[cfg.store].filter(function (c) {
         return c.testId !== id;
       });
     }
-    const sum = document.getElementById('ipn-lab-selected');
+    const sum = document.getElementById(cfg.summary);
     if (sum) {
-      sum.textContent = IPNotesModule.selectedLabs.length
-        ? 'Ordering: ' + IPNotesModule.selectedLabs.map(function (c) { return c.testName; }).join(', ')
+      sum.textContent = IPNotesModule[cfg.store].length
+        ? 'Ordering: ' + IPNotesModule[cfg.store].map(function (c) { return c.testName; }).join(', ')
         : 'No investigations selected.';
     }
+  }
+
+  // ── 13e. ADVICE TEMPLATES ───────────────────────────────
+  //
+  // The OP consult has had a standard-advice library since Phase 3 (seeded
+  // phrases plus phrases the clinic has actually used, scoped to the doctor).
+  // IP advice was a bare textarea, so the same instructions were retyped on
+  // every ward round and came out worded differently each time. Both IP forms
+  // now read from the same library, through the same backend call.
+
+  function ipnLoadAdviceTemplates(done) {
+    if (IPNotesModule.adviceTemplates) {
+      ipnRenderAdvicePickers();
+      if (done) done();
+      return;
+    }
+    const runner = google.script.run
+      .withSuccessHandler(function (res) {
+        const phrases = (res && res.phrases && res.phrases.ADVICE) || [];
+        IPNotesModule.adviceTemplates = phrases;
+        ipnRenderAdvicePickers();
+        if (done) done();
+      })
+      .withFailureHandler(function () {
+        IPNotesModule.adviceTemplates = [];      // a missing library is not an error
+        ipnRenderAdvicePickers();
+        if (done) done();
+      });
+
+    // getComposerContext lives in OP_Rx_Engine.gs. If that file is not in the
+    // deployment the picker simply stays empty rather than throwing.
+    if (typeof runner.getComposerContext !== 'function') {
+      IPNotesModule.adviceTemplates = [];
+      ipnRenderAdvicePickers();
+      if (done) done();
+      return;
+    }
+    const perm = IPNotesModule.permissions || {};
+    runner.getComposerContext(
+      IPNotesModule.actingDoctorId || perm.doctorId || '', window.sessionToken);
+  }
+
+  function ipnRenderAdvicePickers() {
+    const list = IPNotesModule.adviceTemplates || [];
+    const html = list.length
+      ? '<option value="">Insert standard advice...</option>' +
+        list.slice(0, 60).map(function (a) {
+          return '<option value="' + _esc(a.text) + '">' + _esc(a.text) + '</option>';
+        }).join('')
+      : '<option value="">No advice templates yet</option>';
+
+    ['dr-advice-picker', 'cons-advice-picker'].forEach(function (id) {
+      const sel = document.getElementById(id);
+      if (sel) { sel.innerHTML = html; sel.value = ''; }
+    });
+  }
+
+  /** Appends the chosen phrase rather than replacing what is already typed. */
+  function ipnApplyAdviceTemplate(sel, targetId) {
+    const text = sel.value;
+    sel.value = '';
+    if (!text) return;
+    const box = document.getElementById(targetId);
+    if (!box) return;
+    const cur = box.value.trim();
+    if (cur.toLowerCase().indexOf(text.toLowerCase()) !== -1) return;   // already there
+    box.value = cur ? (cur.replace(/[.\s]+$/, '') + '. ' + text) : text;
+    box.focus();
   }
 
   // ── 14. HELPERS ─────────────────────────────────────────

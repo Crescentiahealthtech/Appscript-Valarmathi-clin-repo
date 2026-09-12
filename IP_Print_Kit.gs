@@ -207,6 +207,20 @@ function ipp_when_(d, pattern) {
 }
 
 /**
+ * The patient-ID barcode for a letterhead, or "" when it cannot be drawn.
+ *
+ * Barcode_Print.gs is a separate file, and Apps Script leaves a function
+ * undefined rather than failing to load when a file was not copied across.
+ * A missing encoder must cost this document its barcode, never its printing.
+ */
+function ipp_barcodeCell_(patientId) {
+  try {
+    if (typeof bcp_patientBarcodeBlock_ !== 'function') return "";
+    return bcp_patientBarcodeBlock_(patientId, { align: 'right', height: 8 });
+  } catch (e) { return ""; }
+}
+
+/**
  * Wraps composed sections into a complete printable document.
  *
  * @param {Object} o
@@ -240,12 +254,33 @@ function ipp_doc_(o) {
         (o.footNote ? ' &middot; ' + ipp_esc_(o.footNote) : '') + '</span>' +
     '</div>';
 
-  var letterhead =
-    '<div class="lh">' +
+  // The patient-ID barcode rides on the letterhead of every IP document, so
+  // any sheet the patient or the ward is holding can be scanned back to the
+  // record. It sits in its own fixed-width table cell rather than floating:
+  // floats are the one construct the PDF converter reflows unpredictably.
+  var barcode = ipp_barcodeCell_(p.pid);
+
+  var letterheadInner =
+    '<div class="lh"' + (barcode ? ' style="border-bottom:0;margin-bottom:0;padding-bottom:0;"' : '') + '>' +
       '<h1>' + ipp_esc_(IPP_CLINIC.name) + '</h1>' +
       '<p class="sub">' + ipp_esc_(IPP_CLINIC.tagline) + ' &nbsp;|&nbsp; Ph: ' + ipp_esc_(IPP_CLINIC.phone) + '</p>' +
       '<h2>' + ipp_esc_(o.docTitle || "Clinical Record") + '</h2>' +
     '</div>';
+
+  // A spacer cell mirrors the barcode cell so the clinic name stays centred on
+  // the page rather than drifting left by the width of the barcode.
+  // Spacing lives on the CELLS, not the table: under border-collapse a
+  // table's own padding is ignored, which would have pulled the rule up
+  // against the clinic name.
+  var letterhead = barcode
+    ? '<table style="width:100%;border-collapse:collapse;table-layout:fixed;' +
+        'border-bottom:2px solid #0369a1;margin-bottom:12px;">' +
+        '<tr>' +
+          '<td style="width:48mm;padding:0 0 8px 0;"></td>' +
+          '<td style="vertical-align:bottom;padding:0 0 8px 0;">' + letterheadInner + '</td>' +
+          '<td style="width:48mm;vertical-align:bottom;padding:0 0 8px 0;">' + barcode + '</td>' +
+        '</tr></table>'
+    : letterheadInner;
 
   var banner = (o.bannerHtml !== undefined) ? o.bannerHtml : ipp_patientBanner_(p);
 

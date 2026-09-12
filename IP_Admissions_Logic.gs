@@ -506,6 +506,29 @@ function saveNewAdmissionLedger(payload) {
       return { success: false, message: 'Bed ' + bed + ' is no longer available. Refresh and pick another.' };
     }
 
+    // The consultant is chosen by Doctor_ID now, so the admission can be tied
+    // to a real doctor profile. The display name is still written to the
+    // Consultant column — every existing reader, the ward filter and the
+    // discharge summary included, reads that column by name.
+    var consultantId   = ipa_str_(payload.consultantId);
+    var consultantName = ipa_str_(payload.consultant);
+    if (consultantId) {
+      var prof = null;
+      try {
+        prof = (typeof dc_getDoctorById_ === 'function') ? dc_getDoctorById_(consultantId) : null;
+      } catch (e) { prof = null; }
+      if (!prof) {
+        return { success: false,
+                 message: 'Consultant ' + consultantId + ' is not in the Doctors sheet. ' +
+                          'Refresh the form and pick again.' };
+      }
+      if (ipa_str_(prof.status).toUpperCase() !== 'ACTIVE') {
+        return { success: false, message: prof.name + ' is not an active doctor.' };
+      }
+      consultantName = ipa_str_(prof.name) || consultantName;
+    }
+    if (!consultantName) return { success: false, message: 'An admitting consultant is required.' };
+
     var sheet = ipa_sheet_();
     var newIpNumber = ipa_nextIpNumber_(sheet);
 
@@ -523,22 +546,64 @@ function saveNewAdmissionLedger(payload) {
       ipa_str_(payload.type),
       String(ward),          // ward ONLY — never "Ward - Bed"
       String(bed),
-      ipa_str_(payload.consultant),
-      ipa_str_(payload.diagnosis),
+      consultantName,
+      // Provisional diagnosis is no longer collected at admission. It is
+      // recorded on the admission casesheet, by the doctor who examines the
+      // patient — a diagnosis typed at the reception desk was never theirs to
+      // give. The column stays (the schema is frozen and every reader knows
+      // its index) and is filled by updateIPDiagnosis() / the casesheet.
+      '',
       'ACTIVE',
       ''
     ]);
 
+    // Attribution: written by header name, because Primary_Doctor_ID is an
+    // appended column whose position differs between clinics.
+    if (consultantId) ipa_setPrimaryDoctorId_(sheet, newIpNumber, consultantId);
+
     ipa_occupyBed_(bed, patientId, ipa_str_(payload.patientName), doaVal, newIpNumber);
 
     SpreadsheetApp.flush();
-    return { success: true, message: 'Admitted. IP Number ' + newIpNumber, ipNumber: newIpNumber };
+    return { success: true, message: 'Admitted. IP Number ' + newIpNumber,
+             ipNumber: newIpNumber, consultant: consultantName, consultantId: consultantId };
 
   } catch (e) {
     return { success: false, message: 'Admission failed: ' + e.message };
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Stamps Primary_Doctor_ID on a freshly appended admission row.
+ *
+ * Never fails the admission: the patient is in the bed either way, and an
+ * unattributed row is recoverable (runMultiDoctorMigration backfills it)
+ * while a refused admission is not.
+ */
+function ipa_setPrimaryDoctorId_(sheet, ipNumber, doctorId) {
+  try {
+    var col = -1;
+    var lastCol = sheet.getLastColumn();
+    var header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    for (var c = 0; c < header.length; c++) {
+      if (ipa_str_(header[c]) === 'Primary_Doctor_ID') { col = c + 1; break; }
+    }
+    if (col === -1) {
+      col = lastCol + 1;
+      sheet.getRange(1, col).setValue('Primary_Doctor_ID').setFontWeight('bold');
+    }
+
+    var lastRow = sheet.getLastRow();
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = ids.length - 1; i >= 0; i--) {
+      if (ipa_str_(ids[i][0]) === ipa_str_(ipNumber)) {
+        sheet.getRange(i + 2, col).setValue(String(doctorId));
+        return true;
+      }
+    }
+  } catch (e) { /* attribution is recoverable; the admission is not */ }
+  return false;
 }
 
 // ---- WRITE: bed transfer --------------------------------------------------
@@ -782,7 +847,12 @@ function repairWardBedColumns() {
 IPA_CFG.DOCTORS = 'Master_Doctors';
 IPA_CFG.DOCTOR_HEADERS = ['Doctor_Name', 'Department', 'Status'];
 
-/** Fallback if Master_Doctors does not exist yet. Sheet always wins. */
+/**
+ * Last-resort names, used only when NEITHER the Doctors sheet nor the legacy
+ * Master_Doctors sheet yields an active consultant. A hard-coded clinician
+ * name on a live admission is a data-integrity problem, so this list exists
+ * to keep the form usable on a brand-new spreadsheet and nothing more.
+ */
 var IPA_DEFAULT_CONSULTANTS = [
   'Dr. Meivasagam',
   'Dr. Nagamanikandan',
@@ -792,45 +862,92 @@ var IPA_DEFAULT_CONSULTANTS = [
 
 /**
  * Active consultants for the admission dropdown.
- * Contract: { success, message, data:[String] }. data is ALWAYS an array.
+ *
+ * THE DOCTORS SHEET IS THE AUTHORITY. It is the sheet that carries Doctor_ID
+ * (DOC001, DOC002...), the signature line, the registration number and the
+ * login binding, and it is what every other clinical module resolves an
+ * author against. Reading admission consultants out of the separate
+ * Master_Doctors sheet meant the admission stored a display name that matched
+ * no Doctor_ID, so an admission could never be attributed to a real doctor
+ * profile — which is also why Primary_Doctor_ID sat on the default DOC001 for
+ * every patient.
+ *
+ * Contract: { success, message, data: [{doctorId, name, specialty, label}],
+ *             source }. `data` is ALWAYS an array; older callers that read
+ * plain strings still work because every entry carries a `name`.
  */
 function getConsultantList() {
   try {
+    // --- tier 1: the Doctors master (Doctor_ID + Display_Name + Specialty) --
+    var docs = [];
+    try {
+      docs = (typeof getActiveDoctors === 'function') ? (getActiveDoctors() || []) : [];
+    } catch (e) { docs = []; }
+
+    var out = [], seen = {};
+    for (var i = 0; i < docs.length; i++) {
+      var id = ipa_str_(docs[i].doctorId);
+      var nm = ipa_str_(docs[i].name);
+      if (!id || !nm) continue;
+      if (seen[id.toUpperCase()]) continue;
+      seen[id.toUpperCase()] = true;
+      out.push({
+        doctorId:  id,
+        name:      nm,
+        specialty: ipa_str_(docs[i].specialty),
+        label:     nm + (docs[i].specialty ? ' — ' + ipa_str_(docs[i].specialty) : '')
+      });
+    }
+    out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+
+    if (out.length) {
+      return { success: true, message: out.length + ' consultant(s) from the Doctors sheet.',
+               data: out, source: 'doctors' };
+    }
+
+    // --- tier 2: the legacy Master_Doctors sheet ---------------------------
+    // Names only: these rows carry no Doctor_ID, so an admission made from one
+    // cannot be attributed. Kept so an existing clinic is never locked out of
+    // admitting, and flagged in `source` so the UI can say where it came from.
     var sheet = ipa_ss_().getSheetByName(IPA_CFG.DOCTORS);
-    if (!sheet) {
-      return { success: true, message: 'Using default consultant list.',
-               data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'fallback' };
+    if (sheet && sheet.getLastRow() >= 2) {
+      var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+      var legacy = [], seenName = {};
+      for (var r = 0; r < rows.length; r++) {
+        var name = ipa_str_(rows[r][0]);
+        if (!name) continue;
+        var status = ipa_str_(rows[r][2]).toUpperCase();
+        if (status && status !== 'ACTIVE') continue;      // blank status = active
+        if (seenName[name.toUpperCase()]) continue;
+        seenName[name.toUpperCase()] = true;
+        legacy.push({ doctorId: '', name: name,
+                      specialty: ipa_str_(rows[r][1]), label: name });
+      }
+      legacy.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      if (legacy.length) {
+        return { success: true,
+                 message: legacy.length + ' consultant(s) from the legacy Master_Doctors ' +
+                          'sheet. Add them to the Doctors sheet so admissions can be ' +
+                          'attributed to a Doctor_ID.',
+                 data: legacy, source: 'master_doctors' };
+      }
     }
 
-    var lastRow = sheet.getLastRow();
-    if (lastRow < 2) {
-      return { success: true, message: 'Using default consultant list.',
-               data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'fallback' };
-    }
-
-    var rows = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-    var seen = {}, out = [];
-    for (var i = 0; i < rows.length; i++) {
-      var name = ipa_str_(rows[i][0]);
-      if (!name) continue;
-      var status = ipa_str_(rows[i][2]).toUpperCase();
-      if (status && status !== 'ACTIVE') continue;   // blank status = active
-      if (seen[name.toUpperCase()]) continue;
-      seen[name.toUpperCase()] = true;
-      out.push(name);
-    }
-    out.sort();
-
-    if (!out.length) {
-      return { success: true, message: 'No active consultants on file.',
-               data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'fallback' };
-    }
-    return { success: true, message: out.length + ' consultant(s).',
-             data: out, source: 'sheet' };
+    // --- tier 3: bare fallback --------------------------------------------
+    return { success: true,
+             message: 'No active doctors on file. Run setupDoctorsSheet() and add ' +
+                      'your consultants to the Doctors sheet.',
+             data: IPA_DEFAULT_CONSULTANTS.map(function (n) {
+               return { doctorId: '', name: n, specialty: '', label: n };
+             }),
+             source: 'fallback' };
 
   } catch (e) {
     return { success: false, message: 'Consultant lookup failed: ' + e.message,
-             data: IPA_DEFAULT_CONSULTANTS.slice(), source: 'error' };
+             data: IPA_DEFAULT_CONSULTANTS.map(function (n) {
+               return { doctorId: '', name: n, specialty: '', label: n };
+             }),
+             source: 'error' };
   }
 }
 

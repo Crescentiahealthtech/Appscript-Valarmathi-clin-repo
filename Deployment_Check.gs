@@ -71,7 +71,22 @@ var DEP_MAP = {
                              "resolveScan", "barcodeUpdateAppointment", "bc_auditScan_",
                              "auditDuplicatePatientIds", "getPatientLabelData",
                              "getSampleLabelData", "verifyCollectionIdentity",
-                             "receiveLabSampleByBarcode"]
+                             "receiveLabSampleByBarcode"],
+  // Every printed document asks this file for the patient-ID barcode. It is
+  // called defensively, so a missing file costs the barcode and not the
+  // document — which is precisely why it needs naming here instead.
+  "Barcode_Print.gs":       ["bcp_code128_", "bcp_code128Svg_", "bcp_patientBarcodeBlock_"],
+  // The discharge summary engine. Its absence used to surface as
+  // "ds_getStatusMap is not a function" on the IP Admissions screen and as a
+  // Discharge Desk that spun for ever, neither of which names a file.
+  "DS_Data.gs":             ["dsx_summariesSheet_", "dsx_headerMap_", "dsx_newSection_"],
+  "DS_Workflow.gs":         ["ds_getQueue", "ds_getStatusMap", "ds_getSummary",
+                             "ds_initiateDischarge", "ds_saveWorking", "ds_sign",
+                             "ds_getDiff", "ds_getSourceItem", "ds_heartbeatEditing",
+                             "dsx_requireRole_", "dsx_permissions_", "dsx_userRow_"],
+  "DS_Assembly.gs":         ["dsx_assemble_", "dsx_admissionRow_"],
+  "DS_Print.gs":            ["ds_getPrintHtml"],
+  "DS_Gate.gs":             ["dsx_gateCheck_", "ds_getGateStatus"]
 };
 
 /**

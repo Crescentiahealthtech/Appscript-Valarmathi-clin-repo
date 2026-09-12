@@ -150,6 +150,24 @@ function getIPCasesheetContext(ipNumber, sessionToken) {
     }
     var canWrite = (role === "doctor") && ipc_mayWriteOnAdmission_(ipNumber, selfDoctorId);
 
+    // An administrator may fill in a casesheet, but only under a doctor they
+    // name: the chart is then signed with that doctor's snapshot and carries
+    // the administrator's username as the recorder. The gate that enforces
+    // this is resolveIPWrite_(); this block only tells the form so it can
+    // offer the picker instead of presenting a Save button that will refuse.
+    var actsOnBehalf = (typeof IPC_ROLE_ACTS_AS !== "undefined") &&
+                       IPC_ROLE_ACTS_AS.indexOf(role) !== -1;
+    var doctors = [];
+    if (actsOnBehalf) {
+      try {
+        doctors = (getActiveDoctors() || []).map(function (d) {
+          return { doctorId: d.doctorId, name: d.name, specialty: d.specialty };
+        });
+      } catch (e) { doctors = []; }
+      // The care team still decides the chart; the picker just offers names.
+      canWrite = doctors.length > 0;
+    }
+
     var ageSex = dc_str_(adm.row[3]);
     var sexParts = ageSex.split("/");
     var patientId = dc_str_(adm.row[1]);
@@ -158,6 +176,8 @@ function getIPCasesheetContext(ipNumber, sessionToken) {
       success: true,
       canWrite: canWrite,
       role: role,
+      actsOnBehalf: actsOnBehalf,
+      doctors: doctors,
       doctorId: selfDoctorId,
       doctorName: doctorName,
       authorLabel: ipc_authorLabel_(role, doctorName),
@@ -301,8 +321,10 @@ function ipc_writeCasesheetRow_(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    var w = resolveIPWrite_(sessionToken || payload.sessionToken, payload.ipNumber, "DOCTOR", {});
-    if (!w.ok) return { success: false, message: w.message };
+    var w = resolveIPWrite_(sessionToken || payload.sessionToken, payload.ipNumber,
+                            "DOCTOR", {},
+                            { onBehalfOfDoctorId: payload.onBehalfOfDoctorId });
+    if (!w.ok) return { success: false, message: w.message, code: w.code || "" };
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ipc_casesheetSheet_();
