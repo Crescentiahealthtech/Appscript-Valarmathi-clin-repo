@@ -2,50 +2,26 @@
 
 <style>
   /* ---------------------------------------------------------------------
-     This screen was built against Bootstrap's fixed dark utilities
-     (bg-dark / bg-black / table-dark / border-secondary) while every other
-     screen is drawn from the theme tokens. It therefore read as a different
-     product, and stayed black when the app was switched to light. The rules
-     below put it back on the same surfaces, borders and type scale as the
-     consult and the case sheet.
+     This screen carried Bootstrap's fixed dark utilities on top of surfaces
+     and tables Styles.html already resolves to tokens, so the markup claimed
+     a palette it was not actually getting. Those are gone.
 
-     The stream cards size themselves in `em`, so one base font-size here
-     rescales the whole card stack at once — 1.05em stops meaning "bigger than
-     the browser default" and starts meaning "slightly bigger than the app".
+     What remains is the part no global rule can supply: the type scale. The
+     stream cards size themselves in `em`, so with no base here 1.05em meant
+     "larger than the browser default" and the whole card stack ran a size
+     above the consult and the case sheet. One base font-size rescales them
+     together, and 1.05em goes back to meaning "slightly larger than the app".
      ------------------------------------------------------------------ */
-  #emr-workspace-records                 { font-size: 0.85rem; }
-  #emr-workspace-records h4              { font-size: 1.05rem; }
-  #emr-workspace-records h5              { font-size: 0.95rem; }
-
-  #emr-workspace-records .emr-rec-panel  { background-color: var(--bg-card) !important;
-                                           border: 1px solid var(--border-color) !important;
-                                           border-radius: 10px; }
-  #emr-workspace-records .emr-rec-input  { background-color: var(--bg-input) !important;
-                                           color: var(--text-main) !important;
-                                           border: 1px solid var(--border-color) !important;
-                                           font-size: 0.85rem; }
-  #emr-workspace-records .emr-rec-input:focus { border-color: var(--accent-purple) !important;
-                                           box-shadow: 0 0 0 0.1rem var(--accent-glow); }
-  #emr-workspace-records .emr-rec-input::placeholder { color: var(--text-faint) !important; }
-
-  #emr-workspace-records .emr-rec-scroll { background-color: var(--bg-card) !important;
-                                           border: 1px solid var(--border-color) !important;
-                                           border-radius: 10px; }
-  #emr-workspace-records .emr-rec-table               { color: var(--text-main); margin: 0; }
-  #emr-workspace-records .emr-rec-table > thead > tr > th {
-                                           background-color: var(--surface-2);
-                                           color: var(--text-label);
-                                           border-bottom: 1px solid var(--border-color);
-                                           font-size: 0.72rem; text-transform: uppercase;
-                                           letter-spacing: 0.04em; font-weight: 700;
-                                           padding: 8px 10px; }
-  #emr-workspace-records .emr-rec-table > tbody > tr > td {
-                                           border-bottom: 1px solid var(--border-soft, var(--border-color));
-                                           padding: 8px 10px; vertical-align: middle; }
-  #emr-workspace-records .emr-rec-table > tbody > tr:hover > td {
-                                           background-color: var(--surface-hover); }
-  #emr-workspace-records .emr-rec-title   { color: var(--text-main) !important; }
-  #emr-workspace-records .emr-rec-divider { border-bottom: 1px solid var(--border-color) !important; }
+  #emr-workspace-records                { font-size: 0.85rem; }
+  #emr-workspace-records h4             { font-size: 1.05rem; }
+  #emr-workspace-records h5             { font-size: 0.95rem; }
+  #emr-workspace-records .emr-rec-panel { background-color: var(--bg-card);
+                                          border: 1px solid var(--border-color);
+                                          border-radius: 10px; }
+  #emr-workspace-records .emr-rec-scroll { background-color: var(--bg-card);
+                                          border: 1px solid var(--border-color);
+                                          border-radius: 10px; }
+  #emr-workspace-records .emr-rec-divider     { border-bottom: 1px solid var(--border-color) !important; }
   #emr-workspace-records .emr-rec-divider-end { border-right: 1px solid var(--border-color) !important; }
 </style>
     
@@ -55,7 +31,7 @@
     <div id="timeline-ledger-section" class="flex-grow-1 d-flex flex-column">
         <div class="d-flex justify-content-between align-items-center mb-3 emr-rec-divider pb-2">
             <div>
-                <h4 class="m-0 fw-bold emr-rec-title"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i> Master Patient Records</h4>
+                <h4 class="m-0 fw-bold"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i> Master Patient Records</h4>
             </div>
             <button class="btn btn-outline-secondary btn-sm fw-bold" onclick="returnToEMRMenu()">
                 <i class="fa-solid fa-arrow-left me-1"></i> EMR Menu
@@ -65,7 +41,7 @@
         <div class="emr-rec-panel mb-3">
             <div class="card-body row g-2">
                 <div class="col-md-8">
-                    <input type="text" id="master-search-input" class="form-control emr-rec-input" placeholder="Search Patient ID, Name, or Mobile..." onkeyup="filterMasterLedger()">
+                    <input type="text" id="master-search-input" class="form-control" placeholder="Search Patient ID, Name, or Mobile..." onkeyup="filterMasterLedger()">
                 </div>
                 <div class="col-md-4">
                     <button class="btn btn-outline-info w-100 fw-bold" onclick="loadMasterLedger()">
@@ -76,7 +52,7 @@
         </div>
 
         <div class="flex-grow-1 overflow-auto emr-rec-scroll">
-            <table class="table table-hover align-middle text-nowrap emr-rec-table">
+            <table class="table table-hover align-middle text-nowrap">
                 <thead style="position: sticky; top: 0; z-index: 10;">
                     <tr>
                         <th class="sno-col">S.No</th>
@@ -102,7 +78,7 @@
         <div class="emr-rec-panel mb-3 shadow-sm" style="position: sticky; top: 0; z-index: 10;">
             <div class="card-body d-flex justify-content-between align-items-center py-2">
                 <div>
-                    <h5 class="m-0 fw-bold emr-rec-title" id="tl-pat-name">Loading...</h5>
+                    <h5 class="m-0 fw-bold" id="tl-pat-name">Loading...</h5>
                     <small class="text-muted" id="tl-pat-details">Loading details...</small>
                 </div>
                 <div class="d-flex align-items-center gap-2">
