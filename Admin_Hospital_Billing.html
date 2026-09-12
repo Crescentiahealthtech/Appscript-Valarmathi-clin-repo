@@ -206,7 +206,7 @@
             </div>
             <div class="col-md-4">
               <label class="hb-label">Amount received (&#8377;)</label>
-              <input type="number" id="hb-paid" class="hb-input text-end" value="0" min="0" oninput="hbRecalc()">
+              <input type="number" id="hb-paid" class="hb-input text-end" value="0" min="0" oninput="hbPaidInput()">
             </div>
             <div class="col-md-4">
               <label class="hb-label">Mode</label>
@@ -1052,10 +1052,14 @@
     });
   }
 
-  // The cashier typing in "received" must win over the auto-fill.
-  document.addEventListener('input', function (ev) {
-    if (ev.target && ev.target.id === 'hb-paid') HB.paidTouched = true;
-  });
+  /**
+   * The cashier typing in "received" must win over the auto-fill.
+   *
+   * This has to be the field's OWN handler. A listener on `document` runs
+   * after the element's oninput, so recalc() would already have overwritten
+   * the first keystroke before the flag was set.
+   */
+  function paidInput() { HB.paidTouched = true; recalc(); }
 
   // ---- exports (inline handlers above address these) --------------------
   window.openBillingWorkspace = openWorkspace;
@@ -1067,6 +1071,7 @@
   window.hbSet                = setField;
   window.hbApplyPackage       = applyPackage;
   window.hbRecalc             = recalc;
+  window.hbPaidInput          = paidInput;
   window.hbModeChanged        = modeChanged;
   window.hbSaveInvoice        = saveInvoice;
   window.hbPrintCurrent       = printCurrent;
