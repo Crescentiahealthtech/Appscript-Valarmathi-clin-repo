@@ -1,218 +1,388 @@
 <style>
-  /* Bed Map Visual Styles */
-  .bed-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1rem;
-    margin-bottom: 2rem;
+  /* =====================================================================
+     BED MAP
+
+     Rewritten as ONE stylesheet. There used to be two <style> blocks here
+     declaring .bed-card and the six .bed-status-* rules twice over, the
+     second set overriding the first with !important on every line — so the
+     first set was dead weight and nothing could be changed by editing the
+     obvious one.
+
+     Everything is a theme token now. The old markup wrote text-white and
+     text-light straight onto the bed id and the patient name, which is
+     invisible on a white card in the light theme.
+     ===================================================================== */
+
+  #ip-bed-management-view .bm-legend {
+    display: flex; flex-wrap: wrap; gap: .4rem;
   }
-  .bed-card {
-    background-color: var(--bg-input);
-    border: 2px solid var(--border-strong);
-    border-radius: 0.5rem;
-    padding: 1rem;
+  #ip-bed-management-view .bm-chip {
+    display: inline-flex; align-items: center; gap: .4rem;
+    border: 1px solid var(--border-color); border-radius: 999px;
+    background: var(--bg-card); color: var(--text-secondary);
+    padding: .25rem .7rem; font-size: .78rem; font-weight: 600;
+    cursor: pointer; transition: .15s;
+  }
+  #ip-bed-management-view .bm-chip:hover { border-color: var(--border-hover); color: var(--text-main); }
+  #ip-bed-management-view .bm-chip.on {
+    border-color: var(--accent-purple); background: var(--accent-glow); color: var(--text-main);
+  }
+  #ip-bed-management-view .bm-dot {
+    width: .6rem; height: .6rem; border-radius: 50%; flex-shrink: 0;
+  }
+  #ip-bed-management-view .bm-chip .bm-n {
+    font-variant-numeric: tabular-nums; color: var(--text-main);
+  }
+
+  /* ---- ward header: name, counts, one occupancy bar ---- */
+  #ip-bed-management-view .bm-ward {
+    margin-top: 1.25rem; margin-bottom: .75rem;
+    border-bottom: 1px solid var(--divider-color); padding-bottom: .6rem;
+  }
+  #ip-bed-management-view .bm-ward-top {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: .5rem;
+  }
+  #ip-bed-management-view .bm-ward-name {
+    font-size: 1rem; font-weight: 700; color: var(--text-main);
+  }
+  #ip-bed-management-view .bm-ward-meta { font-size: .8rem; color: var(--text-muted); }
+  #ip-bed-management-view .bm-bar {
+    display: flex; height: 8px; border-radius: 999px; overflow: hidden;
+    background: var(--surface-3); margin-top: .5rem;
+  }
+  #ip-bed-management-view .bm-bar span { display: block; height: 100%; }
+
+  /* ---- the beds ---- */
+  #ip-bed-management-view .bed-grid {
+    display: grid; gap: .85rem;
+    grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  }
+  #ip-bed-management-view .bed-card {
     position: relative;
-    transition: transform 0.2s, border-color 0.2s;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-top: 4px solid var(--border-strong);
+    border-radius: 12px; padding: .85rem .9rem .8rem;
+    transition: transform .15s, border-color .15s, box-shadow .15s;
   }
-  .bed-card:hover {
-    transform: translateY(-3px);
+  #ip-bed-management-view .bed-card:hover {
+    transform: translateY(-2px); box-shadow: 0 10px 22px -12px var(--shadow-strong, rgba(0,0,0,.35));
   }
-  
-  /* Status Colors */
-  .bed-status-available { border-color: var(--success); box-shadow: 0 0 10px rgba(25, 135, 84, 0.2); }
-  .bed-status-occupied { border-color: var(--danger); box-shadow: 0 0 10px rgba(220, 53, 69, 0.2); }
-  .bed-status-reserved { border-color: var(--warning); box-shadow: 0 0 10px rgba(255, 193, 7, 0.2); }
-  .bed-status-cleaning { border-color: var(--info); }
-  .bed-status-maintenance { border-color: var(--border-strong); }
-  .bed-status-isolation { border-color: var(--warning); }
+  #ip-bed-management-view .bed-card.bm-hidden { display: none; }
 
-  /* Typography for Bed Map */
-  .bed-id { font-size: 1.25rem; font-weight: 800; margin-bottom: 0.2rem; }
-  .bed-patient-info { font-size: 0.8rem; color: var(--text-muted); min-height: 40px; }
-  .los-badge { position: absolute; top: 0.5rem; right: 0.5rem; font-size: 0.7rem; }
-  
-  /* Select Overrides for Dark UI */
-  .bed-status-select {
-    background-color: transparent;
-    color: var(--text-main);
-    border: 1px solid var(--border-strong);
-    border-radius: 0.25rem;
-    font-size: 0.8rem;
-    padding: 0.2rem;
-    width: 100%;
-    margin-top: 0.5rem;
-  }
-  .bed-status-select option { background-color: var(--bg-input); }
-</style>
+  #ip-bed-management-view .bed-status-available   { border-top-color: var(--success); }
+  #ip-bed-management-view .bed-status-occupied    { border-top-color: var(--danger); }
+  #ip-bed-management-view .bed-status-reserved    { border-top-color: var(--warning); }
+  #ip-bed-management-view .bed-status-cleaning    { border-top-color: var(--info); }
+  #ip-bed-management-view .bed-status-isolation   { border-top-color: var(--violet); }
+  #ip-bed-management-view .bed-status-maintenance { border-top-color: var(--border-strong); }
 
-<style>
-  /* 1. Modal Theme Corrections for Text Visibility */
-  .modal-content, #form-admission {
-    background-color: var(--surface-2) !important;
-    color: var(--text-main) !important;
+  #ip-bed-management-view .bed-id {
+    font-size: 1.15rem; font-weight: 800; color: var(--text-main); line-height: 1.1;
   }
-  
-  .modal-body label,
-  .modal-body .form-label,
-  .modal-body h6,
-  .modal-body .text-muted {
-    color: var(--text-main) !important; /* Forces Labels to Bright High-Clear White */
-    font-weight: 600 !important;
+  #ip-bed-management-view .bm-state {
+    font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  }
+  #ip-bed-management-view .bed-patient-info {
+    font-size: .82rem; color: var(--text-secondary); line-height: 1.45;
+    min-height: 2.6rem; margin-top: .5rem;
+  }
+  #ip-bed-management-view .bed-patient-info .bm-pname {
+    font-weight: 700; color: var(--text-main); display: block;
+  }
+  #ip-bed-management-view .bm-empty { color: var(--text-muted); font-style: italic; }
+  #ip-bed-management-view .los-badge {
+    position: absolute; top: .6rem; right: .6rem;
+    font-size: .68rem; font-weight: 700; padding: .15rem .45rem; border-radius: 6px;
+    background: var(--danger-bg); color: var(--danger-fg); border: 1px solid var(--danger);
+  }
+  #ip-bed-management-view .los-badge.bm-long {
+    background: var(--warning-bg); color: var(--warning-fg); border-color: var(--warning);
   }
 
-  .modal-body .form-control,
-  .modal-body .form-select {
-    background-color: var(--surface-3) !important;
-    border: 1px solid var(--border-strong) !important;
-    color: var(--text-main) !important;
+  #ip-bed-management-view .bed-status-select {
+    background: var(--bg-input); color: var(--text-main);
+    border: 1px solid var(--border-color); border-radius: 7px;
+    font-size: .78rem; padding: .3rem .4rem; width: 100%; margin-top: .6rem;
   }
-
-  .modal-body .form-control[readonly] {
-    background-color: var(--surface-3) !important;
-    color: var(--text-secondary) !important;
-  }
-
-  /* 2. Structured Box Grid Layout for Bed Maps */
-  .bed-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
-    gap: 1.25rem !important;
-    margin-top: 1rem;
-    margin-bottom: 2rem;
-  }
-  
-  .bed-card {
-    background-color: var(--bg-input) !important;
-    border: 2px solid var(--border-strong) !important;
-    border-radius: 0.5rem !important;
-    padding: 1.25rem !important;
-    box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.4) !important;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    transition: transform 0.2s ease, border-color 0.2s ease;
-  }
-
-  .bed-card:hover {
-    transform: translateY(-3px) !important;
-  }
-
-  /* Distinct Top Borders Representing Realtime Statuses */
-  .bed-status-available { border-top: 5px solid var(--success) !important; }
-  .bed-status-occupied { border-top: 5px solid var(--danger) !important; }
-  .bed-status-reserved { border-top: 5px solid var(--warning) !important; }
-  .bed-status-cleaning { border-top: 5px solid var(--info) !important; }
-  .bed-status-maintenance { border-top: 5px solid var(--border-strong) !important; }
-  .bed-status-isolation { border-top: 5px solid var(--warning) !important; }
-
-  .bed-id {
-    font-size: 1.35rem !important;
-    font-weight: 800 !important;
-    color: var(--text-main) !important;
-    margin-bottom: 0.5rem;
-  }
-
-  .bed-patient-info {
-    font-size: 0.85rem !important;
-    color: var(--text-secondary) !important;
-    min-height: 45px;
-    line-height: 1.4;
+  #ip-bed-management-view .bed-status-select:disabled { opacity: .55; }
+  #ip-bed-management-view .bm-occ-note {
+    font-size: .72rem; color: var(--text-muted); margin-top: .45rem;
   }
 </style>
 
 <div id="ip-bed-management-view" class="app-view page-section d-none h-100 flex-column px-2">
-  
-  <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
+
+  <div class="d-flex justify-content-between align-items-start mb-3 border-bottom pb-3 flex-wrap gap-2"
+       style="border-color: var(--divider-color) !important;">
     <div>
-      <h4 class="m-0 text-white fw-bold"><i class="fa-solid fa-map-location-dot me-2 text-info"></i> Bed Command Center</h4>
-      <small class="text-muted">Real-time occupancy and admission management</small>
+      <h4 class="m-0 fw-bold" style="color: var(--text-main);">
+        <i class="fa-solid fa-map-location-dot me-2" style="color: var(--info-fg);"></i> Bed Command Center
+      </h4>
+      <small class="label-bright" id="bm-subtitle">Real-time occupancy and admission management</small>
     </div>
-    <button class="btn btn-outline-light fw-bold shadow px-4" onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
-  <i class="fa-solid fa-arrow-left me-2"></i> Go Back
-</button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm fw-semibold" onclick="initBedMap()">
+        <i class="fa-solid fa-rotate me-1"></i> Refresh
+      </button>
+      <button class="btn btn-outline-secondary btn-sm fw-semibold"
+              onclick="switchTab('workspace-appointments', document.getElementById('nav-tab-appt'))">
+        <i class="fa-solid fa-arrow-left me-1"></i> Go Back
+      </button>
+    </div>
   </div>
 
-  <div class="d-flex flex-wrap gap-3 mb-4 small fw-bold">
-    <span class="text-success"><i class="fa-solid fa-square me-1"></i> Available</span>
-    <span class="text-danger"><i class="fa-solid fa-square me-1"></i> Occupied</span>
-    <span class="text-warning"><i class="fa-solid fa-square me-1"></i> Reserved</span>
-    <span class="text-info"><i class="fa-solid fa-square me-1"></i> Cleaning</span>
-    <span style="color: var(--warning-fg);"><i class="fa-solid fa-square me-1"></i> Isolation</span>
-    <span class="text-secondary"><i class="fa-solid fa-square me-1"></i> Maintenance</span>
-  </div>
+  <!-- The legend carries the live counts and doubles as the filter: the
+       question "which beds are free" used to mean reading every card. -->
+  <div class="bm-legend mb-3" id="bm-legend"></div>
 
   <div class="flex-grow-1 overflow-auto pe-2" id="bed-map-container">
-    <div class="text-center text-muted py-5"><div class="spinner-border text-primary"></div><br>Loading Bed Map...</div>
+    <div class="text-center label-bright py-5">
+      <div class="spinner-border" style="color: var(--accent-purple);"></div><br>Loading bed map…
+    </div>
   </div>
 </div>
 
 <script>
-  let globalBedData = [];
+(function () {
+  'use strict';
 
-  function initBedMap() {
-    document.querySelectorAll('.app-view').forEach(v => v.classList.add('d-none')); 
-    document.getElementById('ip-bed-management-view').classList.remove('d-none');
-    google.script.run.withSuccessHandler(renderBedGrid).getBedStatuses();
+  var STATES = [
+    ['Available',   'var(--success)'],
+    ['Occupied',    'var(--danger)'],
+    ['Reserved',    'var(--warning)'],
+    ['Cleaning',    'var(--info)'],
+    ['Isolation',   'var(--violet)'],
+    ['Maintenance', 'var(--border-strong)']
+  ];
+
+  /** A bed in one of these states cannot take a patient. */
+  var BLOCKING = ['Occupied', 'Reserved', 'Cleaning', 'Maintenance', 'Isolation'];
+
+  var globalBedData = [];
+  var filter = 'ALL';
+
+  function esc(s) {
+    return window.crescEsc ? window.crescEsc(s)
+      : String(s === null || s === undefined ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function el(id) { return document.getElementById(id); }
+  function colourFor(state) {
+    for (var i = 0; i < STATES.length; i++) if (STATES[i][0] === state) return STATES[i][1];
+    return 'var(--border-strong)';
+  }
+  function norm(s) { return String(s || 'Available').trim(); }
+
+  /**
+   * Whole days since admission. Math.abs() used to be applied here, so a
+   * data-entry slip that put the admission date in the future reported a
+   * cheerful positive length of stay instead of showing up as wrong.
+   */
+  function lengthOfStay(doa) {
+    if (!doa) return null;
+    var d = new Date(doa);
+    if (isNaN(d.getTime())) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
   }
 
-  function renderBedGrid(dataStr) {
-    const container = document.getElementById('bed-map-container');
-    try {
-      globalBedData = JSON.parse(dataStr);
-      let html = '';
-      const wards = ['A', 'B', 'ICU'];
-      
-      wards.forEach(ward => {
-        html += `<h5 class="text-white mt-4 mb-3 border-bottom border-secondary pb-2"><i class="fa-solid fa-layer-group me-2 text-muted"></i> Ward ${ward}</h5>`;
-        html += `<div class="bed-grid">`;
-        
-        const wardBeds = globalBedData.filter(b => b.ward === ward);
-        
-        wardBeds.forEach(bed => {
-          let statusClass = `bed-status-${bed.status.toLowerCase()}`;
-          let losBadge = '';
-          let patientText = '<span class="text-muted fst-italic">Empty</span>';
-          
-          if(bed.status === 'Occupied' && bed.doa) {
-             const admitDate = new Date(bed.doa);
-             const today = new Date();
-             const diffTime = Math.abs(today - admitDate);
-             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-             losBadge = `<span class="badge bg-danger los-badge">LOS: ${diffDays} Days</span>`;
-             patientText = `<strong class="text-light">${bed.patientName}</strong><br>${bed.patientId} | IP: ${bed.ipNumber}`;
-          }
+  window.initBedMap = function () {
+    // This view carries BOTH `page-section` and `d-none`. switchTab() adds
+    // `active-section` (display:block), but Bootstrap's `.d-none` is
+    // display:none !important and wins, so the class has to come off here or
+    // the screen stays blank. The previous version also hid every .app-view
+    // by hand; switchTab already hides the EMR tab that holds those, and the
+    // EMR sub-workspaces are inside it.
+    var view = el('ip-bed-management-view');
+    if (view) view.classList.remove('d-none');
 
-          html += `
-            <div class="bed-card ${statusClass}">
-              ${losBadge}
-              <div class="d-flex justify-content-between align-items-start">
-                <div class="bed-id text-white">${bed.bedId}</div>
-              </div>
-              <div class="bed-patient-info mt-2">
-                ${patientText}
-              </div>
-              <select class="bed-status-select mt-3" onchange="updateSingleBedStatus('${bed.bedId}', this.value)">
-                <option value="Available" ${bed.status === 'Available' ? 'selected' : ''}>Available</option>
-                <option value="Occupied" ${bed.status === 'Occupied' ? 'selected' : ''} disabled>Occupied</option>
-                <option value="Reserved" ${bed.status === 'Reserved' ? 'selected' : ''}>Reserved</option>
-                <option value="Cleaning" ${bed.status === 'Cleaning' ? 'selected' : ''}>Cleaning</option>
-                <option value="Maintenance" ${bed.status === 'Maintenance' ? 'selected' : ''}>Maintenance</option>
-                <option value="Isolation" ${bed.status === 'Isolation' ? 'selected' : ''}>Isolation</option>
-              </select>
-            </div>
-          `;
-        });
-        html += `</div>`;
-      });
-      container.innerHTML = html;
-    } catch(e) {
-      container.innerHTML = `<div class="alert alert-danger">Error loading bed map configuration.</div>`;
+    var c = el('bed-map-container');
+    if (c) {
+      c.innerHTML = '<div class="text-center label-bright py-5">' +
+        '<div class="spinner-border" style="color: var(--accent-purple);"></div><br>Loading bed map…</div>';
+    }
+    google.script.run
+      .withSuccessHandler(window.renderBedGrid)
+      .withFailureHandler(function (err) {
+        if (c) c.innerHTML = '<div class="alert alert-danger">' +
+          esc((err && err.message) || 'The bed map could not be loaded.') + '</div>';
+      })
+      .getBedStatuses();
+  };
+
+  window.renderBedGrid = function (dataStr) {
+    var container = el('bed-map-container');
+    if (!container) return;
+    try {
+      globalBedData = (typeof dataStr === 'string') ? JSON.parse(dataStr) : (dataStr || []);
+    } catch (e) {
+      container.innerHTML = '<div class="alert alert-danger">The bed map data could not be read.</div>';
+      return;
+    }
+    paint();
+  };
+
+  /** Wards in the order the sheet lists them — never a hardcoded list. */
+  function wardsInData() {
+    var seen = {}, out = [];
+    globalBedData.forEach(function (b) {
+      var w = String(b.ward || '').trim() || 'Unassigned';
+      if (!seen[w]) { seen[w] = true; out.push(w); }
+    });
+    return out;
+  }
+
+  function counts(beds) {
+    var c = { total: beds.length, blocked: 0 };
+    STATES.forEach(function (s) { c[s[0]] = 0; });
+    beds.forEach(function (b) {
+      var st = norm(b.status);
+      if (c[st] === undefined) c[st] = 0;
+      c[st]++;
+      if (BLOCKING.indexOf(st) > -1) c.blocked++;
+    });
+    return c;
+  }
+
+  function paintLegend(all) {
+    var host = el('bm-legend');
+    if (!host) return;
+    var c = counts(all);
+
+    var chips = ['<button type="button" class="bm-chip' + (filter === 'ALL' ? ' on' : '') +
+                 '" onclick="bmSetFilter(\'ALL\')">All <span class="bm-n">' + c.total + '</span></button>'];
+
+    STATES.forEach(function (s) {
+      var name = s[0];
+      chips.push('<button type="button" class="bm-chip' + (filter === name ? ' on' : '') +
+        '" onclick="bmSetFilter(\'' + name + '\')">' +
+        '<span class="bm-dot" style="background:' + s[1] + ';"></span>' + name +
+        ' <span class="bm-n">' + (c[name] || 0) + '</span></button>');
+    });
+    host.innerHTML = chips.join('');
+
+    var sub = el('bm-subtitle');
+    if (sub) {
+      var free = c.total - c.blocked;
+      sub.textContent = c.total
+        ? (free + ' of ' + c.total + ' bed' + (c.total === 1 ? '' : 's') + ' free · ' +
+           Math.round(c.blocked / c.total * 100) + '% in use')
+        : 'No beds are configured yet.';
     }
   }
 
-  function updateSingleBedStatus(bedId, newStatus) {
-    google.script.run.withSuccessHandler(() => {
-      google.script.run.withSuccessHandler(renderBedGrid).getBedStatuses();
-    }).updateBedStatusInDB(bedId, newStatus);
+  function wardBar(c) {
+    if (!c.total) return '';
+    var seg = STATES.filter(function (s) { return c[s[0]]; }).map(function (s) {
+      return '<span title="' + s[0] + ': ' + c[s[0]] + '" style="width:' +
+             (c[s[0]] / c.total * 100) + '%; background:' + s[1] + ';"></span>';
+    }).join('');
+    return '<div class="bm-bar">' + seg + '</div>';
   }
+
+  function bedCard(bed) {
+    var st = norm(bed.status);
+    var shown = (filter === 'ALL' || filter === st);
+    var los = (st === 'Occupied') ? lengthOfStay(bed.doa) : null;
+
+    var badge = '';
+    if (los !== null && los >= 0) {
+      badge = '<span class="los-badge' + (los >= 7 ? ' bm-long' : '') + '">Day ' + (los + 1) + '</span>';
+    } else if (st === 'Occupied' && bed.doa) {
+      badge = '<span class="los-badge bm-long" title="The admission date on this bed is not a usable date.">DOA?</span>';
+    }
+
+    var who = (st === 'Occupied' || st === 'Isolation') && (bed.patientName || bed.patientId)
+      ? '<span class="bm-pname">' + esc(bed.patientName || '—') + '</span>' +
+        esc(bed.patientId || '') + (bed.ipNumber ? ' · IP ' + esc(bed.ipNumber) : '')
+      : '<span class="bm-empty">' + (st === 'Available' ? 'Empty' : st) + '</span>';
+
+    // Occupied is never a choice on this screen: a bed becomes occupied by
+    // admitting a patient to it, and is freed by discharging them. Offering
+    // it as a dropdown option invited someone to mark a bed occupied with
+    // nobody in it, which the ward then cannot clear.
+    var options = STATES.map(function (s) {
+      var name = s[0];
+      if (name === 'Occupied') {
+        return '<option value="Occupied"' + (st === 'Occupied' ? ' selected' : '') +
+               ' disabled>Occupied (set by admission)</option>';
+      }
+      return '<option value="' + name + '"' + (st === name ? ' selected' : '') + '>' + name + '</option>';
+    }).join('');
+
+    return '<div class="bed-card bed-status-' + st.toLowerCase() + (shown ? '' : ' bm-hidden') + '">' +
+      badge +
+      '<div class="d-flex justify-content-between align-items-start gap-2">' +
+        '<div class="bed-id">' + esc(bed.bedId) + '</div>' +
+      '</div>' +
+      '<div class="bm-state" style="color:' + colourFor(st) + ';">' + esc(st) + '</div>' +
+      '<div class="bed-patient-info">' + who + '</div>' +
+      '<select class="bed-status-select" ' + (st === 'Occupied' ? 'disabled ' : '') +
+        'onchange="bmUpdateStatus(\'' + esc(bed.bedId) + '\', this.value)">' + options + '</select>' +
+      (st === 'Occupied'
+        ? '<div class="bm-occ-note">Freed by discharging the patient.</div>'
+        : '') +
+    '</div>';
+  }
+
+  function paint() {
+    var container = el('bed-map-container');
+    if (!container) return;
+
+    paintLegend(globalBedData);
+
+    if (!globalBedData.length) {
+      container.innerHTML = '<div class="text-center label-bright py-5">' +
+        'No beds are configured. Master_Beds is empty.</div>';
+      return;
+    }
+
+    var html = wardsInData().map(function (ward) {
+      var beds = globalBedData.filter(function (b) {
+        return (String(b.ward || '').trim() || 'Unassigned') === ward;
+      });
+      var c = counts(beds);
+      var free = c.total - c.blocked;
+      var visible = beds.filter(function (b) {
+        return filter === 'ALL' || filter === norm(b.status);
+      }).length;
+
+      return '<div class="bm-ward">' +
+          '<div class="bm-ward-top">' +
+            '<span class="bm-ward-name"><i class="fa-solid fa-layer-group me-2" ' +
+              'style="color: var(--text-muted);"></i>Ward ' + esc(ward) + '</span>' +
+            '<span class="bm-ward-meta">' + free + ' free of ' + c.total + '</span>' +
+          '</div>' +
+          wardBar(c) +
+        '</div>' +
+        (visible
+          ? '<div class="bed-grid">' + beds.map(bedCard).join('') + '</div>'
+          : '<div class="label-bright small pb-2">No ' + esc(filter.toLowerCase()) +
+            ' beds in this ward.</div>');
+    }).join('');
+
+    container.innerHTML = html;
+  }
+
+  window.bmSetFilter = function (name) {
+    filter = name;
+    paint();
+  };
+
+  window.bmUpdateStatus = function (bedId, newStatus) {
+    google.script.run
+      .withSuccessHandler(function () { window.initBedMap(); })
+      .withFailureHandler(function (err) {
+        if (window.showToast) {
+          window.showToast('Bed not updated', (err && err.message) || 'Try again.', 'error');
+        }
+        window.initBedMap();
+      })
+      .updateBedStatusInDB(bedId, newStatus);
+  };
+
+  // Kept for older call sites that used the previous global name.
+  window.updateSingleBedStatus = window.bmUpdateStatus;
+})();
 </script>
