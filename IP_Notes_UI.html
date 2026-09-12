@@ -626,6 +626,16 @@
             <i class="fa-solid fa-file-medical" style="color:var(--info-fg);"></i>
             <span style="font-size:0.8rem;">Baseline</span>
           </button>
+          <!-- The full verified result set, with reference ranges and flags,
+               over the top of the ward round. The lab panel further down
+               this screen lists what has been ORDERED and whether it is back;
+               this is for reading the numbers. -->
+          <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
+            onclick="crescLabPeek(IPNotesModule.context.patientId, IPNotesModule.context.name)"
+            title="This patient's verified lab results">
+            <i class="fa-solid fa-flask-vial" style="color:var(--teal-fg);"></i>
+            <span style="font-size:0.8rem;">Labs</span>
+          </button>
           <!-- The medical record and the nursing record are separate documents
                and file separately, so printing asks which one is wanted. -->
           <div class="dropdown">

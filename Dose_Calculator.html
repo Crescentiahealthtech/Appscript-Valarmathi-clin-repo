@@ -1,0 +1,394 @@
+<!-- =====================================================================
+     💉 DOSE CALCULATOR — one, shared
+
+     There were two of these: openOPDoseCalc/calcOPDose/insertOPDose in
+     OP_Module and ipcOpenIPCDoseCalc/ipcCalcIPCDose/ipcInsertIPCDose in
+     IP_Casesheet_UI, line-for-line identical apart from an `ipc-` prefix on
+     every id. Two copies of arithmetic that decides how much drug a child
+     receives is one copy too many: a correction made to one was a
+     correction the other never got.
+
+     It is in the SHELL because the OP consult and the IP case sheet are
+     separate lazy bundles and both need it.
+
+     What the old pair did NOT do, and this does:
+
+       • It checks the result against a ceiling. A mg/kg slip — 150 typed
+         for 15 — used to produce a tenfold dose in silence.
+       • It distinguishes mg/kg/DAY from mg/kg/DOSE. The old box was
+         labelled per day and had nothing stopping a per-dose figure being
+         typed into it, which divides the intended dose by the frequency.
+       • Liquids are computed in millilitres. The old strength box said
+         "mg per tab / 5 ml" and then divided by it, so a syrup of
+         250 mg/5 ml reported "0.73 unit" — units of 5 ml, which reads as
+         0.73 ml. This asks for mg per how many ml and answers in ml.
+       • Tablets come out as halves and quarters, not 0.73 of a tablet.
+       • Age is used rather than collected and ignored: it sets the ceiling
+         band and warns on a neonatal or infant weight.
+     ===================================================================== -->
+<style>
+  #cresc-dose { position: fixed; inset: 0; z-index: 3550; display: flex;
+                align-items: center; justify-content: center;
+                background: var(--overlay-scrim); backdrop-filter: blur(3px); }
+  #cresc-dose[hidden] { display: none !important; }
+  #cresc-dose .dc-card { background: var(--bg-card); color: var(--text-main);
+                border: 1px solid var(--border-color); border-radius: 14px;
+                width: 94%; max-width: 660px; max-height: 92vh;
+                display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+  #cresc-dose .dc-head, #cresc-dose .dc-foot {
+                padding: .75rem 1rem; display: flex; align-items: center;
+                justify-content: space-between; gap: .75rem; }
+  #cresc-dose .dc-head { border-bottom: 1px solid var(--divider-color); }
+  #cresc-dose .dc-foot { border-top: 1px solid var(--divider-color); }
+  #cresc-dose .dc-body { padding: .85rem 1rem; overflow: auto; }
+  #cresc-dose label { font-size: .74rem; font-weight: 600; color: var(--text-label);
+                display: block; margin-bottom: .2rem; }
+  #cresc-dose input, #cresc-dose select {
+                background: var(--bg-input); color: var(--text-main);
+                border: 1px solid var(--border-color); border-radius: 7px;
+                padding: .35rem .5rem; font-size: .86rem; width: 100%; }
+  #cresc-dose .dc-out { background: var(--surface-3); border: 1px solid var(--border-color);
+                border-radius: 10px; padding: .7rem .85rem; margin-top: .85rem; }
+  #cresc-dose .dc-big { font-size: 1.35rem; font-weight: 800; line-height: 1.15; }
+  #cresc-dose .dc-sub { font-size: .82rem; color: var(--text-secondary); }
+  #cresc-dose .dc-warn { border-radius: 8px; padding: .5rem .7rem; margin-top: .5rem;
+                font-size: .82rem; font-weight: 600; }
+  #cresc-dose .dc-warn.hard { background: var(--danger-bg); color: var(--danger-fg);
+                border: 1px solid var(--danger); }
+  #cresc-dose .dc-warn.soft { background: var(--warning-bg); color: var(--warning-fg);
+                border: 1px solid var(--warning); }
+  #cresc-dose .dc-warn.info { background: var(--info-bg); color: var(--info-fg);
+                border: 1px solid var(--info); }
+  #cresc-dose .dc-sig { font-family: monospace; font-size: .85rem; word-break: break-word; }
+</style>
+
+<div id="cresc-dose" hidden>
+  <div class="dc-card">
+    <div class="dc-head">
+      <div>
+        <div class="fw-bold"><i class="fa-solid fa-calculator me-2" style="color: var(--info-fg);"></i>Dose calculator</div>
+        <div class="label-bright small" id="dc-drug">&nbsp;</div>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="crescDoseClose()">Close</button>
+    </div>
+
+    <div class="dc-body">
+      <div class="row g-2">
+        <div class="col-6 col-md-3">
+          <label for="dc-weight">Weight (kg)</label>
+          <input type="number" step="0.1" min="0" id="dc-weight" placeholder="auto">
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="dc-age">Age</label>
+          <div class="d-flex gap-1">
+            <input type="number" step="1" min="0" id="dc-age" placeholder="0">
+            <select id="dc-age-unit" style="width: 6.5rem;">
+              <option value="years">years</option>
+              <option value="months">months</option>
+              <option value="days">days</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-12 col-md-6">
+          <label for="dc-mgkg">Dose</label>
+          <div class="d-flex gap-1">
+            <input type="number" step="0.01" min="0" id="dc-mgkg" placeholder="e.g. 15">
+            <!-- The basis is explicit. The old calculator had one box
+                 labelled per day, so a per-dose figure typed into it was
+                 quietly divided by the frequency again. -->
+            <select id="dc-basis" style="width: 11rem;">
+              <option value="day">mg / kg / day</option>
+              <option value="dose">mg / kg / dose</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label for="dc-freq">Doses per day</label>
+          <!-- The VALUE is doses per day, which is what the arithmetic needs.
+               Naming the interval as well stops "6-hourly" being read as six
+               doses a day. -->
+          <select id="dc-freq">
+            <option value="1">OD &mdash; once a day</option>
+            <option value="2" selected>BD &mdash; twice a day</option>
+            <option value="3">TDS &mdash; 3 a day (8-hourly)</option>
+            <option value="4">QID &mdash; 4 a day (6-hourly)</option>
+            <option value="6">6 a day (4-hourly)</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="dc-form">Formulation</label>
+          <select id="dc-form">
+            <option value="tab">Tablet / capsule</option>
+            <option value="liq">Syrup / suspension</option>
+            <option value="none">Milligrams only</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="dc-strength"><span id="dc-strength-lbl">mg per tablet</span></label>
+          <input type="number" step="0.01" min="0" id="dc-strength" placeholder="e.g. 250">
+        </div>
+        <div class="col-6 col-md-3" id="dc-perml-wrap" hidden>
+          <label for="dc-perml">per how many ml</label>
+          <input type="number" step="0.1" min="0" id="dc-perml" value="5">
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label for="dc-maxdose">Max per dose (mg)</label>
+          <input type="number" step="0.1" min="0" id="dc-maxdose" placeholder="optional">
+        </div>
+        <div class="col-6 col-md-3">
+          <label for="dc-maxday">Max per day (mg)</label>
+          <input type="number" step="0.1" min="0" id="dc-maxday" placeholder="optional">
+        </div>
+      </div>
+
+      <div class="dc-out" id="dc-out">
+        <div class="dc-sub">Enter a weight and a dose.</div>
+      </div>
+    </div>
+
+    <div class="dc-foot">
+      <div class="label-bright small">Always verify against the child's condition and the product label.</div>
+      <button type="button" class="btn btn-sm btn-info fw-bold text-white"
+              id="dc-insert" onclick="crescDoseInsert()" disabled>Insert into Sig</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var ctx = { row: null, sigSelector: '', sig: '' };
+
+  function el(id) { return document.getElementById(id); }
+  function num(id) { var v = parseFloat((el(id) || {}).value); return isNaN(v) ? 0 : v; }
+
+  /** Age in months, from whichever unit was chosen. */
+  function ageMonths() {
+    var n = num('dc-age');
+    if (!n) return null;
+    var unit = (el('dc-age-unit') || {}).value;
+    if (unit === 'months') return n;
+    if (unit === 'days') return n / 30.44;
+    return n * 12;
+  }
+
+  /**
+   * A tablet count a nurse can actually give: quarters up to 3 tablets,
+   * halves beyond that. 0.73 of a tablet is not a dose.
+   */
+  function practicalTabs(n) {
+    if (n <= 0) return { n: 0, text: '0' };
+    var step = (n <= 3) ? 0.25 : 0.5;
+    var rounded = Math.round(n / step) * step;
+    if (rounded <= 0) rounded = step;
+    var WORDS = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+    var whole = Math.floor(rounded);
+    var frac = Math.round((rounded - whole) * 100) / 100;
+    var text = whole ? String(whole) : '';
+    if (frac && WORDS[frac]) text = (whole ? whole + ' ' : '') + WORDS[frac];
+    else if (frac) text = String(rounded);
+    return { n: rounded, text: text || String(rounded) };
+  }
+
+  function syncFormRow() {
+    var form = (el('dc-form') || {}).value;
+    var lbl = el('dc-strength-lbl');
+    var perml = el('dc-perml-wrap');
+    if (lbl) lbl.textContent = (form === 'liq') ? 'mg in' : 'mg per tablet';
+    if (perml) perml.hidden = (form !== 'liq');
+    if (el('dc-strength')) el('dc-strength').disabled = (form === 'none');
+  }
+
+  function calc() {
+    var out = el('dc-out');
+    var btn = el('dc-insert');
+    if (!out) return;
+
+    var w = num('dc-weight');
+    var per = num('dc-mgkg');
+    var freq = parseInt((el('dc-freq') || {}).value, 10) || 1;
+    var basis = (el('dc-basis') || {}).value;
+    var form = (el('dc-form') || {}).value;
+    var strength = num('dc-strength');
+    var perMl = num('dc-perml') || 5;
+    var maxDose = num('dc-maxdose');
+    var maxDay = num('dc-maxday');
+
+    ctx.sig = '';
+    if (btn) btn.disabled = true;
+
+    if (!w || !per) {
+      out.innerHTML = '<div class="dc-sub">Enter a weight and a dose.</div>';
+      return;
+    }
+
+    // The basis decides which way the frequency applies. Getting this wrong
+    // is a factor-of-freq error in the dose, which is why it is a choice.
+    var perDose = (basis === 'dose') ? (w * per) : (w * per / freq);
+    var perDay  = perDose * freq;
+
+    var lines = [];
+    var sig = '';
+
+    if (form === 'liq' && strength > 0 && perMl > 0) {
+      var mlPerDose = perDose * perMl / strength;
+      var ml = Math.round(mlPerDose * 10) / 10;
+      lines.push('<div class="dc-big">' + ml + ' ml</div>' +
+                 '<div class="dc-sub">per dose &middot; ' + freq + ' time' +
+                 (freq === 1 ? '' : 's') + ' a day</div>');
+      lines.push('<div class="dc-sub mt-1">' + perDose.toFixed(1) + ' mg per dose &middot; ' +
+                 perDay.toFixed(1) + ' mg a day &middot; ' + strength + ' mg in ' + perMl + ' ml</div>');
+      sig = ml + ' ml ' + freqWord(freq) + ' (' + perDose.toFixed(1) + ' mg)';
+
+    } else if (form === 'tab' && strength > 0) {
+      var t = practicalTabs(perDose / strength);
+      var given = t.n * strength;
+      lines.push('<div class="dc-big">' + t.text + ' tablet' + (t.n === 1 ? '' : 's') + '</div>' +
+                 '<div class="dc-sub">per dose &middot; ' + freq + ' time' +
+                 (freq === 1 ? '' : 's') + ' a day &middot; ' + strength + ' mg tablets</div>');
+      lines.push('<div class="dc-sub mt-1">Calculated ' + perDose.toFixed(1) + ' mg per dose; ' +
+                 t.text + ' tablet gives ' + given.toFixed(1) + ' mg &middot; ' +
+                 (given * freq).toFixed(1) + ' mg a day</div>');
+      sig = t.text + ' tab ' + freqWord(freq) + ' (' + given.toFixed(1) + ' mg)';
+      // Rounding to something administrable can move the dose a long way on
+      // a small child, so say when it has.
+      var drift = Math.abs(given - perDose) / perDose;
+      if (drift > 0.2) {
+        lines.push('<div class="dc-warn soft">Rounding to ' + t.text + ' tablet changes the dose by ' +
+          Math.round(drift * 100) + '%. A liquid formulation may suit this weight better.</div>');
+      }
+      perDay = given * freq;
+
+    } else {
+      lines.push('<div class="dc-big">' + perDose.toFixed(1) + ' mg</div>' +
+                 '<div class="dc-sub">per dose &middot; ' + freq + ' time' +
+                 (freq === 1 ? '' : 's') + ' a day</div>');
+      lines.push('<div class="dc-sub mt-1">' + perDay.toFixed(1) + ' mg a day at ' +
+                 w + ' kg</div>');
+      sig = perDose.toFixed(1) + ' mg ' + freqWord(freq);
+    }
+
+    // ---- the checks the old calculator had none of ----------------------
+    if (maxDose > 0 && perDose > maxDose) {
+      lines.push('<div class="dc-warn hard">Over the stated maximum per dose: ' +
+        perDose.toFixed(1) + ' mg against a limit of ' + maxDose + ' mg.</div>');
+    }
+    if (maxDay > 0 && perDay > maxDay) {
+      lines.push('<div class="dc-warn hard">Over the stated maximum per day: ' +
+        perDay.toFixed(1) + ' mg against a limit of ' + maxDay + ' mg.</div>');
+    }
+
+    var am = ageMonths();
+    if (am !== null) {
+      if (am < 1 && w > 6) {
+        lines.push('<div class="dc-warn soft">A neonate weighing ' + w +
+          ' kg is unusual &mdash; check the weight and the age.</div>');
+      } else if (am >= 24 && w < 8) {
+        lines.push('<div class="dc-warn soft">' + Math.round(am / 12) + ' years at ' + w +
+          ' kg is below the expected range &mdash; check the weight.</div>');
+      }
+    }
+    if (w > 0 && w <= 3) {
+      lines.push('<div class="dc-warn info">Neonatal weight. Neonatal dosing is usually ' +
+        'per dose, not per day &mdash; check the basis above.</div>');
+    }
+    // A mg/kg/day figure in the hundreds is almost always a typing slip.
+    if (basis === 'day' && per > 200) {
+      lines.push('<div class="dc-warn soft">' + per + ' mg/kg/day is very high for most drugs. ' +
+        'Check whether this is a per-DOSE figure.</div>');
+    }
+
+    lines.push('<div class="dc-sub mt-2">Sig: <span class="dc-sig">' + sig + '</span></div>');
+
+    out.innerHTML = lines.join('');
+    ctx.sig = sig;
+    if (btn) btn.disabled = !sig;
+  }
+
+  function freqWord(f) {
+    return { 1: 'OD', 2: 'BD', 3: 'TDS', 4: 'QID', 6: '4-hourly' }[f] || (f + '/day');
+  }
+
+  /**
+   * Opens the calculator for one prescription row.
+   *
+   * @param {Object} o
+   * @param {HTMLElement} o.row          the <tr> to write the Sig back into
+   * @param {string} o.sigSelector       selector for the Sig input in that row
+   * @param {string} [o.nameSelector]    selector for the drug-name input
+   * @param {string} [o.weightElId]      id of the module's weight field
+   * @param {string} [o.demoElId]        id of the "32 Y | M" demographics span
+   */
+  window.crescDoseCalc = function (o) {
+    o = o || {};
+    var host = el('cresc-dose');
+    if (!host) return;
+    ctx.row = o.row || null;
+    ctx.sigSelector = o.sigSelector || '';
+    ctx.sig = '';
+
+    // Weight and age from whichever module asked, so nothing is retyped.
+    var w = o.weightElId && el(o.weightElId) ? el(o.weightElId).value : '';
+    if (el('dc-weight')) el('dc-weight').value = w || '';
+
+    if (o.demoElId && el(o.demoElId)) {
+      var demo = el(o.demoElId).innerText || '';
+      var y = demo.match(/(\d+)\s*Y/i);
+      var mo = demo.match(/(\d+)\s*M(?:onths?)?\b/i);
+      if (y) { el('dc-age').value = y[1]; el('dc-age-unit').value = 'years'; }
+      else if (mo) { el('dc-age').value = mo[1]; el('dc-age-unit').value = 'months'; }
+      else { el('dc-age').value = ''; }
+    }
+
+    var nameEl = (ctx.row && o.nameSelector) ? ctx.row.querySelector(o.nameSelector) : null;
+    if (el('dc-drug')) el('dc-drug').textContent = (nameEl && nameEl.value) ? nameEl.value : '';
+    if (nameEl && nameEl.dataset && nameEl.dataset.refdose) {
+      var n = String(nameEl.dataset.refdose).match(/[\d.]+/);
+      if (n && el('dc-mgkg')) el('dc-mgkg').value = n[0];
+    } else if (el('dc-mgkg')) {
+      el('dc-mgkg').value = '';
+    }
+
+    syncFormRow();
+    calc();
+    host.hidden = false;
+  };
+
+  window.crescDoseClose = function () {
+    var host = el('cresc-dose');
+    if (host) host.hidden = true;
+  };
+
+  window.crescDoseInsert = function () {
+    if (ctx.row && ctx.sigSelector && ctx.sig) {
+      var sigEl = ctx.row.querySelector(ctx.sigSelector);
+      if (sigEl) {
+        sigEl.value = ctx.sig;
+        sigEl.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    window.crescDoseClose();
+  };
+
+  // Live recalculation, and Escape to close.
+  ['dc-weight', 'dc-age', 'dc-age-unit', 'dc-mgkg', 'dc-basis', 'dc-freq',
+   'dc-strength', 'dc-perml', 'dc-maxdose', 'dc-maxday'].forEach(function (id) {
+    var e = el(id);
+    if (!e) return;
+    e.addEventListener('input', calc);
+    e.addEventListener('change', calc);
+  });
+  var formSel = el('dc-form');
+  if (formSel) {
+    formSel.addEventListener('change', function () { syncFormRow(); calc(); });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var host = el('cresc-dose');
+    if (host && !host.hidden) window.crescDoseClose();
+  });
+})();
+</script>

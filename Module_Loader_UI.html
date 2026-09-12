@@ -1,0 +1,358 @@
+<!-- =====================================================================
+     📦 MODULE LOADER — client half. Include LAST in Index.html.
+
+     It must be parsed after ScriptsMV (switchTab) and EMR_Cockpit
+     (openEMRWorkspace), because it wraps both: navigation now waits for the
+     target screen's bundle before it switches to it.
+     ===================================================================== -->
+<style>
+  /* ------------------------------------------------------------------
+     The host must not exist as far as layout is concerned.
+
+     .main-content is `display:flex; flex-direction:column`, and when the
+     modules were inlined their root divs were its direct flex items. Most
+     of the clinical screens are `h-100 flex-column app-view`, so their
+     height resolves against that flex parent. Putting them inside an
+     ordinary wrapper div would make the wrapper the flex item and leave
+     `h-100` resolving against its auto height — the case sheet, the notes
+     and the OP consult would all collapse to nothing.
+
+     `display: contents` removes the wrapper's own box, so the injected
+     sections become direct flex items of .main-content exactly as before.
+     ------------------------------------------------------------------ */
+  #cresc-module-host { display: contents; }
+
+  /* The wait is usually invisible — a prewarmed bundle resolves from cache
+     with no server call at all — so this only appears on a genuine fetch. */
+  #cresc-module-veil {
+    position: fixed; inset: 0; z-index: 4000;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--overlay-scrim, rgba(2, 6, 23, .55));
+    backdrop-filter: blur(3px);
+  }
+  #cresc-module-veil[hidden] { display: none !important; }
+  #cresc-module-veil .cmv-card {
+    background: var(--bg-elevated); color: var(--text-main);
+    border: 1px solid var(--border-color); border-radius: 14px;
+    padding: 20px 26px; box-shadow: var(--shadow-lg);
+    display: flex; align-items: center; gap: 14px;
+    font-weight: 600; font-size: .95rem;
+  }
+  #cresc-module-veil .cmv-sub {
+    display: block; font-weight: 400; font-size: .8rem;
+    color: var(--text-muted); margin-top: 2px;
+  }
+</style>
+
+<div id="cresc-module-veil" hidden>
+  <div class="cmv-card">
+    <i class="fa-solid fa-circle-notch fa-spin" style="color: var(--accent-fg);"></i>
+    <span>
+      <span id="cresc-module-veil-label">Opening…</span>
+      <span class="cmv-sub">Loading this module for the first time</span>
+    </span>
+  </div>
+</div>
+
+<script>
+window.CrescModules = (function () {
+  'use strict';
+
+  // ------------------------------------------------------------------
+  // Which bundle owns which screen.
+  //
+  // Keys are the ids switchTab() is given. Anything absent from this map
+  // is in the shell and needs no load — that is the default, so a new
+  // shell screen needs no entry here.
+  // ------------------------------------------------------------------
+  var TAB_BUNDLE = {
+    // patient portal
+    'tab-pat-home': 'patient', 'tab-pat-profile': 'patient',
+    'tab-pat-records': 'patient', 'tab-pat-appt': 'patient',
+    'tab-pat-meds': 'patient',
+    // appointments
+    'tab-admin-appt': 'appointments', 'tab-admin-avail': 'appointments',
+    // patients
+    'tab-admin-reg': 'patients', 'tab-admin-search': 'patients',
+    // hospital billing
+    'tab-admin-billing': 'billing',
+    // ward + discharge
+    'ip-ledger-view': 'emr-ward', 'ip-history-view': 'emr-ward',
+    'ip-bed-management-view': 'emr-ward',
+    'ds-desk-view': 'emr-discharge', 'ds-editor-view': 'emr-discharge',
+    // pharmacy
+    'workspace-pharmacy': null,
+    'tab-admin-pharmacy': 'pharmacy', 'pharmacy-inventory-view': 'pharmacy',
+    'pharmacy-billing-workspace': 'pharmacy', 'pharmacy-desk-workspace': 'pharmacy',
+    'pharmacy-dashboard-workspace': 'pharmacy',
+    // lab
+    'workspace-lab': 'lab', 'workspace-lab-catalog': 'lab',
+    'workspace-lab-records': 'lab', 'lab-workspace-view': 'lab',
+    'lab-billing-workspace': 'lab',
+    // accounts — the hub ships with its own scripts, so it is lazy too
+    'workspace-accounts': 'accounts', 'workspace-accounts-dashboard': 'accounts',
+    'workspace-accounts-ledger': 'accounts', 'workspace-accounts-drawer': 'accounts',
+    'workspace-accounts-payables': 'accounts', 'workspace-accounts-tpa': 'accounts',
+    'workspace-accounts-discharges': 'accounts', 'workspace-accounts-tax': 'accounts',
+    'workspace-accounts-iptab': 'accounts', 'workspace-accounts-discharge': 'accounts',
+    'workspace-accounts-insurance': 'accounts'
+  };
+
+  /** EMR sub-workspace id -> bundle, for openEMRWorkspace(). */
+  var EMR_BUNDLE = {
+    'op-consult': 'emr-op',
+    'ip-casesheet': 'emr-casesheet',
+    'ip-notes': 'emr-notes',
+    'records': 'emr-records',
+    'ip-records': 'emr-records'
+  };
+
+  /** A friendly name for the veil while a bundle is in flight. */
+  var LABEL = {
+    'patient': 'Opening your health record…',
+    'appointments': 'Opening appointments…',
+    'patients': 'Opening patients…',
+    'billing': 'Opening hospital billing…',
+    'emr-ward': 'Opening the ward…',
+    'emr-casesheet': 'Opening the case sheet…',
+    'emr-notes': 'Opening ward notes…',
+    'emr-op': 'Opening the consultation…',
+    'emr-records': 'Opening records…',
+    'emr-discharge': 'Opening the discharge desk…',
+    'pharmacy': 'Opening pharmacy…',
+    'lab': 'Opening the lab…',
+    'accounts': 'Opening accounts…',
+    'barcode': 'Starting the scanner…'
+  };
+
+  /**
+   * What each role actually uses, most-used first. Prewarmed in the
+   * background after sign-in so the first click is normally instant.
+   *
+   * The role's LANDING bundle leads, because for a pharmacist, a lab
+   * technician and an accountant the screen they are sent to on sign-in is
+   * itself a lazy bundle — they would otherwise watch the overlay while
+   * the scanner loaded ahead of the screen they asked for. `barcode`
+   * follows immediately: it only has to be live before they scan, and
+   * every scanner path is guarded until it is.
+   *
+   * Roles that land on a shell screen (admin, doctor, nurse, reception)
+   * keep `barcode` first, since nothing is blocking on anything else.
+   */
+  var PREWARM = {
+    'admin':        ['barcode', 'emr-ward', 'appointments', 'patients', 'accounts',
+                     'lab', 'pharmacy', 'emr-discharge', 'billing', 'emr-casesheet',
+                     'emr-notes', 'emr-op', 'emr-records'],
+    'doctor':       ['barcode', 'emr-op', 'emr-ward', 'emr-casesheet', 'emr-notes',
+                     'emr-records', 'emr-discharge', 'appointments', 'lab', 'patients'],
+    'nurse':        ['barcode', 'emr-ward', 'emr-notes', 'emr-casesheet',
+                     'emr-records', 'emr-discharge'],
+    'receptionist': ['barcode', 'appointments', 'patients', 'billing', 'emr-ward'],
+    'reception':    ['barcode', 'appointments', 'patients', 'billing', 'emr-ward'],
+    'accounts':     ['accounts', 'barcode', 'billing'],
+    'accountant':   ['accounts', 'barcode', 'billing'],
+    'pharmacy':     ['pharmacy', 'barcode'],
+    'pharmacist':   ['pharmacy', 'barcode'],
+    'lab':          ['lab', 'barcode'],
+    'patient':      ['patient']
+  };
+
+  var state = {};      // bundle -> 'loading' | 'ready' | 'failed'
+  var waiters = {};    // bundle -> [cb]
+  var readyCbs = {};   // bundle -> [cb] registered via onReady
+  var queue = [];      // prewarm backlog
+  var queueRunning = false;
+
+  function veil(on, bundle) {
+    var el = document.getElementById('cresc-module-veil');
+    if (!el) return;
+    if (on) {
+      var lbl = document.getElementById('cresc-module-veil-label');
+      if (lbl) lbl.textContent = LABEL[bundle] || 'Opening…';
+    }
+    el.hidden = !on;
+  }
+
+  function host() {
+    return document.getElementById('cresc-module-host') || document.body;
+  }
+
+  /**
+   * Puts a bundle's markup into the document and RUNS its scripts.
+   *
+   * innerHTML does not execute <script>, so each one is recreated as a fresh
+   * element and appended; an inline script runs synchronously on append, so
+   * the original order is preserved. They go on <body> rather than inside
+   * the host because that is where they ran when Index.html inlined them,
+   * and a few of them walk up from document.body.
+   */
+  function inject(html) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+
+    var scripts = Array.prototype.slice.call(tmp.getElementsByTagName('script'));
+    scripts.forEach(function (s) { s.parentNode.removeChild(s); });
+
+    var target = host();
+    while (tmp.firstChild) target.appendChild(tmp.firstChild);
+
+    scripts.forEach(function (old) {
+      var s = document.createElement('script');
+      for (var i = 0; i < old.attributes.length; i++) {
+        s.setAttribute(old.attributes[i].name, old.attributes[i].value);
+      }
+      if (!old.src) s.text = old.textContent;
+      document.body.appendChild(s);
+    });
+  }
+
+  function settle(name, ok) {
+    state[name] = ok ? 'ready' : 'failed';
+    var list = (waiters[name] || []).concat(ok ? (readyCbs[name] || []) : []);
+    waiters[name] = [];
+    if (ok) readyCbs[name] = [];   // onReady fires once
+    list.forEach(function (cb) {
+      try { cb(ok); } catch (e) { /* one bad callback must not stop the rest */ }
+    });
+  }
+
+  /**
+   * Loads a bundle once. Repeat calls while it is in flight join the same
+   * fetch; calls after it has arrived run the callback immediately.
+   *
+   * A bundle is injected EXACTLY once. Re-injecting would re-run top-level
+   * `const AccX = (function(){…})()` declarations and throw on redeclaration.
+   */
+  function load(name, cb) {
+    if (!name) { if (cb) cb(true); return; }
+    if (state[name] === 'ready')  { if (cb) cb(true);  return; }
+    if (state[name] === 'failed') { if (cb) cb(false); return; }
+
+    (waiters[name] = waiters[name] || []).push(cb || function () {});
+    if (state[name] === 'loading') return;
+    state[name] = 'loading';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        // google.script.run hands the SUCCESS handler null when the reply
+        // could not be carried back, so null is a failure, not an answer.
+        if (!res || !res.success || !res.html) {
+          if (window.crescDeployBanner) {
+            window.crescDeployBanner((res && res.message) ||
+              'The ' + name + ' screens could not be loaded. Reload the page to try again.');
+          }
+          settle(name, false);
+          return;
+        }
+        try {
+          inject(res.html);
+          settle(name, true);
+        } catch (e) {
+          if (window.crescDeployBanner) {
+            window.crescDeployBanner('The ' + name + ' screens failed to start: ' + e.message);
+          }
+          settle(name, false);
+        }
+      })
+      .withFailureHandler(function (err) {
+        if (window.crescDeployBanner) {
+          window.crescDeployBanner('Could not reach the server for the ' + name +
+            ' screens: ' + ((err && err.message) || err));
+        }
+        settle(name, false);
+      })
+      .crescGetBundle(name);
+  }
+
+  /** Runs `cb` once `name` is loaded, now or later. Never blocks. */
+  function onReady(name, cb) {
+    if (typeof cb !== 'function') return;
+    if (state[name] === 'ready') { cb(true); return; }
+    (readyCbs[name] = readyCbs[name] || []).push(cb);
+    if (!state[name]) enqueue([name]);
+  }
+
+  /** Background loads, one at a time so they never crowd out a click. */
+  function enqueue(names) {
+    names.forEach(function (n) {
+      if (n && !state[n] && queue.indexOf(n) === -1) queue.push(n);
+    });
+    runQueue();
+  }
+
+  function runQueue() {
+    if (queueRunning) return;
+    var next = queue.shift();
+    if (!next) return;
+    if (state[next]) { runQueue(); return; }
+    queueRunning = true;
+    load(next, function () {
+      queueRunning = false;
+      // Yield to the event loop so a user click is served before the next
+      // prewarm starts its round trip.
+      setTimeout(runQueue, 0);
+    });
+  }
+
+  /** Called from Auth after sign-in. */
+  function prewarmFor(role) {
+    var list = PREWARM[String(role || '').toLowerCase()];
+    if (!list) list = ['barcode'];
+    enqueue(list);
+  }
+
+  /**
+   * Ensures the bundle behind a tab id is present, then runs `cb`.
+   * `cb` runs even on failure so navigation is never left half-done; the
+   * screen will simply be missing and the banner will say why.
+   */
+  function ensureTab(tabId, cb) {
+    var bundle = TAB_BUNDLE[tabId];
+    if (!bundle || state[bundle] === 'ready') { cb(); return; }
+    veil(true, bundle);
+    load(bundle, function () { veil(false); cb(); });
+  }
+
+  function ensureEmr(workspaceId, cb) {
+    var bundle = EMR_BUNDLE[workspaceId];
+    if (!bundle || state[bundle] === 'ready') { cb(); return; }
+    veil(true, bundle);
+    load(bundle, function () { veil(false); cb(); });
+  }
+
+  // ------------------------------------------------------------------
+  // Wrap the two routers.
+  //
+  // Wrapping rather than editing them keeps every call site — including
+  // dozens of inline onclick attributes — working untouched, and keeps the
+  // whole lazy-loading concern inside this one file.
+  // ------------------------------------------------------------------
+  var rawSwitchTab = window.switchTab;
+  if (typeof rawSwitchTab === 'function') {
+    window.switchTab = function (tabId, clickedElement) {
+      var args = arguments;
+      var self = this;
+      ensureTab(tabId, function () { rawSwitchTab.apply(self, args); });
+    };
+  }
+
+  var rawOpenEmr = window.openEMRWorkspace;
+  if (typeof rawOpenEmr === 'function') {
+    window.openEMRWorkspace = function (workspaceId) {
+      var args = arguments;
+      var self = this;
+      ensureEmr(workspaceId, function () { rawOpenEmr.apply(self, args); });
+    };
+  }
+
+  return {
+    load: load,
+    onReady: onReady,
+    prewarmFor: prewarmFor,
+    prewarm: enqueue,
+    isReady: function (name) { return state[name] === 'ready'; },
+    status: function () { var c = {}; Object.keys(state).forEach(function (k) { c[k] = state[k]; }); return c; },
+    bundleForTab: function (tabId) { return TAB_BUNDLE[tabId] || null; }
+  };
+})();
+</script>

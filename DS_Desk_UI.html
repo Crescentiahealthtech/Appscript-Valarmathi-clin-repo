@@ -37,10 +37,54 @@
   .ds-tat-red   { color:var(--danger-fg);  font-weight:700; }
   .ds-tat-done  { color:var(--success-fg); }
 
-  /* ---- editor shell: three panels, one column below 992px ---- */
-  #ds-editor-view .ds-grid { display:grid; grid-template-columns:230px minmax(0,1fr) 320px;
-                             gap:1rem; align-items:start; }
-  @media (max-width: 991.98px) { #ds-editor-view .ds-grid { grid-template-columns:1fr; } }
+  /* ---- editor shell -------------------------------------------------
+     The three support panels — the section jump list, readiness and the
+     workflow trail — used to be the left and right columns of a three
+     column grid, leaving the document itself a middle lane a third of the
+     screen wide. The document is the work; complaints, history, the course
+     in hospital, the investigations table and the discharge script all
+     needed the room the panels were holding.
+
+     So the panels are a short strip along the top, and every section box
+     below spans the FULL width of all three. Below 992px the strip stacks.
+     -------------------------------------------------------------------- */
+  #ds-editor-view .ds-grid { display:grid; gap:1rem; align-items:start;
+                             grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
+                             grid-template-areas:"nav ready flow"
+                                                 "secs secs secs"; }
+  #ds-editor-view .ds-area-nav   { grid-area:nav; }
+  #ds-editor-view .ds-area-ready { grid-area:ready; }
+  #ds-editor-view .ds-area-flow  { grid-area:flow; }
+  #ds-editor-view .ds-area-secs  { grid-area:secs; min-width:0; }
+
+  @media (max-width: 991.98px) {
+    #ds-editor-view .ds-grid { grid-template-columns:1fr;
+                               grid-template-areas:"nav" "ready" "flow" "secs"; }
+  }
+
+  /* The jump list reads across rather than down, so the strip stays short
+     with eighteen sections in it. */
+  #ds-ed-nav { display:flex; flex-wrap:wrap; gap:.3rem; max-height:8.5rem; overflow:auto; }
+  #ds-ed-nav .ds-navitem { width:auto; flex:0 0 auto; padding:.25rem .5rem; font-size:.78rem; }
+  #ds-ed-nav .ds-navitem .ds-state { margin-left:.25rem; }
+
+  /* A vitals strip: small fixed-width boxes on one line, wrapping. */
+  #ds-editor-view .ds-vitals { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:.6rem; }
+  #ds-editor-view .ds-vitals .ds-vital { flex:0 0 8.5rem; }
+  #ds-editor-view .ds-vitals .ds-vital.ds-vital-wide { flex:1 1 14rem; }
+
+  /* Phrase-library picker */
+  #ds-editor-view .ds-pick { position:relative; }
+  #ds-editor-view .ds-picklist { position:absolute; z-index:1200; left:0; right:0; top:100%;
+      background:var(--bg-elevated); border:1px solid var(--border-color);
+      border-radius:8px; box-shadow:var(--shadow-lg); max-height:15rem; overflow:auto; }
+  #ds-editor-view .ds-picklist button { display:block; width:100%; text-align:left;
+      background:transparent; border:0; color:var(--text-main);
+      padding:.35rem .6rem; font-size:.82rem; }
+  #ds-editor-view .ds-picklist button:hover,
+  #ds-editor-view .ds-picklist button.ds-pickon { background:var(--surface-hover); }
+  #ds-editor-view .ds-picklist .ds-pickmeta { color:var(--text-muted); font-size:.72rem; }
+  #ds-editor-view .ds-pickempty { color:var(--text-muted); padding:.4rem .6rem; font-size:.8rem; }
 
   .ds-panel      { background:var(--bg-card); border:1px solid var(--border-color);
                    border-radius:12px; padding:.9rem; }
@@ -171,7 +215,16 @@
       <div class="ds-muted" id="ds-ed-banner"></div>
       <div class="mt-1" id="ds-ed-statusline"></div>
     </div>
-    <div class="d-flex flex-wrap gap-2" id="ds-ed-actions"></div>
+    <div class="d-flex flex-wrap gap-2 align-items-start">
+      <!-- Writing the investigations and the pending-results sections means
+           reading the actual numbers. This opens them here rather than
+           sending the writer to the Lab module and back. -->
+      <button type="button" class="btn btn-sm btn-outline-info" id="ds-ed-labs"
+              onclick="dsPeekLabs()" title="This patient's verified lab results">
+        <i class="fa-solid fa-flask-vial me-1"></i> Labs
+      </button>
+      <div class="d-flex flex-wrap gap-2" id="ds-ed-actions"></div>
+    </div>
   </div>
 
   <div id="ds-ed-presence" class="alert alert-warning py-2 px-3 d-none" role="status"></div>
@@ -184,31 +237,29 @@
 
   <div class="ds-grid" id="ds-ed-grid">
 
-    <!-- LEFT: section navigator -->
-    <div class="ds-panel">
+    <!-- TOP STRIP: jump list, readiness, workflow -->
+    <div class="ds-panel ds-area-nav">
       <div class="fw-bold mb-2" style="font-size:.85rem">Sections</div>
-      <div id="ds-ed-nav" class="d-flex flex-column gap-1"></div>
+      <div id="ds-ed-nav"></div>
     </div>
 
-    <!-- CENTRE: editors -->
-    <div>
+    <div class="ds-panel ds-area-ready">
+      <div class="fw-bold mb-2" style="font-size:.85rem">
+        <i class="fa-solid fa-clipboard-check me-1"></i> Readiness
+      </div>
+      <div id="ds-ed-readiness" style="max-height:8.5rem; overflow:auto"></div>
+    </div>
+
+    <div class="ds-panel ds-area-flow">
+      <div class="fw-bold mb-2" style="font-size:.85rem">
+        <i class="fa-solid fa-clock-rotate-left me-1"></i> Workflow
+      </div>
+      <div id="ds-ed-timeline" style="max-height:8.5rem; overflow:auto"></div>
+    </div>
+
+    <!-- THE DOCUMENT: full width, all three columns -->
+    <div class="ds-area-secs">
       <div id="ds-ed-sections"></div>
-    </div>
-
-    <!-- RIGHT: readiness, timeline -->
-    <div class="d-flex flex-column gap-3">
-      <div class="ds-panel">
-        <div class="fw-bold mb-2" style="font-size:.85rem">
-          <i class="fa-solid fa-clipboard-check me-1"></i> Readiness
-        </div>
-        <div id="ds-ed-readiness"></div>
-      </div>
-      <div class="ds-panel">
-        <div class="fw-bold mb-2" style="font-size:.85rem">
-          <i class="fa-solid fa-clock-rotate-left me-1"></i> Workflow
-        </div>
-        <div id="ds-ed-timeline" style="max-height:340px; overflow:auto"></div>
-      </div>
     </div>
   </div>
 </div>

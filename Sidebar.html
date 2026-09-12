@@ -49,6 +49,41 @@
         gap: 0 !important;
     }
   }
+
+  /* ------------------------------------------------------------------
+     ACCOUNT MENU
+
+     Anchored to the rail rather than to the avatar, and fixed-position so
+     it is never clipped by the rail's own overflow: the rail scrolls, and
+     a menu inside a scrolling 85px column would be cut off at the edge.
+     ------------------------------------------------------------------ */
+  #sidebar .sidebar-avatar { cursor: pointer; transition: box-shadow .15s ease; }
+  #sidebar .sidebar-avatar:hover,
+  #sidebar .sidebar-avatar[aria-expanded="true"] {
+      box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  .sidebar-account-menu {
+      position: fixed; z-index: 2200; min-width: 208px;
+      background: var(--bg-elevated); color: var(--text-main);
+      border: 1px solid var(--border-color); border-radius: 10px;
+      box-shadow: var(--shadow-lg); padding: .35rem;
+  }
+  .sidebar-account-menu[hidden] { display: none !important; }
+  .sidebar-account-menu .sam-who {
+      padding: .45rem .6rem .5rem; margin-bottom: .25rem;
+      border-bottom: 1px solid var(--divider-color);
+  }
+  .sidebar-account-menu .sam-item {
+      display: flex; align-items: center; gap: .6rem; width: 100%;
+      background: transparent; border: 0; border-radius: 7px;
+      padding: .45rem .6rem; color: var(--text-main);
+      font-size: .86rem; font-weight: 500; text-align: left;
+  }
+  .sidebar-account-menu .sam-item:hover { background: var(--surface-hover); }
+  .sidebar-account-menu .sam-item i { width: 1rem; text-align: center; color: var(--text-muted); }
+  .sidebar-account-menu .sam-danger { color: var(--danger-fg); }
+  .sidebar-account-menu .sam-danger i { color: var(--danger-fg); }
 </style>
 
 <div id="sidebar" class="sidebar py-3 d-flex flex-column h-100">
@@ -66,7 +101,7 @@
     <a class="nav-link active" onclick="switchTab('tab-pat-home', this)"><i class="fa-solid fa-house"></i> <span class="sidebar-text">Home</span></a>
     <a class="nav-link" onclick="switchTab('tab-pat-profile', this)"><i class="fa-solid fa-user"></i> <span class="sidebar-text">My Profile</span></a>
     <a class="nav-link" onclick="switchTab('tab-pat-records', this)"><i class="fa-solid fa-file-medical"></i> <span class="sidebar-text">Records & Labs</span></a>
-    <a class="nav-link" onclick="switchTab('tab-pat-appt', this); initPatientBooking();"><i class="fa-solid fa-calendar-check"></i> <span class="sidebar-text">Book Appointment</span></a>
+    <a class="nav-link" onclick="switchTab('tab-pat-appt', this)"><i class="fa-solid fa-calendar-check"></i> <span class="sidebar-text">Book Appointment</span></a>
     <a class="nav-link" onclick="switchTab('tab-pat-meds', this)"><i class="fa-solid fa-pills"></i> <span class="sidebar-text">Order Medications</span></a>
   </div>
 
@@ -93,12 +128,34 @@
   </div>
 
   <div class="sidebar-profile pt-3 mt-3 border-top border-secondary flex-shrink-0">
-    <div class="profile-row d-flex align-items-center gap-3">
-      <div class="rounded-circle d-flex justify-content-center align-items-center text-white fw-bold on-accent" style="width: 35px; height: 35px; background-color: var(--accent-purple);" id="profile-initial">?</div>
+    <!-- Collapsed, the avatar is the only thing left of this row, and Sign
+         Out is inside .profile-details which is hidden. Signing out therefore
+         meant opening the whole rail first. The avatar is now a button: it
+         opens a small account menu with Sign Out in it, wherever the rail is. -->
+    <div class="profile-row d-flex align-items-center gap-3" id="sidebar-profile-row">
+      <button type="button"
+              class="rounded-circle d-flex justify-content-center align-items-center text-white fw-bold on-accent sidebar-avatar"
+              style="width: 35px; height: 35px; background-color: var(--accent-purple); border: 0; flex-shrink: 0;"
+              id="profile-initial"
+              aria-haspopup="true" aria-expanded="false"
+              title="Account" onclick="crescToggleAccountMenu(event)">?</button>
       <div class="profile-details">
         <h6 id="display-user-name" class="m-0 text-white small">Loading...</h6>
-        <small><a href="#" onclick="signOut()" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
+        <small><a href="#" onclick="signOut(); return false;" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
       </div>
+    </div>
+
+    <div id="sidebar-account-menu" class="sidebar-account-menu" hidden>
+      <div class="sam-who">
+        <div class="fw-bold small" id="sam-name">&nbsp;</div>
+        <div class="label-bright" style="font-size:.72rem;" id="sam-role">&nbsp;</div>
+      </div>
+      <button type="button" class="sam-item" onclick="toggleTheme(); crescCloseAccountMenu();">
+        <i class="fa-solid fa-circle-half-stroke"></i> Toggle theme
+      </button>
+      <button type="button" class="sam-item sam-danger" onclick="crescCloseAccountMenu(); signOut();">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign out
+      </button>
     </div>
   </div>
   
@@ -180,6 +237,64 @@
     }
     window.addEventListener('resize', crescCollapseSidebar);
   })();
+
+  /* ===================================================================
+     ACCOUNT MENU — sign out without opening the rail
+     =================================================================== */
+
+  function crescCloseAccountMenu() {
+    var menu = document.getElementById('sidebar-account-menu');
+    var btn  = document.getElementById('profile-initial');
+    if (menu) menu.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+  window.crescCloseAccountMenu = crescCloseAccountMenu;
+
+  function crescToggleAccountMenu(ev) {
+    if (ev) ev.stopPropagation();
+    var menu = document.getElementById('sidebar-account-menu');
+    var btn  = document.getElementById('profile-initial');
+    if (!menu || !btn) return;
+
+    if (!menu.hidden) { crescCloseAccountMenu(); return; }
+
+    // Name and role, so the menu says whose account is about to sign out.
+    var nameEl = document.getElementById('display-user-name');
+    var samName = document.getElementById('sam-name');
+    var samRole = document.getElementById('sam-role');
+    if (samName) samName.textContent = nameEl ? nameEl.textContent : '';
+    if (samRole) {
+      var role = String(window.loggedInRole || '');
+      samRole.textContent = role ? (role.charAt(0).toUpperCase() + role.slice(1)) : '';
+    }
+
+    // Placed beside the avatar and nudged back on screen if it would overflow.
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    var box = btn.getBoundingClientRect();
+    var w = menu.offsetWidth || 208;
+    var h = menu.offsetHeight || 120;
+    var left = Math.min(box.right + 8, window.innerWidth - w - 8);
+    var top  = Math.min(Math.max(8, box.top - h + box.height), window.innerHeight - h - 8);
+    menu.style.left = Math.max(8, left) + 'px';
+    menu.style.top  = top + 'px';
+  }
+  window.crescToggleAccountMenu = crescToggleAccountMenu;
+
+  // Anything else closes it: a click elsewhere, Escape, a resize or a scroll
+  // (it is fixed-position, so it would otherwise sit where the avatar was).
+  document.addEventListener('click', function (ev) {
+    var menu = document.getElementById('sidebar-account-menu');
+    if (!menu || menu.hidden) return;
+    if (ev.target.closest && ev.target.closest('#sidebar-account-menu')) return;
+    if (ev.target.closest && ev.target.closest('#profile-initial')) return;
+    crescCloseAccountMenu();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') crescCloseAccountMenu();
+  });
+  window.addEventListener('resize', crescCloseAccountMenu);
+  window.addEventListener('scroll', crescCloseAccountMenu, true);
 
   // 2. Theme control
   // Single entry point for the theme. The class is kept on the root element

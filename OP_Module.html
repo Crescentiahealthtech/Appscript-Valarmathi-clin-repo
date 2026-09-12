@@ -123,6 +123,11 @@
       <span class="text-warning fw-bold small" id="hd-pat-demo">-- Y | -</span>
       <span id="hd-allergy-chip" class="op-allergy-none" onclick="openAllergyEditor()">Allergies: not recorded</span>
 
+      <!-- Verified lab results for this patient, over the top of the consult.
+           Reading them used to mean leaving the consultation, opening the Lab
+           module and searching for the patient by name or number. -->
+      <button class="btn btn-outline-info btn-sm py-1 px-2" onclick="crescLabPeek(window.currentPatientId, document.getElementById('hd-pat-name').textContent)" title="This patient's verified lab results, without leaving the consult"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
+
       <span class="ms-auto text-muted small">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></span>
     </div>
 
@@ -595,39 +600,11 @@
 </div>
 
 <!-- ===================== DOSE CALCULATOR ===================== -->
-<div class="modal fade" id="opDoseCalcModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered">
-    <div class="modal-content text-white" style="background-color: var(--bg-input); border: 1px solid var(--info);">
-      <div class="modal-header py-2 border-secondary">
-        <h6 class="m-0 text-info"><i class="fa-solid fa-calculator"></i> Dose calculator</h6>
-        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-3">
-        <label class="hd-label">Weight (kg)</label>
-        <input type="number" class="hd-input mb-2" id="dc-weight" placeholder="auto from vitals">
-        <label class="hd-label">Age</label>
-        <div class="d-flex gap-1 mb-2">
-          <input type="number" class="hd-input" id="dc-age" placeholder="0">
-          <select class="hd-input" id="dc-age-unit" style="width:90px;"><option value="years">years</option><option value="months">months</option></select>
-        </div>
-        <label class="hd-label">Dose (mg / kg / day)</label>
-        <input type="number" class="hd-input mb-2" id="dc-mgkg" placeholder="e.g. 15">
-        <label class="hd-label">Doses per day</label>
-        <select class="hd-input mb-2" id="dc-freq">
-          <option value="1">OD (1)</option><option value="2" selected>BD (2)</option>
-          <option value="3">TDS (3)</option><option value="4">QID (4)</option>
-        </select>
-        <label class="hd-label">Strength available (mg per tab / 5 ml) &mdash; optional</label>
-        <input type="number" class="hd-input mb-2" id="dc-strength" placeholder="e.g. 250">
-        <div class="bg-black rounded p-2 mt-2 small" id="dc-output" style="white-space:pre-line; min-height:60px; border: 1px solid var(--border-hover);">&mdash;</div>
-      </div>
-      <div class="modal-footer py-1 border-secondary">
-        <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Close</button>
-        <button class="btn btn-sm btn-info fw-bold text-white" onclick="insertOPDose()">Insert into Sig</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- The dose calculator modal that stood here is gone. It was one of two
+     byte-identical copies (the other in IP_Casesheet_UI), and both used the
+     same dc-* element ids. Dose_Calculator.html in the shell is the single
+     one now, shared by the consult and the case sheet, and it does the
+     checks neither copy did. -->
 
 <!-- ===================== SAVE TEMPLATE ===================== -->
 <div class="modal fade" id="opSaveTemplateModal" tabindex="-1">
@@ -878,9 +855,9 @@ let opConsultTemplates = [];
 let opPatientAllergies = { recorded: false, raw: "", list: [] };
 let currentOPDialTarget = null;
 let activeOpEncounterId = "";
-let opDoseTargetRow = null;
+/* opDoseTargetRow / _opDoseSig retired with the local calculator; the
+   shared one in Dose_Calculator.html keeps its own target row. */
 let opTaperTargetRow = null;
-let _opDoseSig = '';
 let _opTaperPlan = null;
 let _safetyTimer = null;
 let opSysDefaults = {
@@ -2357,7 +2334,7 @@ function addOPRxRow(pre) {
           '<div class="d-flex align-items-center gap-1">' +
             '<input type="text" class="hd-input dial-trigger op-rx-sig text-warning fw-bold text-center" placeholder="Dosage" onclick="openOPDialPad(this, \'rx\')">' +
             '<input type="text" class="hd-input op-rx-rate text-info fw-bold text-center d-none" placeholder="ml/hr" title="Infusion rate in ml/hr">' +
-            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print op-rx-dosecalc" style="font-size:0.6rem;" title="Dose calculator" onclick="openOPDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>' +
+            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print op-rx-dosecalc" style="font-size:0.6rem;" title="Dose calculator" onclick="crescDoseCalc({row:this.closest(\'tr\'), sigSelector:\'.op-rx-sig\', nameSelector:\'.op-rx-name\', weightElId:\'op-vit-wt\', demoElId:\'hd-pat-demo\'})"><i class="fa-solid fa-calculator"></i></button>' +
           '</div>' +
         '</td>' +
         '<td><input type="text" class="hd-input dial-trigger op-rx-days text-info text-center" placeholder="Days" onclick="openOPDialPad(this, \'dur\')"></td>' +
@@ -2783,55 +2760,13 @@ function opLoadIntegrationData() {
 // ============================================================================
 // DOSE CALCULATOR
 // ============================================================================
-function freqWord(f) { return ({ 1: 'OD', 2: 'BD', 3: 'TDS', 4: 'QID' })[f] || (f + 'x/day'); }
+/* freqWord() went with the local dose calculator, its only caller. The
+   shared calculator carries its own. */
 
-function openOPDoseCalc(btn) {
-    opDoseTargetRow = btn.closest('tr');
-    const w = document.getElementById('op-vit-wt')?.value;
-    if (w) document.getElementById('dc-weight').value = w;
-    const demo = document.getElementById('hd-pat-demo')?.innerText || '';
-    const am = demo.match(/(\d+)\s*Y/i);
-    if (am) document.getElementById('dc-age').value = am[1];
-
-    const nameEl = opDoseTargetRow.querySelector('.op-rx-name');
-    if (nameEl && nameEl.dataset.refdose) {
-        const num = String(nameEl.dataset.refdose).match(/[\d.]+/);
-        if (num) document.getElementById('dc-mgkg').value = num[0];
-    }
-    calcOPDose();
-    ['dc-weight', 'dc-age', 'dc-mgkg', 'dc-freq', 'dc-strength'].forEach(function (id) {
-        const el = document.getElementById(id); el.oninput = calcOPDose; el.onchange = calcOPDose;
-    });
-    new bootstrap.Modal(document.getElementById('opDoseCalcModal')).show();
-}
-
-function calcOPDose() {
-    const w = parseFloat(document.getElementById('dc-weight').value);
-    const mgkg = parseFloat(document.getElementById('dc-mgkg').value);
-    const freq = parseInt(document.getElementById('dc-freq').value, 10) || 1;
-    const strength = parseFloat(document.getElementById('dc-strength').value);
-    const out = document.getElementById('dc-output');
-    if (!w || !mgkg) { out.innerText = 'Enter weight and mg/kg/day.'; _opDoseSig = ''; return; }
-    const perDay = w * mgkg;
-    const perDose = perDay / freq;
-    let txt = 'Total/day: ' + perDay.toFixed(1) + ' mg\nPer dose: ' + perDose.toFixed(1) + ' mg \u00d7 ' + freq + '/day';
-    let sig = perDose.toFixed(1) + ' mg ' + freqWord(freq);
-    if (strength > 0) {
-        const units = perDose / strength;
-        txt += '\n\u2248 ' + units.toFixed(2) + ' unit per dose (of ' + strength + ' mg)';
-        sig = units.toFixed(2) + ' unit ' + freqWord(freq) + ' (' + perDose.toFixed(1) + ' mg)';
-    }
-    out.innerText = txt;
-    _opDoseSig = sig;
-}
-
-function insertOPDose() {
-    if (opDoseTargetRow && _opDoseSig) {
-        const sigEl = opDoseTargetRow.querySelector('.op-rx-sig');
-        if (sigEl) sigEl.value = _opDoseSig;
-    }
-    bootstrap.Modal.getInstance(document.getElementById('opDoseCalcModal'))?.hide();
-}
+/* openOPDoseCalc / calcOPDose / insertOPDose lived here and were duplicated
+   verbatim in IP_Casesheet_UI. The prescription row's calculator button now
+   calls window.crescDoseCalc() (Dose_Calculator.html, in the shell), which
+   takes the row and the selectors for its name and Sig inputs. */
 
 // ============================================================================
 // PAYLOAD

@@ -113,7 +113,30 @@ var DSState = {
   presenceTimer: null,
   initiateIp: null,
   reasonHandler: null,
-  diffMode: 'staff'
+  diffMode: 'staff',
+  pickers: null,           // ds_getPickers payload, fetched once per session
+  pickersPending: false
+};
+
+/* Sections whose lines are "condition — duration" pairs. Stored as one
+   string per line exactly as before, so print, validation and the diff are
+   untouched; the editor just gives each line two boxes instead of one. */
+var DS_PAIR_SECTIONS = ['PRESENTING_COMPLAINTS', 'HISTORY'];
+
+/* The separator dsx_conditionLines_() writes between the two halves. */
+var DS_PAIR_SEP = ' \u2014 ';
+
+/* Fields rendered as a vitals strip rather than half-width rows, in the
+   order a chart records them. */
+var DS_VITAL_FIELDS = ['bpMmHg', 'pulsePerMin', 'spo2Percent', 'temperature',
+                       'respRatePerMin', 'weightKg', 'heightCm', 'otherVitals'];
+
+/* Which phrase list feeds which section or field. */
+var DS_PHRASE_SOURCE = {
+  'PRESENTING_COMPLAINTS': 'cc',
+  'HISTORY': 'hx',
+  'ADVICE': 'advice',
+  'RED_FLAGS': 'advice'
 };
 
 var DS_STATUS_TABS = [
@@ -134,7 +157,7 @@ var DS_SECTION_ORDER = [
   'PATIENT_BANNER', 'ADMISSION_DETAILS', 'DIAGNOSIS', 'PRESENTING_COMPLAINTS',
   'HISTORY', 'ALLERGIES', 'EXAM_ON_ADMISSION', 'INVESTIGATIONS', 'PENDING_RESULTS',
   'PROCEDURES', 'HOSPITAL_COURSE', 'TREATMENT_GIVEN', 'CONDITION_AT_DISCHARGE',
-  'DISCHARGE_MEDICATIONS', 'STOPPED_MEDICATIONS', 'ADVICE', 'FOLLOW_UP', 'RED_FLAGS',
+  'DISCHARGE_MEDICATIONS', 'ADVICE', 'FOLLOW_UP', 'RED_FLAGS',
   'LAMA_DETAILS', 'REFERRAL_DETAILS', 'DEATH_DETAILS', 'ABSCOND_DETAILS', 'SIGNATURES'
 ];
 
@@ -577,6 +600,18 @@ function dsRenderEditor() {
   dsRenderSections();
   dsRenderReadiness();
   dsRenderTimeline();
+
+  // The phrase library and the formulary arrive after the document does, so
+  // the summary is on screen and editable immediately. When they land, the
+  // sections are repainted once to attach the pickers — but only if the
+  // clinician has not started typing, so a repaint can never take a
+  // keystroke or a caret away from them.
+  if (!DSState.pickers) {
+    dsLoadPickers(function () {
+      if (Object.keys(DSState.dirty).length) return;
+      if (DSState.summaryId) dsRenderSections();
+    });
+  }
 }
 
 function dsRenderActions() {
@@ -668,6 +703,151 @@ function dsRenderNav() {
   });
 }
 
+/* =====================================================================
+   PICK LISTS — phrase library, formulary, field labels
+   ---------------------------------------------------------------------
+   One fetch per editing session. Everything it returns is clinic
+   reference data, so it is cached on DSState and reused for every summary
+   the user opens. If it fails the editor stays fully usable: every box it
+   decorates is a plain text input underneath.
+   ================================================================== */
+
+function dsLoadPickers(after) {
+  if (DSState.pickers) { if (after) after(); return; }
+  if (DSState.pickersPending) return;          // one flight at a time
+  DSState.pickersPending = true;
+
+  var runner = dsRunner('ds_getPickers',
+    function (res) {
+      DSState.pickersPending = false;
+      DSState.pickers = (res && res.cc) ? res : { cc: [], hx: [], advice: [], drugs: [], fieldLabels: {} };
+      if (res && res.message) dsNotice('warning', res.message);
+      if (after) after();
+    },
+    function () {
+      DSState.pickersPending = false;
+      DSState.pickers = { cc: [], hx: [], advice: [], drugs: [], fieldLabels: {} };
+      if (after) after();
+    });
+  if (!runner) { DSState.pickersPending = false; DSState.pickers = { cc: [], hx: [], advice: [], drugs: [], fieldLabels: {} }; if (after) after(); return; }
+  runner.ds_getPickers(dsToken());
+}
+
+/** Opens the shared lab viewer for the patient this summary belongs to. */
+function dsPeekLabs() {
+  var b = (DSState.payload && DSState.payload.sections &&
+           DSState.payload.sections.PATIENT_BANNER &&
+           DSState.payload.sections.PATIENT_BANNER.content) || {};
+  if (typeof window.crescLabPeek !== 'function') {
+    dsNotice('warning', 'The lab viewer is not available on this deployment.');
+    return;
+  }
+  window.crescLabPeek(b.patientId || '', b.name || '');
+}
+
+function dsPhrases(name) {
+  var p = DSState.pickers;
+  return (p && p[name]) ? p[name] : [];
+}
+
+/** The server's label for a field key, or a humanised fallback. */
+function dsFieldLabel(key) {
+  var labels = (DSState.pickers && DSState.pickers.fieldLabels) || {};
+  if (labels[key]) return labels[key];
+  var s = String(key).replace(/([A-Z])/g, ' $1').toLowerCase().trim();
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/* ---------------------------------------------------------------------
+   A suggestion list under any input.
+
+   Kept deliberately plain: it filters on what has been typed, commits on
+   click or Enter, and closes on Escape or blur. The input keeps working
+   if the list is empty, because a phrase library is a shortcut and never
+   a constraint on what a clinician may write.
+   ------------------------------------------------------------------ */
+
+function dsCloseAllPicks() {
+  Array.prototype.forEach.call(document.querySelectorAll('#ds-ed-sections .ds-picklist'),
+    function (el) { el.remove(); });
+}
+
+/**
+ * @param {HTMLInputElement} input
+ * @param {function():Array} supply   items: {text, meta} or {brand, generic, ...}
+ * @param {function(Object)} commit   called with the chosen item
+ */
+function dsAttachPicker(input, supply, commit) {
+  var wrap = input.closest('.ds-pick');
+  if (!wrap) return;
+
+  var open = function () {
+    dsCloseAllPicks();
+    var typed = String(input.value || '').toLowerCase().trim();
+    var items = supply().filter(function (it) {
+      if (!typed) return true;
+      return String(it.__search || it.text || '').toLowerCase().indexOf(typed) > -1;
+    }).slice(0, 40);
+
+    var list = document.createElement('div');
+    list.className = 'ds-picklist';
+    if (!items.length) {
+      list.innerHTML = '<div class="ds-pickempty">' +
+        (typed ? 'No match &mdash; what you type is kept.' : 'Nothing in the library yet.') + '</div>';
+    } else {
+      list.innerHTML = items.map(function (it, i) {
+        return '<button type="button" data-ds-picki="' + i + '">' + dsEsc(it.label || it.text) +
+               (it.meta ? ' <span class="ds-pickmeta">' + dsEsc(it.meta) + '</span>' : '') +
+               '</button>';
+      }).join('');
+    }
+    wrap.appendChild(list);
+
+    Array.prototype.forEach.call(list.querySelectorAll('[data-ds-picki]'), function (b) {
+      b.addEventListener('mousedown', function (ev) {
+        ev.preventDefault();                        // keep focus off the blur race
+        commit(items[Number(b.getAttribute('data-ds-picki'))]);
+        list.remove();
+      });
+    });
+  };
+
+  input.addEventListener('focus', open);
+  input.addEventListener('input', open);
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') dsCloseAllPicks();
+  });
+  input.addEventListener('blur', function () {
+    // A click on the list fires mousedown before blur, so a short delay lets
+    // the choice land before the list goes away.
+    setTimeout(dsCloseAllPicks, 120);
+  });
+}
+
+/** Phrase items shaped for dsAttachPicker. */
+function dsPhraseItems(sourceName) {
+  return dsPhrases(sourceName).map(function (p) {
+    return { text: p.text, label: p.text, __search: p.text,
+             meta: p.count > 1 ? ('used ' + p.count + '×') : '' };
+  });
+}
+
+/** Formulary items shaped for dsAttachPicker. */
+function dsDrugItems() {
+  var drugs = (DSState.pickers && DSState.pickers.drugs) || [];
+  return drugs.map(function (d) {
+    var stockNote = (d.stock === null || d.stock === undefined)
+      ? 'not stocked here'
+      : (d.stock > 0 ? ('in stock ' + d.stock) : 'OUT OF STOCK');
+    return {
+      brand: d.brand, generic: d.generic, type: d.type, dose: d.dose,
+      label: d.brand + (d.generic ? ' (' + d.generic + ')' : ''),
+      meta: d.type + ' · ' + stockNote,
+      __search: d.brand + ' ' + d.generic
+    };
+  });
+}
+
 function dsRenderSections() {
   var p = DSState.payload;
   if (!p) { dsEl(DS_IDS.edSections).innerHTML = ''; return; }
@@ -741,33 +921,119 @@ function dsRenderFields(key, sec, readOnly) {
   var c = sec.content || {};
   var keys = Object.keys(c);
   if (!keys.length) return '<div class="ds-muted">Nothing recorded.</div>';
-  return '<div class="row g-2">' + keys.map(function (f) {
-    var label = f.replace(/([A-Z])/g, ' $1').replace(/^./, function (m) { return m.toUpperCase(); });
+
+  // Vitals come first, as their own strip of small boxes on one line. They
+  // used to be a single "BP 120/80 · PR 88 · SpO2 97" string in one wide
+  // input: correcting the pulse meant retyping the line and keeping the
+  // separators right.
+  var vitals = keys.filter(function (f) { return DS_VITAL_FIELDS.indexOf(f) > -1; });
+  var rest   = keys.filter(function (f) { return DS_VITAL_FIELDS.indexOf(f) === -1; });
+
+  var strip = '';
+  if (vitals.length) {
+    // Keep chart order, not object order.
+    vitals.sort(function (a, b) {
+      return DS_VITAL_FIELDS.indexOf(a) - DS_VITAL_FIELDS.indexOf(b);
+    });
+    strip = '<div class="ds-vitals">' + vitals.map(function (f) {
+      var wide = (f === 'otherVitals') ? ' ds-vital-wide' : '';
+      var label = '<label class="ds-muted d-block mb-1" style="font-size:.72rem">' +
+                  dsEsc(dsFieldLabel(f)) + '</label>';
+      if (readOnly) {
+        return '<div class="ds-vital' + wide + '">' + label +
+               '<div>' + dsEscML(c[f]) + '</div></div>';
+      }
+      return '<div class="ds-vital' + wide + '">' + label +
+             '<input type="text" data-ds-field="' + dsEsc(key) + '|' + dsEsc(f) +
+             '" value="' + dsEsc(c[f]) + '"></div>';
+    }).join('') + '</div>';
+  }
+
+  // The document is full width now, so four boxes to a row on a wide screen
+  // instead of two; long-form fields keep half the row to themselves.
+  var LONG = ['generalExamination', 'wardHistory', 'other', 'investigations',
+              'risksExplained', 'resuscitationSummary', 'conditionAtTransfer'];
+  var phraseSource = DS_PHRASE_SOURCE[key];
+
+  var body = rest.length ? ('<div class="row g-2">' + rest.map(function (f) {
+    var label = dsFieldLabel(f);
     var val = c[f];
+    var col = (LONG.indexOf(f) > -1) ? 'col-12 col-xl-6' : 'col-sm-6 col-xl-3';
     if (readOnly) {
-      return '<div class="col-md-6"><div class="ds-muted">' + dsEsc(label) + '</div>' +
+      return '<div class="' + col + '"><div class="ds-muted">' + dsEsc(label) + '</div>' +
              '<div>' + dsEscML(val) + '</div></div>';
     }
-    return '<div class="col-md-6"><label class="ds-muted d-block mb-1">' + dsEsc(label) + '</label>' +
-           '<input type="text" data-ds-field="' + dsEsc(key) + '|' + dsEsc(f) + '" value="' +
-           dsEsc(val) + '"></div>';
-  }).join('') + '</div>';
+    // Advice fields draw on the clinic's advice phrase library, the same one
+    // the OP and IP consults prescribe advice from.
+    var pickAttr = phraseSource ? ' data-ds-pick="' + dsEsc(phraseSource) + '"' : '';
+    return '<div class="' + col + ' ds-pick">' +
+           '<label class="ds-muted d-block mb-1">' + dsEsc(label) + '</label>' +
+           '<input type="text" data-ds-field="' + dsEsc(key) + '|' + dsEsc(f) + '"' + pickAttr +
+           ' value="' + dsEsc(val) + '"></div>';
+  }).join('') + '</div>') : '';
+
+  return strip + body;
+}
+
+/** "Cold \u2014 2 days" -> {condition:'Cold', duration:'2 days'} */
+function dsSplitPair(line) {
+  var s = String(line === null || line === undefined ? '' : line);
+  var at = s.indexOf(DS_PAIR_SEP);
+  if (at === -1) return { condition: s.trim(), duration: '' };
+  return { condition: s.slice(0, at).trim(), duration: s.slice(at + DS_PAIR_SEP.length).trim() };
+}
+
+/** The inverse. An empty duration leaves no dangling separator. */
+function dsJoinPair(condition, duration) {
+  var c = String(condition || '').trim();
+  var d = String(duration || '').trim();
+  if (!c) return d ? (DS_PAIR_SEP.trim() + ' ' + d) : '';
+  return d ? (c + DS_PAIR_SEP + d) : c;
 }
 
 function dsRenderList(key, sec, readOnly) {
   var items = sec.content || [];
+  var isPair = DS_PAIR_SECTIONS.indexOf(key) > -1;
+  var phraseSource = DS_PHRASE_SOURCE[key];
+
   if (readOnly) {
     if (!items.length) return '<div class="ds-muted">Nothing recorded.</div>';
     return '<ul class="mb-0" style="font-size:.86rem">' +
            items.map(function (i) { return '<li>' + dsEsc(i) + '</li>'; }).join('') + '</ul>';
   }
-  return '<div data-ds-list="' + dsEsc(key) + '">' +
-    items.map(function (i, idx) {
-      return '<div class="d-flex gap-2 mb-1">' +
-        '<input type="text" data-ds-listitem="' + dsEsc(key) + '|' + idx + '" value="' + dsEsc(i) + '">' +
+
+  // Complaints and history are a condition AND a duration. They are still
+  // stored as the one "condition — duration" line the printer and the diff
+  // already understand; the editor just stops making the clinician type the
+  // dash. The condition box offers the clinic's phrase library, so another
+  // condition can be chosen rather than spelled afresh.
+  var rows = items.map(function (i, idx) {
+    if (!isPair) {
+      return '<div class="d-flex gap-2 mb-1 ds-pick">' +
+        '<input type="text" data-ds-listitem="' + dsEsc(key) + '|' + idx + '"' +
+        (phraseSource ? ' data-ds-pick="' + dsEsc(phraseSource) + '"' : '') +
+        ' value="' + dsEsc(i) + '">' +
         '<button class="btn btn-sm btn-outline-danger" data-ds-listdel="' + dsEsc(key) + '|' + idx +
         '"><i class="fa-solid fa-xmark"></i></button></div>';
-    }).join('') +
+    }
+    var pr = dsSplitPair(i);
+    return '<div class="row g-2 mb-1 align-items-end">' +
+      '<div class="col-12 col-md-7 ds-pick">' +
+        (idx === 0 ? '<label class="ds-muted d-block mb-1">Condition</label>' : '') +
+        '<input type="text" data-ds-pairc="' + dsEsc(key) + '|' + idx + '"' +
+        (phraseSource ? ' data-ds-pick="' + dsEsc(phraseSource) + '"' : '') +
+        ' placeholder="Condition" value="' + dsEsc(pr.condition) + '"></div>' +
+      '<div class="col-8 col-md-4">' +
+        (idx === 0 ? '<label class="ds-muted d-block mb-1">Duration</label>' : '') +
+        '<input type="text" data-ds-paird="' + dsEsc(key) + '|' + idx + '"' +
+        ' placeholder="e.g. 3 days" value="' + dsEsc(pr.duration) + '"></div>' +
+      '<div class="col-4 col-md-1 text-end">' +
+        '<button class="btn btn-sm btn-outline-danger" data-ds-listdel="' + dsEsc(key) + '|' + idx +
+        '"><i class="fa-solid fa-xmark"></i></button></div>' +
+    '</div>';
+  }).join('');
+
+  return '<div data-ds-list="' + dsEsc(key) + '">' + rows +
     '<button class="btn btn-sm btn-outline-primary mt-1" data-ds-listadd="' + dsEsc(key) + '">' +
     '<i class="fa-solid fa-plus me-1"></i>Add line</button></div>';
 }
@@ -779,12 +1045,22 @@ function dsRenderTable(key, sec, readOnly) {
   var head = '<tr>' + c.columns.map(function (h) { return '<th>' + dsEsc(h) + '</th>'; }).join('') +
              (readOnly ? '' : '<th></th>') + '</tr>';
 
+  // The discharge script's Generic and Brand columns autocomplete from the
+  // formulary with live pharmacy stock, the same list OP and IP prescribe
+  // from. Picking a drug fills the row's generic, brand and dose together.
+  var drugCols = (key === 'DISCHARGE_MEDICATIONS')
+    ? { generic: c.columns.indexOf('Generic'), brand: c.columns.indexOf('Brand') }
+    : { generic: -1, brand: -1 };
+
   var body = c.rows.map(function (row, ri) {
     var cells = c.columns.map(function (col, ci) {
       var v = row[ci] === undefined ? '' : row[ci];
       if (readOnly) return '<td>' + dsEsc(v) + '</td>';
-      return '<td><input type="text" data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci +
-             '" value="' + dsEsc(v) + '"></td>';
+      var isDrug = (ci === drugCols.generic || ci === drugCols.brand);
+      return '<td' + (isDrug ? ' class="ds-pick"' : '') + '>' +
+             '<input type="text" data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci + '"' +
+             (isDrug ? ' data-ds-drug="' + dsEsc(key) + '|' + ri + '"' : '') +
+             ' value="' + dsEsc(v) + '"></td>';
     }).join('');
     return '<tr>' + cells + (readOnly ? '' :
       '<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-ds-rowdel="' +
@@ -826,6 +1102,53 @@ function dsWireSectionInputs(wrap) {
       var parts = el.getAttribute('data-ds-listitem').split('|');
       DSState.payload.sections[parts[0]].content[parseInt(parts[1], 10)] = el.value;
       mark(parts[0]);
+    });
+  });
+
+  // Condition / duration halves of a complaints or history line. Both write
+  // back into the SAME stored string, so nothing downstream sees a new shape.
+  var writePair = function (secKey, idx) {
+    var c = wrap.querySelector('[data-ds-pairc="' + secKey + '|' + idx + '"]');
+    var d = wrap.querySelector('[data-ds-paird="' + secKey + '|' + idx + '"]');
+    DSState.payload.sections[secKey].content[idx] =
+      dsJoinPair(c ? c.value : '', d ? d.value : '');
+    mark(secKey);
+  };
+
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-pairc],[data-ds-paird]'), function (el) {
+    var attr = el.hasAttribute('data-ds-pairc') ? 'data-ds-pairc' : 'data-ds-paird';
+    var parts = el.getAttribute(attr).split('|');
+    el.addEventListener('input', function () { writePair(parts[0], parseInt(parts[1], 10)); });
+  });
+
+  // Phrase-library suggestions under any input that asked for them.
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-pick]'), function (el) {
+    var source = el.getAttribute('data-ds-pick');
+    dsAttachPicker(el, function () { return dsPhraseItems(source); }, function (item) {
+      el.value = item.text;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+
+  // Formulary suggestions on a discharge-script row. Choosing a drug fills
+  // the generic, the brand and the reference dose at once, because a
+  // half-filled drug row is the thing a pharmacist has to ring back about.
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-drug]'), function (el) {
+    var parts = el.getAttribute('data-ds-drug').split('|');
+    var secKey = parts[0], ri = parseInt(parts[1], 10);
+    dsAttachPicker(el, dsDrugItems, function (item) {
+      var sec = DSState.payload.sections[secKey];
+      var cols = sec.content.columns;
+      var row = sec.content.rows[ri];
+      var set = function (name, value) {
+        var ci = cols.indexOf(name);
+        if (ci > -1 && value) row[ci] = value;
+      };
+      set('Generic', String(item.generic || '').toUpperCase());
+      set('Brand', item.brand);
+      set('Strength / Dose', item.dose);
+      mark(secKey);
+      dsRenderSections();
     });
   });
 

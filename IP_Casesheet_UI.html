@@ -168,6 +168,10 @@
       </div>
 
       <div class="ipc-hdr-right">
+        <!-- Verified lab results for this patient, over the top of the case
+             sheet. Reading them used to mean leaving the ward, opening the
+             Lab module and searching for the patient by name. -->
+        <button class="btn btn-sm btn-outline-info py-1 px-2 flex-shrink-0" onclick="crescLabPeek(window.currentPatientId, document.getElementById('ipc-hd-pat-name').textContent)" title="This patient's verified lab results, without leaving this screen"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
         <span class="text-muted" style="font-size:.7rem;">
           <span id="ipc-hd-current-date" class="text-warning fw-bold"></span>
         </span>
@@ -650,39 +654,11 @@
 </div>
 
 <!-- ===================== DOSE CALCULATOR ===================== -->
-<div class="modal fade" id="ipc-opDoseCalcModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered">
-    <div class="modal-content text-white" style="background-color: var(--bg-input); border: 1px solid var(--info);">
-      <div class="modal-header py-2 border-secondary">
-        <h6 class="m-0 text-info"><i class="fa-solid fa-calculator"></i> Dose calculator</h6>
-        <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-3">
-        <label class="hd-label">Weight (kg)</label>
-        <input type="number" class="hd-input mb-2" id="ipc-dc-weight" placeholder="auto from vitals">
-        <label class="hd-label">Age</label>
-        <div class="d-flex gap-1 mb-2">
-          <input type="number" class="hd-input" id="ipc-dc-age" placeholder="0">
-          <select class="hd-input" id="ipc-dc-age-unit" style="width:90px;"><option value="years">years</option><option value="months">months</option></select>
-        </div>
-        <label class="hd-label">Dose (mg / kg / day)</label>
-        <input type="number" class="hd-input mb-2" id="ipc-dc-mgkg" placeholder="e.g. 15">
-        <label class="hd-label">Doses per day</label>
-        <select class="hd-input mb-2" id="ipc-dc-freq">
-          <option value="1">OD (1)</option><option value="2" selected>BD (2)</option>
-          <option value="3">TDS (3)</option><option value="4">QID (4)</option>
-        </select>
-        <label class="hd-label">Strength available (mg per tab / 5 ml) &mdash; optional</label>
-        <input type="number" class="hd-input mb-2" id="ipc-dc-strength" placeholder="e.g. 250">
-        <div class="bg-black rounded p-2 mt-2 small" id="ipc-dc-output" style="white-space:pre-line; min-height:60px; border: 1px solid var(--border-hover);">&mdash;</div>
-      </div>
-      <div class="modal-footer py-1 border-secondary">
-        <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Close</button>
-        <button class="btn btn-sm btn-info fw-bold text-white" onclick="ipcInsertIPCDose()">Insert into Sig</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- The dose calculator modal that stood here is gone. It was one of two
+     byte-identical copies (the other in OP_Module), differing only by an
+     `ipc-` prefix on every id. Dose_Calculator.html in the shell is the
+     single one now, shared by the case sheet and the consult, and it does
+     the safety checks neither copy did. -->
 
 <!-- ===================== SAVE TEMPLATE ===================== -->
 <div class="modal fade" id="ipc-opSaveTemplateModal" tabindex="-1">
@@ -921,9 +897,9 @@ let ipcConsultTemplates = [];
 let ipcPatientAllergies = { recorded: false, raw: "", list: [] };
 let currentIPCDialTarget = null;
 let activeIpcEncounterId = "";
-let ipcDoseTargetRow = null;
+/* ipcDoseTargetRow / _ipcDoseSig retired with the local calculator; the
+   shared one in Dose_Calculator.html keeps its own target row. */
 let ipcTaperTargetRow = null;
-let _ipcDoseSig = '';
 let _ipcTaperPlan = null;
 let _ipcSafetyTimer = null;
 let ipcSysDefaults = {
@@ -2460,7 +2436,7 @@ function ipcAddIPCRxRow(pre) {
           '<div class="d-flex align-items-center gap-1">' +
             '<input type="text" class="hd-input dial-trigger ipc-rx-sig text-warning fw-bold text-center" placeholder="Dosage" onclick="ipcOpenIPCDialPad(this, \'rx\')">' +
             '<input type="text" class="hd-input ipc-rx-rate text-info fw-bold text-center d-none" placeholder="ml/hr" title="Infusion rate in ml/hr">' +
-            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print ipc-rx-dosecalc" style="font-size:0.6rem;" title="Dose calculator" onclick="ipcOpenIPCDoseCalc(this)"><i class="fa-solid fa-calculator"></i></button>' +
+            '<button class="btn btn-sm btn-outline-info py-0 px-1 no-print ipc-rx-dosecalc" style="font-size:0.6rem;" title="Dose calculator" onclick="crescDoseCalc({row:this.closest(\'tr\'), sigSelector:\'.ipc-rx-sig\', nameSelector:\'.ipc-rx-name\', weightElId:\'ipc-vit-wt\', demoElId:\'ipc-hd-pat-demo\'})"><i class="fa-solid fa-calculator"></i></button>' +
           '</div>' +
         '</td>' +
         '<td><input type="text" class="hd-input dial-trigger ipc-rx-days text-info text-center" placeholder="Days" onclick="ipcOpenIPCDialPad(this, \'dur\')"></td>' +
@@ -2894,55 +2870,11 @@ function ipcLoadIntegrationData() {
 // ============================================================================
 // DOSE CALCULATOR
 // ============================================================================
-function ipcFreqWord(f) { return ({ 1: 'OD', 2: 'BD', 3: 'TDS', 4: 'QID' })[f] || (f + 'x/day'); }
+/* ipcFreqWord() went with the local dose calculator, its only caller. */
 
-function ipcOpenIPCDoseCalc(btn) {
-    ipcDoseTargetRow = btn.closest('tr');
-    const w = document.getElementById('ipc-vit-wt')?.value;
-    if (w) document.getElementById('ipc-dc-weight').value = w;
-    const demo = document.getElementById('ipc-hd-pat-demo')?.innerText || '';
-    const am = demo.match(/(\d+)\s*Y/i);
-    if (am) document.getElementById('ipc-dc-age').value = am[1];
-
-    const nameEl = ipcDoseTargetRow.querySelector('.ipc-rx-name');
-    if (nameEl && nameEl.dataset.refdose) {
-        const num = String(nameEl.dataset.refdose).match(/[\d.]+/);
-        if (num) document.getElementById('ipc-dc-mgkg').value = num[0];
-    }
-    ipcCalcIPCDose();
-    ['ipc-dc-weight', 'ipc-dc-age', 'ipc-dc-mgkg', 'ipc-dc-freq', 'ipc-dc-strength'].forEach(function (id) {
-        const el = document.getElementById(id); el.oninput = ipcCalcIPCDose; el.onchange = ipcCalcIPCDose;
-    });
-    new bootstrap.Modal(document.getElementById('ipc-opDoseCalcModal')).show();
-}
-
-function ipcCalcIPCDose() {
-    const w = parseFloat(document.getElementById('ipc-dc-weight').value);
-    const mgkg = parseFloat(document.getElementById('ipc-dc-mgkg').value);
-    const freq = parseInt(document.getElementById('ipc-dc-freq').value, 10) || 1;
-    const strength = parseFloat(document.getElementById('ipc-dc-strength').value);
-    const out = document.getElementById('ipc-dc-output');
-    if (!w || !mgkg) { out.innerText = 'Enter weight and mg/kg/day.'; _ipcDoseSig = ''; return; }
-    const perDay = w * mgkg;
-    const perDose = perDay / freq;
-    let txt = 'Total/day: ' + perDay.toFixed(1) + ' mg\nPer dose: ' + perDose.toFixed(1) + ' mg \u00d7 ' + freq + '/day';
-    let sig = perDose.toFixed(1) + ' mg ' + ipcFreqWord(freq);
-    if (strength > 0) {
-        const units = perDose / strength;
-        txt += '\n\u2248 ' + units.toFixed(2) + ' unit per dose (of ' + strength + ' mg)';
-        sig = units.toFixed(2) + ' unit ' + ipcFreqWord(freq) + ' (' + perDose.toFixed(1) + ' mg)';
-    }
-    out.innerText = txt;
-    _ipcDoseSig = sig;
-}
-
-function ipcInsertIPCDose() {
-    if (ipcDoseTargetRow && _ipcDoseSig) {
-        const sigEl = ipcDoseTargetRow.querySelector('.ipc-rx-sig');
-        if (sigEl) sigEl.value = _ipcDoseSig;
-    }
-    bootstrap.Modal.getInstance(document.getElementById('ipc-opDoseCalcModal'))?.hide();
-}
+/* ipcOpenIPCDoseCalc / ipcCalcIPCDose / ipcInsertIPCDose lived here and were
+   duplicated verbatim in OP_Module. The prescription row's calculator button
+   now calls window.crescDoseCalc() (Dose_Calculator.html, in the shell). */
 
 // ============================================================================
 // PAYLOAD

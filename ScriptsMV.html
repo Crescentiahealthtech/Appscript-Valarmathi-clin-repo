@@ -97,16 +97,8 @@ function switchTab(tabId, clickedElement) {
     
     if(clickedElement) clickedElement.classList.add('active');
     
-    if(tabId === 'tab-pat-home') { setTimeout(renderCharts, 100); }
+    crescRunTabInit(tabId);
 
-    // 📊 DASHBOARD ROUTER HOOK — refresh live metrics on entry (cached, cheap).
-    // This was two nested copies of the same `tabId === 'tab-admin-dash'`
-    // test, the outer one calling loadDashboardMetrics() — a function no
-    // file in the project defines. Only the inner call ever did anything.
-    if (tabId === 'tab-admin-dash') {
-        if (typeof renderAdminDashboard === 'function') renderAdminDashboard();
-    }
-    
     // 🛡️ THE SAFETY CATCH (Restored original)
     if (tabId !== 'tab-admin-emr') {
         
@@ -124,70 +116,70 @@ function switchTab(tabId, clickedElement) {
         if (typeof returnToEMRMenu === 'function') returnToEMRMenu();
     }
     
-    // 👇 ADD THIS NEW ROUTER HOOK 👇
-    if (tabId === 'tab-admin-pharmacy') {
-        if (typeof loadPharmacyInventory === 'function') {
-            loadPharmacyInventory();
-        }
-    }
-
-    // 👇 ADD THIS NEW PHARMACY DESK HOOK 👇
-    if (tabId === 'pharmacy-desk-workspace') {
-        if (typeof openPharmacyDesk === 'function') {
-            openPharmacyDesk();
-        }
-    }
-
-    // 💊 PHARMACY BILLING HOOK — the inventory scan belongs here, on entry.
-    // It used to run from a timer on every page load, for every role.
-    if (tabId === 'pharmacy-billing-workspace') {
-        if (typeof openPharmacyBilling === 'function') {
-            openPharmacyBilling();
-        }
-    }
-
-    // 👇 ADD THIS NEW DASHBOARD HOOK 👇
-    if (tabId === 'pharmacy-dashboard-workspace') {
-        if (typeof openPharmacyDashboard === 'function') {
-            openPharmacyDashboard();
-        }
-    }
-    
-    // 🔬 LAB ROUTER HOOK — auto-load workspace when navigating to lab sections
-    if (tabId === 'lab-workspace-view') {
-        if (typeof LabX !== 'undefined' && typeof LabX.load === 'function') {
-            setTimeout(function() { LabX.load(); }, 100);
-        }
-    }
-    if (tabId === 'lab-records-view') {
-        // Lab records section — no auto-load needed, user will search
-    }
-
-    // 💰 LAB BILLING ROUTER HOOK — auto-load when Cashier opens the desk
-    if (tabId === 'lab-billing-workspace') {
-        if (typeof LabBill !== 'undefined' && typeof LabBill.load === 'function') {
-            setTimeout(function() { LabBill.load(); }, 100);
-        }
-    }
-    
-    // 🛏️ IP WARD ROUTER HOOK
-    if (tabId === 'ip-ledger-view') {
-        if (typeof loadIPLedger === 'function') setTimeout(loadIPLedger, 0);
-    }
-
-    // 🏥 DISCHARGE DESK ROUTER HOOK
-    if (tabId === 'ds-desk-view') {
-        if (typeof dsOpenDesk === 'function') setTimeout(dsOpenDesk, 0);
-    }
-
-    // 🏦 ACCOUNTS ROUTER HOOK (FIXED)
-    if (tabId === 'workspace-accounts') { // Changed workspaceId to tabId
-        if (typeof showAccounts === 'function') {
-            showAccounts(); 
-        }
-    }
-    
     window.isLedgerHandoff = false;
+}
+
+/* ====================================================================
+   ONE ROUTER, ONE INIT TABLE
+
+   Every screen that has to fetch something when you arrive on it used to
+   do so from its own `if (tabId === …)` block here, and the screens that
+   had no block relied on their tile's onclick calling the init by hand:
+   `onclick="switchTab('tab-admin-appt'); initAdminLedger();"`. Two ways
+   of doing one thing, and the second one broke the moment modules began
+   loading on demand — the init ran before the module carrying it had
+   arrived.
+
+   So the table below is now the only place a screen's entry point is
+   named, every tile is a plain switchTab(), and the init runs after the
+   module is in. Values are function NAMES resolved at call time,
+   because the module that owns one may not be downloaded yet.
+   ==================================================================== */
+var CRESC_TAB_INIT = {
+  'tab-pat-home':                 'renderCharts',
+  'tab-pat-appt':                 'initPatientBooking',
+  'tab-admin-dash':               'renderAdminDashboard',
+  'tab-admin-appt':               'initAdminLedger',
+  'tab-admin-avail':              'initAvailability',
+  'tab-admin-billing':            'openBillingWorkspace',
+  'tab-admin-search':             'loadRoster',
+  'ip-ledger-view':               'loadIPLedger',
+  'ip-history-view':              'loadIPHistory',
+  'ip-bed-management-view':       'initBedMap',
+  'ds-desk-view':                 'dsOpenDesk',
+  'tab-admin-pharmacy':           'loadPharmacyInventory',
+  'pharmacy-desk-workspace':      'openPharmacyDesk',
+  'pharmacy-billing-workspace':   'openPharmacyBilling',
+  'pharmacy-dashboard-workspace': 'openPharmacyDashboard',
+  'lab-workspace-view':           'LabX.load',
+  'lab-billing-workspace':        'LabBill.load',
+  'workspace-lab-catalog':        'LabCatalog.init',
+  'workspace-lab-records':        'LabRecordsApp.init',
+  'workspace-accounts':           'showAccounts'
+};
+
+/** A dotted global path ("LabX.load") to the function, or null. */
+function crescResolveFn(path) {
+  if (!path) return null;
+  var parts = String(path).split('.');
+  var ref = window;
+  for (var i = 0; i < parts.length; i++) {
+    if (ref === null || ref === undefined) return null;
+    ref = ref[parts[i]];
+  }
+  return (typeof ref === 'function') ? ref : null;
+}
+
+/** Runs a screen's entry point, on the next tick so the switch paints first. */
+function crescRunTabInit(tabId) {
+  var path = CRESC_TAB_INIT[tabId];
+  if (!path) return;
+  setTimeout(function () {
+    var fn = crescResolveFn(path);
+    if (fn) {
+      try { fn(); } catch (e) { /* the screen is up; its fetch reports itself */ }
+    }
+  }, 0);
 }
 
 function routeToEMRTimeline(patientId) {

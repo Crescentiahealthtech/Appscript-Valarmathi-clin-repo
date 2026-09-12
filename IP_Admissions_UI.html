@@ -10,6 +10,19 @@
      Historical records live in IP_Ledger_UI.html (#ip-history-view).
      ===================================================================== -->
 
+<style>
+  /* The admission form's own surface. This rule used to live in
+     IP_BedMap_UI.html, several screens away from the form it styles,
+     alongside a block of UNSCOPED .modal-content / .modal-body overrides
+     that silently restyled every dialog in the application from a bed-map
+     partial. Those are all covered by Styles.html section 11.4/11.6
+     already, so only this one needed a home — here, beside the form. */
+  #form-admission {
+    background-color: var(--surface-2);
+    color: var(--text-main);
+  }
+</style>
+
 <div id="ip-ledger-view" class="page-section">
 
   <div class="d-flex justify-content-between align-items-center mb-3 mt-4 border-bottom pb-3">
@@ -25,7 +38,7 @@
         <i class="fa-solid fa-plus me-2"></i> New Admission
       </button>
       <button class="btn btn-outline-secondary fw-bold px-4"
-              onclick="switchTab('ip-history-view'); loadIPHistory();">
+              onclick="switchTab('ip-history-view')">
         <i class="fa-solid fa-book me-2"></i> IP Ledger
       </button>
       <button class="btn btn-outline-light fw-bold shadow px-4" onclick="switchTab('workspace-appointments',        document.getElementById('nav-tab-appt'))">

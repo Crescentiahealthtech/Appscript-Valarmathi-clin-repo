@@ -320,7 +320,20 @@ var LabX = (function () {
       if(!res||!res.success){ flash((res&&res.message)||'Workspace load failed.', false); return; }
       _orders=res.orders||[]; _stats=res.stats||{};
       _renderKpis(); _renderTabs(); render();
-      if($('lx-subtitle')) $('lx-subtitle').textContent=(_stats.todayTotal||0)+' orders today · '+_orders.length+' in active view';
+      if($('lx-subtitle')) {
+        // The queue is a worklist: finished orders and orders whose sample was
+        // never drawn drop off after the window. Say so on screen, with the
+        // count, so a shrinking list never looks like lost work.
+        var aged = _stats.agedOut || 0;
+        var exp  = _stats.expiredHidden || 0;
+        var days = _stats.queueWindowDays || 2;
+        var tail = aged
+          ? ' · ' + aged + ' older than ' + days + ' day' + (days === 1 ? '' : 's') + ' not shown' +
+            (exp ? ' (' + exp + ' expired uncollected)' : '')
+          : '';
+        $('lx-subtitle').textContent =
+          (_stats.todayTotal||0)+' orders today · '+_orders.length+' in active view' + tail;
+      }
     }, 'Loading lab workspace…');
   }
 
@@ -683,11 +696,28 @@ var LabX = (function () {
   /* Tube labels are fetched and printed straight after collection, because a
      tube that leaves the room unlabelled is the same failure the identity gate
      just prevented. */
-  function printTubeLabels(orderId){
+  /**
+   * @param {string} [orderId]  defaults to the open order
+   * @param {string} [barcode]  print only this tube's label
+   *
+   * A single tube can be reprinted on its own. Reprinting the whole order to
+   * replace one smudged label produced a fresh set of identical barcodes for
+   * tubes already on the bench, and there is no way to tell two of them apart
+   * afterwards.
+   */
+  function printTubeLabels(orderId, barcode){
     if(!window.CrescLabel){ flash('Label engine is not loaded.',false); return; }
     run('getSampleLabelData',[orderId||_cur.orderId,window.sessionToken],function(res){
       if(!res||!res.success){ flash((res&&res.message)||'Could not build tube labels.',false); return; }
-      CrescLabel.printTubeLabels(res.tubes);
+      var tubes=res.tubes||[];
+      if(barcode){
+        var want=String(barcode).toUpperCase();
+        tubes=tubes.filter(function(t){
+          return String(t.barcode||t.barcodeId||'').toUpperCase()===want;
+        });
+        if(!tubes.length){ flash('No label found for tube '+barcode+'.',false); return; }
+      }
+      CrescLabel.printTubeLabels(tubes);
     },'Building tube labels…');
   }
 
@@ -728,11 +758,44 @@ var LabX = (function () {
 
   function _uiReceive(){
     _rcv={};
+    // One row per TUBE, each with its own label reprint and its own rejection.
+    // There used to be a single "Reject Sample" button for the whole order,
+    // and it rejected samples[samples.length - 1] — whichever tube happened
+    // to be last in the list, not the one the technician was holding. A
+    // haemolysed EDTA tube could therefore condemn the plain tube beside it.
     var samps=(_cur._samples||[]).map(function(s){
-      return '<div class="d-flex justify-content-between align-items-center px-3 py-2 rounded mb-1" style="background:var(--bg-card);border:1px solid var(--border-color);">'+
-        '<span class="text-white-force small"><i class="fa-solid fa-vial me-2" style="color:var(--violet-fg);"></i>'+esc(s.sampleType.replace(/_/g,' '))+'</span>'+
-        '<span class="d-flex gap-3 align-items-center"><code class="label-bright" style="font-size:.7rem;">'+esc(s.barcode)+'</code>'+
-        '<span class="lx-stage-pill" id="lx-rcv-'+esc(s.barcode)+'">'+esc(s.status)+'</span></span></div>';
+      var rejected=String(s.status||'').toUpperCase()==='REJECTED';
+      var sid=esc(s.sampleId), bc=esc(s.barcode);
+      return '<div class="px-3 py-2 rounded mb-1" style="background:var(--bg-card);border:1px solid '+
+          (rejected?'var(--danger)':'var(--border-color)')+';">'+
+        '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">'+
+          '<span class="text-white-force small"><i class="fa-solid fa-vial me-2" style="color:'+
+            (rejected?'var(--danger-fg)':'var(--violet-fg)')+';"></i>'+
+            esc(String(s.sampleType||'').replace(/_/g,' '))+'</span>'+
+          '<span class="d-flex gap-2 align-items-center flex-wrap">'+
+            '<code class="label-bright" style="font-size:.7rem;">'+bc+'</code>'+
+            '<span class="lx-stage-pill" id="lx-rcv-'+bc+'">'+esc(s.status)+'</span>'+
+            '<button class="btn btn-sm py-0 px-2" style="font-size:.72rem;border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" '+
+              'title="Reprint just this tube\'s label" '+
+              'onclick="LabX.printTubeLabels(null,\''+bc+'\')"><i class="fa-solid fa-print"></i></button>'+
+            (rejected ? '' :
+            '<button class="btn btn-sm py-0 px-2" style="font-size:.72rem;border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" '+
+              'title="Reject this tube" '+
+              'onclick="LabX.toggleReject(\''+sid+'\')"><i class="fa-solid fa-ban"></i></button>') +
+          '</span>'+
+        '</div>'+
+        (rejected && s.rejectionReason
+          ? '<div class="small mt-1" style="color:var(--danger-fg);">Rejected: '+esc(String(s.rejectionReason).replace(/_/g,' '))+'</div>'
+          : '')+
+        '<div id="lx-rej-'+sid+'" class="mt-2 d-none d-flex gap-2 align-items-center flex-wrap">'+
+          '<select id="lx-rejr-'+sid+'" class="form-select form-select-sm" style="max-width:220px;">'+
+            ['HAEMOLYSED','INSUFFICIENT','WRONG_TUBE','CLOTTED','UNLABELLED','LEAKED']
+              .map(function(r){return '<option value="'+r+'">'+r.replace(/_/g,' ')+'</option>';}).join('')+
+          '</select>'+
+          '<button class="btn btn-sm btn-danger py-0 px-2" style="font-size:.75rem;" '+
+            'onclick="LabX.doReject(\''+sid+'\')">Reject this tube (raises NCR)</button>'+
+        '</div>'+
+      '</div>';
     }).join('');
     return '<div class="p-3 rounded" style="background:var(--bg-input);">'+
       '<div class="alert py-2 px-3 small mb-3" style="background:var(--info-bg);border:1px solid var(--info);color:var(--info);">'+
@@ -748,14 +811,8 @@ var LabX = (function () {
       '<div class="label-bright small mb-2">SAMPLES IN TRANSIT</div>'+samps+
       '<div class="d-flex gap-2 mt-3 flex-wrap">'+
         '<button class="btn btn-sm fw-semibold" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);" onclick="LabX.doReceive();"><i class="fa-solid fa-flask me-1"></i>Receive at Bench & Start Processing</button>'+
-        '<button class="btn btn-sm" style="border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" onclick="var w=document.getElementById(\'lx-rej\');if(w)w.classList.toggle(\'d-none\');"><i class="fa-solid fa-ban me-1"></i>Reject Sample</button>'+
       '</div>'+
-      '<div id="lx-rej" class="mt-3 d-none d-flex gap-2 align-items-center flex-wrap">'+
-        '<select id="lx-rej-reason" class="form-select form-select-sm" style="max-width:230px;">'+
-          ['HAEMOLYSED','INSUFFICIENT','WRONG_TUBE','CLOTTED','UNLABELLED','LEAKED'].map(function(r){return '<option value="'+r+'">'+r.replace(/_/g,' ')+'</option>';}).join('')+
-        '</select>'+
-        '<button class="btn btn-sm btn-danger" onclick="LabX.doReject();">Confirm Rejection (raises NCR)</button>'+
-      '</div>'+
+      '<div class="label-bright small mt-2">Rejection is per tube &mdash; use the &#10006; on the tube concerned.</div>'+
     '</div>';
   }
   function doReceive(){
@@ -763,11 +820,23 @@ var LabX = (function () {
       if(res&&res.success){ flash(res.message,true); _refreshPanel(); } else flash((res&&res.message)||'Receive failed.',false);
     },'Receiving…');
   }
-  function doReject(){
-    var samples=_cur._samples||[];
-    if(!samples.length){ flash('No sample to reject.',false); return; }
-    var sid=samples[samples.length-1].sampleId;
-    run('rejectLabSample',[sid, $('lx-rej-reason').value],function(res){
+  /** Shows or hides one tube's rejection-reason row. */
+  function toggleReject(sampleId){
+    var w=document.getElementById('lx-rej-'+sampleId);
+    if(w) w.classList.toggle('d-none');
+  }
+
+  /**
+   * Rejects ONE tube, named explicitly by the caller.
+   *
+   * @param {string} sampleId
+   */
+  function doReject(sampleId){
+    if(!sampleId){ flash('Choose the tube to reject.',false); return; }
+    var sel=document.getElementById('lx-rejr-'+sampleId);
+    var reason=sel?sel.value:'';
+    if(!reason){ flash('Give a rejection reason.',false); return; }
+    run('rejectLabSample',[sampleId, reason],function(res){
       if(res&&res.success){ flash(res.message,true); _refreshPanel(); } else flash((res&&res.message)||'Rejection failed.',false);
     },'Raising NCR…');
   }
@@ -1042,6 +1111,7 @@ var LabX = (function () {
   return{
     load:load, render:render, setTab:setTab,
     verifyId:verifyId, rescan:rescan, receiveScan:receiveScan, printTubeLabels:printTubeLabels,
+    toggleReject:toggleReject,
     openPanel:openPanel, doBill:doBill,pm:pm, bCalc:bCalc,
     addTube:addTube, doCollect:doCollect, doReceive:doReceive, doReject:doReject,
     onVal:onVal, saveDraft:saveDraft, submitResults:submitResults, doVerify:doVerify, sendBack:sendBack,
