@@ -168,20 +168,18 @@ function ipr_gaps_(r, now) {
 function ipr_when_(v, pattern) {
   try {
     if (v === null || v === undefined || v === "") return "";
-    var d = (v instanceof Date) ? v : new Date(v);
-    if (isNaN(d.getTime())) return dc_str_(v);
+    // Shared parser (Date_Utils.gs): day-first, and it reads the dd-mm-yyyy
+    // and Sheets-serial cells that `new Date(v)` turned into the wrong day or
+    // into nothing. Only genuinely unparseable text is echoed back raw.
+    var d = cresc_toDate_(v);
+    if (!d) return dc_str_(v);
     return Utilities.formatDate(d, Session.getScriptTimeZone(), pattern || "dd MMM yyyy, hh:mm a");
   } catch (e) { return dc_str_(v); }
 }
 
 /** Epoch milliseconds, or 0. */
 function ipr_ms_(v) {
-  try {
-    if (v === null || v === undefined || v === "") return 0;
-    var d = (v instanceof Date) ? v : new Date(v);
-    var ms = d.getTime();
-    return isNaN(ms) ? 0 : ms;
-  } catch (e) { return 0; }
+  try { return cresc_ms_(v); } catch (e) { return 0; }
 }
 
 // ---------------------------------------------------------------------------

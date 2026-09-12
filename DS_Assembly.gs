@@ -459,6 +459,96 @@ function dsx_genericFuzzy_(index, brand) {
   return hits.length === 1 ? hits[0] : '';
 }
 
+/**
+ * The one column set both medication tables use, and the same five headings
+ * a doctor prescribes into on the OP consult and the IP casesheet.
+ * Anything that reads a medication row by index reads it through here.
+ */
+var DSX_MED_COLUMNS = ['Type', 'Medicine Name', 'Dosage / Sig', 'Duration', 'Notes / Timing'];
+
+var DSX_MED_COL = { TYPE: 0, NAME: 1, SIG: 2, DURATION: 3, NOTE: 4 };
+
+/**
+ * "Tab" / "Cap" / "Inj" / "IV" / "Syp" / "Oint" / "Drops" — the same short
+ * forms the OP and IP type dropdowns offer, so a row copied between screens
+ * needs no translation.
+ *
+ * The route is the stronger signal; the brand string is the fallback, because
+ * ward notes very often record only "TAB PARACETAMOL 500" with no route.
+ */
+function dsx_medType_(route, brand) {
+  var r = dsx_upper_(route), b = dsx_upper_(brand);
+  if (/^(IV|I\/V|INTRAVENOUS)\b|INFUSION|DRIP/.test(r)) return 'IV';
+  if (/^(IM|I\/M|SC|S\/C|INJ|INTRAMUSCULAR|SUBCUTANEOUS|INJECTION)\b/.test(r)) return 'Inj';
+  if (/^(TOP|TOPICAL|LOCAL)\b/.test(r)) return 'Oint';
+  if (/^(OD|OS|OU|AD|AS|AU|OPHTH|EYE|EAR|NASAL|INTRANASAL)\b/.test(r)) return 'Drops';
+  if (/^(NEB|INH|INHALATION|RESP)\b/.test(r)) return 'Inh';
+
+  if (/\bINJ\b|\bINJECTION\b/.test(b)) return 'Inj';
+  if (/\bCAP\b|\bCAPSULE/.test(b)) return 'Cap';
+  if (/\bSYP\b|\bSYR\b|\bSYRUP\b|\bSUSP/.test(b)) return 'Syp';
+  if (/\bOINT\b|\bCREAM\b|\bGEL\b|\bLOTION\b/.test(b)) return 'Oint';
+  if (/\bDROP|\bGTT\b/.test(b)) return 'Drops';
+  if (/\bRESPULE|\bNEB\b|\bINHALER\b|\bROTACAP/.test(b)) return 'Inh';
+  if (/\bTAB\b|\bTABLET/.test(b)) return 'Tab';
+
+  // Oral tablet is the safe default only when the route says oral; otherwise
+  // say nothing rather than assert a form nobody recorded.
+  return /^(PO|ORAL|P\/O)\b/.test(r) ? 'Tab' : '';
+}
+
+/**
+ * One name column, the way a prescription is written: the brand as ordered,
+ * with the generic beside it when the two are different. Two separate columns
+ * meant every row printed one of them blank.
+ */
+function dsx_medName_(brand, generic) {
+  var b = dsx_str_(brand), g = dsx_str_(generic);
+  if (!b) return dsx_upper_(g);
+  if (!g || dsx_upper_(g) === dsx_upper_(b)) return b;
+  return b + ' (' + dsx_upper_(g) + ')';
+}
+
+/** "500 mg — 1-0-1", from whichever of the two the notes recorded. */
+function dsx_medSig_(dose, freq) {
+  return [dsx_str_(dose), dsx_str_(freq)].filter(String).join(' \u2014 ');
+}
+
+/**
+ * How long the drug ran during the stay: "05-Sep \u2192 09-Sep (5 days)", or
+ * "05-Sep \u2192 ongoing" for one still running at discharge. This replaces
+ * the separate Started and Stopped columns without losing either date.
+ */
+function dsx_medStayDuration_(d) {
+  var from = dsx_fmt_(d.startedAt, 'dd-MMM');
+  if (!from) return '';
+  var to = d.stoppedAt ? dsx_fmt_(d.stoppedAt, 'dd-MMM') : '';
+  if (!to) return from + ' \u2192 ongoing';
+  var days = cresc_stayDays_(d.startedAt, d.stoppedAt);
+  return from + ' \u2192 ' + to + (days ? ' (' + days + ' day' + (days === 1 ? '' : 's') + ')' : '');
+}
+
+/**
+ * The notes column carries the prescriber's instruction, and — where the
+ * route is not already implied by the Type — the route, and the state of the
+ * order when it is anything other than plainly active. Dropping the Status
+ * column must not drop the fact that a drug was stopped or held.
+ */
+function dsx_medNote_(instructions, state, route) {
+  var bits = [];
+  var st = dsx_upper_(state);
+  if (st === 'STOPPED') bits.push('Stopped in hospital');
+  else if (st === 'HELD') bits.push('Held in hospital');
+
+  var r = dsx_str_(route);
+  var t = dsx_medType_(route, '');
+  if (r && !t) bits.push(r);
+
+  var ins = dsx_str_(instructions);
+  if (ins) bits.push(ins);
+  return bits.join(' \u00b7 ');
+}
+
 function dsx_isInjectable_(route, brand) {
   var r = dsx_upper_(route);
   if (/^(IV|IM|SC|S\/C|I\/V|I\/M|INJ|INTRAVENOUS|INTRAMUSCULAR|SUBCUTANEOUS)\b/.test(r)) return true;
@@ -607,17 +697,30 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
   var admissionMeds = cs ? dsx_admissionMeds_(cs, warnings) : [];
   var replay = dsx_replayMedications_(bundle.notes, admissionMeds);
 
+  // Both medication tables carry the SAME five columns the doctor already
+  // prescribes into in OP and IP: Type, Medicine Name, Dosage / Sig,
+  // Duration, Notes / Timing.
+  //
+  // They used to carry eight of their own — Generic, Brand, Dose, Route,
+  // Frequency, Started, Stopped, Status — which is a second, incompatible way
+  // of writing a prescription inside an app that already has one. Route and
+  // Frequency are not separate facts to a prescriber: "Tab" and "1-0-1" are
+  // how they are written and how they are read, and splitting them into four
+  // narrow columns is what made the table unreadable at print width. Started
+  // and Stopped folded into a single Duration, which is the thing anybody
+  // reading a discharge summary actually wants; Status folded into the note,
+  // so a held or stopped drug still says so in words.
   var given = replay.drugs.map(function (d) {
     return [
-      d.generic || '', d.brand, d.dose, d.route, d.freq,
-      dsx_fmt_(d.startedAt, 'dd-MMM'),
-      d.stoppedAt ? dsx_fmt_(d.stoppedAt, 'dd-MMM') : '',
-      d.state
+      dsx_medType_(d.route, d.brand),
+      dsx_medName_(d.brand, d.generic),
+      dsx_medSig_(d.dose, d.freq),
+      dsx_medStayDuration_(d),
+      dsx_medNote_(d.instructions, d.state, d.route)
     ];
   });
   sections.TREATMENT_GIVEN = dsx_newSection_('Treatment given during the stay', 'TABLE',
-    { columns: ['Generic', 'Brand', 'Dose', 'Route', 'Frequency', 'Started', 'Stopped', 'Status'],
-      rows: given },
+    { columns: DSX_MED_COLUMNS.slice(), rows: given },
     'AUTO', dsx_refsFrom_('NOTE', bundle.notes.filter(function (n) {
       return n.data && n.data.medOrders && n.data.medOrders.length;
     }).map(function (n) { return n.noteId; })));
@@ -634,9 +737,7 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
   // Treatment given during the stay (above) still carries the full replay, so
   // nothing is lost from the record — it simply is not the discharge script.
   sections.DISCHARGE_MEDICATIONS = dsx_newSection_('Discharge medications', 'TABLE',
-    { columns: ['Generic', 'Brand', 'Strength / Dose', 'Route', 'Frequency', 'Timing',
-                'Food', 'Duration', 'Instructions', 'Status'],
-      rows: [] },
+    { columns: DSX_MED_COLUMNS.slice(), rows: [] },
     'MANUAL', []);
   sections.DISCHARGE_MEDICATIONS.reviewed = false;
 
@@ -1195,16 +1296,50 @@ function dsx_humanise_(camel) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * The same medicine listed twice on the discharge script.
+ *
+ * Read the Medicine Name column by NAME, not by position: r[0] used to be
+ * Generic and is now Type, so a positional read would have compared "Tab"
+ * against "Tab" and flagged every prescription as a duplicate.
+ *
+ * Rows are compared on their normalised drug key, which strips the form and
+ * the punctuation, so "Tab Paracetamol 500" and "PARACETAMOL" collide the way
+ * a pharmacist would expect them to.
+ */
 function dsx_duplicateGenerics_(section) {
   if (!section || !section.content || !section.content.rows) return [];
+  var cols = section.content.columns || [];
+  var ci = cols.indexOf('Medicine Name');
+  if (ci === -1) ci = 0;
+
   var seen = {}, dup = [];
   section.content.rows.forEach(function (r) {
-    var g = dsx_upper_(r[0]);
-    if (!g) return;
-    if (seen[g] && dup.indexOf(g) === -1) dup.push(g);
-    seen[g] = true;
+    var label = dsx_str_(r[ci]);
+    if (!label) return;
+    // The name cell is written "Brand (GENERIC)". Both halves are keyed, so a
+    // row naming the brand and a row naming the generic still collide — which
+    // is the whole point of the check: the same medicine, listed twice under
+    // two names, is the duplicate a patient actually goes home and doubles.
+    dsx_medNameKeys_(label).forEach(function (key) {
+      if (!key) return;
+      if (seen[key]) { if (dup.indexOf(seen[key]) === -1) dup.push(seen[key]); }
+      else seen[key] = label;
+    });
   });
   return dup;
+}
+
+/** The normalised keys a "Brand (GENERIC)" cell should match on. */
+function dsx_medNameKeys_(label) {
+  var m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(dsx_str_(label));
+  var parts = m ? [m[1], m[2]] : [label];
+  var keys = [];
+  parts.forEach(function (p) {
+    var k = _normDrug_(p);
+    if (k && keys.indexOf(k) === -1) keys.push(k);
+  });
+  return keys;
 }
 
 // ---------------------------------------------------------------------------

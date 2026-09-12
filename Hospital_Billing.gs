@@ -116,12 +116,9 @@ function hb_tenant_() {
   try { return getTenantId_(); } catch (e) { return 'VALARMATHI'; }
 }
 
+/** Shared parser — see Date_Utils.gs for why `new Date(text)` was not enough. */
 function hb_toDate_(v) {
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
-  var s = hb_str_(v);
-  if (!s) return null;
-  var d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+  return cresc_toDate_(v);
 }
 
 function hb_fmt_(v, pattern) {

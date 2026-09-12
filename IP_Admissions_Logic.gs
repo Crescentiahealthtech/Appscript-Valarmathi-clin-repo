@@ -47,11 +47,20 @@ function ipa_sheet_() {
   return sh;
 }
 
+/**
+ * A sheet date, formatted.
+ *
+ * This used to format only a real Date object and echo everything else back
+ * as raw text. A DOA cell holding "10-09-2026" — which is what a manual entry
+ * or a re-imported sheet leaves behind — is text, so the ward list, the
+ * ledger and the discharge banner all printed the raw cell instead of a date,
+ * and ipa_los_ below refused to count a stay from it at all. Both now go
+ * through the shared parser in Date_Utils.gs.
+ */
 function ipa_fmt_(v, pattern) {
-  if (v instanceof Date && !isNaN(v.getTime())) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), pattern);
-  }
-  return ipa_str_(v);
+  var d = cresc_toDate_(v);
+  if (!d) return ipa_str_(v);
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), pattern);
 }
 
 function ipa_isLive_(status) {
@@ -170,10 +179,15 @@ function ipa_mapRow_(r, rowIndex, lastCol) {
 }
 
 /** Length of stay in days. Discharged uses DOD; active uses today. */
+/**
+ * Length of stay in days, counting both ends.
+ *
+ * Was midnight-blind as well as text-blind: two Dates 25 hours apart across a
+ * midnight counted as 2 days, but 23:00 to 01:00 counted as 1. A ward counts
+ * calendar days, which is what cresc_stayDays_ does.
+ */
 function ipa_los_(doaVal, dodVal) {
-  if (!(doaVal instanceof Date) || isNaN(doaVal.getTime())) return null;
-  var end = (dodVal instanceof Date && !isNaN(dodVal.getTime())) ? dodVal : new Date();
-  return Math.max(1, Math.floor((end.getTime() - doaVal.getTime()) / 86400000) + 1);
+  return cresc_stayDays_(doaVal, dodVal);
 }
 
 // =========================================================================
@@ -316,8 +330,11 @@ function getIPHistory(query) {
       if (wardF && rec.ward.toUpperCase() !== wardF) continue;
 
       if (fromD || toD) {
-        var doaVal = r[IPA_COL.DOA];
-        if (!(doaVal instanceof Date) || isNaN(doaVal.getTime())) continue;
+        // Text DOA cells used to fail the `instanceof Date` test and be
+        // dropped from the result entirely, so a date-range search over a
+        // sheet with any hand-typed dates quietly returned a short list.
+        var doaVal = cresc_toDate_(r[IPA_COL.DOA]);
+        if (!doaVal) continue;
         if (fromD && doaVal < fromD) continue;
         if (toD && doaVal > toD) continue;
       }

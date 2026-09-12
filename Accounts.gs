@@ -57,10 +57,12 @@ function acc_dayStr_(d) {
   if (isNaN(dt.getTime())) return "";
   return Utilities.formatDate(dt, ACC_CFG.TZ, "dd-MMM-yyyy");
 }
+/**
+ * Shared parser (Date_Utils.gs), keeping this module's "today" fallback so a
+ * ledger row with an unreadable date still sorts and totals somewhere sane.
+ */
 function acc_toDate_(v) {
-  if (v instanceof Date) return v;
-  var d = new Date(v);
-  return isNaN(d.getTime()) ? new Date() : d;
+  return cresc_toDate_(v) || new Date();
 }
 function acc_lockedSet_() {
   var raw = PropertiesService.getScriptProperties().getProperty(ACC_CFG.LOCK_PROP) || "";

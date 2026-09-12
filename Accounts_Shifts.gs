@@ -8,8 +8,11 @@
 // posted to Finance_Master_Ledger + a mandatory reason on the audit trail.
 // =========================================================================
 
-function acc_fmtDay_(v) { var d = (v instanceof Date) ? v : new Date(v); return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, ACC_CFG.TZ, "yyyy-MM-dd"); }
-function acc_fmtTime_(v) { var d = (v instanceof Date) ? v : new Date(v); return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, ACC_CFG.TZ, "HH:mm"); }
+// Both key a shift against a day or a clock time, so a date the parser reads
+// as the wrong day silently reconciles a shift's cash against another day's.
+// Shared parser — see Date_Utils.gs.
+function acc_fmtDay_(v)  { return cresc_fmt_(v, "yyyy-MM-dd", ACC_CFG.TZ); }
+function acc_fmtTime_(v) { return cresc_fmtTime_(v, "HH:mm", ACC_CFG.TZ); }
 
 // cash movement (CASH income − cash expenses) since a moment — the shift's auto-calc.
 function acc_cashSince_(fromDate) {

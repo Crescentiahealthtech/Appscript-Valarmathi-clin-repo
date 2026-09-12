@@ -62,12 +62,16 @@ function dsx_tz_() {
 
 function dsx_nowIso_() { return new Date().toISOString(); }
 
+/**
+ * A date out of a sheet cell, or null.
+ *
+ * Delegates to cresc_toDate_ (Date_Utils.gs). It used to be `new Date(text)`,
+ * which reads "10/09/2026" as the 9th of October and cannot read "10-09-2026"
+ * at all — that is the fault that kept surfacing as a wrong or blank Date of
+ * Admission on the summary.
+ */
 function dsx_toDate_(v) {
-  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
-  var s = dsx_str_(v);
-  if (!s) return null;
-  var d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+  return cresc_toDate_(v);
 }
 
 function dsx_fmt_(v, pattern) {
@@ -88,7 +92,14 @@ function dsx_fmt_(v, pattern) {
  */
 function dsx_time_(v, pattern) {
   if (v instanceof Date) {
-    return isNaN(v.getTime()) ? '' : dsx_fmt_(v, pattern || 'hh:mm a');
+    if (isNaN(v.getTime())) return '';
+    // allowTimeOnly: an 1899-epoch Date is exactly what a time-only cell is,
+    // and here that is the value we want — it is dsx_toDate_ that must reject
+    // it, so it can never be printed as a calendar date.
+    var d = cresc_toDate_(v, true);
+    if (!d) return '';
+    try { return Utilities.formatDate(d, dsx_tz_(), pattern || 'hh:mm a'); }
+    catch (e) { return ''; }
   }
   return dsx_str_(v);
 }
@@ -389,11 +400,100 @@ function dsx_unpackPayload_(rowObj) {
                     ' characters but the row declares ' + declared +
                     '. The draft is corrupt; restore it from the last snapshot.');
   }
+  var parsed;
   try {
-    return JSON.parse(s);
+    parsed = JSON.parse(s);
   } catch (e) {
     throw new Error('VALIDATION_FAILED: stored payload is not valid JSON (' + e.message + ').');
   }
+  return dsx_migratePayload_(parsed);
+}
+
+/**
+ * Brings a stored draft up to the shape the current code expects.
+ *
+ * Only the medication tables need it so far. They were rewritten to the five
+ * columns OP and IP prescribe into, and DISCHARGE_MEDICATIONS is a MANUAL
+ * section — dsx_mergeRegenerated_ never overwrites one, by design, so a draft
+ * started before the change would have kept its old ten columns for the rest
+ * of its life: the editor's drug autocomplete looks for a "Medicine Name"
+ * column and would not have found one.
+ *
+ * Runs on read and is idempotent. Nothing is written back here; the next save
+ * of the draft persists the migrated shape.
+ */
+function dsx_migratePayload_(payload) {
+  if (!payload || !payload.sections) return payload;
+
+  // A signed summary is the legal record and is rendered exactly as it was
+  // signed, old columns and all. Its stored hash was taken over this payload;
+  // reshaping it on read would print a document that is not the one the
+  // doctor put their name to.
+  if (payload.signature) return payload;
+
+  ['TREATMENT_GIVEN', 'DISCHARGE_MEDICATIONS'].forEach(function (k) {
+    var sec = payload.sections[k];
+    if (sec && sec.content && sec.content.columns) {
+      sec.content = dsx_migrateMedTable_(sec.content);
+    }
+  });
+  return payload;
+}
+
+/**
+ * An old medication table folded into the five current columns. Every value
+ * is carried across — Route and Frequency join the fields they belong with
+ * rather than being dropped, and Status becomes words in the note.
+ */
+function dsx_migrateMedTable_(content) {
+  var cols = content.columns || [];
+  if (cols.length === DSX_MED_COLUMNS.length &&
+      cols.join('|') === DSX_MED_COLUMNS.join('|')) {
+    return content;                                   // already current
+  }
+
+  var at = function (name) { return cols.indexOf(name); };
+  var get = function (row, name) {
+    var i = at(name);
+    return (i > -1 && row[i] !== undefined && row[i] !== null) ? String(row[i]).trim() : '';
+  };
+  var join = function (parts, sep) {
+    return parts.filter(function (x) { return x; }).join(sep);
+  };
+
+  var rows = (content.rows || []).map(function (row) {
+    var brand = get(row, 'Brand');
+    var generic = get(row, 'Generic');
+    var route = get(row, 'Route');
+    var status = get(row, 'Status').toUpperCase();
+
+    var duration = get(row, 'Duration');
+    if (!duration) {
+      var started = get(row, 'Started'), stopped = get(row, 'Stopped');
+      if (started) duration = started + ' \u2192 ' + (stopped || 'ongoing');
+    }
+
+    var note = join([
+      status === 'STOPPED' ? 'Stopped in hospital' :
+      status === 'HELD' ? 'Held in hospital' : '',
+      dsx_medType_(route, brand) ? '' : route,
+      get(row, 'Timing'),
+      get(row, 'Food'),
+      join([get(row, 'Instructions'), get(row, 'Notes / Timing')], ' ')
+    ], ' \u00b7 ');
+
+    return [
+      get(row, 'Type') || dsx_medType_(route, brand),
+      get(row, 'Medicine Name') || dsx_medName_(brand, generic),
+      get(row, 'Dosage / Sig') ||
+        dsx_medSig_(join([get(row, 'Dose'), get(row, 'Strength / Dose')], ' '),
+                    get(row, 'Frequency')),
+      duration,
+      note
+    ];
+  });
+
+  return { columns: DSX_MED_COLUMNS.slice(), rows: rows };
 }
 
 /**

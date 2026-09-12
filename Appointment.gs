@@ -4,6 +4,28 @@ var APPT_STATUS_WRITERS   = ['admin', 'doctor', 'receptionist', 'reception', 'nu
 // ==========================================
 // 🚀 APPOINTMENT MODULE ENGINE
 // ==========================================
+//
+// Every date comparison in this file keys a ledger row against a "yyyy-MM-dd"
+// string. That key used to be built as:
+//
+//     (cell instanceof Date) ? Utilities.formatDate(cell, tz, "yyyy-MM-dd")
+//                            : cell.toString().substring(0, 10)
+//
+// The second branch is the whole problem. A date cell holding TEXT — which is
+// what a hand-typed entry, a CSV re-import or a column formatted as plain text
+// leaves behind — yields "10/09/2026", which never equals "2026-09-10". The
+// comparison does not error; it just never matches, and every caller reads
+// that as "no such row":
+//
+//   * the day's ledger renders empty for a date that has appointments;
+//   * the "already has an active appointment on that date" guard passes, so
+//     the same patient is booked twice;
+//   * the blocked-slot conflict scan finds nothing, so appointments are booked
+//     into slots the clinic closed.
+//
+// All six now go through cresc_fmt_ (Date_Utils.gs), which parses the day-first
+// and dd-mm-yyyy forms these sheets actually hold and returns '' — matching
+// nothing — only when the cell genuinely is not a date.
 
 // Helper to prevent Google Sheets from corrupting Time formats into hidden Date objects
 function formatTimeSafely(timeVal) {
@@ -31,7 +53,7 @@ function getAvailableTimeSlots(dateStr) {
   const takenSlots = [];
   for (let i = 1; i < data.length; i++) {
     let dObj = data[i][3];
-    let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
+    let rowDate = cresc_fmt_(dObj, "yyyy-MM-dd");
 
     if (rowDate === dateStr && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') {
       takenSlots.push(formatTimeSafely(data[i][4]));
@@ -51,9 +73,7 @@ function getAppointmentsByDate(dateStr) {
     let appts = [];
     for(let i = 1; i < data.length; i++) {
       let dObj = data[i][3];
-      let rowDate = "";
-      if(dObj instanceof Date) rowDate = Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd");
-      else if(dObj) rowDate = dObj.toString().substring(0,10);
+      let rowDate = cresc_fmt_(dObj, "yyyy-MM-dd");
 
       if(rowDate === dateStr) {
         // BUG 2 FIX: formatTimeSafely forces identical strings so the UI toggle arrays match perfectly
@@ -103,9 +123,7 @@ function fetchDailyLedger(dateStr) {
   const rows = [];
   for (let i = 1; i < apptData.length; i++) {
     let dObj = apptData[i][3];
-    let rowDate = (dObj instanceof Date)
-      ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd")
-      : (dObj ? dObj.toString().substring(0, 10) : "");
+    let rowDate = cresc_fmt_(dObj, "yyyy-MM-dd");
     if (rowDate !== dateStr) continue;
     let pId = apptData[i][1] ? apptData[i][1].toString().toUpperCase() : "";
     if (pId === "ADMIN") continue;
@@ -150,9 +168,7 @@ function submitNewAppointment(apptObj) {
     if (apptObj.patientId !== 'ADMIN' && apptObj.patientId !== 'DIRECT' && apptObj.patientId !== 'WALK-IN') {
       for (let i = 1; i < data.length; i++) {
         let dObj = data[i][3];
-        let rowDate = (dObj instanceof Date)
-          ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd")
-          : (dObj ? dObj.toString().substring(0, 10) : "");
+        let rowDate = cresc_fmt_(dObj, "yyyy-MM-dd");
         if (rowDate !== apptObj.date) continue;
         if (data[i][1] === apptObj.patientId) {
           let status = data[i][6];
@@ -298,7 +314,7 @@ function saveEnterpriseAvailability(payload) {
     // Feature 1: Conflict Resolution Engine
     for (let i = 1; i < data.length; i++) {
       let dObj = data[i][3];
-      let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
+      let rowDate = cresc_fmt_(dObj, "yyyy-MM-dd");
       let pId = data[i][1];
       let time = formatTimeSafely(data[i][4]);
       let status = data[i][6];
@@ -316,7 +332,7 @@ function saveEnterpriseAvailability(payload) {
     let rowsToDelete = [];
     for(let i = data.length - 1; i >= 1; i--) {
       let dObj = data[i][3];
-      let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
+      let rowDate = cresc_fmt_(dObj, "yyyy-MM-dd");
       
       if(datesToProcess.includes(rowDate) && data[i][6] === 'Blocked') {
         rowsToDelete.push(i + 1);

@@ -12,114 +12,87 @@
         </div>
     </div>
 
-    <h6 class="text-muted fw-bold small text-uppercase mb-3 mt-2">Navigation Menu</h6>
+    <!-- The tiles are the EMR cockpit's and the Appointments workspace's
+         tile, not a third design: one centred icon above one label, every
+         card the same height, four to a row on a wide screen and two on a
+         phone. What was here before was a row of left-aligned cards of three
+         different widths, half of them wearing a coloured left border and
+         half not, and one card that was completely EMPTY — a blank tile in
+         the middle of the grid that opened the IP running tab if you found
+         it. That tile is the "IP Running Tab" card below.
 
-    <div class="row g-3">
-        <div class="col-md-4 col-sm-6">
-            <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift" onclick="openAccountsDashboard()">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="icon-circle bg-primary bg-opacity-10 text-primary me-3 text-center" style="width:40px;height:40px;line-height:40px;border-radius:8px;">
-                        <i class="fas fa-chart-pie"></i>
-                    </div>
-                    <div>
-                        <h6 class="fw-bold text-white mb-0">Accounts Dashboard</h6>
-                        <span class="text-muted small" style="font-size:.75rem;">Overall · Monthly · Day</span>
-                    </div>
-                </div>
-            </div>
+         The live counts stay: they are the reason a cashier looks at this
+         screen at all. They sit under the label rather than beside it, so
+         they cannot stretch a card out of line with its neighbours. -->
+    <h5 class="fw-bold m-0 text-white mb-3 border-bottom border-secondary pb-2">Navigation Menu</h5>
+
+    <div class="row g-4">
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="openAccountsDashboard()">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-chart-pie fa-2xl" style="color: var(--accent-fg);"></i></div>
+          <h5 class="text-white fw-bold mt-2 mb-1">Accounts Dashboard</h5>
+          <span class="text-muted small">Overall &middot; Monthly &middot; Day</span>
         </div>
+      </div>
 
-        <div class="col-md-4 col-sm-6">
-            <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift border-start border-primary border-3" onclick="switchAccountsPage('workspace-accounts-ledger')">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="icon-circle bg-primary bg-opacity-10 text-primary me-3 text-center" style="width: 40px; height: 40px; line-height: 40px; border-radius: 8px;">
-                        <i class="fas fa-book-open"></i>
-                    </div>
-                    <div>
-                        <h6 class="fw-bold text-white mb-0">Master Ledger</h6>
-                        <span class="text-muted small" style="font-size: 0.75rem;">View all transactions</span>
-                    </div>
-                </div>
-            </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="switchAccountsPage('workspace-accounts-ledger')">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-book-open fa-2xl" style="color: var(--info-fg);"></i></div>
+          <h5 class="text-white fw-bold mt-2 mb-1">Master Ledger</h5>
+          <span class="text-muted small">View all transactions</span>
         </div>
+      </div>
 
-        <div class="col-md-4 col-sm-6">
-            <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift border-start border-success border-3" onclick="openCashDrawer()">
-                <div class="card-body p-3 d-flex align-items-center">
-                 <div class="icon-circle bg-success bg-opacity-10 text-success me-3 text-center" style="width: 40px; height: 40px; line-height: 40px; border-radius: 8px;">
-                    <i class="fas fa-cash-register"></i>
-                  </div>
-                  <div>
-                      <h6 class="fw-bold text-white mb-0">Cash Drawer</h6>
-                      <span class="text-danger small fw-bold" style="font-size: 0.75rem;" id="acc-flag-mismatch">0 Mismatches</span>
-                    </div>
-                </div>
-            </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="openCashDrawer()">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-cash-register fa-2xl" style="color: var(--success-fg);"></i></div>
+          <h5 class="text-white fw-bold mt-2 mb-1">Cash Drawer</h5>
+          <span class="small fw-bold text-danger" id="acc-flag-mismatch">0 Mismatches</span>
         </div>
+      </div>
 
-        <div class="col-md-4 col-sm-6">
-            <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift border-start border-danger border-3" onclick="switchAccountsPage('workspace-accounts-payables')">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="icon-circle bg-danger bg-opacity-10 text-danger me-3 text-center" style="width: 40px; height: 40px; line-height: 40px; border-radius: 8px;">
-                        <i class="fas fa-file-invoice-dollar"></i>
-                    </div>
-                    <div>
-                        <h6 class="fw-bold text-white mb-0">Payables</h6>
-                        <span class="text-muted small" style="font-size: 0.75rem;">Vendor payments</span>
-                    </div>
-                </div>
-            </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="switchAccountsPage('workspace-accounts-payables')">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-file-invoice-dollar fa-2xl" style="color: var(--danger)"></i></div>
+          <h5 class="text-white fw-bold mt-2 mb-1">Payables</h5>
+          <span class="text-muted small">Vendor payments</span>
         </div>
+      </div>
 
-        <div class="col-md-4 col-sm-6">
-            <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift" onclick="openInsurance()">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="icon-circle bg-info bg-opacity-10 text-info me-3 text-center" style="width: 40px; height: 40px; line-height: 40px; border-radius: 8px;">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <div>
-                        <h6 class="fw-bold text-white mb-0">Insurance Desk</h6>
-                        <span class="text-warning small fw-bold" style="font-size: 0.75rem;"><span id="acc-flag-claims">0</span> Delayed</span>
-                    </div>
-                </div>
-            </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="openInsurance()">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-shield-halved fa-2xl" style="color: var(--info-fg);"></i></div>
+          <h5 class="text-white fw-bold mt-2 mb-1">Insurance Desk</h5>
+          <span class="small fw-bold text-warning"><span id="acc-flag-claims">0</span> Delayed</span>
         </div>
+      </div>
 
-        <div class="col-md-4 col-sm-6">
-          <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift" onclick="openDischargeDesk()">
-             <div class="card-body p-3 d-flex align-items-center">
-                <div class="icon-circle bg-warning bg-opacity-10 text-warning me-3 text-center" style="width: 40px;     height: 40px; line-height: 40px; border-radius: 8px;">
-                 <i class="fas fa-procedures"></i>
-              </div>
-              <div>
-                <!-- "Discharges" collided with the clinical Discharge Desk in
-                     EMR, and staff could not tell which screen a colleague
-                     meant. This one is stage 3 of the workflow: the money. -->
-                <h6 class="fw-bold text-white mb-0">Discharge Settlement</h6>
-                <span class="text-warning small fw-bold" style="font-size: 0.75rem;"><span id="acc-flag-discharges">0</span> Pending</span>
-              </div>
-            </div>
-          </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="openDischargeDesk()">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-procedures fa-2xl" style="color: var(--warning-fg);"></i></div>
+          <!-- "Discharges" collided with the clinical Discharge Desk in EMR,
+               and staff could not tell which screen a colleague meant. This
+               one is stage 3 of the workflow: the money. -->
+          <h5 class="text-white fw-bold mt-2 mb-1">Discharge Settlement</h5>
+          <span class="small fw-bold text-warning"><span id="acc-flag-discharges">0</span> Pending</span>
         </div>
+      </div>
 
-          <div class="col-md-4 col-sm-6">
-            <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift" onclick="openIpTab()">
-              </div>
-          </div>
-
-        <div class="col-md-4 col-sm-6">
-            <div class="card premium-card border-0 shadow-sm rounded-3 cursor-pointer hover-lift" onclick="switchAccountsPage('workspace-accounts-tax')">
-                <div class="card-body p-3 d-flex align-items-center">
-                    <div class="icon-circle bg-secondary bg-opacity-25 text-light me-3 text-center" style="width: 40px; height: 40px; line-height: 40px; border-radius: 8px;">
-                        <i class="fas fa-landmark"></i>
-                    </div>
-                    <div>
-                        <h6 class="fw-bold text-white mb-0">Tax & Audit</h6>
-                        <span class="text-muted small" style="font-size: 0.75rem;">GST & Compliance</span>
-                    </div>
-                </div>
-            </div>
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="openIpTab()">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-receipt fa-2xl" style="color: var(--violet-fg);"></i></div>
+          <h5 class="text-white fw-bold mt-2 mb-1">IP Running Tab</h5>
+          <span class="text-muted small">Charges on an open admission</span>
         </div>
+      </div>
+
+      <div class="col-md-6 col-xl-3">
+        <div class="emr-module-card p-4 text-center" onclick="switchAccountsPage('workspace-accounts-tax')">
+          <div class="emr-icon-wrap"><i class="fa-solid fa-landmark fa-2xl" style="color: var(--teal-fg);"></i></div>
+          <h5 class="text-white fw-bold mt-2 mb-1">Tax &amp; Audit</h5>
+          <span class="text-muted small">GST &amp; compliance</span>
+        </div>
+      </div>
     </div>
 </div>
 

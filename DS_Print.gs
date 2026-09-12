@@ -202,8 +202,10 @@ function dsx_printSection_(key, sec, empty) {
         sec.content.rows.map(function (r) {
           return sec.content.columns.map(function (c, i) {
             var v = r[i] === undefined ? '' : r[i];
-            // Generic names print in capitals: that is what a pharmacist reads.
-            if (/^generic$/i.test(c)) return '<strong>' + ipp_esc_(String(v).toUpperCase()) + '</strong>';
+            // The drug name is what a pharmacist scans the page for, so it
+            // is the one bold column. It used to be "Generic", a column the
+            // medication tables no longer have.
+            if (/^medicine name$/i.test(c)) return '<strong>' + ipp_esc_(v) + '</strong>';
             return ipp_esc_(v);
           });
         })));

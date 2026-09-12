@@ -200,8 +200,10 @@ function ipp_sig_(name, caption) {
 /** "dd-MMM-yyyy hh:mm a" in the script's timezone, tolerant of junk input. */
 function ipp_when_(d, pattern) {
   try {
-    var dt = (d instanceof Date) ? d : new Date(d);
-    if (isNaN(dt.getTime())) return "";
+    // Shared parser (Date_Utils.gs): a printed document is the last place a
+    // dd-mm-yyyy cell should come out blank or a month wrong.
+    var dt = cresc_toDate_(d);
+    if (!dt) return "";
     return Utilities.formatDate(dt, Session.getScriptTimeZone(), pattern || "dd-MMM-yyyy hh:mm a");
   } catch (e) { return ""; }
 }

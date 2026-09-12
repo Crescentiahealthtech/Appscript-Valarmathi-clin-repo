@@ -94,7 +94,15 @@ var DEP_MAP = {
                              "hb_saveInvoice", "hb_getInvoices", "hb_getInvoice",
                              "hb_recordPayment", "acc_hospitalRows_", "hb_billedApptIds_"],
   "DS_Print.gs":            ["ds_getPrintHtml"],
-  "DS_Gate.gs":             ["dsx_gateCheck_", "ds_getGateStatus"]
+  "DS_Gate.gs":             ["dsx_gateCheck_", "ds_getGateStatus"],
+
+  // Every module that reads a date out of a sheet now parses it here. Without
+  // this file the ward list, the discharge summary, the billing desk and the
+  // accounts ledger all fail with "cresc_toDate_ is not defined" on their
+  // first row — four unrelated-looking breakages from one missing file, which
+  // is precisely what this check exists to name.
+  "Date_Utils.gs":          ["cresc_toDate_", "cresc_fmt_", "cresc_ms_",
+                             "cresc_stayDays_", "crescVerifyDates"]
 };
 
 /**

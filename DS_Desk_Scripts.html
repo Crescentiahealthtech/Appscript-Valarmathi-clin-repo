@@ -1045,18 +1045,17 @@ function dsRenderTable(key, sec, readOnly) {
   var head = '<tr>' + c.columns.map(function (h) { return '<th>' + dsEsc(h) + '</th>'; }).join('') +
              (readOnly ? '' : '<th></th>') + '</tr>';
 
-  // The discharge script's Generic and Brand columns autocomplete from the
+  // The discharge script's Medicine Name column autocompletes from the
   // formulary with live pharmacy stock, the same list OP and IP prescribe
-  // from. Picking a drug fills the row's generic, brand and dose together.
-  var drugCols = (key === 'DISCHARGE_MEDICATIONS')
-    ? { generic: c.columns.indexOf('Generic'), brand: c.columns.indexOf('Brand') }
-    : { generic: -1, brand: -1 };
+  // from. Picking a drug fills the row's name and dosage together.
+  var nameCol = (key === 'DISCHARGE_MEDICATIONS')
+    ? c.columns.indexOf('Medicine Name') : -1;
 
   var body = c.rows.map(function (row, ri) {
     var cells = c.columns.map(function (col, ci) {
       var v = row[ci] === undefined ? '' : row[ci];
       if (readOnly) return '<td>' + dsEsc(v) + '</td>';
-      var isDrug = (ci === drugCols.generic || ci === drugCols.brand);
+      var isDrug = (nameCol > -1 && ci === nameCol);
       return '<td' + (isDrug ? ' class="ds-pick"' : '') + '>' +
              '<input type="text" data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci + '"' +
              (isDrug ? ' data-ds-drug="' + dsEsc(key) + '|' + ri + '"' : '') +
@@ -1144,9 +1143,17 @@ function dsWireSectionInputs(wrap) {
         var ci = cols.indexOf(name);
         if (ci > -1 && value) row[ci] = value;
       };
-      set('Generic', String(item.generic || '').toUpperCase());
-      set('Brand', item.brand);
-      set('Strength / Dose', item.dose);
+      // One name column now, written the way a prescription is written:
+      // brand with the generic beside it. Type and Dosage are filled in from
+      // the same pick so the row is usable without three more keystrokes.
+      var brand = String(item.brand || '').trim();
+      var generic = String(item.generic || '').trim().toUpperCase();
+      set('Medicine Name',
+          (brand && generic && generic !== brand.toUpperCase())
+            ? brand + ' (' + generic + ')'
+            : (brand || generic));
+      set('Type', dsGuessMedType(brand));
+      set('Dosage / Sig', item.dose);
       mark(secKey);
       dsRenderSections();
     });
@@ -1503,16 +1510,34 @@ function dsOpenSign() {
   if (m) m.show();
 }
 
+/**
+ * The short form of a drug on the OP / IP type dropdowns, guessed from the
+ * brand string. The same rule as dsx_medType_ on the server, minus the route,
+ * which a formulary pick does not carry.
+ */
+function dsGuessMedType(brand) {
+  var b = String(brand || '').toUpperCase();
+  if (/\bINJ\b|\bINJECTION\b|\bVIAL\b|\bAMP\b/.test(b)) return 'Inj';
+  if (/\bCAP\b|\bCAPSULE/.test(b)) return 'Cap';
+  if (/\bSYP\b|\bSYR\b|\bSYRUP\b|\bSUSP/.test(b)) return 'Syp';
+  if (/\bOINT\b|\bCREAM\b|\bGEL\b|\bLOTION\b/.test(b)) return 'Oint';
+  if (/\bDROP|\bGTT\b/.test(b)) return 'Drops';
+  if (/\bRESPULE|\bNEB\b|\bINHALER\b|\bROTACAP/.test(b)) return 'Inh';
+  if (/\bTAB\b|\bTABLET/.test(b)) return 'Tab';
+  return '';
+}
+
 function dsSectionSummaryText(key, sec) {
   if (key === 'DISCHARGE_MEDICATIONS') {
-    var rows = (sec.content && sec.content.rows) || [];
-    var counts = { NEW: 0, CHANGED: 0, CONTINUED: 0 };
-    rows.forEach(function (r) {
-      var s = String(r[9] || '').toUpperCase();
-      if (counts[s] !== undefined) counts[s]++;
+    // Just the count. This used to read a Status column at index 9 and
+    // report "0 new, 0 changed, 0 continued" for every summary — the column
+    // was never filled in, and the medication table no longer has one.
+    var rows = ((sec.content && sec.content.rows) || []).filter(function (r) {
+      return String((r && r[1]) || '').trim();
     });
-    return rows.length + ' medication(s): ' + counts.NEW + ' new, ' +
-           counts.CHANGED + ' changed, ' + counts.CONTINUED + ' continued.';
+    return rows.length
+      ? rows.length + ' medication(s) on the discharge script.'
+      : 'No medications on the discharge script.';
   }
   if (sec.format === 'TEXT') return String(sec.content || '').substring(0, 160);
   if (sec.format === 'LIST') return (sec.content || []).join('; ').substring(0, 160);
