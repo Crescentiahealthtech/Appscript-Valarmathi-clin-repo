@@ -1,0 +1,181 @@
+<!-- =====================================================================
+     🔬 LAB RESULTS PEEK — one viewer, opened from anywhere
+
+     In the SHELL on purpose. The OP consult, the IP case sheet, the ward
+     notes and the discharge editor all live in different lazy bundles, and
+     all four want this. Putting it in the shell means any of them can call
+     window.crescLabPeek() the moment it is on screen, with no bundle
+     ordering to think about, and there is one copy of it rather than four.
+
+     Backed by getPatientLabResults() in Lab_Patient_View.gs, which is a
+     .gs and therefore always present.
+     ===================================================================== -->
+<style>
+  #cresc-labpeek { position: fixed; inset: 0; z-index: 3500; display: flex;
+                   align-items: center; justify-content: center;
+                   background: var(--overlay-scrim); backdrop-filter: blur(3px); }
+  #cresc-labpeek[hidden] { display: none !important; }
+  #cresc-labpeek .lp-card { background: var(--bg-card); color: var(--text-main);
+                   border: 1px solid var(--border-color); border-radius: 14px;
+                   width: 94%; max-width: 900px; max-height: 92vh;
+                   display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+  #cresc-labpeek .lp-head { padding: .9rem 1.1rem; border-bottom: 1px solid var(--divider-color);
+                   display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  #cresc-labpeek .lp-body { padding: .9rem 1.1rem; overflow: auto; }
+  #cresc-labpeek .lp-order { border: 1px solid var(--border-color); border-radius: 10px;
+                   padding: .7rem .85rem; margin-bottom: .7rem; background: var(--surface-2); }
+  #cresc-labpeek table { width: 100%; font-size: .84rem; }
+  #cresc-labpeek th { color: var(--text-label); font-weight: 600; text-align: left;
+                   padding: .2rem .4rem; border-bottom: 1px solid var(--border-color); }
+  #cresc-labpeek td { padding: .2rem .4rem; border-bottom: 1px solid var(--divider-color); }
+  #cresc-labpeek .lp-flag { font-weight: 700; }
+  #cresc-labpeek .lp-H, #cresc-labpeek .lp-HIGH { color: var(--danger-fg); }
+  #cresc-labpeek .lp-L, #cresc-labpeek .lp-LOW  { color: var(--info-fg); }
+  #cresc-labpeek .lp-C { color: var(--text-on-accent); background: var(--danger);
+                   padding: 0 .35rem; border-radius: 4px; }
+  #cresc-labpeek .lp-crit { border-color: var(--danger); }
+</style>
+
+<div id="cresc-labpeek" hidden>
+  <div class="lp-card">
+    <div class="lp-head">
+      <div>
+        <div class="fw-bold" style="font-size:1rem;">
+          <i class="fa-solid fa-flask-vial me-2" style="color: var(--accent-fg);"></i>
+          Lab results
+        </div>
+        <div class="label-bright small" id="cresc-labpeek-sub">&nbsp;</div>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary"
+              onclick="crescLabPeekClose()">Close</button>
+    </div>
+    <div class="lp-body" id="cresc-labpeek-body"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var esc = function (s) {
+    return window.crescEsc ? window.crescEsc(s)
+      : String(s === null || s === undefined ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+
+  function body(html) {
+    var el = document.getElementById('cresc-labpeek-body');
+    if (el) el.innerHTML = html;
+  }
+  function sub(text) {
+    var el = document.getElementById('cresc-labpeek-sub');
+    if (el) el.textContent = text;
+  }
+
+  /**
+   * Opens the viewer for one patient.
+   *
+   * @param {string} patientId
+   * @param {string} [patientName]  shown in the subtitle while loading
+   */
+  window.crescLabPeek = function (patientId, patientName) {
+    var pid = String(patientId || '').trim();
+    var host = document.getElementById('cresc-labpeek');
+    if (!host) return;
+
+    if (!pid) {
+      host.hidden = false;
+      sub('');
+      body('<div class="label-bright">Open a patient first — results are looked up by patient ID.</div>');
+      return;
+    }
+
+    host.hidden = false;
+    sub((patientName ? patientName + ' · ' : '') + pid);
+    body('<div class="text-center py-4 label-bright">' +
+         '<i class="fa-solid fa-circle-notch fa-spin fa-lg d-block mb-2"></i>' +
+         'Fetching verified results…</div>');
+
+    if (typeof google === 'undefined' || !google.script || !google.script.run ||
+        typeof google.script.run.getPatientLabResults !== 'function') {
+      body('<div class="text-danger">Lab_Patient_View.gs is missing from the Apps Script ' +
+           'project, so results cannot be fetched here.</div>');
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res) {
+          body('<div class="text-danger">The reply did not arrive. Try again.</div>');
+          return;
+        }
+        if (!res.success) {
+          body('<div class="text-danger">' + esc(res.message || 'Could not load results.') + '</div>');
+          return;
+        }
+        render(res.orders || []);
+      })
+      .withFailureHandler(function (err) {
+        body('<div class="text-danger">' + esc((err && err.message) || err) + '</div>');
+      })
+      .getPatientLabResults(pid, window.sessionToken || '', { limit: 40 });
+  };
+
+  window.crescLabPeekClose = function () {
+    var host = document.getElementById('cresc-labpeek');
+    if (host) host.hidden = true;
+  };
+
+  function render(orders) {
+    if (!orders.length) {
+      body('<div class="label-bright">No verified lab results for this patient yet. ' +
+           'Drafts and unverified values are deliberately not shown here.</div>');
+      return;
+    }
+
+    // Abnormal and critical values carry their flag, because the reason to
+    // open this at the bedside is almost always to find the one out-of-range
+    // number among twenty normal ones.
+    body(orders.map(function (o) {
+      var crit = o.results.some(function (r) { return r.critical; });
+      var rows = o.results.map(function (r) {
+        var f = String(r.flag || '').toUpperCase();
+        var flagCell = f && f !== 'N' && f !== 'NORMAL'
+          ? '<span class="lp-flag lp-' + esc(f) + '">' + esc(f) + '</span>' : '';
+        return '<tr>' +
+          '<td>' + esc(r.parameterName) + '</td>' +
+          '<td class="fw-semibold">' + esc(r.value) + ' <span class="label-bright">' +
+            esc(r.unit) + '</span></td>' +
+          '<td class="label-bright">' + esc(r.refRangeText) + '</td>' +
+          '<td>' + flagCell + '</td></tr>';
+      }).join('');
+
+      return '<div class="lp-order' + (crit ? ' lp-crit' : '') + '">' +
+        '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">' +
+          '<div>' +
+            '<span class="fw-bold">' + esc(o.testNames || o.orderId) + '</span>' +
+            '<div class="label-bright small">' + esc(o.orderId) +
+              (o.doctor ? ' · ' + esc(o.doctor) : '') +
+              (o.verifiedBy ? ' · verified by ' + esc(o.verifiedBy) : '') + '</div>' +
+          '</div>' +
+          '<div class="text-end">' +
+            '<div class="label-bright small">' + esc(o.date) + '</div>' +
+            (o.abnormal ? '<div class="small" style="color:var(--danger-fg);">' +
+              o.abnormal + ' out of range</div>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="table-responsive"><table><thead><tr>' +
+          '<th>Test</th><th>Result</th><th>Reference</th><th>Flag</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '</div>';
+    }).join(''));
+  }
+
+  // Escape closes it, like every other overlay in the app.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var host = document.getElementById('cresc-labpeek');
+    if (host && !host.hidden) window.crescLabPeekClose();
+  });
+})();
+</script>

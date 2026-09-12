@@ -733,6 +733,18 @@ function dsLoadPickers(after) {
   runner.ds_getPickers(dsToken());
 }
 
+/** Opens the shared lab viewer for the patient this summary belongs to. */
+function dsPeekLabs() {
+  var b = (DSState.payload && DSState.payload.sections &&
+           DSState.payload.sections.PATIENT_BANNER &&
+           DSState.payload.sections.PATIENT_BANNER.content) || {};
+  if (typeof window.crescLabPeek !== 'function') {
+    dsNotice('warning', 'The lab viewer is not available on this deployment.');
+    return;
+  }
+  window.crescLabPeek(b.patientId || '', b.name || '');
+}
+
 function dsPhrases(name) {
   var p = DSState.pickers;
   return (p && p[name]) ? p[name] : [];

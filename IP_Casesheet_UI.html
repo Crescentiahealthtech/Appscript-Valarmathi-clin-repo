@@ -168,6 +168,10 @@
       </div>
 
       <div class="ipc-hdr-right">
+        <!-- Verified lab results for this patient, over the top of the case
+             sheet. Reading them used to mean leaving the ward, opening the
+             Lab module and searching for the patient by name. -->
+        <button class="btn btn-sm btn-outline-info py-1 px-2 flex-shrink-0" onclick="crescLabPeek(window.currentPatientId, document.getElementById('ipc-hd-pat-name').textContent)" title="This patient's verified lab results, without leaving this screen"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
         <span class="text-muted" style="font-size:.7rem;">
           <span id="ipc-hd-current-date" class="text-warning fw-bold"></span>
         </span>

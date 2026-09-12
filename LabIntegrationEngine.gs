@@ -516,7 +516,11 @@ function getLabWorkspaceData() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const oSheet = ss.getSheetByName(LAB.ORDERS);
-    const stats = { pendingBill:0, awaitingCollection:0, inProcess:0, awaitingVerify:0, verified:0, overdue:0, criticalPending:0, todayTotal:0 };
+    // agedOut = rows the queue is deliberately not showing (finished, or
+    // expired uncollected). expiredHidden is the subset that expired.
+    const stats = { pendingBill:0, awaitingCollection:0, inProcess:0, awaitingVerify:0,
+                    verified:0, overdue:0, criticalPending:0, todayTotal:0,
+                    agedOut:0, expiredHidden:0, queueWindowDays: Math.round(LAB_QUEUE_WINDOW_MS/86400000) };
     if (!oSheet || oSheet.getLastRow() < 2) return { success: true, stats: stats, orders: [] };
 
     const oMap  = labHeaderMap(oSheet);
@@ -553,6 +557,15 @@ function getLabWorkspaceData() {
       if (createdAt.indexOf(todayStr) === 0) stats.todayTotal++;
 
       const stageIdx = {PENDING:0,BILLED:1,RECOLLECT:1,SAMPLE_COLLECTED:2,IN_PROCESS:3,RESULT_ENTERED:4,VERIFIED:5,REPORT_DISPATCHED:6,AMENDED:6,CANCELLED:0}[status]||0;
+
+      // Visibility is decided BEFORE the counters, so a tab's badge counts
+      // exactly the rows that tab will show. Counting first and hiding after
+      // would put "Billing 14" over a list of three.
+      const vis = _lwQueueVisibility(status, createdAt, r[oMap['LastUpdatedAt']],
+                                     samp ? samp.s : '', nowMs);
+      if (vis.expired) stats.expiredHidden++;
+      if (!vis.show) { stats.agedOut++; return; }
+
       if (status==='PENDING')   stats.pendingBill++;
       else if (status==='BILLED'||status==='RECOLLECT') stats.awaitingCollection++;
       else if (status==='SAMPLE_COLLECTED'||status==='IN_PROCESS') stats.inProcess++;
@@ -560,8 +573,7 @@ function getLabWorkspaceData() {
       else if (status==='VERIFIED'||status==='REPORT_DISPATCHED') stats.verified++;
       if (overdue) stats.overdue++;
 
-      const terminal = (status==='REPORT_DISPATCHED'||status==='CANCELLED');
-      if (!terminal || _lwWithin48h(r[oMap['LastUpdatedAt']], nowMs)) {
+      {
         orders.push({
           orderId:      oid,
           patientId:    String(r[oMap['PatientID']]||''),
@@ -1485,9 +1497,72 @@ function _lwCritCount(){
     return n;
   }catch(e){return 0;}
 }
+/**
+ * How long finished or expired work stays on the bench queue.
+ *
+ * Two days. After that a dispatched report, a verified result and an order
+ * whose sample was never collected are all history, not work, and they were
+ * crowding out the orders somebody still has to act on.
+ */
+var LAB_QUEUE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+
 function _lwWithin48h(ts,nowMs){
   if(!ts) return false;
-  try{return (nowMs-new Date(ts).getTime())<172800000;}catch(e){return false;}
+  try{return (nowMs-new Date(ts).getTime())<LAB_QUEUE_WINDOW_MS;}catch(e){return false;}
+}
+
+/** Milliseconds since a timestamp, or null when it cannot be read. */
+function _lwAgeMs(ts,nowMs){
+  if(!ts) return null;
+  try{
+    var t=new Date(ts).getTime();
+    return isNaN(t)?null:(nowMs-t);
+  }catch(e){return null;}
+}
+
+/**
+ * Should this order still appear on the bench queue?
+ *
+ * The queue is a worklist. Three kinds of row are not work:
+ *
+ *   • DISPATCHED / AMENDED / CANCELLED — finished and gone out.
+ *   • VERIFIED older than the window — the result is signed off; it lives in
+ *     Records now. Only VERIFIED was kept for ever before, so a busy month
+ *     left hundreds of completed orders sitting in Verify & Dispatch.
+ *   • An order past the window whose sample was NEVER collected. This is the
+ *     "expired" case: a request nobody drew blood for cannot be run, and the
+ *     tube would be out of date if they drew it now. It is hidden, never
+ *     deleted, and the count is reported so the lab can see how many.
+ *
+ * Anything a technician could still act on stays, however old it is: an
+ * uncollected order is only expired if it has genuinely sat past the window,
+ * and work on the bench is never hidden.
+ *
+ * @return {{show:boolean, expired:boolean}}
+ */
+function _lwQueueVisibility(status,createdAt,lastUpdatedAt,sampleStatus,nowMs){
+  var terminal = (status==='REPORT_DISPATCHED'||status==='AMENDED'||status==='CANCELLED');
+  if (terminal) {
+    return { show: _lwWithin48h(lastUpdatedAt||createdAt, nowMs), expired: false };
+  }
+
+  if (status==='VERIFIED') {
+    return { show: _lwWithin48h(lastUpdatedAt||createdAt, nowMs), expired: false };
+  }
+
+  // Awaiting billing or awaiting collection: expired once the window passes
+  // with no sample drawn.
+  if (status==='PENDING'||status==='BILLED'||status==='RECOLLECT') {
+    var collected = String(sampleStatus||'').toUpperCase();
+    var drawn = collected && collected !== 'PENDING' && collected !== 'REJECTED';
+    if (drawn) return { show: true, expired: false };
+    var age = _lwAgeMs(createdAt, nowMs);
+    if (age !== null && age >= LAB_QUEUE_WINDOW_MS) {
+      return { show: false, expired: true };
+    }
+  }
+
+  return { show: true, expired: false };
 }
 
 function _mkRowDef(testId,pm){

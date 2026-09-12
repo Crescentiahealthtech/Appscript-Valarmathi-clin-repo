@@ -123,6 +123,11 @@
       <span class="text-warning fw-bold small" id="hd-pat-demo">-- Y | -</span>
       <span id="hd-allergy-chip" class="op-allergy-none" onclick="openAllergyEditor()">Allergies: not recorded</span>
 
+      <!-- Verified lab results for this patient, over the top of the consult.
+           Reading them used to mean leaving the consultation, opening the Lab
+           module and searching for the patient by name or number. -->
+      <button class="btn btn-outline-info btn-sm py-1 px-2" onclick="crescLabPeek(window.currentPatientId, document.getElementById('hd-pat-name').textContent)" title="This patient's verified lab results, without leaving the consult"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
+
       <span class="ms-auto text-muted small">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></span>
     </div>
 
