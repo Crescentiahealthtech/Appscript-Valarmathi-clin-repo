@@ -353,7 +353,7 @@ function dsRenderQueue() {
       '<td class="text-end">' + (canInit
         ? '<button class="btn btn-sm btn-primary" data-ds-init="' + dsEsc(a.ipNumber) +
           '" data-ds-name="' + dsEsc(a.patientName) + '">Initiate discharge</button>'
-        : '<span class="ds-muted">Doctor only</span>') + '</td>' +
+        : '<span class="ds-muted" title="A doctor or the ward nurse starts the summary">Started by ward staff</span>') + '</td>' +
       '</tr>';
   }).join('');
 
@@ -364,10 +364,12 @@ function dsRenderQueue() {
       });
     });
 
+  // "1 summary" / "4 summaries" — the -s rule gives "summarys".
+  var nSum = rows.length, nWait = awaiting.length;
   dsEl(DS_IDS.deskMeta).innerHTML =
-    dsEsc(rows.length + ' summary' + (rows.length === 1 ? '' : 's') +
-          ' - ' + awaiting.length + ' admission' + (awaiting.length === 1 ? '' : 's') +
-          ' with none started');
+    dsEsc(nSum + (nSum === 1 ? ' summary' : ' summaries') +
+          ' · ' + nWait + (nWait === 1 ? ' admission' : ' admissions') +
+          ' not started');
 }
 
 function dsFormatTat(min) {
@@ -436,8 +438,26 @@ function dsLoadSummary(afterFn) {
     function (res) {
       dsShow(DS_IDS.edSpinner, false);
       try {
-        if (!res || res.success === false) {
-          dsNotice('danger', (res && res.message) || 'The summary could not be loaded.');
+        // A bare "could not be loaded" tells the doctor nothing they can act
+        // on. Say which summary, what the server called the failure, and — the
+        // part that actually matters at 2am — what to do next.
+        if (!res) {
+          dsNotice('danger',
+            'The server returned nothing for ' + (DSState.summaryId || 'this summary') +
+            '. That is usually a dropped connection or an expired sign-in. ' +
+            'Reload the page, and sign in again if it repeats.');
+          return;
+        }
+        if (res.success === false) {
+          dsNotice('danger',
+            (res.message || 'The summary could not be loaded.') +
+            (res.code ? ' [' + res.code + ']' : ''));
+          return;
+        }
+        if (!res.data || !res.data.payload) {
+          dsNotice('danger',
+            'The summary record was found but carries no content. Use Regenerate to rebuild ' +
+            'it from the case sheet and notes.');
           return;
         }
         DSState.header = res.data.header;
@@ -450,6 +470,9 @@ function dsLoadSummary(afterFn) {
         dsShow(DS_IDS.edGrid, true);
         dsRenderEditor();
         dsRenderPresence(res.data.editors || []);
+        // A recovered draft must announce itself: the doctor is about to sign
+        // something rebuilt from a different source than they left behind.
+        if (res.data.draftNote) dsNotice('warning', res.data.draftNote);
         if (typeof afterFn === 'function') afterFn();
       } catch (e) {
         dsNotice('danger', 'The summary loaded but could not be drawn: ' + e.message);

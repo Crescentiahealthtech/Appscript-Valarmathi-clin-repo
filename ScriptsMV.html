@@ -20,7 +20,6 @@
   // 1. Define all restricted UI elements (Sidebar Links & Inner Cards)
   const restrictedElements = [
    'nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
-    'nav-tab-ipward', 'nav-tab-discharge',
     'nav-tab-pharmacy', 'nav-tab-lab', 'nav-tab-accounts', 'card-hosp-billing',
     'dash-card-revenue', 'dash-card-credit', 'dash-gateway-accounts'   // NEW
   ];
@@ -42,16 +41,16 @@
       break;
     case 'doctor':
       allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
-                         'nav-tab-ipward', 'nav-tab-discharge', 'nav-tab-pharmacy', 'nav-tab-lab'];
+                         'nav-tab-pharmacy', 'nav-tab-lab'];
       break;
     case 'receptionist':
     case 'reception':
       allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'card-hosp-billing'];
       break;
     case 'nurse':
-      // The ward is where a nurse works; the discharge desk is where the
-      // nursing half of a summary (observations, meds given) is read back.
-      allowedElements = ['nav-tab-dash', 'nav-tab-emr', 'nav-tab-ipward', 'nav-tab-discharge'];
+      // The ward and the discharge desk are both inside EMR, which is where a
+      // nurse works; the rail itself carries only the Dashboard and EMR.
+      allowedElements = ['nav-tab-dash', 'nav-tab-emr'];
       break;
     case 'pharmacy':
       allowedElements = ['nav-tab-dash', 'nav-tab-pharmacy'];

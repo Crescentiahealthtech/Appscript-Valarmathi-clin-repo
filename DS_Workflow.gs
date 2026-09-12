@@ -55,9 +55,18 @@ var DSX_ROLE_MATRIX = {
   pharmacy: ['viewMedsOnly']
 };
 
-/** What a configured preparer role gains. */
+/**
+ * What a configured preparer role gains.
+ *
+ * `initiate` belongs here. Without it a preparer held `generate` — the verb
+ * that rebuilds an EXISTING summary — but had no way to bring one into
+ * existence, so a nurse could only ever wait for a doctor to press the first
+ * button. Preparing the draft is the whole reason the role exists, and it
+ * changes nothing about who may sign: signing stays a doctor action, and an
+ * unsigned summary is not a discharge.
+ */
 var DSX_PREPARER_ACTIONS =
-  ['view', 'viewSigned', 'generate', 'edit', 'submit', 'printDraft', 'printFinal'];
+  ['view', 'viewSigned', 'initiate', 'generate', 'edit', 'submit', 'printDraft', 'printFinal'];
 
 /**
  * Resolves the caller and asserts they hold at least one of `required`.
@@ -490,9 +499,72 @@ function ds_getStatusMap(token, ipNumbers) {
 }
 
 /** Everything the editor needs in one call. */
+/**
+ * The draft the editor should show, recovered rather than surrendered.
+ *
+ * A summary whose header exists but whose draft cannot be read is the one
+ * failure that strands a doctor completely: the desk lists the patient, the
+ * editor opens, and there is nothing to work on and no way forward. The
+ * document is reconstructible — the same clinical record that produced it the
+ * first time is still there — so it is reconstructed, in falling order of
+ * fidelity, and the caller is told which source it got.
+ *
+ * @return {{payload:Object|null, source:string, repaired:boolean, note:string}}
+ */
+function dsx_resolveDraft_(summaryId, header, actor) {
+  // 1. The working draft — the only source carrying unsaved human edits.
+  try {
+    var working = dsx_getWorking_(summaryId);
+    if (working && working.payload) {
+      return { payload: working.payload, source: 'WORKING', repaired: false, note: '' };
+    }
+  } catch (e) {
+    Logger.log('DS working draft unreadable for ' + summaryId + ': ' + e.message);
+  }
+
+  // 2. The newest frozen snapshot. Loses edits made since it was taken, which
+  //    is why it is second, but it is a real clinical document.
+  var snaps = [];
+  try { snaps = dsx_listSnapshots_(summaryId); } catch (e2) { snaps = []; }
+  for (var i = 0; i < snaps.length; i++) {
+    try {
+      var got = dsx_getSnapshotPayload_(summaryId, snaps[i].snapshotNo);
+      if (got && got.payload) {
+        return {
+          payload: got.payload, source: 'SNAPSHOT_' + snaps[i].snapshotNo, repaired: true,
+          note: 'The working draft could not be read, so snapshot ' + snaps[i].snapshotNo +
+                ' was restored. Edits made after that snapshot are not in it — check the ' +
+                'summary before submitting.'
+        };
+      }
+    } catch (e3) { /* try the next snapshot down */ }
+  }
+
+  // 3. Nothing stored survives. Rebuild from the clinical record itself.
+  try {
+    if (typeof dsx_assemble_ !== 'function') {
+      return { payload: null, source: 'NONE', repaired: false, note: '' };
+    }
+    var rebuilt = dsx_assemble_(dsx_str_(header.IP_Number),
+                                dsx_upper_(header.Discharge_Type) || 'NORMAL', actor);
+    return {
+      payload: rebuilt.payload, source: 'REASSEMBLED', repaired: true,
+      note: 'No readable draft was stored, so the summary was rebuilt from the case sheet, ' +
+            'notes and orders. Any earlier hand-editing is not in it — read every section ' +
+            'before submitting.'
+    };
+  } catch (e4) {
+    Logger.log('DS reassembly failed for ' + summaryId + ': ' + e4.message);
+    return { payload: null, source: 'NONE', repaired: false, note: dsx_str_(e4.message) };
+  }
+}
+
 function ds_getSummary(token, summaryId) {
   try {
     var actor = dsx_requireRole_(token, ['view', 'viewSigned', 'viewMedsOnly']);
+    if (!dsx_str_(summaryId)) {
+      return dsx_err_('VALIDATION_FAILED', 'No summary was named. Open one from the Discharge Desk.');
+    }
     var header = dsx_getHeader_(summaryId);
     if (!header) return dsx_err_('VALIDATION_FAILED', 'No discharge summary found for ' + summaryId + '.');
 
@@ -502,12 +574,35 @@ function ds_getSummary(token, summaryId) {
       return dsx_err_('FORBIDDEN', 'This summary has not been signed yet.');
     }
 
-    var working = dsx_getWorking_(summaryId);
-    var payload = working ? working.payload : null;
+    var draft = dsx_resolveDraft_(summaryId, header, actor);
+    var payload = draft.payload;
 
-    if (payload) {
-      payload = dsx_trimPayloadForRole_(payload, actor);
+    if (!payload) {
+      return dsx_err_('VALIDATION_FAILED',
+        'The draft for ' + dsx_str_(header.Summary_ID) + ' could not be read and could not be ' +
+        'rebuilt from the record' + (draft.note ? ' (' + draft.note + ')' : '') +
+        '. Use Regenerate on the Discharge Desk, or cancel and re-initiate the summary.');
     }
+
+    // A repaired draft is persisted so the next reader, the print engine and
+    // the diff all see the same document this one is about to be edited from.
+    if (draft.repaired && canSeeDrafts) {
+      var lock = LockService.getScriptLock();
+      try {
+        lock.waitLock(DSX_LOCK_MS);
+        dsx_putWorking_(summaryId, payload,
+                        dsx_int_(header.Current_Snapshot_No), actor.username);
+        dsx_logEvent_(summaryId, actor, 'DS_DRAFT_REPAIRED', status, status,
+                      dsx_int_(header.Current_Snapshot_No), '', draft.note,
+                      { source: draft.source });
+      } catch (eLock) {
+        Logger.log('DS draft repair could not be persisted: ' + eLock.message);
+      } finally {
+        try { lock.releaseLock(); } catch (eRel) {}
+      }
+    }
+
+    payload = dsx_trimPayloadForRole_(payload, actor);
 
     var readiness = { hard: [], soft: [] };
     if (payload && typeof dsx_readiness_ === 'function') {
@@ -517,6 +612,8 @@ function ds_getSummary(token, summaryId) {
     return dsx_ok_('', {
       header: dsx_headerForClient_(header),
       payload: payload,
+      draftSource: draft.source,
+      draftNote: draft.repaired ? draft.note : '',
       readiness: readiness,
       permissions: dsx_permissions_(actor, header),
       events: dsx_recentEvents_(summaryId, 50),

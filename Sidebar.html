@@ -42,10 +42,10 @@
     <a class="nav-link" id="nav-tab-appt" onclick="switchTab('workspace-appointments', this)"><i class="fa-solid fa-calendar-check"></i> <span class="sidebar-text">Appointments</span></a>
     <a class="nav-link" id="nav-tab-patients" onclick="switchTab('workspace-patients', this)"><i class="fa-solid fa-hospital-user"></i> <span class="sidebar-text">Patients</span></a>
     <a class="nav-link" id="nav-tab-emr" onclick="switchTab('tab-admin-emr', this)"><i class="fa-solid fa-laptop-medical"></i> <span class="sidebar-text">EMR</span></a>
-    <!-- Both screens load their own data from the router hook in switchTab(),
-         so the handler here stays a plain navigation call. -->
-    <a class="nav-link" id="nav-tab-ipward" onclick="switchTab('ip-ledger-view', this)"><i class="fa-solid fa-bed-pulse"></i> <span class="sidebar-text">IP Ward</span></a>
-    <a class="nav-link" id="nav-tab-discharge" onclick="switchTab('ds-desk-view', this)"><i class="fa-solid fa-house-medical-circle-check"></i> <span class="sidebar-text">Discharge Desk</span></a>
+    <!-- IP Ward and the Discharge Desk are not listed here on purpose. Both are
+         ward work that starts from a patient, not from the rail, and both are
+         one click inside EMR. Keeping them out holds the rail to the eight
+         places a shift actually begins. -->
     <a class="nav-link" id="nav-tab-pharmacy" onclick="switchTab('workspace-pharmacy', this)"><i class="fa-solid fa-pills"></i> <span class="sidebar-text">Pharmacy</span></a>
     <a class="nav-link" id="nav-tab-lab" onclick="switchTab('workspace-lab', this)"><i class="fa-solid fa-flask-vial"></i> <span class="sidebar-text">Labs</span></a>
     <a class="nav-link" id="nav-tab-accounts" onclick="switchTab('workspace-accounts', this)"><i class="fa-solid fa-file-invoice-dollar"></i> <span class="sidebar-text">Accounts</span></a>
@@ -104,12 +104,32 @@
     sidebar.classList.toggle('collapsed', collapse !== false);
   };
 
-  // Restore the last explicit choice on load.
+  /**
+   * Collapsed is the resting state.
+   *
+   * The rail costs 260px on every screen in the app, and the screens that
+   * matter — the consult, the case sheet, the ward — are the ones least able
+   * to spare it. Icons remain, so nothing is unreachable, and one click on the
+   * toggle pins it open and keeps it open across reloads. Only an explicit
+   * "0" written by that click opens it; no stored preference means collapsed.
+   */
   (function () {
-    try {
-      const v = localStorage.getItem('sidebarCollapsed');
-      if (v === '0') window.crescSidebarPinned = true;
-    } catch (e) { /* ignore */ }
+    var pinnedOpen = false;
+    try { pinnedOpen = (localStorage.getItem('sidebarCollapsed') === '0'); } catch (e) { /* private mode */ }
+    window.crescSidebarPinned = pinnedOpen;
+
+    function applyInitialSidebarState() {
+      var sidebar = document.getElementById('sidebar');
+      if (!sidebar) return;
+      if (window.innerWidth <= 768) return;   // mobile uses the overlay, never the rail
+      sidebar.classList.toggle('collapsed', !pinnedOpen);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', applyInitialSidebarState);
+    } else {
+      applyInitialSidebarState();
+    }
   })();
 
   // 2. Theme control

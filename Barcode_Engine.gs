@@ -38,12 +38,17 @@ var BC_CFG = {
   SCAN_MIN_LEN: 6,
   // Server-side action matrix. Mirrors applyRBAC() nav visibility so a role
   // is never offered a screen its sidebar hides.
+  // IP_CASESHEET and IP_NOTE are offered only when the scan resolves to a LIVE
+  // admission — see bc_ipActionsFor_(). Scanning the wristband at the bedside
+  // is the fastest route into that patient's chart, and it was the one thing
+  // the scanner could not do: it could open an OP consult for an inpatient,
+  // but not their case sheet.
   ROLE_ACTIONS: {
-    'admin':          ['CHECK_IN', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD'],
-    'doctor':         ['CHECK_IN', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD'],
+    'admin':          ['CHECK_IN', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD', 'IP_CASESHEET', 'IP_NOTE'],
+    'doctor':         ['CHECK_IN', 'START_CONSULT', 'TIMELINE', 'PHARMACY_BILL', 'LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD', 'IP_CASESHEET', 'IP_NOTE'],
     'receptionist':   ['CHECK_IN', 'PRINT_CARD'],
     'reception':      ['CHECK_IN', 'PRINT_CARD'],
-    'nurse':          ['TIMELINE'],
+    'nurse':          ['TIMELINE', 'IP_NOTE'],
     'pharmacy':       ['PHARMACY_BILL'],
     'pharmacist':     ['PHARMACY_BILL'],
     'lab':            ['LAB_ORDERS', 'LAB_WALKIN', 'PRINT_CARD'],
@@ -255,12 +260,36 @@ function resolveScan(payload, context, sessionToken) {
       patient: patient,
       appointments: appointments,
       admission: admission,
-      actions: (BC_CFG.ROLE_ACTIONS[role] || []).slice(),
+      actions: bc_scanActions_(role, admission),
       message: ''
     };
   } catch (e) {
     return { success: false, message: 'Scan lookup failed: ' + e.message };
   }
+}
+
+/**
+ * The actions this scan can actually perform.
+ *
+ * The role matrix says what someone MAY do; this says what is available for
+ * the patient in front of them. Ward actions need a live admission — offering
+ * "New IP note" for a patient who was discharged last month produces a note
+ * with nowhere to go — and the OP actions that assume a clinic queue are
+ * demoted at the bedside, where the wristband is being scanned to reach a
+ * chart, not to start a consultation.
+ */
+function bc_scanActions_(role, admission) {
+  var all = (BC_CFG.ROLE_ACTIONS[role] || []).slice();
+  var IP_ONLY = ['IP_CASESHEET', 'IP_NOTE'];
+
+  if (!admission || !dc_str_(admission.ipNumber)) {
+    return all.filter(function (a) { return IP_ONLY.indexOf(a) === -1; });
+  }
+
+  // Admitted: put the ward actions first, so the bedside scan lands on them.
+  var ip = all.filter(function (a) { return IP_ONLY.indexOf(a) !== -1; });
+  var rest = all.filter(function (a) { return IP_ONLY.indexOf(a) === -1; });
+  return ip.concat(rest);
 }
 
 /**

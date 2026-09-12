@@ -77,8 +77,8 @@ function ipc_casesheetSheet_() {
  * admin login cannot manufacture a doctor's signature.
  */
 var IPC_ROLE_NOTE_TYPES = {
-  "doctor":       ["DOCTOR", "CONSULTANT", "PROCEDURE", "QUICK", "HANDOVER"],
-  "nurse":        ["NURSE", "QUICK", "HANDOVER"],
+  "doctor":       ["DOCTOR", "CONSULTANT", "PROCEDURE", "QUICK"],
+  "nurse":        ["NURSE", "QUICK"],
   // In a single-consultant clinic the doctor IS the administrator, and an
   // admin login that could not write a progress note simply meant the note
   // went unwritten. An admin may now author anything a doctor can — but only
@@ -87,7 +87,7 @@ var IPC_ROLE_NOTE_TYPES = {
   // own username in Author_Username, so the record says who typed it and who
   // stands behind it. An admin still cannot manufacture a signature out of
   // nothing: with no doctor chosen, the write is refused.
-  "admin":        ["DOCTOR", "NURSE", "CONSULTANT", "PROCEDURE", "QUICK", "HANDOVER"],
+  "admin":        ["DOCTOR", "NURSE", "CONSULTANT", "PROCEDURE", "QUICK"],
   "receptionist": ["QUICK"],
   "reception":    ["QUICK"]
 };
@@ -133,8 +133,7 @@ var IPC_SECTION_RBAC = {
     "doctor": ["procedureName", "operator", "findings", "complications",
                "anaesthesia", "alertText"]
   },
-  "QUICK":    { "*": ["text"] },
-  "HANDOVER": { "*": ["handoverText"] }
+  "QUICK":    { "*": ["text"] }
 };
 
 /** Note types whose med/lab orders are allowed to reach downstream queues. */
@@ -466,7 +465,7 @@ function ipc_wardVisibilityFilter_(scope) {
  *
  * @param {string} sessionToken
  * @param {string} ipNumber
- * @param {string} roleType        DOCTOR | NURSE | CONSULTANT | PROCEDURE | QUICK | HANDOVER
+ * @param {string} roleType        DOCTOR | NURSE | CONSULTANT | PROCEDURE | QUICK
  * @param {Object} noteData        raw client sections (filtered on the way out)
  * @return {{ok, message, sess, role, username, displayName, doctorId,
  *           signature, authorLabel, noteData, stripped, mayPrescribe}}

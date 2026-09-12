@@ -49,7 +49,7 @@ var DEP_MAP = {
   "IP_Notes_Logic.gs": [
     "saveIPNote", "getIPTimeline", "getClinicalContext", "getActiveIPAdmissionsForNotes",
     "_normDrug_", "_ensureIPPharmacyQueueSheet_", "fetchPharmacyMasterForIP",
-    "getIPNotesPrintHtml", "getIPNotesLabCatalog", "generateIPHandoverSummary"
+    "getIPNotesPrintHtml", "getIPNotesLabCatalog"
   ],
   "IP_Schema_Repair.gs": [
     "repairCasesheetHeaderDrift", "runIPHealthCheck", "repairDuplicatePharmacyQueueRows"

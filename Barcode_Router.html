@@ -62,7 +62,9 @@
     TIMELINE: 'Clinical timeline',
     PHARMACY_BILL: 'Pharmacy bill',
     LAB_ORDERS: 'Lab orders',
-    LAB_WALKIN: 'New lab order'
+    LAB_WALKIN: 'New lab order',
+    IP_CASESHEET: 'Open IP case sheet',
+    IP_NOTE: 'New IP note'
   };
   var STATUS_LABELS = { 'Booked': 'Booked', 'Arrived': 'Arrived / Queue', 'In-Progress': 'In consultation', 'Completed': 'Completed' };
 
@@ -444,6 +446,21 @@
         added++;
       });
     }
+    // Ward actions come first for an admitted patient: the wristband was
+    // almost certainly scanned at the bedside to reach the chart.
+    if (res.admission && res.admission.ipNumber) {
+      var ipNo = res.admission.ipNumber;
+      if (actions.indexOf('IP_CASESHEET') !== -1) {
+        addButton(box, 'btn btn-sm btn-info', 'fa-solid fa-file-medical', ACTION_LABELS.IP_CASESHEET,
+          function () { hidePanel(); goIPCasesheet(ipNo); });
+        added++;
+      }
+      if (actions.indexOf('IP_NOTE') !== -1) {
+        addButton(box, 'btn btn-sm btn-success', 'fa-solid fa-clipboard-user', ACTION_LABELS.IP_NOTE,
+          function () { hidePanel(); goIPNotes(ipNo); });
+        added++;
+      }
+    }
     if (actions.indexOf('START_CONSULT') !== -1) {
       addButton(box, 'btn btn-sm btn-primary', 'fa-solid fa-stethoscope', ACTION_LABELS.START_CONSULT,
         function (btn) { startConsult(btn, pid, appts); });
@@ -577,6 +594,35 @@
   function goTimeline(pid) {
     if (typeof routeToEMRTimeline === 'function') routeToEMRTimeline(pid);
     else toast('Clinical timeline is not available.', 'err');
+  }
+
+  /**
+   * Opens the ward screens on a scanned inpatient.
+   *
+   * Both live inside the EMR cockpit, so the route is: show the EMR tab, open
+   * the sub-workspace, then hand it the IP number. Each step is guarded —
+   * a deployment missing one of these files should report that plainly rather
+   * than throw into a dead panel.
+   */
+  function goIPCasesheet(ipNumber) {
+    if (typeof switchTab === 'function' && !isSectionActive('tab-admin-emr')) {
+      switchTab('tab-admin-emr', $('nav-tab-emr'));
+    }
+    if (typeof openEMRWorkspace !== 'function') { toast('The EMR workspace is not available.', 'err'); return; }
+    openEMRWorkspace('ip-casesheet');
+    if (typeof ipcOpenAdmission === 'function') ipcOpenAdmission(ipNumber);
+    else toast('Open the patient from the case sheet list.', 'warn');
+  }
+
+  function goIPNotes(ipNumber) {
+    if (typeof switchTab === 'function' && !isSectionActive('tab-admin-emr')) {
+      switchTab('tab-admin-emr', $('nav-tab-emr'));
+    }
+    if (typeof openEMRWorkspace !== 'function') { toast('The EMR workspace is not available.', 'err'); return; }
+    openEMRWorkspace('ip-notes');
+    if (typeof openIPNotesForIP === 'function') openIPNotesForIP(ipNumber);
+    else if (typeof fetchIPNotesLedger === 'function') fetchIPNotesLedger();
+    else toast('Open the patient from the IP notes list.', 'warn');
   }
 
   function goPharmacy(pid) {

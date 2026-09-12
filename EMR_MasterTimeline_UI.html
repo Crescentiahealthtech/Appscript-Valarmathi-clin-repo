@@ -1,22 +1,71 @@
 <div id="emr-workspace-records" class="d-none mt-4 app-view h-100 flex-column px-2">
+
+<style>
+  /* ---------------------------------------------------------------------
+     This screen was built against Bootstrap's fixed dark utilities
+     (bg-dark / bg-black / table-dark / border-secondary) while every other
+     screen is drawn from the theme tokens. It therefore read as a different
+     product, and stayed black when the app was switched to light. The rules
+     below put it back on the same surfaces, borders and type scale as the
+     consult and the case sheet.
+
+     The stream cards size themselves in `em`, so one base font-size here
+     rescales the whole card stack at once — 1.05em stops meaning "bigger than
+     the browser default" and starts meaning "slightly bigger than the app".
+     ------------------------------------------------------------------ */
+  #emr-workspace-records                 { font-size: 0.85rem; }
+  #emr-workspace-records h4              { font-size: 1.05rem; }
+  #emr-workspace-records h5              { font-size: 0.95rem; }
+
+  #emr-workspace-records .emr-rec-panel  { background-color: var(--bg-card) !important;
+                                           border: 1px solid var(--border-color) !important;
+                                           border-radius: 10px; }
+  #emr-workspace-records .emr-rec-input  { background-color: var(--bg-input) !important;
+                                           color: var(--text-main) !important;
+                                           border: 1px solid var(--border-color) !important;
+                                           font-size: 0.85rem; }
+  #emr-workspace-records .emr-rec-input:focus { border-color: var(--accent-purple) !important;
+                                           box-shadow: 0 0 0 0.1rem var(--accent-glow); }
+  #emr-workspace-records .emr-rec-input::placeholder { color: var(--text-faint) !important; }
+
+  #emr-workspace-records .emr-rec-scroll { background-color: var(--bg-card) !important;
+                                           border: 1px solid var(--border-color) !important;
+                                           border-radius: 10px; }
+  #emr-workspace-records .emr-rec-table               { color: var(--text-main); margin: 0; }
+  #emr-workspace-records .emr-rec-table > thead > tr > th {
+                                           background-color: var(--surface-2);
+                                           color: var(--text-label);
+                                           border-bottom: 1px solid var(--border-color);
+                                           font-size: 0.72rem; text-transform: uppercase;
+                                           letter-spacing: 0.04em; font-weight: 700;
+                                           padding: 8px 10px; }
+  #emr-workspace-records .emr-rec-table > tbody > tr > td {
+                                           border-bottom: 1px solid var(--border-soft, var(--border-color));
+                                           padding: 8px 10px; vertical-align: middle; }
+  #emr-workspace-records .emr-rec-table > tbody > tr:hover > td {
+                                           background-color: var(--surface-hover); }
+  #emr-workspace-records .emr-rec-title   { color: var(--text-main) !important; }
+  #emr-workspace-records .emr-rec-divider { border-bottom: 1px solid var(--border-color) !important; }
+  #emr-workspace-records .emr-rec-divider-end { border-right: 1px solid var(--border-color) !important; }
+</style>
     
     <!-- ========================================================= -->
     <!-- SECTION 1: PATIENT LEDGER DIRECTORY -->
     <!-- ========================================================= -->
     <div id="timeline-ledger-section" class="flex-grow-1 d-flex flex-column">
-        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
+        <div class="d-flex justify-content-between align-items-center mb-3 emr-rec-divider pb-2">
             <div>
-                <h4 class="m-0 text-white fw-bold"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i> Master Patient Records</h4>
+                <h4 class="m-0 fw-bold emr-rec-title"><i class="fa-solid fa-clock-rotate-left me-2 text-primary"></i> Master Patient Records</h4>
             </div>
-            <button class="btn btn-outline-secondary btn-sm fw-bold text-white" onclick="returnToEMRMenu()">
+            <button class="btn btn-outline-secondary btn-sm fw-bold" onclick="returnToEMRMenu()">
                 <i class="fa-solid fa-arrow-left me-1"></i> EMR Menu
             </button>
         </div>
 
-        <div class="card bg-dark border-secondary mb-3">
+        <div class="emr-rec-panel mb-3">
             <div class="card-body row g-2">
                 <div class="col-md-8">
-                    <input type="text" id="master-search-input" class="form-control bg-dark text-white border-secondary" placeholder="Search Patient ID, Name, or Mobile..." onkeyup="filterMasterLedger()">
+                    <input type="text" id="master-search-input" class="form-control emr-rec-input" placeholder="Search Patient ID, Name, or Mobile..." onkeyup="filterMasterLedger()">
                 </div>
                 <div class="col-md-4">
                     <button class="btn btn-outline-info w-100 fw-bold" onclick="loadMasterLedger()">
@@ -26,10 +75,10 @@
             </div>
         </div>
 
-        <div class="flex-grow-1 overflow-auto border border-secondary rounded bg-black">
-            <table class="table table-dark table-hover m-0 align-middle text-nowrap">
+        <div class="flex-grow-1 overflow-auto emr-rec-scroll">
+            <table class="table table-hover align-middle text-nowrap emr-rec-table">
                 <thead style="position: sticky; top: 0; z-index: 10;">
-                    <tr class="text-muted small">
+                    <tr>
                         <th class="sno-col">S.No</th>
                         <th>Patient ID</th>
                         <th>Name</th>
@@ -50,10 +99,10 @@
     <div id="timeline-stream-section" class="flex-grow-1 d-none flex-column overflow-hidden">
         
         <!-- HARDCODED STICKY HEADER WITH BUTTONS -->
-        <div class="card bg-black border-secondary mb-3 shadow-sm" style="position: sticky; top: 0; z-index: 10;">
+        <div class="emr-rec-panel mb-3 shadow-sm" style="position: sticky; top: 0; z-index: 10;">
             <div class="card-body d-flex justify-content-between align-items-center py-2">
                 <div>
-                    <h5 class="text-white m-0 fw-bold" id="tl-pat-name">Loading...</h5>
+                    <h5 class="m-0 fw-bold emr-rec-title" id="tl-pat-name">Loading...</h5>
                     <small class="text-muted" id="tl-pat-details">Loading details...</small>
                 </div>
                 <div class="d-flex align-items-center gap-2">
@@ -63,7 +112,7 @@
                         <i class="fa-solid fa-stethoscope me-1"></i> New OPD
                     </button>
                                
-                    <button class="btn btn-sm btn-outline-light rounded-pill px-3 ms-2" onclick="closeTimelineView()">
+                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 ms-2" onclick="closeTimelineView()">
                         <i class="fa-solid fa-arrow-left me-1"></i> Back
                     </button>
 
@@ -237,7 +286,7 @@ function buildOPCard(ev) {
       <div class="timeline-badge badge-op" style="background-color: var(--success); border-color: var(--border-color);"></div>
       <div class="timeline-card" style="background-color: var(--surface-2); border: 1px solid var(--border-hover) !important;">
         
-        <div class="d-flex justify-content-between align-items-center mb-2 border-bottom border-secondary pb-2" style="cursor: pointer; user-select: none;" onclick="toggleTimelineCard('body-${ev.apptId}', 'chev-${ev.apptId}')">
+        <div class="d-flex justify-content-between align-items-center mb-2 emr-rec-divider pb-2" style="cursor: pointer; user-select: none;" onclick="toggleTimelineCard('body-${ev.apptId}', 'chev-${ev.apptId}')">
           <div>
             <strong style="color: var(--success-fg); font-size: 1.15em;"><i class="fa-solid fa-stethoscope me-1"></i> OPD Consult</strong>
             <span style="border: 1px solid var(--border-hover); color: var(--text-main) !important; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 10px; background-color: var(--bg-main);">${ev.apptId}</span>
@@ -257,7 +306,7 @@ function buildOPCard(ev) {
             </div>
 
             <div class="row g-3">
-              <div class="col-md-7 border-end border-secondary">
+              <div class="col-md-7 emr-rec-divider-end">
                 <div class="mb-3">
                   <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-clipboard-list me-1 text-muted"></i> Complaints</span>
                   <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 2px; font-weight: 500;">${ev.complaints}</p>
@@ -325,7 +374,7 @@ function buildIPCard(ev) {
       <div class="timeline-badge badge-ip" style="background-color: var(--accent-purple); border-color: var(--border-color);"></div>
       <div class="timeline-card border-primary" style="background-color: var(--surface-2); border: 1px solid var(--accent-purple) !important;">
         
-        <div class="d-flex justify-content-between align-items-center mb-2 border-bottom border-secondary pb-2" style="cursor: pointer; user-select: none;" onclick="toggleTimelineCard('body-ip-${ev.ipNumber}', 'chev-ip-${ev.ipNumber}')">
+        <div class="d-flex justify-content-between align-items-center mb-2 emr-rec-divider pb-2" style="cursor: pointer; user-select: none;" onclick="toggleTimelineCard('body-ip-${ev.ipNumber}', 'chev-ip-${ev.ipNumber}')">
           <div>
             <strong style="color: var(--accent-fg); font-size: 1.15em;"><i class="fa-solid fa-bed-pulse me-1"></i> IP Admission</strong>
             <span style="border: 1px solid var(--accent-purple); color: var(--text-main) !important; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 10px; background-color: var(--bg-main);">${ev.ipNumber}</span>

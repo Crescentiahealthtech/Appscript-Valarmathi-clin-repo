@@ -176,8 +176,7 @@ function getClinicalContext(ipNumber, sessionToken) {
       latestVitals: { bp: "--/--", pulse: "--", spo2: "--", temp: "--", recorded: null },
       activeMeds: [],
       runningIV: [],
-      dueMeds: [],
-      handoverAlert: null
+      dueMeds: []
     };
 
     // ── Demographics from IP_Admissions ──
@@ -250,17 +249,6 @@ function getClinicalContext(ipNumber, sessionToken) {
         }
       }
 
-      // ── Handover Alert — most recent HANDOVER flag ──
-      for (let i = tlData.length - 1; i > 0; i--) {
-        if (String(tlData[i][1]).trim() === String(ipNumber).trim() &&
-            tlData[i][7] && tlData[i][7].toString().includes('HANDOVER')) {
-          try {
-            const nd = JSON.parse(tlData[i][4] || "{}");
-            result.handoverAlert = nd.handoverText || null;
-          } catch(e) {}
-          break;
-        }
-      }
     }
 
     // ── Active Meds & Running IV from IP_Pharmacy_Queue ──
@@ -354,6 +342,13 @@ function getIPTimeline(ipNumber, sessionToken) {
 
     for (let i = data.length - 1; i > 0; i--) {
       if (String(data[i][1]).trim() !== String(ipNumber).trim()) continue;
+
+      // Shift handovers were an internal shift-change aid, never part of the
+      // clinical record, and they crowded the feed with a machine-written
+      // restatement of notes already on it. The feature is gone; rows written
+      // while it existed stay in the sheet for audit but are not shown, not
+      // printed and not assembled into a discharge summary.
+      if (String(data[i][3] || "").trim().toUpperCase() === "HANDOVER") continue;
 
       let noteData = {};
       try { noteData = JSON.parse(data[i][4] || "{}"); } catch(e) {}
@@ -781,196 +776,6 @@ function updateIPMedAction(payload, sessionToken) {
   }
 }
 
-// ── 9. GENERATE HANDOVER SUMMARY ─────────────────────────
-
-/**
- * Generates a structured shift handover summary note.
- */
-function generateIPHandoverSummary(payload, sessionToken) {
-  // No lock here: this function only reads, then delegates the single write
-  // to saveIPNote(), which takes the script lock itself. Taking it twice in
-  // one execution would deadlock.
-  try {
-    payload = payload || {};
-    const w = resolveIPWrite_(sessionToken, payload.ipNumber, "HANDOVER", {});
-    if (!w.ok) return { success: false, message: w.message };
-
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const tlSheet = ss.getSheetByName('IP_Timeline_DB');
-    const pqSheet = ss.getSheetByName('IP_Pharmacy_Queue');
-
-    const cutoffMs = 12 * 60 * 60 * 1000;
-    const now = new Date();
-
-    let vitalsList = [];
-    let doctorNotes = [];
-    let nurseNotes = [];
-    let alerts = [];
-    let events = [];        // diagnosis revisions, amendments, procedures
-    let consults = [];
-    let activeMedsList = [];
-
-    // ── Active medications ─────────────────────────────────────────────
-    // The single most important line of a shift handover. This block was
-    // missing while the summary still printed activeMedsList, so every
-    // handover died with "activeMedsList is not defined" and no shift
-    // handover could be produced at all.
-    //
-    // Read directly rather than through getClinicalContext(): that function
-    // takes the read gate again and pulls labs, allergies and the care team,
-    // none of which the handover needs.
-    if (pqSheet && pqSheet.getLastRow() > 1) {
-      const pqData = pqSheet.getDataRange().getValues();
-      const seenDrug = {};
-      // Newest first, so a drug modified twice reports its current order.
-      for (let i = pqData.length - 1; i > 0; i--) {
-        if (String(pqData[i][1]).trim() !== String(payload.ipNumber).trim()) continue;
-        if (String(pqData[i][11] || "ACTIVE").toUpperCase() !== "ACTIVE") continue;
-
-        const drugName = String(pqData[i][3] || "").trim();
-        if (!drugName) continue;
-        const key = (typeof _normDrug_ === "function") ? _normDrug_(drugName)
-                                                       : drugName.toUpperCase();
-        if (key && seenDrug[key]) continue;
-        if (key) seenDrug[key] = true;
-
-        const route = String(pqData[i][6] || "").trim();
-        const isIV = /^(IV|INFUSION)/i.test(route) || /FLUID/i.test(route);
-        activeMedsList.push(
-          (isIV ? "▶ [IV] " : "• ") + drugName +
-          [String(pqData[i][4] || "").trim(),      // dose
-           String(pqData[i][5] || "").trim(),      // frequency
-           route,
-           String(pqData[i][7] || "").trim()]      // instructions / rate
-            .filter(Boolean)
-            .map(function (x) { return " — " + x; })
-            .join(""));
-      }
-      // Running infusions belong at the top of a handover list.
-      activeMedsList.sort(function (a, b) {
-        var ai = a.indexOf("[IV]") !== -1 ? 0 : 1;
-        var bi = b.indexOf("[IV]") !== -1 ? 0 : 1;
-        return ai - bi;
-      });
-    }
-
-    if (tlSheet) {
-      const tlData = tlSheet.getDataRange().getValues();
-      const tlMap  = dc_headerMap_(tlSheet);
-      const iFlags = (tlMap["Flags"] === undefined) ? 7 : tlMap["Flags"];
-
-      for (let i = 1; i < tlData.length; i++) {
-        if (String(tlData[i][1]).trim() !== String(payload.ipNumber).trim()) continue;
-        const rowTs = new Date(tlData[i][0]);
-        if ((now - rowTs) > cutoffMs) continue;
-
-        const roleType = String(tlData[i][3] || "");
-        const author   = String(tlData[i][5] || "");
-        const flags    = String(tlData[i][iFlags] || "");
-        let nd = {};
-        try { nd = JSON.parse(tlData[i][4] || "{}"); } catch(e) {}
-
-        const timeStr = Utilities.formatDate(rowTs, Session.getScriptTimeZone(), "hh:mm a");
-
-        if (roleType === 'NURSE' && nd.vitals) {
-          vitalsList.push(`${timeStr}: BP ${nd.vitals.bp || "--"} | P ${nd.vitals.pulse || "--"} | SpO2 ${nd.vitals.spo2 || "--"}% | T ${nd.vitals.temp || "--"}`);
-        }
-
-        // A doctor note is more than its subjective line. Recording only
-        // nd.subjectiveObjective is why a diagnosis revised at 20:27 never
-        // reached the handover — that change lives in assessment/diagnosis.
-        if (roleType === 'DOCTOR') {
-          const body = [nd.subjectiveObjective, nd.assessment, nd.adviceText]
-            .map(function (x) { return String(x || "").trim(); })
-            .filter(Boolean).join(" — ");
-          if (body) doctorNotes.push(`${timeStr} [${author}]: ${body}`);
-        }
-
-        if (roleType === 'NURSE' && nd.observations) {
-          nurseNotes.push(`${timeStr} [${author}]: ${nd.observations}`);
-        }
-
-        if (roleType === 'CONSULTANT') {
-          consults.push(`${timeStr} [${author}] ${nd.specialty ? nd.specialty + ": " : ""}` +
-                        `${String(nd.recommendations || nd.findings || "opinion recorded").trim()}`);
-        }
-
-        if (roleType === 'PROCEDURE') {
-          events.push(`${timeStr} Procedure — ${String(nd.procedureName || "unnamed").trim()}` +
-                      `${nd.complications ? " (complications: " + nd.complications + ")" : ""} [${author}]`);
-        }
-
-        // Flagged clinical events: a diagnosis revision or a casesheet
-        // amendment is exactly what the incoming shift needs to know.
-        if (flags.indexOf('DIAGNOSIS') !== -1) {
-          events.push(`${timeStr} Diagnosis revised — ${String(nd.diagnosis || nd.assessment || "").trim()} [${author}]`);
-        }
-        if (flags.indexOf('CASESHEET_AMENDED') !== -1) {
-          events.push(`${timeStr} Casesheet amended — ${String(nd.plan || "").trim()} [${author}]`);
-        }
-        if (flags.indexOf('ALERT') !== -1) {
-          alerts.push(`\u26A0 ${timeStr} ${nd.alertText || "Clinical alert triggered."} [${author}]`);
-        }
-      }
-    }
-
-    // Current working diagnosis, so the handover states where things stand and
-    // not merely what changed.
-    let currentDx = "";
-    try {
-      const adm = ipc_admissionRow_(payload.ipNumber);
-      if (adm) currentDx = dc_str_(adm.row[10]);
-    } catch (e) { /* the summary is still worth producing without it */ }
-
-    const summaryLines = [
-      `=== ${payload.shift || _getCurrentShift_()} SHIFT HANDOVER SUMMARY ===`,
-      `Generated: ${Utilities.formatDate(now, Session.getScriptTimeZone(), "dd-MMM-yyyy hh:mm a")}`,
-      `Generated by: ${w.authorLabel}`,
-      "",
-      "WORKING DIAGNOSIS:",
-      currentDx || "Not recorded.",
-      "",
-      "CHANGES THIS PERIOD:",
-      events.length ? events.join("\n") : "No diagnosis changes, procedures or amendments.",
-      "",
-      "ALERTS:",
-      alerts.length ? alerts.join("\n") : "No alerts in this period.",
-      "",
-      "VITALS TREND (Last 12h):",
-      vitalsList.length ? vitalsList.join("\n") : "No vitals recorded.",
-      "",
-      "ACTIVE MEDICATIONS:",
-      activeMedsList.length ? activeMedsList.join("\n") : "No active medications.",
-      "",
-      "DOCTOR NOTES:",
-      doctorNotes.length ? doctorNotes.join("\n") : "No doctor notes.",
-      "",
-      "CONSULTANT OPINIONS:",
-      consults.length ? consults.join("\n") : "No consultant opinions this period.",
-      "",
-      "NURSING OBSERVATIONS:",
-      nurseNotes.length ? nurseNotes.join("\n") : "No nursing notes."
-    ];
-    const handoverText = summaryLines.join("\n");
-
-    // Route the handover through the same authored-write path as any other
-    // note so it carries a Note_ID and a real signature.
-    const saved = saveIPNote({
-      ipNumber:  payload.ipNumber,
-      patientId: payload.patientId,
-      roleType:  "HANDOVER",
-      flags:     "HANDOVER",
-      noteData:  { handoverText: handoverText }
-    }, sessionToken);
-    if (!saved.success) return { success: false, message: saved.message };
-
-    return { success: true, summary: handoverText,
-             noteId: saved.noteId, author: w.authorLabel };
-  } catch (error) {
-    return { success: false, message: "Handover generation failed: " + error.toString() };
-  }
-}
-
 // ── 10. FETCH IP PHARMACY QUEUE FOR A PATIENT ──────────
 
 /**
@@ -1181,11 +986,21 @@ function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
       opts.roleTypes.forEach(function (r) { wanted[dc_upper_(r)] = true; });
     }
 
+    // Printing ONE note. A consultant asked for their opinion on paper, or a
+    // single progress note goes out with a referral: neither should drag the
+    // rest of the stay along with it.
+    var onlyIds = null;
+    if (opts.noteIds && opts.noteIds.length) {
+      onlyIds = {};
+      opts.noteIds.forEach(function (id) { onlyIds[String(id).trim()] = true; });
+    }
+
     // A printed record reads chronologically. Sorting on the timestamp rather
     // than reversing the sheet order matters: a note entered late, or a row
     // written during an amendment, sits out of sequence in the sheet and would
     // otherwise print out of sequence too.
     var rows = tl.data.filter(function (n) {
+      if (onlyIds && !onlyIds[String(n.noteId).trim()]) return false;
       if (wanted && !wanted[dc_upper_(n.roleType)]) return false;
       if (!n.rawTs) return !from && !to;
       var d = new Date(n.rawTs);
@@ -1195,14 +1010,21 @@ function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
     }).sort(ipn_byTimeAsc_);
 
     if (!rows.length) {
-      return { success: false, message: "No notes in that period to print." };
+      return { success: false, message: onlyIds
+        ? "That note could not be found. It may have been written by someone whose notes you cannot read."
+        : "No notes in that period to print." };
     }
 
+    var scope = ipn_printScope_(rows, wanted, onlyIds);
     var patient = ipn_printPatient_(ipNumber, adm);
-    var body = ipp_sec_("Observation Chart", ipn_trendSection_(rows, opts), { loose: true }) +
-               ipp_sec_("Progress Notes",
-                        rows.map(ipn_printNote_).join(""),
-                        { loose: true });
+
+    // The observation chart is a trend across a stay. On a single note it has
+    // nothing to plot, and on a doctors-only extract the vitals belong to the
+    // nursing record that is not in the document.
+    var body = scope.showChart
+      ? ipp_sec_("Observation Chart", ipn_trendSection_(rows, opts), { loose: true })
+      : "";
+    body += ipp_sec_(scope.sectionTitle, rows.map(ipn_printNote_).join(""), { loose: true });
 
     var span = (from || to)
       ? "Extract: " + (from ? ipp_when_(from, "dd-MMM-yyyy") : "admission") +
@@ -1210,9 +1032,9 @@ function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
       : "Whole stay";
 
     var html = ipp_doc_({
-      docTitle: "Inpatient Progress Record",
+      docTitle: scope.docTitle,
       patient:  patient,
-      bodyHtml: body + ipp_sig_(patient.consultant || "Consultant", "Treating Consultant"),
+      bodyHtml: body + ipp_sig_(scope.signName(patient), scope.signRole),
       footNote: rows.length + " note(s) · " + span
     });
 
@@ -1220,6 +1042,62 @@ function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
   } catch (err) {
     return { success: false, message: err.toString() };
   }
+}
+
+/**
+ * What this print run actually IS, so the paper says so.
+ *
+ * A nursing record and a medical record are two different documents that
+ * happen to share a timeline. Printed together they read as one undivided
+ * chart, which is wrong on the ward (the nursing file is its own file) and
+ * wrong at the signature line — a consultant should not be signing off the
+ * shift's observations, and a nurse's entries should not arrive under a
+ * heading that says the consultant stands behind them.
+ *
+ * @param {Array}  rows     the notes that survived filtering
+ * @param {Object} wanted   role filter, or null for everything
+ * @param {Object} onlyIds  note-id filter, or null
+ */
+function ipn_printScope_(rows, wanted, onlyIds) {
+  var types = {};
+  rows.forEach(function (n) { types[dc_upper_(n.roleType)] = true; });
+  var kinds = Object.keys(types);
+
+  var nursingOnly = (kinds.length === 1 && kinds[0] === "NURSE");
+  var single      = !!onlyIds && rows.length === 1;
+
+  if (single) {
+    var label = IPN_PRINT_LABELS[dc_upper_(rows[0].roleType)] || "Clinical Note";
+    var author = dc_str_(rows[0].author);
+    return {
+      docTitle: label, sectionTitle: label, showChart: false,
+      signRole: (dc_upper_(rows[0].roleType) === "NURSE") ? "Nurse" : "Author",
+      signName: function () { return author || "Author"; }
+    };
+  }
+
+  if (nursingOnly) {
+    return {
+      docTitle: "Inpatient Nursing Record", sectionTitle: "Nursing Notes", showChart: true,
+      signRole: "Nurse in charge",
+      signName: function () { return "Nurse in charge"; }
+    };
+  }
+
+  var medicalOnly = kinds.length > 0 && kinds.every(function (k) { return k !== "NURSE"; });
+  if (medicalOnly && wanted) {
+    return {
+      docTitle: "Inpatient Medical Record", sectionTitle: "Progress Notes", showChart: false,
+      signRole: "Treating Consultant",
+      signName: function (p) { return p.consultant || "Consultant"; }
+    };
+  }
+
+  return {
+    docTitle: "Inpatient Progress Record", sectionTitle: "Progress Notes", showChart: true,
+    signRole: "Treating Consultant",
+    signName: function (p) { return p.consultant || "Consultant"; }
+  };
 }
 
 /** Oldest first; rows with no usable timestamp keep their relative order last. */
@@ -1269,7 +1147,7 @@ function ipn_trendSection_(rows, opts) {
 var IPN_PRINT_LABELS = {
   DOCTOR: "Clinical Progress Note", NURSE: "Nursing Note",
   CONSULTANT: "Consultant Opinion", PROCEDURE: "Procedure Note",
-  HANDOVER: "Shift Handover", QUICK: "Quick Note",
+  QUICK: "Quick Note",
   INVESTIGATION: "Investigation"
 };
 
@@ -1403,11 +1281,6 @@ function ipn_printNote_(n) {
       blocks.push('<div style="height:5px;"></div>' +
                   ipp_kv_([["Medication Given", given.join(", ")]]));
     }
-  }
-
-  if (dc_str_(d.handoverText)) {
-    blocks.push('<div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:3px;">' +
-                ipp_esc_(d.handoverText) + '</div>');
   }
 
   if (!blocks.length) {

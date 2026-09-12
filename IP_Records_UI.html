@@ -101,7 +101,12 @@
             <li><a class="dropdown-item" href="#" onclick="printIPRecord('casesheet'); return false;">
               <i class="fa-solid fa-file-medical me-2 text-info"></i> Admission casesheet</a></li>
             <li><a class="dropdown-item" href="#" onclick="printIPRecord('notes'); return false;">
-              <i class="fa-solid fa-clipboard-list me-2 text-success"></i> Progress notes</a></li>
+              <i class="fa-solid fa-clipboard-list me-2 text-success"></i> All notes</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="#" onclick="printIPRecord('medical'); return false;">
+              <i class="fa-solid fa-user-doctor me-2 text-info"></i> Doctor &amp; consultant notes</a></li>
+            <li><a class="dropdown-item" href="#" onclick="printIPRecord('nursing'); return false;">
+              <i class="fa-solid fa-user-nurse me-2 text-success"></i> Nursing record</a></li>
           </ul>
         </div>
       </div>
@@ -127,7 +132,6 @@
               <option value="NURSE">Nursing notes</option>
               <option value="CONSULTANT">Consultant opinions</option>
               <option value="PROCEDURE">Procedure notes</option>
-              <option value="HANDOVER">Handovers</option>
               <option value="QUICK">Quick notes</option>
             </select>
           </div>
@@ -556,7 +560,7 @@
 
     var roleColour = {
       DOCTOR: 'info', NURSE: 'success', CONSULTANT: 'warning',
-      PROCEDURE: 'danger', HANDOVER: 'secondary', QUICK: 'secondary'
+      PROCEDURE: 'danger', QUICK: 'secondary'
     };
 
     container.innerHTML = notes.map(function (n) {
@@ -610,7 +614,6 @@
       add('Operator',        esc(d.operator));
       add('Complications',   escLines(d.complications));
       add('Note',            escLines(d.text));
-      add('Handover',        escLines(d.handoverText));
 
       if (d.medOrders && d.medOrders.length) {
         add('Medication Orders', d.medOrders.map(function (m) {
@@ -690,8 +693,14 @@
     if (!w) { toast('Pop-up blocked. Allow pop-ups for this site, then retry.', 'warn'); return; }
     w.document.write('<p style="font:14px sans-serif;padding:24px;">Preparing the record...</p>');
 
+    // The nursing file and the medical file are separate documents that happen
+    // to share a timeline; printing them together reads as one undivided chart.
     var opts = (scope === 'casesheet') ? { notes: false, trend: false, discharge: false }
              : (scope === 'notes')     ? { casesheet: false }
+             : (scope === 'medical')   ? { casesheet: false, trend: false, discharge: false,
+                                           roleTypes: ['DOCTOR', 'CONSULTANT', 'PROCEDURE'] }
+             : (scope === 'nursing')   ? { casesheet: false, discharge: false,
+                                           roleTypes: ['NURSE'] }
              : {};
 
     google.script.run
