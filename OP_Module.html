@@ -896,9 +896,6 @@ function opCurrentPatientId() {
 function initializeOPWorkspaceState() {
     document.getElementById('hd-current-date').innerText = new Date().toLocaleDateString('en-GB');
 
-    const badge = document.getElementById('hd-doctor-badge');
-    if (badge) badge.innerText = window.currentDoctorName || window.loggedInUser || '--';
-
     applyExamDefaults(opSysDefaults);
 
     // Re-entering the workspace starts a blank chart unless we are being handed
@@ -1817,7 +1814,7 @@ function addBundleItem(key, ii) {
     const b = opFindBundle(key);
     if (!b || !b.items || !b.items[ii]) { opToast('That medicine is no longer in the bundle - reload the module.', 'warn'); return; }
     addOPRxRow(b.items[ii]);
-    if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    if (b.bundleId) google.script.run.withFailureHandler(function () { /* a usage counter must never interrupt prescribing */ }).noteRxBundleUsed(b.bundleId, window.sessionToken);
     queueSafetyCheck();
 }
 
@@ -1825,7 +1822,7 @@ function addWholeBundle(key) {
     const b = opFindBundle(key);
     if (!b || !(b.items || []).length) { opToast('That bundle is empty or no longer available.', 'warn'); return; }
     b.items.forEach(function (it) { addOPRxRow(it); });
-    if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    if (b.bundleId) google.script.run.withFailureHandler(function () { /* a usage counter must never interrupt prescribing */ }).noteRxBundleUsed(b.bundleId, window.sessionToken);
     queueSafetyCheck();
 }
 
@@ -2751,7 +2748,19 @@ function opLoadIntegrationData() {
         .fetchOPDrugMaster();
 
     if (!opCachedUniversalDrugs.length) {
-        google.script.run.withSuccessHandler(function (d) { opCachedUniversalDrugs = d || []; }).fetchUniversalDrugs();
+        google.script.run
+            .withSuccessHandler(function (d) { opCachedUniversalDrugs = d || []; })
+            // The formulary beyond the clinic's own stock. Failing silently
+            // left the drug autocomplete permanently short of everything the
+            // pharmacy does not carry, with nothing on screen to explain it.
+            .withFailureHandler(function () {
+                opCachedUniversalDrugs = [];
+                if (typeof showToast === 'function') {
+                    showToast('Drug list incomplete',
+                        'Only the pharmacy\'s own stock is offered. Names can still be typed.', 'warning');
+                }
+            })
+            .fetchUniversalDrugs();
     }
     loadOPLabCatalog();
     ensureOPLabsDatalist();

@@ -2007,7 +2007,7 @@ function ipcAddBundleItem(key, ii) {
     const b = ipcFindBundle(key);
     if (!b || !b.items || !b.items[ii]) { ipcToast('That medicine is no longer in the bundle - reload the module.', 'warn'); return; }
     ipcAddIPCRxRow(b.items[ii]);
-    if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    if (b.bundleId) google.script.run.withFailureHandler(function () { /* a usage counter must never interrupt prescribing */ }).noteRxBundleUsed(b.bundleId, window.sessionToken);
     ipcQueueSafetyCheck();
 }
 
@@ -2015,7 +2015,7 @@ function ipcAddWholeBundle(key) {
     const b = ipcFindBundle(key);
     if (!b || !(b.items || []).length) { ipcToast('That bundle is empty or no longer available.', 'warn'); return; }
     b.items.forEach(function (it) { ipcAddIPCRxRow(it); });
-    if (b.bundleId) google.script.run.noteRxBundleUsed(b.bundleId, window.sessionToken);
+    if (b.bundleId) google.script.run.withFailureHandler(function () { /* a usage counter must never interrupt prescribing */ }).noteRxBundleUsed(b.bundleId, window.sessionToken);
     ipcQueueSafetyCheck();
 }
 

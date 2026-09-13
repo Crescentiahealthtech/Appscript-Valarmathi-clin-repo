@@ -281,6 +281,46 @@
 
  .cursor-pointer { cursor: pointer; }
 
+ /* More classes that were in use with no rule behind them. Each of these
+    carries a visual intention that was simply not happening. */
+
+ /* Pharmacy inventory sets `max-width:100px` on the supplier and
+    manufacturer cells and marks them .truncate-text. Without the rule the
+    text overflowed the cell instead of ellipsising, so a long supplier name
+    ran across the columns beside it. */
+ .truncate-text {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+ }
+
+ /* The Accounts tables. Theme-driven header and hairlines, matching the
+    tables every other module builds by hand. */
+ .custom-table > :not(caption) > * > * { border-bottom-color: var(--divider-color); }
+ .custom-table thead th {
+    background: var(--surface-2); color: var(--text-label);
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .03em;
+    border-bottom: 1px solid var(--border-color);
+ }
+
+ /* The patient portal's selects, which otherwise kept Bootstrap's light
+    dropdown arrow on a dark field. */
+ .premium-select {
+    background-color: var(--bg-input) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-main) !important;
+ }
+ .premium-select:focus {
+    border-color: var(--accent-purple) !important;
+    box-shadow: 0 0 0 .1rem var(--accent-glow) !important;
+ }
+
+ .transition-all { transition: all .2s ease; }
+ .animate-fade-in { animation: cresc-fade-in .25s ease both; }
+ @keyframes cresc-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+ @media (prefers-reduced-motion: reduce) {
+   .animate-fade-in { animation: none; }
+   .transition-all  { transition: none; }
+ }
+
  /* The live count under a Finance Hub tile: one shape for all of them,
     instead of three different colours of small print. */
  .acc-navflag {

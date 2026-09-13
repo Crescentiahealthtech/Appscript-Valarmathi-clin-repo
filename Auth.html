@@ -599,8 +599,16 @@
     var book = document.getElementById('pat-book-date');
     if (book) { book.setAttribute('min', strToday); book.setAttribute('max', strMax); }
 
-    var avail = document.getElementById('avail-date');
-    if (avail) { avail.setAttribute('min', strToday); avail.removeAttribute('max'); }
+    // The availability screen has a start AND an end date, both named for
+    // which end they are. This looked for a single "avail-date", which
+    // exists nowhere, so the lower bound reached neither and a schedule
+    // could be published into a month that has already been billed.
+    ['avail-start-date', 'avail-end-date'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('min', strToday);
+      el.removeAttribute('max');
+    });
 
     var ab = document.getElementById('ab-date');
     if (ab) ab.setAttribute('min', strToday);
