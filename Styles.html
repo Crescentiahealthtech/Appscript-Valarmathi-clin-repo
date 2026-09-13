@@ -201,7 +201,71 @@
    --bs-card-bg:               var(--bg-card);
    --bs-card-border-color:     var(--border-color);
    --bs-card-cap-bg:           transparent;
+
+   /* ---- Bootstrap 5.3's SEMANTIC surface and emphasis tokens ----------
+    *
+    * The Accounts sub-screens (payables, insurance, tax) build their KPI
+    * cards out of `bg-body-tertiary` with `text-warning-emphasis` and
+    * friends - 50 uses across the application. Those two families were not
+    * bound to the theme, so they kept Bootstrap's LIGHT defaults:
+    * --bs-tertiary-bg is #f8f9fa, near-white, and text-warning-emphasis is
+    * #664d03, a dark brown. On this application's dark surfaces that is a
+    * near-white card with dark brown figures on it, sitting beside cards
+    * that are dark with bright figures - which is a large part of why the
+    * Accounts section looked like it belonged to a different product.
+    *
+    * Bound here rather than hunted down call site by call site, so any
+    * screen that reaches for a Bootstrap semantic class gets the theme. */
+   --bs-secondary-bg:          var(--surface-2);
+   --bs-tertiary-bg:           var(--surface-3);
+   --bs-body-secondary-bg:     var(--surface-2);
+   --bs-body-tertiary-bg:      var(--surface-3);
+
+   --bs-primary-text-emphasis: var(--accent-fg);
+   --bs-secondary-text-emphasis: var(--text-muted);
+   --bs-success-text-emphasis: var(--success-fg);
+   --bs-info-text-emphasis:    var(--info-fg);
+   --bs-warning-text-emphasis: var(--warning-fg);
+   --bs-danger-text-emphasis:  var(--danger-fg);
+   --bs-light-text-emphasis:   var(--text-main);
+   --bs-dark-text-emphasis:    var(--text-main);
+
+   --bs-primary-bg-subtle:     var(--accent-glow);
+   --bs-success-bg-subtle:     var(--success-bg);
+   --bs-info-bg-subtle:        var(--info-bg);
+   --bs-warning-bg-subtle:     var(--warning-bg);
+   --bs-danger-bg-subtle:      var(--danger-bg);
+
+   --bs-primary-border-subtle: var(--accent-purple);
+   --bs-success-border-subtle: var(--success);
+   --bs-info-border-subtle:    var(--info);
+   --bs-warning-border-subtle: var(--warning);
+   --bs-danger-border-subtle:  var(--danger);
  }
+
+ /* Bootstrap 5.3 emits these as literal colours on the utility classes
+    themselves, not only through the tokens above, so the classes are
+    re-pointed at the tokens directly. */
+ .bg-body-tertiary  { background-color: var(--surface-3) !important; }
+ .bg-body-secondary { background-color: var(--surface-2) !important; }
+ .bg-body           { background-color: var(--bg-main)   !important; }
+ .text-primary-emphasis   { color: var(--accent-fg)  !important; }
+ .text-secondary-emphasis { color: var(--text-muted) !important; }
+ .text-success-emphasis   { color: var(--success-fg) !important; }
+ .text-info-emphasis      { color: var(--info-fg)    !important; }
+ .text-warning-emphasis   { color: var(--warning-fg) !important; }
+ .text-danger-emphasis    { color: var(--danger-fg)  !important; }
+ .bg-warning-subtle       { background-color: var(--warning-bg) !important; }
+ .bg-success-subtle       { background-color: var(--success-bg) !important; }
+ .bg-info-subtle          { background-color: var(--info-bg)    !important; }
+ .bg-danger-subtle        { background-color: var(--danger-bg)  !important; }
+ .border-warning-subtle   { border-color: var(--warning) !important; }
+ .border-success-subtle   { border-color: var(--success) !important; }
+ /* .text-body-secondary is Bootstrap's label colour and is used heavily on
+    the Accounts forms; it resolves to a fixed slate that all but vanishes
+    on our dark surfaces. */
+ .text-body-secondary { color: var(--text-label) !important; }
+
  /* Modals, dropdowns, list groups and accordions are already pinned with
     !important rules in section 11.6 below, so they are left out here. */
 
