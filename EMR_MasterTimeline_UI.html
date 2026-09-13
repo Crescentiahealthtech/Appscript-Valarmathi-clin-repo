@@ -668,9 +668,15 @@ function buildIPCard(ev) {
           if (document.getElementById('op-future-labs')) document.getElementById('op-future-labs').value = futureMatch ? futureMatch[1] : "";
           
           if(document.getElementById('clin-review-date') && ev.followUp && ev.followUp !== "None") {
-              try { 
-                  let d = new Date(ev.followUp); 
-                  if(!isNaN(d)) document.getElementById('clin-review-date').value = d.toISOString().split('T')[0]; 
+              try {
+                  // The stored follow-up is whatever the consult wrote -
+                  // "13-Sep-2026" as often as an ISO date. crescParseDate
+                  // reads both; new Date() read only one of them, so the
+                  // review-date box came up empty on a real follow-up.
+                  var iso = (typeof window.crescDateInputValue === 'function')
+                    ? window.crescDateInputValue(ev.followUp) : '';
+                  if (!iso) { var d = new Date(ev.followUp); if (!isNaN(d)) iso = d.toISOString().split('T')[0]; }
+                  if (iso) document.getElementById('clin-review-date').value = iso;
               } catch(e) {}
           }
       }, 100);

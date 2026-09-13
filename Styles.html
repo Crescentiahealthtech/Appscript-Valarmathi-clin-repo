@@ -225,6 +225,73 @@
  .dr-badge { position: fixed; top: 20px; right: 25px; color: var(--text-muted); font-weight: 500; z-index: 1050; background: var(--bg-card); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(5px);}
  .card { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 20px; transition: 0.3s; }
  .soft-glow { box-shadow: 0 10px 30px -10px var(--accent-glow); border: 1px solid var(--accent-glow); }
+
+ /* 8.2b - WORKSPACE TILES AND CARD SURFACES ---------------------------- */
+ /*
+  * Four classes were in use across the application with NO rule defined
+  * anywhere for any of them:
+  *
+  *   .style-workspace-btn   on every Appointments and IP tile
+  *   .premium-card          on every Accounts panel, modal and table card
+  *   .hover-lift            on the Finance Hub tiles
+  *   .cursor-pointer        on the Finance Hub tiles
+  *
+  * A class with no rule is not a no-op here: the tiles were clickable
+  * rectangles with a default arrow cursor and no hover response, and the
+  * Accounts screens fell back to bare Bootstrap .card - a flat panel with
+  * none of the surface, border or shadow the rest of the app uses. That is
+  * most of why the Accounts section read as belonging to a different
+  * application from the one around it.
+  */
+
+ /* A card that behaves like a button. Same lift the EMR module cards use,
+    so a tile responds identically wherever it appears. */
+ .style-workspace-btn,
+ .hover-lift {
+    cursor: pointer;
+    transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+ }
+ .style-workspace-btn:hover,
+ .hover-lift:hover {
+    transform: translateY(-5px);
+    border-color: var(--accent-purple) !important;
+    box-shadow: 0 12px 24px var(--accent-glow);
+ }
+ .style-workspace-btn:active,
+ .hover-lift:active { transform: translateY(-1px); }
+ /* Reachable by keyboard, not only by mouse. */
+ .style-workspace-btn:focus-visible,
+ .hover-lift:focus-visible {
+    outline: 2px solid var(--accent-purple); outline-offset: 3px;
+ }
+ @media (prefers-reduced-motion: reduce) {
+   .style-workspace-btn, .hover-lift { transition: border-color .2s ease; }
+   .style-workspace-btn:hover, .hover-lift:hover,
+   .style-workspace-btn:active, .hover-lift:active { transform: none; }
+ }
+
+ /* The panel surface the Accounts screens are built from. */
+ .premium-card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-main);
+    box-shadow: 0 4px 14px rgba(var(--shadow-rgb), .08);
+ }
+ .premium-card .card-body { color: inherit; }
+
+ .cursor-pointer { cursor: pointer; }
+
+ /* The live count under a Finance Hub tile: one shape for all of them,
+    instead of three different colours of small print. */
+ .acc-navflag {
+    display: inline-block; margin-top: .35rem;
+    font-size: .68rem; font-weight: 700; letter-spacing: .02em;
+    padding: .1rem .5rem; border-radius: 999px;
+    background: var(--surface-3); color: var(--text-muted);
+ }
+ /* Set by Accounts_Scripts when the count is non-zero: something needs doing. */
+ .acc-navflag.is-flagged { background: var(--warning-bg); color: var(--warning-fg); }
+ .acc-navflag.is-clear   { background: var(--success-bg); color: var(--success-fg); }
  .status-chip { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px; background: var(--surface-hover); backdrop-filter: blur(4px); margin-right: 8px; margin-bottom: 8px; }
  
  .text-normal { color: var(--success-fg) !important; } 
@@ -498,6 +565,44 @@
  .card-header, .card-footer { background-color: transparent !important; border-color: var(--divider-color) !important; color: var(--text-main) !important; }
  .progress { background-color: var(--surface-3) !important; }
  .spinner-border, .spinner-grow { color: var(--accent-purple); }
+
+ /* 11.6b - LOADING STATE PRIMITIVES ------------------------------------ */
+ /* Backing the crescBusyButton / crescInlineSpinner / crescSkeleton       */
+ /* helpers in Auth.html. One vocabulary for "working", so a module no     */
+ /* longer has to invent a full-screen scrim to say it.                    */
+
+ .cresc-inline-spinner {
+    display: flex; align-items: center; justify-content: center; gap: .55rem;
+    padding: 1.75rem 1rem; color: var(--text-muted); font-size: .85rem;
+ }
+ .cresc-inline-spinner .spinner-border { color: var(--accent-purple); }
+
+ /* A spinner sitting inside the control that started the work, rather than
+    over the content the user is reading. */
+ .cresc-busy-chip {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .2rem .6rem; border-radius: 999px; font-size: .74rem;
+    background: var(--surface-2); border: 1px solid var(--border-color);
+    color: var(--text-muted);
+ }
+ .cresc-busy-chip[hidden] { display: none !important; }
+ .cresc-busy-chip .spinner-border { width: .75rem; height: .75rem; border-width: .12em; }
+
+ .cresc-skeleton { padding: .35rem 0; }
+ .cresc-sk-row {
+    height: .72rem; border-radius: 4px; margin: .5rem 0;
+    background: linear-gradient(90deg,
+       var(--surface-2) 0%, var(--surface-hover) 50%, var(--surface-2) 100%);
+    background-size: 200% 100%;
+    animation: cresc-sk 1.25s ease-in-out infinite;
+ }
+ @keyframes cresc-sk { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+ /* Someone reading a chart should not have it strobe at them. */
+ @media (prefers-reduced-motion: reduce) {
+   .cresc-sk-row { animation: none; }
+   .spinner-border { animation-duration: 1.6s; }
+ }
 
  /* 11.7 - Tables: drive Bootstrap through its own variables so striping, */
  /*        hover and bordered variants all follow the theme.              */

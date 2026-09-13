@@ -63,6 +63,11 @@ function dsx_tz_() {
 function dsx_nowIso_() { return new Date().toISOString(); }
 
 function dsx_toDate_(v) {
+  // Delegates to the project's one parser (Shared_Dates.gs). This used to be
+  // `new Date(String(v))`, which returned Invalid Date for the "13/09/2026"
+  // that a text-formatted DOA column holds - the reason the date of admission
+  // and the length of stay came out blank on the summary.
+  if (typeof cresc_parseDate_ === 'function') return cresc_parseDate_(v);
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
   var s = dsx_str_(v);
   if (!s) return null;
@@ -87,6 +92,7 @@ function dsx_fmt_(v, pattern) {
  * ("05:34 PM") passes through untouched.
  */
 function dsx_time_(v, pattern) {
+  if (typeof cresc_timeText_ === 'function') return cresc_timeText_(v, pattern);
   if (v instanceof Date) {
     return isNaN(v.getTime()) ? '' : dsx_fmt_(v, pattern || 'hh:mm a');
   }
@@ -389,11 +395,134 @@ function dsx_unpackPayload_(rowObj) {
                     ' characters but the row declares ' + declared +
                     '. The draft is corrupt; restore it from the last snapshot.');
   }
+  var parsed;
   try {
-    return JSON.parse(s);
+    parsed = JSON.parse(s);
   } catch (e) {
     throw new Error('VALIDATION_FAILED: stored payload is not valid JSON (' + e.message + ').');
   }
+  return dsx_upgradePayload_(parsed);
+}
+
+/**
+ * Brings a payload written by an earlier build up to the current shape.
+ *
+ * Runs on every read, in memory. Nothing is written back here: the upgraded
+ * payload is saved by whatever the user does next, so a summary nobody opens
+ * is left exactly as it was signed. That matters - a SIGNED document's
+ * content hash must keep verifying against what was signed, and rewriting
+ * its rows on read would break that.
+ *
+ * @param {Object} payload
+ * @return {Object} the same object, upgraded in place
+ */
+function dsx_upgradePayload_(payload) {
+  if (!payload || !payload.sections) return payload;
+
+  // A SIGNED document is left exactly as it was signed. Re-laying out its
+  // tables would mean the paper a doctor put their name to and the paper
+  // reprinted from the archive no longer look alike, and the second is
+  // supposed to be evidence of the first. Only drafts are upgraded; an
+  // amendment re-assembles from source anyway, and gets the new shape then.
+  if (payload.signature && dsx_str_(payload.signature.signedBy)) return payload;
+
+  dsx_upgradeMedTable_(payload.sections.TREATMENT_GIVEN, 'TREATMENT_GIVEN');
+  dsx_upgradeMedTable_(payload.sections.DISCHARGE_MEDICATIONS, 'DISCHARGE_MEDICATIONS');
+  return payload;
+}
+
+/**
+ * Migrates one medication table from the pre-OP/IP columns to the shared
+ * five.
+ *
+ *   Treatment given:      Generic | Brand | Dose | Route | Frequency |
+ *                         Started | Stopped | Status
+ *   Discharge script:     Generic | Brand | Strength / Dose | Route |
+ *                         Frequency | Timing | Food | Duration |
+ *                         Instructions | Status
+ *
+ * both become  Type | Medicine Name | Dosage / Sig | Days-or-Duration |
+ *              Notes / Timing.
+ *
+ * Every old cell is carried into the new row rather than dropped: the route
+ * decides the type, the generic joins the brand, dose and frequency join as
+ * the sig, the dates and the state become the duration, and timing, food,
+ * instructions and a non-obvious status are joined into the notes. A draft
+ * half-written under the old shape therefore survives the change with its
+ * text intact.
+ */
+function dsx_upgradeMedTable_(sec, key) {
+  if (!sec || dsx_upper_(sec.format) !== 'TABLE') return;
+  var c = sec.content;
+  if (!c || !c.columns || !c.rows) return;
+
+  var target = (key === 'DISCHARGE_MEDICATIONS') ? DSX_RX_COLUMNS : DSX_TREATMENT_COLUMNS;
+  // Already migrated (or freshly assembled): leave it alone.
+  if (c.columns.length === target.length &&
+      c.columns[0] === target[0] && c.columns[1] === target[1]) return;
+
+  var at = {};
+  c.columns.forEach(function (name, i) { at[dsx_upper_(name)] = i; });
+  var get = function (row, name) {
+    var i = at[dsx_upper_(name)];
+    return (i === undefined || row[i] === undefined) ? '' : dsx_str_(row[i]);
+  };
+  var join = function (parts, sep) {
+    return parts.filter(function (x) { return dsx_str_(x); }).join(sep);
+  };
+
+  sec.content = {
+    columns: target.slice(),
+    rows: c.rows.map(function (row) {
+      var brand   = get(row, 'Brand');
+      var generic = get(row, 'Generic');
+      var route   = get(row, 'Route');
+      var status  = get(row, 'Status');
+
+      var name = brand || generic;
+      if (generic && brand && brand.toUpperCase().indexOf(generic.toUpperCase()) === -1) {
+        name = brand + ' (' + generic + ')';
+      }
+
+      var type = dsx_drugType_({
+        route: route, brand: brand,
+        injectable: dsx_isInjectable_(route, brand)
+      });
+
+      var sig = join([get(row, 'Dose') || get(row, 'Strength / Dose'),
+                      get(row, 'Frequency')], ' · ');
+
+      // The fourth column: a span for the record, a count for the script.
+      var fourth;
+      if (key === 'DISCHARGE_MEDICATIONS') {
+        fourth = get(row, 'Duration');
+      } else {
+        var started = get(row, 'Started'), stopped = get(row, 'Stopped');
+        fourth = started ? (started + ' to ' + (stopped || 'discharge')) : '';
+        var st = dsx_upper_(status);
+        if (st === 'STOPPED') fourth = join([fourth, 'stopped'], ' — ');
+        else if (st === 'HELD') fourth = join([fourth, 'on hold'], ' — ');
+      }
+
+      // A status the duration does not already say (CHANGED, CONTINUED) is
+      // information about the prescription, so it goes to the notes rather
+      // than being dropped with its column.
+      var st2 = dsx_upper_(status);
+      var keepStatus = (st2 && st2 !== 'ACTIVE' && st2 !== 'NEW' &&
+                        st2 !== 'STOPPED' && st2 !== 'HELD') ? status : '';
+
+      var notes = join([get(row, 'Timing'), get(row, 'Food'),
+                        get(row, 'Instructions'), get(row, 'Notes / Timing'),
+                        keepStatus,
+                        // The route is in the type for oral and injectable
+                        // drugs, but something like "per NG tube" is not,
+                        // and that instruction must survive.
+                        /^(ORAL|PO|IV|IM|SC|S\/C|I\/V|I\/M|INJ)$/.test(dsx_upper_(route)) ? '' : route
+                       ], ' · ');
+
+      return [type, name, sig, fourth, notes];
+    })
+  };
 }
 
 /**

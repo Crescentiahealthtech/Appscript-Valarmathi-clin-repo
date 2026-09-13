@@ -158,11 +158,10 @@ function saveOPEncounter(payload) {
       const ledgerData = ledgerSheet.getDataRange().getDisplayValues();
       const todayStr = Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
       for (let i = 1; i < ledgerData.length; i++) {
-        let rowDateStr = "";
-        if (ledgerData[i][3]) {
-          let d = new Date(ledgerData[i][3]);
-          if (!isNaN(d.getTime())) rowDateStr = Utilities.formatDate(d, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
-        }
+        // Shared_Dates.gs: a day-first ledger date used to parse as Invalid
+        // and never match today, so the queue row stayed open after the
+        // consult was billed.
+        let rowDateStr = cresc_dayKey_(ledgerData[i][3]);
         if (ledgerData[i][1] === payload.patientId && rowDateStr === todayStr && ledgerData[i][6] !== "Completed") {
           ledgerSheet.getRange(i + 1, 7).setValue("Completed");
           break;
@@ -472,11 +471,8 @@ function getOPPrescriptionHtml(encounterId) {
     const doctorSpecialty = String(data.doctorSpecialty || "").trim(); // optional
 
     // 2. Format Dates & Nulls
-    let printDate = data.date || "--";
-    try {
-      let d = new Date(data.date);
-      if (!isNaN(d.getTime())) printDate = Utilities.formatDate(d, Session.getScriptTimeZone(), "dd/MM/yyyy, hh:mm a");
-    } catch (e) {}
+    let printDate = cresc_formatDate_(data.date, "dd/MM/yyyy, hh:mm a") ||
+                    String(data.date || "--");
 
     const vitals = data.vitals || {};
     const clin = data.clinical || {};

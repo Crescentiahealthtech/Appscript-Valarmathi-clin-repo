@@ -494,11 +494,20 @@ function _nextInvoiceNo_(headerSheet, now) {
 }
 
 function round2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
-function _fmtDate_(v) { return v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), "dd-MMM-yyyy") : String(v || ""); }
+function _fmtDate_(v) { return cresc_formatDate_(v, "dd-MMM-yyyy") || String(v || ""); }
+
+/**
+ * 'yyyy-MM-dd' for a prescription row.
+ *
+ * This used to recognise only a yyyy-MM-dd substring and return the raw text
+ * for everything else. A ward order dated "13/09/2026" therefore keyed as
+ * "13/09/2026", and _dateKeyNum_ turned that into 13092026 - a number that
+ * sorts BELOW 20260913. Picking "the latest note" then picked the wrong one,
+ * and the pharmacy dispensed against a superseded prescription.
+ */
 function _dateKey_(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  var s = String(v || ""), m = s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  return m ? m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2) : s;
+  var k = cresc_dayKey_(v);
+  return k || String(v || "");
 }
 function _dateKeyNum_(v) { var n = parseInt(_dateKey_(v).replace(/[-\/]/g, ""), 10); return isNaN(n) ? 0 : n; }
 function _expiryToSortKey_(exp) {

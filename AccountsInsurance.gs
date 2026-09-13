@@ -25,7 +25,14 @@ function ins_objs_() {
   return out;
 }
 function ins_col_(sh, n) { return sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (x) { return acc_str_(x).trim(); }).indexOf(n) + 1; }
-function ins_days_(v) { var d = acc_toDate_(v); if (!d) return 0; return Math.floor(((new Date()).setHours(0, 0, 0, 0) - d.setHours(0, 0, 0, 0)) / 86400000); }
+function ins_days_(v) {
+  // setHours() on the parsed date MUTATED it, and the same Date instance is
+  // handed to the caller that then formats it - which is how a claim's date
+  // lost its time on screen the moment its age was calculated.
+  if (typeof cresc_daysBetween_ === 'function') { var n = cresc_daysBetween_(v, null); return n === null ? 0 : n; }
+  var d = acc_toDate_(v); if (!d) return 0;
+  return Math.floor(((new Date()).setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000);
+}
 
 // called by settleDischarge — one claim per insurer
 function ins_createClaimsForSettlement_(setId, ip, adm, billed, insurers, user) {

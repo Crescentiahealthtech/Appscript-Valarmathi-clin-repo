@@ -181,3 +181,96 @@ function repairDuplicatePharmacyQueueRows() {
     lock.releaseLock();
   }
 }
+/**
+ * NORMALISES EVERY DATE CELL THAT IS STILL TEXT.
+ *
+ * The parser in Shared_Dates.gs reads a text date correctly on the way out,
+ * so every screen is already right. This puts the workbook right too, which
+ * matters for the three things that read the sheet without going through
+ * our code: the user sorting a column by hand, a spreadsheet formula, and a
+ * CSV export. A column that mixes real dates with "13/09/2026" sorts all the
+ * text below all the dates, whichever direction you pick.
+ *
+ * Safe to re-run. Reports every cell it changed and every cell it could not
+ * read, and CHANGES NOTHING on a dry run - call it with no argument first
+ * and read the report before letting it write.
+ *
+ *   normaliseSheetDates()       -> report only, writes nothing
+ *   normaliseSheetDates(true)   -> applies the same changes
+ *
+ * @param {boolean} [apply=false]
+ * @return {string} a human-readable report
+ */
+function normaliseSheetDates(apply) {
+  var TARGETS = [
+    { sheet: 'IP_Admissions',      columns: ['DOA', 'DOD'] },
+    { sheet: 'Master_Beds',        columns: ['DOA'] },
+    { sheet: 'Patients',           columns: ['DOB', 'Registered_On', 'Registration_Date'] },
+    { sheet: 'Accounts_Ledger',    columns: ['Timestamp', 'Date'] },
+    { sheet: 'Accounts_Payables',  columns: ['Due_Date', 'Timestamp'] },
+    { sheet: 'Accounts_Insurance', columns: ['Date'] }
+  ];
+
+  if (typeof cresc_parseDate_ !== 'function') {
+    return 'Shared_Dates.gs is not in this project - copy it across first.';
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var lines = [apply ? 'APPLYING changes:' : 'DRY RUN - nothing written. Call normaliseSheetDates(true) to apply.'];
+  var changed = 0, unreadable = 0;
+
+  TARGETS.forEach(function (t) {
+    var sh = ss.getSheetByName(t.sheet);
+    if (!sh) { lines.push('  ' + t.sheet + ': not in this workbook, skipped.'); return; }
+    var lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) return;
+
+    var header = sh.getRange(1, 1, 1, lastCol).getValues()[0]
+                   .map(function (h) { return String(h || '').trim(); });
+
+    t.columns.forEach(function (name) {
+      var col = header.indexOf(name);
+      if (col === -1) return;
+
+      var n = lastRow - 1;
+      var range = sh.getRange(2, col + 1, n, 1);
+      var values = range.getValues();
+      var out = [], touched = 0, bad = [];
+
+      for (var i = 0; i < n; i++) {
+        var v = values[i][0];
+        if (v === '' || v === null || v === undefined) { out.push(['']); continue; }
+        if (v instanceof Date && !isNaN(v.getTime())) { out.push([v]); continue; }
+        var d = cresc_parseDate_(v);
+        // A time-only cell belongs to a time column that happens to be listed
+        // here; leaving it alone is right, and rewriting it as 1899 is not.
+        if (!d || cresc_isSheetEpoch_(d)) {
+          out.push([v]);
+          if (!d) { bad.push('row ' + (i + 2) + ': "' + v + '"'); unreadable++; }
+          continue;
+        }
+        out.push([d]);
+        touched++;
+      }
+
+      if (touched && apply) {
+        range.setValues(out);
+        range.setNumberFormat('dd-mmm-yyyy');
+      }
+      changed += touched;
+      lines.push('  ' + t.sheet + '.' + name + ': ' + touched + ' text cell(s) ' +
+                 (apply ? 'converted to real dates' : 'would be converted') +
+                 (bad.length ? ', ' + bad.length + ' unreadable' : ''));
+      bad.slice(0, 10).forEach(function (b) { lines.push('      unreadable ' + b); });
+      if (bad.length > 10) lines.push('      ... and ' + (bad.length - 10) + ' more');
+    });
+  });
+
+  if (apply) SpreadsheetApp.flush();
+  lines.push('');
+  lines.push('Total: ' + changed + ' cell(s) ' + (apply ? 'converted' : 'to convert') +
+             ', ' + unreadable + ' left alone because no date could be read from them.');
+  var report = lines.join('\n');
+  Logger.log(report);
+  return report;
+}

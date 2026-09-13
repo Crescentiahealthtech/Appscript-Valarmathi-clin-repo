@@ -20,6 +20,14 @@
  * the file that defines it. Extend this when you add a cross-file dependency.
  */
 var DEP_MAP = {
+  // Shared_Dates.gs is listed FIRST because everything else depends on it:
+  // every module's own date helper now delegates here, so a project missing
+  // this one file loses dates on every screen at once.
+  "Shared_Dates.gs": [
+    "cresc_parseDate_", "cresc_formatDate_", "cresc_dateOnly_", "cresc_dayKey_",
+    "cresc_timeText_", "cresc_dateTimeText_", "cresc_daysBetween_", "cresc_los_",
+    "cresc_ms_", "cresc_isSheetEpoch_"
+  ],
   "Doctor_Core.gs": [
     "dc_headerMap_", "dc_col_", "dc_ensureColumn_", "dc_ensureSheet_",
     "dc_invalidate_", "dc_resetCache_", "dc_sheetValues_",

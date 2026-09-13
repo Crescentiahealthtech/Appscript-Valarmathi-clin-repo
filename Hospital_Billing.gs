@@ -117,6 +117,9 @@ function hb_tenant_() {
 }
 
 function hb_toDate_(v) {
+  // See Shared_Dates.gs: a slashed date typed in a text column is day-first
+  // here, and `new Date()` reads it month-first or not at all.
+  if (typeof cresc_parseDate_ === 'function') return cresc_parseDate_(v);
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
   var s = hb_str_(v);
   if (!s) return null;

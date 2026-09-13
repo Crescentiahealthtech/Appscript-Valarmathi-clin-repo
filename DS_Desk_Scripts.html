@@ -832,6 +832,25 @@ function dsPhraseItems(sourceName) {
   });
 }
 
+/**
+ * A formulary row's free-typed type ("TABLET", "tab.", "Injection") mapped
+ * onto the fixed list the Type column offers. Falls back to Tab, which is
+ * what most of a discharge script is.
+ */
+function dsRxTypeFor(item) {
+  var t = String((item && item.type) || '').toUpperCase();
+  var n = String((item && item.brand) || '').toUpperCase();
+  if (/INJ/.test(t) || /\bINJ\b|INJECTION/.test(n)) return 'Inj';
+  if (/^IV|FLUID|INFUS/.test(t)) return 'IV';
+  if (/NEB/.test(t) || /NEB/.test(n)) return 'Neb';
+  if (/DROP/.test(t) || /DROPS?\b/.test(n)) return 'Drops';
+  if (/OINT|CREAM|GEL/.test(t) || /OINT|CREAM|\bGEL\b/.test(n)) return 'Oint';
+  if (/SYR|SYP|SUSP|LIQ/.test(t) || /\bSYR|SYP|SUSP/.test(n)) return 'Syp';
+  if (/CAP/.test(t) || /\bCAP\b/.test(n)) return 'Cap';
+  if (/TAB/.test(t)) return 'Tab';
+  return 'Tab';
+}
+
 /** Formulary items shaped for dsAttachPicker. */
 function dsDrugItems() {
   var drugs = (DSState.pickers && DSState.pickers.drugs) || [];
@@ -1038,39 +1057,81 @@ function dsRenderList(key, sec, readOnly) {
     '<i class="fa-solid fa-plus me-1"></i>Add line</button></div>';
 }
 
+/* The prescribing forms the OP consult offers, in the same order, so a
+   doctor picks from one list wherever they prescribe. */
+var DS_RX_TYPES = ['Tab', 'Cap', 'Syp', 'Inj', 'IV', 'Oint', 'Drops', 'Neb', 'Other'];
+
+/* Column widths for the prescription tables, keyed by column name. The
+   medicine name gets the room; Type and Days need almost none. Anything not
+   listed shares what is left. */
+var DS_RX_WIDTHS = {
+  'Type': '9%', 'Medicine Name': '30%', 'Dosage / Sig': '20%',
+  'Days': '9%', 'Duration': '20%', 'Notes / Timing': '24%'
+};
+
+/** True for the two tables that hold medicines rather than data. */
+function dsIsRxTable(key) {
+  return key === 'DISCHARGE_MEDICATIONS' || key === 'TREATMENT_GIVEN';
+}
+
 function dsRenderTable(key, sec, readOnly) {
   var c = sec.content || { columns: [], rows: [] };
   if (!c.rows.length && readOnly) return '<div class="ds-muted">Nothing recorded.</div>';
 
-  var head = '<tr>' + c.columns.map(function (h) { return '<th>' + dsEsc(h) + '</th>'; }).join('') +
-             (readOnly ? '' : '<th></th>') + '</tr>';
+  var isRx = dsIsRxTable(key);
+  var head = '<tr>' + c.columns.map(function (h) {
+    var w = isRx && DS_RX_WIDTHS[h] ? ' style="width:' + DS_RX_WIDTHS[h] + '"' : '';
+    return '<th' + w + '>' + dsEsc(h) + '</th>';
+  }).join('') + (readOnly ? '' : '<th style="width:4%"></th>') + '</tr>';
 
-  // The discharge script's Generic and Brand columns autocomplete from the
-  // formulary with live pharmacy stock, the same list OP and IP prescribe
-  // from. Picking a drug fills the row's generic, brand and dose together.
-  var drugCols = (key === 'DISCHARGE_MEDICATIONS')
-    ? { generic: c.columns.indexOf('Generic'), brand: c.columns.indexOf('Brand') }
-    : { generic: -1, brand: -1 };
+  // The discharge script's Medicine Name autocompletes from the formulary
+  // with live pharmacy stock, the same list OP and IP prescribe from.
+  // Choosing a drug fills the type, the name and the reference dose at once,
+  // because a half-filled drug row is the thing a pharmacist rings back about.
+  var nameCol = (key === 'DISCHARGE_MEDICATIONS') ? c.columns.indexOf('Medicine Name') : -1;
+  var typeCol = isRx ? c.columns.indexOf('Type') : -1;
 
   var body = c.rows.map(function (row, ri) {
     var cells = c.columns.map(function (col, ci) {
       var v = row[ci] === undefined ? '' : row[ci];
       if (readOnly) return '<td>' + dsEsc(v) + '</td>';
-      var isDrug = (ci === drugCols.generic || ci === drugCols.brand);
+
+      // Type is a fixed vocabulary, so it is a select rather than a box to
+      // type "tablet", "TAB" and "Tab." into on three consecutive rows.
+      if (ci === typeCol) {
+        var known = DS_RX_TYPES.indexOf(v) > -1;
+        return '<td><select data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci + '">' +
+          (known ? '' : '<option value="' + dsEsc(v) + '" selected>' + dsEsc(v || '—') + '</option>') +
+          DS_RX_TYPES.map(function (t) {
+            return '<option value="' + dsEsc(t) + '"' + (t === v ? ' selected' : '') + '>' +
+                   dsEsc(t) + '</option>';
+          }).join('') + '</select></td>';
+      }
+
+      var isDrug = (ci === nameCol);
       return '<td' + (isDrug ? ' class="ds-pick"' : '') + '>' +
              '<input type="text" data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci + '"' +
              (isDrug ? ' data-ds-drug="' + dsEsc(key) + '|' + ri + '"' : '') +
+             (isRx ? ' placeholder="' + dsEsc(col) + '"' : '') +
              ' value="' + dsEsc(v) + '"></td>';
     }).join('');
     return '<tr>' + cells + (readOnly ? '' :
       '<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-ds-rowdel="' +
-      dsEsc(key) + '|' + ri + '"><i class="fa-solid fa-xmark"></i></button></td>') + '</tr>';
+      dsEsc(key) + '|' + ri + '" title="Remove this row"><i class="fa-solid fa-xmark"></i></button></td>') + '</tr>';
   }).join('');
 
-  return '<div class="table-responsive"><table><thead>' + head + '</thead><tbody>' + body +
-         '</tbody></table></div>' +
+  var empty = (!c.rows.length && !readOnly)
+    ? '<div class="ds-muted mb-2">' +
+      (key === 'DISCHARGE_MEDICATIONS'
+        ? 'Nothing prescribed yet. Add each medicine the patient goes home on.'
+        : 'Nothing recorded.') + '</div>'
+    : '';
+
+  return empty + '<div class="table-responsive"><table' + (isRx ? ' class="ds-rx-table"' : '') +
+         '><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
     (readOnly ? '' : '<button class="btn btn-sm btn-outline-primary mt-2" data-ds-rowadd="' +
-     dsEsc(key) + '"><i class="fa-solid fa-plus me-1"></i>Add row</button>');
+     dsEsc(key) + '"><i class="fa-solid fa-plus me-1"></i>' +
+     (isRx ? 'Add medicine' : 'Add row') + '</button>');
 }
 
 function dsWireSectionInputs(wrap) {
@@ -1144,11 +1205,29 @@ function dsWireSectionInputs(wrap) {
         var ci = cols.indexOf(name);
         if (ci > -1 && value) row[ci] = value;
       };
-      set('Generic', String(item.generic || '').toUpperCase());
-      set('Brand', item.brand);
-      set('Strength / Dose', item.dose);
+      // The brand carries the generic with it, so a pharmacist substituting
+      // a stock item reads both from the one cell the script actually shows.
+      var generic = String(item.generic || '').toUpperCase();
+      var brand = String(item.brand || '');
+      var name = (generic && brand.toUpperCase().indexOf(generic) === -1)
+        ? (brand + ' (' + generic + ')') : brand;
+      set('Medicine Name', name);
+      set('Type', dsRxTypeFor(item));
+      // Only SUGGEST the reference dose: a dose already typed for this
+      // patient is a decision, and picking the drug again must not undo it.
+      var sigCol = cols.indexOf('Dosage / Sig');
+      if (sigCol > -1 && !String(row[sigCol] || '').trim()) row[sigCol] = item.dose || '';
       mark(secKey);
       dsRenderSections();
+    });
+  });
+
+  // The Type column is a <select>, so it fires `change`, not `input`.
+  Array.prototype.forEach.call(wrap.querySelectorAll('select[data-ds-cell]'), function (el) {
+    el.addEventListener('change', function () {
+      var p = el.getAttribute('data-ds-cell').split('|');
+      DSState.payload.sections[p[0]].content.rows[parseInt(p[1], 10)][parseInt(p[2], 10)] = el.value;
+      mark(p[0]);
     });
   });
 

@@ -1210,7 +1210,7 @@ function getLabReportHtml(orderId) {
 
     const pId = orderRow[oHeaders.indexOf("PatientID")];
     const docName = orderRow[oHeaders.indexOf("OrderingDoctorName")] || "Self";
-    const ordDate = orderRow[oHeaders.indexOf("CreatedAt")] ? new Date(orderRow[oHeaders.indexOf("CreatedAt")]).toLocaleString() : "";
+    const ordDate = cresc_formatDate_(orderRow[oHeaders.indexOf("CreatedAt")], "dd-MMM-yyyy hh:mm a");
     
     // 2. Get Patient Details
     const patData = patSheet.getDataRange().getValues();
@@ -1255,7 +1255,7 @@ function getLabReportHtml(orderId) {
         if (attestationHash === "N/A" && resData[i][rHeaders.indexOf("AttestationHash")]) {
           attestationHash = resData[i][rHeaders.indexOf("AttestationHash")];
           verifierName = resData[i][rHeaders.indexOf("VerifiedBy")] || verifierName;
-          verifiedAt = resData[i][rHeaders.indexOf("VerifiedAt")] ? new Date(resData[i][rHeaders.indexOf("VerifiedAt")]).toLocaleString() : verifiedAt;
+          verifiedAt = cresc_formatDate_(resData[i][rHeaders.indexOf("VerifiedAt")], "dd-MMM-yyyy hh:mm a") || verifiedAt;
         }
 
         let valFmt = (flag === "H" || flag === "L" || flag === "C") ? `<strong>${val}*</strong>` : val;
@@ -1484,8 +1484,8 @@ function _lwTatIndex(){
   data.forEach(function(r){
     const k=String(r[map['OrderID']]||''); if(!k) return;
     const dl=r[map['TAT_Deadline']]; const st=r[map['SampleCollectedAt']];
-    const dlMs=dl?new Date(dl).getTime():0;
-    if(!out[k]||dlMs>out[k].dlMs) out[k]={dlMs:dlMs,stMs:st?new Date(st).getTime():0};
+    const dlMs=cresc_ms_(dl);
+    if(!out[k]||dlMs>out[k].dlMs) out[k]={dlMs:dlMs,stMs:cresc_ms_(st)};
   });
   return out;
 }
@@ -1507,17 +1507,14 @@ function _lwCritCount(){
 var LAB_QUEUE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 function _lwWithin48h(ts,nowMs){
-  if(!ts) return false;
-  try{return (nowMs-new Date(ts).getTime())<LAB_QUEUE_WINDOW_MS;}catch(e){return false;}
+  var t=cresc_ms_(ts);
+  return t ? (nowMs-t)<LAB_QUEUE_WINDOW_MS : false;
 }
 
 /** Milliseconds since a timestamp, or null when it cannot be read. */
 function _lwAgeMs(ts,nowMs){
-  if(!ts) return null;
-  try{
-    var t=new Date(ts).getTime();
-    return isNaN(t)?null:(nowMs-t);
-  }catch(e){return null;}
+  var t=cresc_ms_(ts);
+  return t ? (nowMs-t) : null;
 }
 
 /**
@@ -1644,7 +1641,10 @@ function _startTat(order,collectedAtStr){
     const byId={}; cat.panels.forEach(function(t){byId[t.testId]=t;}); cat.individuals.forEach(function(t){byId[t.testId]=t;}); cat.packages.forEach(function(t){byId[t.testId]=t;});
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.TAT_LOG); if(!sheet) return;
     const map=labHeaderMap(sheet); const ncols=LAB_SCHEMA.LAB_TAT_LOG.length;
-    const collectedMs=new Date(collectedAtStr).getTime();
+    // A TAT deadline computed from an unreadable collection time would be
+    // 1970, and every test on the order would show as overdue the moment it
+    // was booked in.
+    const collectedMs=cresc_ms_(collectedAtStr)||Date.now();
     order.testIds.forEach(function(tid){
       const t=byId[tid]; if(!t) return;
       const tat=parseInt(t.tatMinutes,10)||0;

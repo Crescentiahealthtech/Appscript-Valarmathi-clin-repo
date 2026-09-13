@@ -210,23 +210,54 @@ const AccX = (function () {
 
   // ---------- dashboard ----------
   function setText(id, t) { const e = $(id); if (e) e.textContent = t; }
+
+  /* A tile's count, styled by whether it means "attend to this".
+     Was three raw numbers in three different hard-coded colours, one of
+     which ("0 Mismatches") was painted danger-red even when it said zero. */
+  function setFlag(id, n, oneLabel, manyLabel) {
+    const e = $(id); if (!e) return;
+    const count = Number(n) || 0;
+    e.textContent = count + ' ' + (count === 1 ? oneLabel : manyLabel);
+    e.classList.toggle('is-flagged', count > 0);
+    e.classList.toggle('is-clear', count === 0);
+  }
+
+  /* The hub's own busy state. The refresh button spins and a chip appears
+     beside the subtitle; nothing is covered over. */
+  function hubBusy(on) {
+    const chip = $('acc-busy'); if (chip) chip.hidden = !on;
+    const btn = $('acc-refresh');
+    if (btn) { btn.disabled = on; const i = btn.querySelector('i'); if (i) i.classList.toggle('fa-spin', on); }
+  }
+
   function load() {
     const tb = $('master-ledger-tbody');
     if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading financial data…</td></tr>';
+    hubBusy(true);
     google.script.run
       .withSuccessHandler(function (res) {
+        hubBusy(false);
         if (!res || !res.success) { toast((res && res.message) || 'Load failed.', false); LEDGER_CACHE = []; renderLedger(); return; }
         CURRENT_PERIOD = res.currentPeriod; LEDGER_CACHE = res.ledger || [];
-        setText('acc-kpi-revenue', inr(res.kpis.collectedMTD));
-        setText('acc-kpi-expense', inr(res.kpis.paidMTD));
-        setText('acc-kpi-cash', inr(res.kpis.drawerCash));
-        const f = res.flags;
-        setText('acc-flag-mismatch', f.cashMismatch + ' Mismatch' + (f.cashMismatch === 1 ? '' : 'es'));
-        setText('acc-flag-claims', f.delayedClaims);
-        setText('acc-flag-discharges', f.pendingDischarges);
+
+        // These four write into the KPI strip at the top of the hub. Until
+        // that strip existed in the markup, setText() found no element and
+        // every one of these numbers was computed and discarded.
+        const k = res.kpis || {};
+        setText('acc-kpi-revenue', inr(k.collectedMTD));
+        setText('acc-kpi-expense', inr(k.paidMTD));
+        setText('acc-kpi-cash', inr(k.drawerCash));
+        // Net is the number anyone actually asks for, and it is the only one
+        // the hub did not show. It is derived, so no backend change is needed.
+        setText('acc-kpi-net', inr((Number(k.collectedMTD) || 0) - (Number(k.paidMTD) || 0)));
+
+        const f = res.flags || {};
+        setFlag('acc-flag-mismatch', f.cashMismatch, 'mismatch', 'mismatches');
+        setFlag('acc-flag-claims', f.delayedClaims, 'claim delayed', 'claims delayed');
+        setFlag('acc-flag-discharges', f.pendingDischarges, 'pending', 'pending');
         renderLedger();
       })
-      .withFailureHandler(function (err) { LEDGER_CACHE = []; renderLedger(); toast(err.message || 'Server error.', false); })
+      .withFailureHandler(function (err) { hubBusy(false); LEDGER_CACHE = []; renderLedger(); toast(err.message || 'Server error.', false); })
       .getAccountsDashboard();
   }
   function lockPeriod() {

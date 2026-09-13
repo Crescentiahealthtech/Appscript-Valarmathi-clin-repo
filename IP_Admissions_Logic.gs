@@ -47,7 +47,28 @@ function ipa_sheet_() {
   return sh;
 }
 
+/**
+ * A formatted date from the admissions sheet.
+ *
+ * This used to format ONLY when the cell came back as a Date object and
+ * return the raw text for everything else. A DOA column formatted as Plain
+ * Text - which is how most of these sheets end up, because staff paste into
+ * them - therefore reached the ward roster, the bed map and the IP ledger as
+ * whatever was typed: "13/09/2026" on one row, "13-9-26" on the next, and
+ * "Sat Dec 30 1899 ..." wherever a time cell had strayed into it. That is the
+ * "Date of Admission error" the desks report.
+ *
+ * Shared_Dates.gs parses all of those, so a date now renders in one form.
+ * Text that is genuinely not a date still passes through unchanged rather
+ * than vanishing, because a note somebody typed into a date column is
+ * information, and blanking it silently loses it.
+ */
 function ipa_fmt_(v, pattern) {
+  if (typeof cresc_formatDate_ === 'function') {
+    var out = cresc_formatDate_(v, pattern);
+    if (out) return out;
+    return ipa_str_(v);
+  }
   if (v instanceof Date && !isNaN(v.getTime())) {
     return Utilities.formatDate(v, Session.getScriptTimeZone(), pattern);
   }
@@ -170,10 +191,34 @@ function ipa_mapRow_(r, rowIndex, lastCol) {
 }
 
 /** Length of stay in days. Discharged uses DOD; active uses today. */
+/**
+ * Length of stay in days, counting the day of admission.
+ *
+ * The `instanceof Date` gate meant a text DOA returned null, which is what
+ * put the "DOA?" badge on the bed map and left the LOS column blank on the
+ * ward roster for every admission whose date had been typed rather than
+ * picked.
+ */
 function ipa_los_(doaVal, dodVal) {
+  if (typeof cresc_los_ === 'function') return cresc_los_(doaVal, dodVal || null);
   if (!(doaVal instanceof Date) || isNaN(doaVal.getTime())) return null;
   var end = (dodVal instanceof Date && !isNaN(dodVal.getTime())) ? dodVal : new Date();
   return Math.max(1, Math.floor((end.getTime() - doaVal.getTime()) / 86400000) + 1);
+}
+
+/** Midnight at the start of `v`, or null. */
+function ipa_dayStart_(v) {
+  if (typeof cresc_dateOnly_ === 'function') return cresc_dateOnly_(v);
+  var s = ipa_str_(v); if (!s) return null;
+  var d = new Date(s + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** The last millisecond of `v`, or null. */
+function ipa_dayEnd_(v) {
+  var d = ipa_dayStart_(v);
+  if (!d) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
 }
 
 // =========================================================================
@@ -273,8 +318,11 @@ function getIPHistory(query) {
     var consultF = ipa_str_(q.consultant).toUpperCase();
     var wardF    = ipa_str_(q.ward).toUpperCase();
 
-    var fromD = ipa_str_(q.fromDate) ? new Date(ipa_str_(q.fromDate) + 'T00:00:00') : null;
-    var toD   = ipa_str_(q.toDate)   ? new Date(ipa_str_(q.toDate)   + 'T23:59:59') : null;
+    // Shared_Dates.gs, so a filter typed as "13/09/2026" works as well as the
+    // date picker's yyyy-MM-dd. The old concatenation produced
+    // "13/09/2026T00:00:00", an Invalid Date that silently matched nothing.
+    var fromD = ipa_dayStart_(q.fromDate);
+    var toD   = ipa_dayEnd_(q.toDate);
     if (fromD && isNaN(fromD.getTime())) fromD = null;
     if (toD   && isNaN(toD.getTime()))   toD   = null;
 
@@ -532,9 +580,47 @@ function saveNewAdmissionLedger(payload) {
     var sheet = ipa_sheet_();
     var newIpNumber = ipa_nextIpNumber_(sheet);
 
+    // THE DATE OF ADMISSION.
+    //
+    // This used to be `new Date(doaRaw)` with `if (isNaN(...)) doaVal = new
+    // Date()`, and both halves were wrong:
+    //
+    //   - "2026-09-13" from the date picker parsed as UTC midnight, which is
+    //     the PREVIOUS day for anyone west of Greenwich and, once the sheet
+    //     timezone and the script timezone disagree, reads back a day out
+    //     here too;
+    //   - anything the parser could not read - a back-dated "13/09/2026"
+    //     typed by hand, a value pasted from another system - was SILENTLY
+    //     REPLACED WITH TODAY. The admission went into the sheet with the
+    //     wrong date, and every screen downstream (length of stay, the bed
+    //     map's day count, the IP bill's per-day charges, the discharge
+    //     summary) inherited it with nothing to show anything had happened.
+    //
+    // cresc_parseDate_ (Shared_Dates.gs) builds a local date and reads the
+    // day-first forms this clinic writes. A date it cannot read is now an
+    // error the admitting clerk sees, not a wrong date nobody sees. An empty
+    // box still means "now", which is what a walk-in admission needs.
     var doaRaw = ipa_str_(payload.doa);
-    var doaVal = doaRaw ? new Date(doaRaw) : new Date();
-    if (isNaN(doaVal.getTime())) doaVal = new Date();
+    var doaVal;
+    if (doaRaw) {
+      doaVal = cresc_parseDate_(doaRaw);
+      if (!doaVal) {
+        return { success: false,
+                 message: 'The date of admission "' + doaRaw + '" could not be read. ' +
+                          'Use the date picker, or type it as dd/MM/yyyy.' };
+      }
+      // A stay cannot start in the future. Catching it here keeps a
+      // mistyped year out of every ledger that counts days from this cell.
+      var horizon = new Date();
+      horizon.setDate(horizon.getDate() + 1);
+      if (doaVal.getTime() > horizon.getTime()) {
+        return { success: false,
+                 message: 'The date of admission is in the future (' +
+                          cresc_formatDate_(doaVal, 'dd-MMM-yyyy') + '). Check the year.' };
+      }
+    } else {
+      doaVal = new Date();
+    }
 
     sheet.appendRow([
       String(newIpNumber),
