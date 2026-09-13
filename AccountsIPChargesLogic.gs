@@ -57,7 +57,7 @@ function ipc_objs_(sh) {
 }
 function ipc_isTrue_(v) { var s = acc_str_(v).trim().toUpperCase(); return s === 'TRUE' || s === 'YES' || s === '1'; }
 function ipc_cash_(m) { return acc_str_(m).toLowerCase().indexOf('cash') !== -1; }
-function ipc_id_(p) { return p + '-' + Date.now().toString().slice(-9) + Math.floor(Math.random() * 90 + 10); }
+function ipc_id_(p) { return acc_newId_(p); }
 
 // resolve a patient's single ACTIVE admission (used to auto-route IP credit bills)
 function ipc_activeAdmissionByPatient_(patientId) {

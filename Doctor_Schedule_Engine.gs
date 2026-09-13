@@ -617,7 +617,11 @@ function bookAppointmentScoped(payload, sessionToken) {
     }
 
     // --- write ------------------------------------------------------------
-    var newId = "APT-" + Utilities.getUuid().substring(0, 6).toUpperCase();
+    // The same generator as every other booking path, so ids are one shape
+    // across the application and sort chronologically in the sheet.
+    var newId = (typeof apt_newId_ === 'function')
+      ? apt_newId_()
+      : "APT-" + Utilities.getUuid().substring(0, 6).toUpperCase();
     var row = new Array(sh.getLastColumn()).fill("");
     row[0] = String(newId);
     row[1] = String(patientId);

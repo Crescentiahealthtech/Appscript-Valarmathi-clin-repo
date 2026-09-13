@@ -40,7 +40,7 @@ function ins_createClaimsForSettlement_(setId, ip, adm, billed, insurers, user) 
   (insurers || []).forEach(function (x) {
     var amt = acc_money_(x.amount); if (amt <= 0) return;
     var row = {
-      Claim_ID: 'CLM-' + Date.now().toString().slice(-9) + Math.floor(Math.random() * 90 + 10), Date: now,
+      Claim_ID: acc_newId_('CLM'), Date: now,
       Patient_ID: adm.patientId, Patient_Name: adm.patientName, TPA_Company: acc_str_(x.name), Policy_No: '',
       PreAuth_Status: 'APPROVED', Total_Billed: acc_money_(billed), Claimed_Amount: amt, Approved_Amount: amt,
       Deduction_Amount: 0, Patient_Liability_Log: '', Settlement_Status: 'PENDING',
@@ -98,7 +98,7 @@ function createManualClaim(payload) {
     var source = (acc_str_(payload.source).toUpperCase() || 'OP');
     var caseRef = acc_str_(payload.caseRef).trim() || source;
     var user = acc_str_(payload.user) || 'UNKNOWN', now = new Date();
-    var id = 'CLM-' + Date.now().toString().slice(-9) + Math.floor(Math.random() * 90 + 10);
+    var id = acc_newId_('CLM');
     var row = {
       Claim_ID: id, Date: now, Patient_ID: acc_str_(payload.patientId), Patient_Name: patient,
       TPA_Company: insurer, Policy_No: acc_str_(payload.policyNo), PreAuth_Status: acc_str_(payload.preAuth).toUpperCase() || 'REQUESTED',

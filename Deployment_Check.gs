@@ -45,6 +45,7 @@ var DEP_MAP = {
   // listing them means verifyDeployment() names the file when they are gone.
   "DS_Data.gs": ["dsx_latestSnapshotOfType_", "dsx_summaryIdFor_", "dsx_unpackPayload_",
                  "dsx_upgradePayload_", "dsx_toDate_"],
+  "Appointment.gs":          ["apt_newId_", "submitNewAppointment", "getAppointmentsByDate"],
   "Doctors_Engine.gs":       ["getTenantId_", "validateSession_", "issueSession_", "logAudit_", "getActiveDoctors"],
   "IP_Clinical_Access.gs": [
     "ipc_timelineSheet_", "ipc_casesheetSheet_", "resolveIPWrite_", "resolveIPRead_",
@@ -68,7 +69,7 @@ var DEP_MAP = {
   "IP_Schema_Repair.gs": [
     "repairCasesheetHeaderDrift", "runIPHealthCheck", "repairDuplicatePharmacyQueueRows"
   ],
-  "Drug_Interactions.gs": [
+  "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
   "OP_Rx_Engine.gs":        ["checkRxSafety", "getPatientAllergies", "savePatientAllergies",

@@ -25,7 +25,7 @@ function pay_objs_() {
   return out;
 }
 function pay_col_(sh, name) { return sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (x) { return acc_str_(x).trim(); }).indexOf(name) + 1; }
-function pay_id_() { return 'PAY-' + Date.now().toString().slice(-9) + Math.floor(Math.random() * 90 + 10); }
+function pay_id_() { return acc_newId_('PAY'); }
 function pay_days_(due) {
   if (typeof cresc_daysBetween_ === 'function') return cresc_daysBetween_(due, null);
   var d = acc_toDate_(due); if (!d) return null;
@@ -94,7 +94,7 @@ function payPayable(payload) {
       sh.getRange(row, cStat + 1).setValue(status);
       if (cPaidAt >= 0) sh.getRange(row, cPaidAt + 1).setValue(now);
 
-      acc_sheet_(ACC_CFG.LEDGER).appendRow([target + '-P' + Date.now().toString().slice(-5), now, 'Payable', entity, name, target, doc + ' · ' + name, mode, 0, amt, user, '', 'FALSE', acc_str_(payload.notes)]);
+      acc_sheet_(ACC_CFG.LEDGER).appendRow([acc_newId_(target + '-P'), now, 'Payable', entity, name, target, doc + ' · ' + name, mode, 0, amt, user, '', 'FALSE', acc_str_(payload.notes)]);
       acc_audit_(user, 'PAYABLE_PAY', PAY_CFG.SHEET, target, 'Pending: ' + pending, 'Paid: ' + amt, mode + ' | now ' + status);
       SpreadsheetApp.flush();
       return { success: true, message: "Paid ₹" + amt + " · " + name + " (" + status + ").", status: status, pending: newPending };

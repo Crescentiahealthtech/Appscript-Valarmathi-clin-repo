@@ -92,6 +92,49 @@ function acc_toDate_(v) {
   var d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 }
+/**
+ * A unique id for a financial record.
+ *
+ * Every id in this module was built as
+ *
+ *     PREFIX + Date.now().toString().slice(-9)
+ *
+ * which is not unique in either of the two ways that matter for a ledger.
+ * Two entries recorded in the SAME MILLISECOND get the same id - and they
+ * do: settling a discharge posts a receipt and its tax split together, and
+ * a busy counter has two people pressing Save at once. And slice(-9) keeps
+ * only the last nine digits of a thirteen-digit clock, which wraps roughly
+ * every eleven and a half days, so two entries that far apart collide too.
+ *
+ * A duplicate id in a ledger is not a cosmetic problem. Reversing,
+ * reconciling and auditing all find a transaction by its id, and a lookup
+ * that matches two rows either picks one arbitrarily or reverses the wrong
+ * entry.
+ *
+ * The replacement is sortable, readable and unique: a timestamp anyone can
+ * read at a glance, plus six characters from a UUID.
+ *
+ *     TXN-260913-174233-A19F4C
+ *
+ * Nothing parses these ids - they are matched whole - so the change is safe
+ * for rows already written, which keep the ids they have.
+ *
+ * @param {string} prefix  e.g. 'TXN', 'TAX', 'AUD'
+ * @return {string}
+ */
+function acc_newId_(prefix) {
+  var stamp = Utilities.formatDate(new Date(), ACC_CFG.TZ, 'yyMMdd-HHmmss');
+  var rand;
+  try {
+    rand = Utilities.getUuid().replace(/-/g, '').substring(0, 6).toUpperCase();
+  } catch (e) {
+    // getUuid() is not available in every execution context. Six random
+    // base-36 characters are still far better than none.
+    rand = ('000000' + Math.floor(Math.random() * 2176782336).toString(36).toUpperCase()).slice(-6);
+  }
+  return String(prefix || 'ID') + '-' + stamp + '-' + rand;
+}
+
 function acc_lockedSet_() {
   var raw = PropertiesService.getScriptProperties().getProperty(ACC_CFG.LOCK_PROP) || "";
   return raw ? raw.split(",").filter(String) : [];
@@ -102,7 +145,7 @@ function acc_isLocked_(period) { return acc_lockedSet_().indexOf(period) !== -1;
 function acc_audit_(user, action, module, refId, oldVal, newVal, reason) {
   try {
     var sh = acc_sheet_(ACC_CFG.AUDIT);
-    var id = "AUD-" + Date.now().toString().slice(-8);
+    var id = acc_newId_("AUD");
     sh.appendRow([
       id, acc_now_(), acc_str_(user) || "SYSTEM", acc_str_(action),
       acc_str_(module), acc_str_(refId), acc_str_(oldVal), acc_str_(newVal), acc_str_(reason)
@@ -432,7 +475,7 @@ function recordLedgerEntry(obj) {
     if (acc_isLocked_(period)) return { success: false, message: "Period " + period + " is locked. Entries are frozen." };
 
     var sh = acc_sheet_(ACC_CFG.LEDGER);
-    var txnId = "TXN-" + Date.now().toString().slice(-9);
+    var txnId = acc_newId_("TXN");
     var ts = new Date(); 
 
     var amountIn = (dir === 'IN') ? amount : 0;
@@ -460,7 +503,7 @@ function recordLedgerEntry(obj) {
       var g = obj.gst;
       var cgst = acc_money_(g.cgst), sgst = acc_money_(g.sgst), igst = acc_money_(g.igst);
       acc_sheet_(ACC_CFG.TAX).appendRow([
-        "TAX-" + Date.now().toString().slice(-9),        
+        acc_newId_("TAX"),
         ts,                                              
         acc_str_(txnId),                                 
         acc_str_(dir === 'IN' ? 'Output' : 'Input'),     

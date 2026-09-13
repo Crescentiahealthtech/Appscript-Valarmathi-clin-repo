@@ -91,7 +91,7 @@ function openShift(payload) {
     }
 
     var now = new Date();
-    var shiftId = "SH-" + Utilities.formatDate(now, ACC_CFG.TZ, "yyyyMMdd") + "-" + Date.now().toString().slice(-5);
+    var shiftId = acc_newId_("SH");
     sh.appendRow([
       shiftId, Utilities.formatDate(now, ACC_CFG.TZ, "yyyy-MM-dd"),
       acc_str_(payload.user) || 'UNKNOWN', counter, opening,
@@ -145,7 +145,7 @@ function closeShift(payload) {
       // Post tallying adjustment to Ledger
       var adj = '';
       if (payload.postAdjustment && mismatch) {
-        var led = acc_sheet_(ACC_CFG.LEDGER), aid = "ADJ-" + Date.now().toString().slice(-9);
+        var led = acc_sheet_(ACC_CFG.LEDGER), aid = acc_newId_("ADJ");
         if (variance > 0)  // Surplus
           led.appendRow([aid, now, 'Adjustment', 'CASH_OVER', counter, target, 'Drawer Surplus', 'Cash', Math.abs(variance), 0, acc_str_(payload.user) || 'UNKNOWN', '', "FALSE", reason]);
         else               // Shortage
