@@ -1034,22 +1034,20 @@ function dsFillLabPanel() {
   var b = (DSState.payload && DSState.payload.sections &&
            DSState.payload.sections.PATIENT_BANNER &&
            DSState.payload.sections.PATIENT_BANNER.content) || {};
+  var forSummary = DSState.summaryId;
   window.crescLabResultsInto(host, b.patientId || '', {
     emptyText: 'No verified results for this patient. Anything still on the bench ' +
-               'belongs under "Results pending at discharge" above.'
-  });
-  // crescLabResultsInto writes asynchronously; snapshot what it wrote once
-  // it has landed, so the next re-render can replay it without a call.
-  var snap = function (tries) {
-    if (host.querySelector('.lp-order') || host.querySelector('.label-bright') ||
-        host.querySelector('.text-danger')) {
-      DSState.labsHtml = host.innerHTML;
-      DSState.labsFor  = DSState.summaryId;
-      return;
+               'belongs under "Results pending at discharge" above.',
+    // Cache what landed, so the next re-render replays it instead of
+    // calling the server again. Guarded on the summary id: a slow fetch
+    // that returns after the user has opened a DIFFERENT patient must not
+    // file its results under theirs.
+    done: function (html) {
+      if (DSState.summaryId !== forSummary) return;
+      DSState.labsHtml = html;
+      DSState.labsFor  = forSummary;
     }
-    if (tries > 0) setTimeout(function () { snap(tries - 1); }, 400);
-  };
-  setTimeout(function () { snap(20); }, 400);
+  });
 }
 
 /** Drops the cached results, so the next render fetches again. */

@@ -90,7 +90,9 @@
    *
    * @param {HTMLElement|string} target  element, or element id
    * @param {string} patientId
-   * @param {{limit?:number, emptyText?:string}} [opts]
+   * @param {{limit?:number, emptyText?:string, done?:function(string)}} [opts]
+   *        done() is called with the markup once it has landed, so a caller
+   *        can cache it rather than re-fetching on every re-render.
    */
   window.crescLabResultsInto = function (target, patientId, opts) {
     var el = (typeof target === 'string') ? document.getElementById(target) : target;
@@ -98,7 +100,22 @@
     el.classList.add('lp-scope');
     var o = opts || {};
     var pid = String(patientId || '').trim();
-    var write = function (html) { el.innerHTML = html; };
+    // Every call stamps the element with the patient it is fetching for, and
+    // a reply refuses to write if that stamp has since changed. Without it, a
+    // slow fetch for one patient that lands after the user has moved to
+    // another writes the FIRST patient's results under the SECOND patient's
+    // name - which on a lab panel is the worst kind of wrong: it looks
+    // completely normal.
+    var token = String(Date.now()) + ':' + pid;
+    el.setAttribute('data-lp-token', token);
+
+    var write = function (html, settled) {
+      if (el.getAttribute('data-lp-token') !== token) return;   // superseded
+      el.innerHTML = html;
+      if (settled && typeof o.done === 'function') {
+        try { o.done(html); } catch (e) { /* a caller's cache must not break the render */ }
+      }
+    };
 
     if (!pid) {
       write('<div class="label-bright">Open a patient first — results are looked up by patient ID.</div>');
@@ -120,15 +137,15 @@
 
     google.script.run
       .withSuccessHandler(function (res) {
-        if (!res) { write('<div class="text-danger">The reply did not arrive. Try again.</div>'); return; }
+        if (!res) { write('<div class="text-danger">The reply did not arrive. Try again.</div>', true); return; }
         if (!res.success) {
-          write('<div class="text-danger">' + esc(res.message || 'Could not load results.') + '</div>');
+          write('<div class="text-danger">' + esc(res.message || 'Could not load results.') + '</div>', true);
           return;
         }
-        write(ordersHtml(res.orders || [], o.emptyText));
+        write(ordersHtml(res.orders || [], o.emptyText), true);
       })
       .withFailureHandler(function (err) {
-        write('<div class="text-danger">' + esc((err && err.message) || err) + '</div>');
+        write('<div class="text-danger">' + esc((err && err.message) || err) + '</div>', true);
       })
       .getPatientLabResults(pid, window.sessionToken || '', { limit: o.limit || 40 });
   };
