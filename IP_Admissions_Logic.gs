@@ -834,11 +834,18 @@ function ipa_occupyBed_(bedId, patientId, patientName, doa, ipNumber) {
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (ipa_str_(data[i][0]) !== ipa_str_(bedId)) continue;
-    sheet.getRange(i + 1, 3).setValue('Occupied');
-    sheet.getRange(i + 1, 4).setValue(String(patientId));
-    sheet.getRange(i + 1, 5).setValue(String(patientName));
-    sheet.getRange(i + 1, 6).setValue(doa);
-    sheet.getRange(i + 1, 7).setValue(String(ipNumber));
+    // ONE write for five consecutive columns, not five.
+    //
+    // This runs inside saveNewAdmissionLedger's lock, on every admission.
+    // Five setValue() calls are five round trips to the Sheets service,
+    // each of which can fail on its own - so a timeout between the third
+    // and the fourth left the bed marked Occupied, with a patient name on
+    // it, and no IP number: a bed the ward can see is taken and the ledger
+    // cannot match to an admission. setValues() on the 1x5 range is one
+    // call and lands whole or not at all.
+    sheet.getRange(i + 1, 3, 1, 5).setValues([[
+      'Occupied', String(patientId), String(patientName), doa, String(ipNumber)
+    ]]);
     return;
   }
 }

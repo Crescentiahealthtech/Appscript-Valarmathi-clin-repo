@@ -643,8 +643,39 @@ function dsRenderActions() {
   var wrap = dsEl(DS_IDS.edActions);
   wrap.innerHTML = out.join('');
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-act]'), function (b) {
-    b.addEventListener('click', function () { dsAction(b.getAttribute('data-ds-act')); });
+    b.addEventListener('click', function () { dsAction(b.getAttribute('data-ds-act'), b); });
   });
+}
+
+/**
+ * Marks the action bar busy while a workflow move is in flight.
+ *
+ * Submitting, signing, regenerating and amending are all server round trips
+ * on a document that can be several hundred kilobytes. Before this, the bar
+ * looked idle throughout, so "Submit for signature" got pressed twice - and
+ * the second press raced the first through a row-version check, which is the
+ * conflict dialog nobody could explain.
+ *
+ * @param {HTMLElement|null} btn  the button pressed
+ * @param {boolean} on
+ * @param {string} [label]        what it is doing, while it is doing it
+ */
+function dsActionsBusy(btn, on, label) {
+  var wrap = dsEl(DS_IDS.edActions);
+  if (wrap) {
+    Array.prototype.forEach.call(wrap.querySelectorAll('button'), function (b) {
+      b.disabled = on;
+    });
+  }
+  if (!btn) return;
+  if (on) {
+    if (btn.dataset.dsLabel === undefined) btn.dataset.dsLabel = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>' +
+                    dsEsc(label || 'Working…');
+  } else if (btn.dataset.dsLabel !== undefined) {
+    btn.innerHTML = btn.dataset.dsLabel;
+    delete btn.dataset.dsLabel;
+  }
 }
 
 function dsSectionKeys() {
@@ -1354,9 +1385,11 @@ function dsWireSectionInputs(wrap) {
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-listadd]'), function (el) {
     el.addEventListener('click', function () {
       var key = el.getAttribute('data-ds-listadd');
+      var idx = DSState.payload.sections[key].content.length;
       DSState.payload.sections[key].content.push('');
       mark(key);
       dsRenderSections();
+      dsFocusLine(key, idx);
     });
   });
 
@@ -1381,9 +1414,16 @@ function dsWireSectionInputs(wrap) {
     el.addEventListener('click', function () {
       var key = el.getAttribute('data-ds-rowadd');
       var sec = DSState.payload.sections[key];
+      var ri = sec.content.rows.length;
       sec.content.rows.push(sec.content.columns.map(function () { return ''; }));
       mark(key);
       dsRenderSections();
+      // dsRenderSections() rebuilds the whole editor, so the caret was left
+      // wherever the browser put it - usually nowhere. Pressing "Add
+      // medicine" means "I am about to type a medicine", so the cursor goes
+      // to the cell that is about to be typed into. On a prescription table
+      // that is the NAME, not the type dropdown beside it.
+      dsFocusRow(key, ri);
     });
   });
 
@@ -1401,6 +1441,30 @@ function dsWireSectionInputs(wrap) {
       dsOpenSource(p[0], p[1]);
     });
   });
+}
+
+/**
+ * Puts the caret in a table row that has just been added.
+ *
+ * On a prescription table that is the Medicine Name box, which also opens
+ * the formulary picker under it - so "Add medicine" lands the user exactly
+ * where a drug is chosen. Everywhere else it is the first cell.
+ */
+function dsFocusRow(key, ri) {
+  var sec = DSState.payload.sections[key];
+  var cols = (sec && sec.content && sec.content.columns) || [];
+  var want = cols.indexOf('Medicine Name');
+  if (want === -1) want = 0;
+  var el = document.querySelector(
+    '[data-ds-cell="' + key + '|' + ri + '|' + want + '"]');
+  if (el && el.focus) el.focus();
+}
+
+/** The same, for a LIST section's new line. */
+function dsFocusLine(key, idx) {
+  var el = document.querySelector('[data-ds-listitem="' + key + '|' + idx + '"]') ||
+           document.querySelector('[data-ds-pairc="' + key + '|' + idx + '"]');
+  if (el && el.focus) el.focus();
 }
 
 /* ---- readiness and timeline ---- */
@@ -1473,7 +1537,7 @@ function dsPatchesFromDirty() {
   return patches;
 }
 
-function dsSave(silent) {
+function dsSave(silent, btn) {
   if (!dsIsDirty()) {
     if (!silent) dsNotice('info', 'Nothing to save.');
     return;
@@ -1481,9 +1545,13 @@ function dsSave(silent) {
   if (DSState.saveTimer) { clearTimeout(DSState.saveTimer); DSState.saveTimer = null; }
 
   var patches = dsPatchesFromDirty();
+  // An autosave stays quiet; a pressed Save button says it is saving.
+  if (!silent) dsActionsBusy(btn, true, 'Saving…');
+  var done = function () { if (!silent) dsActionsBusy(btn, false); };
 
   google.script.run
     .withSuccessHandler(function (res) {
+      done();
       try {
         if (dsHandleFailure(res)) return;
         DSState.dirty = {};
@@ -1493,30 +1561,46 @@ function dsSave(silent) {
         dsLoadSummary();
       } catch (e) { dsNotice('danger', 'Saved, but the screen could not refresh: ' + e.message); }
     })
-    .withFailureHandler(function (err) { dsNotice('danger', 'Save failed: ' + err.message); })
+    .withFailureHandler(function (err) {
+      done();
+      dsNotice('danger', 'Save failed: ' + err.message);
+    })
     .ds_saveWorking(dsToken(), DSState.summaryId, DSState.header.rowVersion, patches);
 }
 
-/** Saves pending edits first so a workflow move never discards typing. */
-function dsSaveThen(fn) {
+/**
+ * Saves pending edits first so a workflow move never discards typing.
+ *
+ * @param {function} fn        runs once the save has landed
+ * @param {function} [onAbort] runs instead, if the save never lands - so a
+ *                             caller that disabled its buttons before
+ *                             calling can put them back. Without it, a save
+ *                             that failed here left the action bar disabled
+ *                             with no way out but a reload.
+ */
+function dsSaveThen(fn, onAbort) {
   if (!dsIsDirty()) { fn(); return; }
+  var abort = function (msg) {
+    if (typeof onAbort === 'function') onAbort();
+    if (msg) dsNotice('danger', msg);
+  };
   google.script.run
     .withSuccessHandler(function (res) {
       try {
-        if (dsHandleFailure(res)) return;
+        if (dsHandleFailure(res)) { abort(''); return; }
         DSState.dirty = {};
         DSState.header.rowVersion = res.data.rowVersion;
         fn();
-      } catch (e) { dsNotice('danger', e.message); }
+      } catch (e) { abort(e.message); }
     })
-    .withFailureHandler(function (err) { dsNotice('danger', 'Save failed: ' + err.message); })
+    .withFailureHandler(function (err) { abort('Save failed: ' + err.message); })
     .ds_saveWorking(dsToken(), DSState.summaryId, DSState.header.rowVersion, dsPatchesFromDirty());
 }
 
 /* ---------------------------------------------------------------------
    ACTIONS
    ------------------------------------------------------------------ */
-function dsAction(what) {
+function dsAction(what, btn) {
   switch (what) {
     case 'back':
       // The router wrapper below asks about unsaved changes and stops the
@@ -1526,8 +1610,8 @@ function dsAction(what) {
       if (stillHere && stillHere.classList.contains('active-section')) return;  // cancelled
       dsLoadQueue();
       break;
-    case 'save':   dsSave(false); break;
-    case 'regen':  dsRegenerate(); break;
+    case 'save':   dsSave(false, btn); break;
+    case 'regen':  dsRegenerate(btn); break;
     case 'diff':   dsOpenDiff('staff'); break;
     case 'submit': dsSubmit(); break;
     case 'return': dsOpenReturn(); break;
@@ -1551,21 +1635,23 @@ function dsAction(what) {
 }
 
 /** Runs a mutating endpoint that takes (token, summaryId, rowVersion, ...rest). */
-function dsCall(fnName, rest, successText) {
+function dsCall(fnName, rest, successText, onSettled) {
   var args = [dsToken(), DSState.summaryId, DSState.header.rowVersion].concat(rest || []);
+  var settle = function () { if (typeof onSettled === 'function') onSettled(); };
   var runner = google.script.run
     .withSuccessHandler(function (res) {
+      settle();
       try {
         if (dsHandleFailure(res)) return;
         dsNotice('success', (res && res.message) || successText || 'Done.');
         dsLoadSummary();
       } catch (e) { dsNotice('danger', 'Done, but the screen could not refresh: ' + e.message); }
     })
-    .withFailureHandler(function (err) { dsNotice('danger', err.message); });
+    .withFailureHandler(function (err) { settle(); dsNotice('danger', err.message); });
   runner[fnName].apply(runner, args);
 }
 
-function dsRegenerate() {
+function dsRegenerate(btn) {
   crescConfirm(
       'Regenerate from the clinical record?\n\n' +
       '- Sections nobody has edited are refreshed from the notes and results.\n' +
@@ -1574,7 +1660,13 @@ function dsRegenerate() {
       'Nothing you typed is lost.', { okLabel: 'Regenerate' })
     .then(function (ok) {
       if (!ok) return;
-      dsSaveThen(function () { dsCall('ds_regenerate', [], 'Regenerated.'); });
+      // Re-assembling a whole admission from its notes, results and case
+      // sheets is the slowest call in this module.
+      dsActionsBusy(btn, true, 'Regenerating…');
+      var free = function () { dsActionsBusy(btn, false); };
+      dsSaveThen(function () {
+        dsCall('ds_regenerate', [], 'Regenerated.', free);
+      }, free);
     });
 }
 

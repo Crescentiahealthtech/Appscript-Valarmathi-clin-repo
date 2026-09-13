@@ -454,7 +454,17 @@ function buildIPCard(ev) {
     currentPatientEvents = res.events || [];
 
     document.getElementById('tl-pat-name').innerText = res.patient.name || "Unknown Patient";
-    document.getElementById('tl-pat-details').innerHTML = `<span style="color:var(--text-main) !important;">ID: ${res.patient.id || '--'} &nbsp;|&nbsp; Age: ${res.patient.age || '--'} &nbsp;|&nbsp; Sex: ${res.patient.sex || '--'} &nbsp;|&nbsp; Mobile: ${res.patient.mobile || '--'}</span>`;
+    // Escaped. These four are typed into the Patients sheet by staff and
+    // land in innerHTML: an ampersand in an address or an angle bracket in a
+    // note field would break the banner's markup, and worse is possible.
+    // crescEsc lives in the shell (Auth.html) and is always parsed first.
+    const tlEsc = (v) => (window.crescEsc ? window.crescEsc(v)
+      : String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+    document.getElementById('tl-pat-details').innerHTML =
+      `<span style="color:var(--text-main) !important;">ID: ${tlEsc(res.patient.id || '--')}` +
+      ` &nbsp;|&nbsp; Age: ${tlEsc(res.patient.age || '--')}` +
+      ` &nbsp;|&nbsp; Sex: ${tlEsc(res.patient.sex || '--')}` +
+      ` &nbsp;|&nbsp; Mobile: ${tlEsc(res.patient.mobile || '--')}</span>`;
 
     const container = document.getElementById('clinical-stream-container');
     
