@@ -22,18 +22,22 @@
   #cresc-labpeek .lp-head { padding: .9rem 1.1rem; border-bottom: 1px solid var(--divider-color);
                    display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
   #cresc-labpeek .lp-body { padding: .9rem 1.1rem; overflow: auto; }
-  #cresc-labpeek .lp-order { border: 1px solid var(--border-color); border-radius: 10px;
+  /* Carried by the overlay body AND by any element crescLabResultsInto()
+     draws into, so results look identical inline and in the overlay. These
+     used to be scoped to #cresc-labpeek, which meant an inline copy had no
+     table rules at all. */
+  .lp-scope .lp-order { border: 1px solid var(--border-color); border-radius: 10px;
                    padding: .7rem .85rem; margin-bottom: .7rem; background: var(--surface-2); }
-  #cresc-labpeek table { width: 100%; font-size: .84rem; }
-  #cresc-labpeek th { color: var(--text-label); font-weight: 600; text-align: left;
+  .lp-scope table { width: 100%; font-size: .84rem; }
+  .lp-scope th { color: var(--text-label); font-weight: 600; text-align: left;
                    padding: .2rem .4rem; border-bottom: 1px solid var(--border-color); }
-  #cresc-labpeek td { padding: .2rem .4rem; border-bottom: 1px solid var(--divider-color); }
-  #cresc-labpeek .lp-flag { font-weight: 700; }
-  #cresc-labpeek .lp-H, #cresc-labpeek .lp-HIGH { color: var(--danger-fg); }
-  #cresc-labpeek .lp-L, #cresc-labpeek .lp-LOW  { color: var(--info-fg); }
-  #cresc-labpeek .lp-C { color: var(--text-on-accent); background: var(--danger);
+  .lp-scope td { padding: .2rem .4rem; border-bottom: 1px solid var(--divider-color); }
+  .lp-scope .lp-flag { font-weight: 700; }
+  .lp-scope .lp-H, .lp-scope .lp-HIGH { color: var(--danger-fg); }
+  .lp-scope .lp-L, .lp-scope .lp-LOW  { color: var(--info-fg); }
+  .lp-scope .lp-C { color: var(--text-on-accent); background: var(--danger);
                    padding: 0 .35rem; border-radius: 4px; }
-  #cresc-labpeek .lp-crit { border-color: var(--danger); }
+  .lp-scope .lp-crit { border-color: var(--danger); }
 </style>
 
 <div id="cresc-labpeek" hidden>
@@ -49,7 +53,7 @@
       <button type="button" class="btn btn-sm btn-outline-secondary"
               onclick="crescLabPeekClose()">Close</button>
     </div>
-    <div class="lp-body" id="cresc-labpeek-body"></div>
+    <div class="lp-body lp-scope" id="cresc-labpeek-body"></div>
   </div>
 </div>
 
@@ -63,10 +67,6 @@
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   };
 
-  function body(html) {
-    var el = document.getElementById('cresc-labpeek-body');
-    if (el) el.innerHTML = html;
-  }
   function sub(text) {
     var el = document.getElementById('cresc-labpeek-sub');
     if (el) el.textContent = text;
@@ -78,47 +78,74 @@
    * @param {string} patientId
    * @param {string} [patientName]  shown in the subtitle while loading
    */
-  window.crescLabPeek = function (patientId, patientName) {
+  /**
+   * Draws this patient's verified results into ANY element.
+   *
+   * Split out of crescLabPeek so the same viewer can appear inline as well
+   * as in the overlay. The discharge editor puts it directly under
+   * "Significant investigations", because writing that section and the
+   * pending-results section means reading the actual numbers, and an
+   * overlay that covers the thing you are writing is the wrong instrument
+   * for a value you are copying across.
+   *
+   * @param {HTMLElement|string} target  element, or element id
+   * @param {string} patientId
+   * @param {{limit?:number, emptyText?:string}} [opts]
+   */
+  window.crescLabResultsInto = function (target, patientId, opts) {
+    var el = (typeof target === 'string') ? document.getElementById(target) : target;
+    if (!el) return;
+    el.classList.add('lp-scope');
+    var o = opts || {};
     var pid = String(patientId || '').trim();
-    var host = document.getElementById('cresc-labpeek');
-    if (!host) return;
+    var write = function (html) { el.innerHTML = html; };
 
     if (!pid) {
-      host.hidden = false;
-      sub('');
-      body('<div class="label-bright">Open a patient first — results are looked up by patient ID.</div>');
+      write('<div class="label-bright">Open a patient first — results are looked up by patient ID.</div>');
       return;
     }
 
-    host.hidden = false;
-    sub((patientName ? patientName + ' · ' : '') + pid);
-    body('<div class="text-center py-4 label-bright">' +
-         '<i class="fa-solid fa-circle-notch fa-spin fa-lg d-block mb-2"></i>' +
-         'Fetching verified results…</div>');
+    write(typeof window.crescInlineSpinner === 'function'
+      ? window.crescInlineSpinner('Fetching verified results…')
+      : '<div class="text-center py-4 label-bright">' +
+        '<i class="fa-solid fa-circle-notch fa-spin fa-lg d-block mb-2"></i>' +
+        'Fetching verified results…</div>');
 
     if (typeof google === 'undefined' || !google.script || !google.script.run ||
         typeof google.script.run.getPatientLabResults !== 'function') {
-      body('<div class="text-danger">Lab_Patient_View.gs is missing from the Apps Script ' +
-           'project, so results cannot be fetched here.</div>');
+      write('<div class="text-danger">Lab_Patient_View.gs is missing from the Apps Script ' +
+            'project, so results cannot be fetched here.</div>');
       return;
     }
 
     google.script.run
       .withSuccessHandler(function (res) {
-        if (!res) {
-          body('<div class="text-danger">The reply did not arrive. Try again.</div>');
-          return;
-        }
+        if (!res) { write('<div class="text-danger">The reply did not arrive. Try again.</div>'); return; }
         if (!res.success) {
-          body('<div class="text-danger">' + esc(res.message || 'Could not load results.') + '</div>');
+          write('<div class="text-danger">' + esc(res.message || 'Could not load results.') + '</div>');
           return;
         }
-        render(res.orders || []);
+        write(ordersHtml(res.orders || [], o.emptyText));
       })
       .withFailureHandler(function (err) {
-        body('<div class="text-danger">' + esc((err && err.message) || err) + '</div>');
+        write('<div class="text-danger">' + esc((err && err.message) || err) + '</div>');
       })
-      .getPatientLabResults(pid, window.sessionToken || '', { limit: 40 });
+      .getPatientLabResults(pid, window.sessionToken || '', { limit: o.limit || 40 });
+  };
+
+  /**
+   * Opens the viewer for one patient, in the overlay.
+   *
+   * @param {string} patientId
+   * @param {string} [patientName]  shown in the subtitle while loading
+   */
+  window.crescLabPeek = function (patientId, patientName) {
+    var pid = String(patientId || '').trim();
+    var host = document.getElementById('cresc-labpeek');
+    if (!host) return;
+    host.hidden = false;
+    sub(pid ? ((patientName ? patientName + ' · ' : '') + pid) : '');
+    window.crescLabResultsInto('cresc-labpeek-body', pid);
   };
 
   window.crescLabPeekClose = function () {
@@ -126,17 +153,19 @@
     if (host) host.hidden = true;
   };
 
-  function render(orders) {
+  /** The markup for a set of orders. Returns it rather than writing it, so
+      the overlay and the inline panel share one renderer. */
+  function ordersHtml(orders, emptyText) {
     if (!orders.length) {
-      body('<div class="label-bright">No verified lab results for this patient yet. ' +
-           'Drafts and unverified values are deliberately not shown here.</div>');
-      return;
+      return '<div class="label-bright">' +
+        esc(emptyText || 'No verified lab results for this patient yet. ' +
+            'Drafts and unverified values are deliberately not shown here.') + '</div>';
     }
 
     // Abnormal and critical values carry their flag, because the reason to
     // open this at the bedside is almost always to find the one out-of-range
     // number among twenty normal ones.
-    body(orders.map(function (o) {
+    return orders.map(function (o) {
       var crit = o.results.some(function (r) { return r.critical; });
       var rows = o.results.map(function (r) {
         var f = String(r.flag || '').toUpperCase();
@@ -168,7 +197,7 @@
           '<th>Test</th><th>Result</th><th>Reference</th><th>Flag</th>' +
         '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '</div>';
-    }).join(''));
+    }).join('');
   }
 
   // Escape closes it, like every other overlay in the app.

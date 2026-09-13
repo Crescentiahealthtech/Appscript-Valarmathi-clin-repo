@@ -39,6 +39,12 @@ var DEP_MAP = {
     "dc_normaliseTeamRole_", "getIPTeamRoles"
   ],
   "Doctor_Session_Store.gs": ["dc_validateSession_", "dc_sessionName_", "revokeSession"],
+  // Pharmacy.gs reads the signed discharge script through these, so the
+  // take-home prescription reaches the counter. Both are optional at runtime
+  // (a project without the discharge module just contributes nothing), but
+  // listing them means verifyDeployment() names the file when they are gone.
+  "DS_Data.gs": ["dsx_latestSnapshotOfType_", "dsx_summaryIdFor_", "dsx_unpackPayload_",
+                 "dsx_upgradePayload_", "dsx_toDate_"],
   "Doctors_Engine.gs":       ["getTenantId_", "validateSession_", "issueSession_", "logAudit_", "getActiveDoctors"],
   "IP_Clinical_Access.gs": [
     "ipc_timelineSheet_", "ipc_casesheetSheet_", "resolveIPWrite_", "resolveIPRead_",

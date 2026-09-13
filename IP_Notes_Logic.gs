@@ -1051,11 +1051,27 @@ function ipn_printScope_(rows, wanted, onlyIds) {
   var single      = !!onlyIds && rows.length === 1;
 
   if (single) {
-    var label = IPN_PRINT_LABELS[dc_upper_(rows[0].roleType)] || "Clinical Note";
+    // One note as a document in its own right - for a referral, a second
+    // opinion, or the relative at the counter asking for what was written
+    // yesterday. It is titled and signed by the note's OWN author and role,
+    // not by the treating consultant: a nursing note signed off as a
+    // consultant's document misrepresents who wrote it.
+    var role   = dc_upper_(rows[0].roleType);
+    var label  = IPN_PRINT_LABELS[role] || "Clinical Note";
     var author = dc_str_(rows[0].author);
+    var when   = dc_str_(rows[0].timestamp);
+    var SIGN_ROLE = {
+      NURSE: "Nurse", DOCTOR: "Doctor", CONSULTANT: "Consultant",
+      PROCEDURE: "Operator", QUICK: "Author"
+    };
     return {
-      docTitle: label, sectionTitle: label, showChart: false,
-      signRole: (dc_upper_(rows[0].roleType) === "NURSE") ? "Nurse" : "Author",
+      // The date is part of the title on a single-note document: without it
+      // two printed progress notes for the same patient are indistinguishable
+      // once they are on a desk.
+      docTitle: when ? (label + " — " + when) : label,
+      sectionTitle: label,
+      showChart: false,
+      signRole: SIGN_ROLE[role] || "Author",
       signName: function () { return author || "Author"; }
     };
   }

@@ -115,7 +115,10 @@ var DSState = {
   reasonHandler: null,
   diffMode: 'staff',
   pickers: null,           // ds_getPickers payload, fetched once per session
-  pickersPending: false
+  pickersPending: false,
+  labsOpen: true,          // the inline lab panel under INVESTIGATIONS
+  labsHtml: '',            // its last fetched markup, replayed on re-render
+  labsFor: ''              // the summary that markup belongs to
 };
 
 /* Sections whose lines are "condition — duration" pairs. Stored as one
@@ -449,6 +452,8 @@ function dsDoInitiate() {
 function dsOpenEditor(summaryId) {
   DSState.summaryId = summaryId;
   DSState.dirty = {};
+  // A different patient's results must never be replayed from the cache.
+  dsInvalidateLabs();
   if (typeof switchTab === 'function') switchTab(DS_IDS.editorView);
   dsLoadSummary();
   dsStartPresence();
@@ -733,7 +738,29 @@ function dsLoadPickers(after) {
   runner.ds_getPickers(dsToken());
 }
 
-/** Opens the shared lab viewer for the patient this summary belongs to. */
+/**
+ * Scrolls to the inline lab panel, opening it if it was collapsed.
+ *
+ * Replaces the overlay this button used to raise. The results live on the
+ * page now, under Significant investigations, which is the section being
+ * written from them.
+ */
+function dsJumpToLabs() {
+  var panel = document.querySelector('#ds-ed-sections .ds-labpanel');
+  if (!panel) { dsPeekLabs(); return; }     // sections not drawn yet
+  if (!DSState.labsOpen) {
+    DSState.labsOpen = true;
+    var host = dsEl('ds-labs-inline');
+    var btn = dsEl('ds-labs-toggle');
+    if (host) host.hidden = false;
+    if (btn) btn.textContent = 'Hide';
+    dsFillLabPanel();
+  }
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** Opens the shared lab viewer in the overlay. Kept as the fallback for
+    when the editor's sections have not been drawn yet. */
 function dsPeekLabs() {
   var b = (DSState.payload && DSState.payload.sections &&
            DSState.payload.sections.PATIENT_BANNER &&
@@ -908,12 +935,96 @@ function dsRenderSections() {
         '<h6>' + dsEsc(sec.title || key) + '</h6>' +
         (sec.edited ? '<span class="ds-muted">edited by ' + dsEsc(sec.editedBy) + '</span>' : '') +
         reviewToggle +
-      '</div>' + pin + body + flag + chips + '</div>';
+      '</div>' + pin + body + flag + chips + '</div>' +
+      // The verified lab results sit directly BELOW the investigations
+      // section, not behind a button. Writing "Significant investigations"
+      // and "Results pending at discharge" means reading the actual
+      // numbers, and an overlay that covers the boxes you are filling in is
+      // the wrong instrument for a value you are copying across. The
+      // overlay is still there for every other screen that wants a quick
+      // look; this is the one place the numbers are being transcribed.
+      (key === 'INVESTIGATIONS' ? dsLabPanelHtml() : '');
   }).join('');
 
   var wrap = dsEl(DS_IDS.edSections);
   wrap.innerHTML = html;
   dsWireSectionInputs(wrap);
+  dsFillLabPanel();
+}
+
+/* The shell of the inline lab panel. Collapsible, and remembered for the
+   session: a preparer copying twenty values wants it open the whole time,
+   and a doctor signing off wants it out of the way. */
+function dsLabPanelHtml() {
+  var open = DSState.labsOpen !== false;
+  return '<div class="ds-section ds-labpanel" data-ds-sec="__LABS">' +
+    '<div class="d-flex align-items-center gap-2 mb-2">' +
+      '<h6><i class="fa-solid fa-flask-vial me-2" style="color:var(--info-fg)"></i>Lab results</h6>' +
+      '<span class="ds-muted">verified values, this admission and before</span>' +
+      '<button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="ds-labs-toggle">' +
+        (open ? 'Hide' : 'Show') + '</button>' +
+    '</div>' +
+    '<div id="ds-labs-inline"' + (open ? '' : ' hidden') + '></div>' +
+  '</div>';
+}
+
+/* Fetches into the panel once per editor session. Re-rendering the sections
+   (which happens on every added row) must not re-fetch. */
+function dsFillLabPanel() {
+  var host = dsEl('ds-labs-inline');
+  if (!host) return;
+
+  var toggle = dsEl('ds-labs-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', function () {
+      DSState.labsOpen = !!host.hidden;
+      host.hidden = !DSState.labsOpen;
+      toggle.textContent = DSState.labsOpen ? 'Hide' : 'Show';
+      if (DSState.labsOpen) dsFillLabPanel();
+    });
+  }
+  if (host.hidden) return;
+
+  // dsRenderSections() replaces the whole editor on every added row, so the
+  // panel element is new each time. The RESULTS are cached on DSState
+  // instead of on the element, or typing in a medicine row would fire a
+  // fresh server call per keystroke-driven re-render.
+  if (DSState.labsHtml && DSState.labsFor === DSState.summaryId) {
+    host.classList.add('lp-scope');
+    host.innerHTML = DSState.labsHtml;
+    return;
+  }
+
+  if (typeof window.crescLabResultsInto !== 'function') {
+    host.innerHTML = '<div class="ds-muted">The lab viewer is not available on this ' +
+      'deployment (Lab_Results_Peek.html is missing from the shell).</div>';
+    return;
+  }
+  var b = (DSState.payload && DSState.payload.sections &&
+           DSState.payload.sections.PATIENT_BANNER &&
+           DSState.payload.sections.PATIENT_BANNER.content) || {};
+  window.crescLabResultsInto(host, b.patientId || '', {
+    emptyText: 'No verified results for this patient. Anything still on the bench ' +
+               'belongs under "Results pending at discharge" above.'
+  });
+  // crescLabResultsInto writes asynchronously; snapshot what it wrote once
+  // it has landed, so the next re-render can replay it without a call.
+  var snap = function (tries) {
+    if (host.querySelector('.lp-order') || host.querySelector('.label-bright') ||
+        host.querySelector('.text-danger')) {
+      DSState.labsHtml = host.innerHTML;
+      DSState.labsFor  = DSState.summaryId;
+      return;
+    }
+    if (tries > 0) setTimeout(function () { snap(tries - 1); }, 400);
+  };
+  setTimeout(function () { snap(20); }, 400);
+}
+
+/** Drops the cached results, so the next render fetches again. */
+function dsInvalidateLabs() {
+  DSState.labsHtml = '';
+  DSState.labsFor = '';
 }
 
 function dsSourceChips(refs) {

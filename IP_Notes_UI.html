@@ -447,13 +447,24 @@
       .ipn-ge-note    { flex: 1 1 200px; min-width: 180px; }
       .ipn-ge-hint    { font-size: 0.68rem; color: var(--text-faint); margin-top: 5px; }
 
-      /* ---- Per-note print: quiet until the row is hovered ---- */
-      .ipn-note-print   { background: none; border: 0; padding: 0 0 0 8px;
-                          color: var(--text-faint); font-size: 0.7rem; cursor: pointer;
-                          opacity: 0; transition: opacity 0.15s, color 0.15s; }
-      .feed-item:hover .ipn-note-print { opacity: 1; }
-      .ipn-note-print:hover { color: var(--warning-fg); }
-      .ipn-note-print:focus-visible { opacity: 1; outline: 1px solid var(--warning-fg); }
+      /* ---- Per-note print ----------------------------------------------
+         It used to be opacity:0 until the row was hovered. Nobody knew it
+         existed: there is no hover on a tablet at the bedside, which is
+         what the ward actually uses, and a control that appears only when
+         the pointer happens to cross it is a control most people never
+         find. It is quiet but always present now, and it says what it does
+         rather than being a bare icon. */
+      .ipn-note-print   { background: none; border: 1px solid transparent;
+                          border-radius: 6px; padding: 1px 7px; margin-left: 8px;
+                          color: var(--text-muted); font-size: 0.68rem; cursor: pointer;
+                          white-space: nowrap; transition: color .15s, border-color .15s,
+                          background-color .15s; }
+      .ipn-note-print:hover { color: var(--warning-fg); border-color: var(--warning);
+                              background: var(--warning-bg); }
+      .ipn-note-print:focus-visible { outline: 2px solid var(--warning-fg); outline-offset: 1px; }
+      .ipn-note-print[disabled] { opacity: .5; cursor: progress; }
+      /* Big enough for a gloved thumb on the ward tablet. */
+      @media (pointer: coarse) { .ipn-note-print { padding: 5px 10px; font-size: .72rem; } }
 
       /* ---- Nursing interventions: tick-any chips, sized for a gloved thumb ---- */
       .ipn-iv-chip        { display: inline-flex; align-items: center; gap: 7px; margin: 0;
@@ -652,6 +663,15 @@
                 <i class="fa-solid fa-user-doctor me-2 text-info"></i>Doctor &amp; consultant notes</a></li>
               <li><a class="dropdown-item" href="#" onclick="ipnPrintNotes('NURSING'); return false;">
                 <i class="fa-solid fa-user-nurse me-2 text-success"></i>Nursing record</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <!-- Whatever the filter bar is currently showing. The filter
+                   already answers "just the consultant's notes" on screen;
+                   this prints the same selection instead of making someone
+                   print the whole record and cross things out. -->
+              <li><a class="dropdown-item" href="#" onclick="ipnPrintFiltered(); return false;">
+                <i class="fa-solid fa-filter me-2 text-warning"></i>What the filter is showing</a></li>
+              <li><span class="dropdown-item-text text-muted" style="font-size:.72rem;">
+                For a single note, use Print on the note itself.</span></li>
             </ul>
           </div>
         </div>
@@ -2333,10 +2353,14 @@ function ipn_prompt(message, value, done, opts) {
     const roleLabel = roleLabelMap[roleType] || roleType;
 
     // A note that stands as a document on its own gets its own print button.
-    // Vitals rows and lab results do not: they are entries in a chart, and a
-    // one-line page with a letterhead is not a thing anyone needs.
+    // QUICK is included: a quick note is still someone's written instruction,
+    // and it is exactly the kind of thing that gets asked for on paper.
+    // Vitals rows and lab results are not: they are entries in a chart, and a
+    // one-line page with a letterhead is not a thing anyone needs - the
+    // observation chart and the lab report print those properly.
     const printableAlone =
-      note.noteId && ['DOCTOR', 'CONSULTANT', 'PROCEDURE', 'NURSE'].indexOf(roleType) !== -1;
+      note.noteId &&
+      ['DOCTOR', 'CONSULTANT', 'PROCEDURE', 'NURSE', 'QUICK'].indexOf(roleType) !== -1;
 
     return `<div class="feed-item role-${roleType}" data-role="${roleType}">
       <div class="feed-icon role-${roleType}"><i class="fas ${icon}"></i></div>
@@ -2349,8 +2373,10 @@ function ipn_prompt(message, value, done, opts) {
           </div>
           <span class="feed-time">
             ${_esc(note.timestamp)}
-            ${printableAlone ? `<button class="ipn-note-print no-print" title="Print this note on its own"
-                onclick="ipnPrintOneNote('${_esc(note.noteId)}')"><i class="fas fa-print"></i></button>` : ''}
+            ${printableAlone ? `<button class="ipn-note-print no-print" type="button"
+                title="Print this ${_esc(roleLabel.toLowerCase())} on its own sheet"
+                aria-label="Print this ${_esc(roleLabel.toLowerCase())}"
+                onclick="ipnPrintOneNote('${_esc(note.noteId)}', this)"><i class="fas fa-print me-1"></i>Print</button>` : ''}
           </span>
         </div>
         ${bodyHTML}
@@ -3773,19 +3799,64 @@ function ipn_prompt(message, value, done, opts) {
     if (!ctx.ipNumber) { ipnToast('Open a patient first.', 'warn'); return; }
 
     const opts = IPN_PRINT_SCOPES[scope || 'ALL'] || IPN_PRINT_SCOPES.ALL;
+    // Assembling a whole stay is the slowest call on this screen, so it
+    // says it is working rather than looking like a dead menu item.
+    ipnToast('Building the record…', 'info');
     google.script.run
       .withSuccessHandler(ipnOpenPrintWindow)
       .withFailureHandler(function (e) { ipnToast('Print failed: ' + e.message, 'err'); })
       .getIPNotesPrintHtml(ctx.ipNumber, opts, window.sessionToken);
   }
 
-  /** One note, on its own sheet of paper — for a referral or a second opinion. */
-  function ipnPrintOneNote(noteId) {
+  /**
+   * Prints exactly what the filter bar is showing.
+   *
+   * The filter already answers "just the consultant's notes, please" on
+   * screen; without this the only way to get that on paper was to print the
+   * whole stay and cross things out.
+   */
+  function ipnPrintFiltered() {
+    const f = IPNotesModule.activeFilter || 'ALL';
+    if (f === 'ALL') { ipnPrintNotes('ALL'); return; }
     const ctx = IPNotesModule.context;
-    if (!ctx.ipNumber || !noteId) return;
+    if (!ctx.ipNumber) { ipnToast('Open a patient first.', 'warn'); return; }
+    ipnToast('Building the record…', 'info');
     google.script.run
       .withSuccessHandler(ipnOpenPrintWindow)
       .withFailureHandler(function (e) { ipnToast('Print failed: ' + e.message, 'err'); })
+      .getIPNotesPrintHtml(ctx.ipNumber, { roleTypes: [f] }, window.sessionToken);
+  }
+  window.ipnPrintFiltered = ipnPrintFiltered;
+
+  /**
+   * One note, on its own sheet of paper — for a referral or a second
+   * opinion, and for the relative at the counter asking for "what the
+   * doctor wrote yesterday".
+   *
+   * Building the document is a server round trip. The button that started
+   * it says so, because pressing a print button and having nothing happen
+   * for two seconds reads as a broken button and gets pressed again.
+   *
+   * @param {string} noteId
+   * @param {HTMLElement} [btn]  the button pressed, for its busy state
+   */
+  function ipnPrintOneNote(noteId, btn) {
+    const ctx = IPNotesModule.context;
+    if (!ctx.ipNumber || !noteId) return;
+
+    const done = function () {
+      if (!btn) return;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-print me-1"></i>Print';
+    };
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:.65rem;height:.65rem;border-width:.1em;" aria-hidden="true"></span>Building…';
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) { done(); ipnOpenPrintWindow(res); })
+      .withFailureHandler(function (e) { done(); ipnToast('Print failed: ' + e.message, 'err'); })
       .getIPNotesPrintHtml(ctx.ipNumber, { noteIds: [noteId] }, window.sessionToken);
   }
   window.ipnPrintOneNote = ipnPrintOneNote;
