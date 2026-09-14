@@ -45,6 +45,9 @@
   .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
   .op-safety-danger { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); }
   .op-safety-warn   { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning-fg); }
+  /* The prescription line a safety alert is about. Set by markRxRows(). */
+  #op-rx-tbody tr.op-rx-flag-danger > td { box-shadow: inset 3px 0 0 var(--danger); background: var(--danger-bg); }
+  #op-rx-tbody tr.op-rx-flag-warn   > td { box-shadow: inset 3px 0 0 var(--warning); background: var(--warning-bg); }
   .op-safety-info   { background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-muted); }
   .op-safety-line { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
 
@@ -1573,11 +1576,53 @@ function renderSafetyBar(alerts, coverage) {
     html += block(warn, 'op-safety-warn', 'fa-circle-exclamation');
     html += block(info, 'op-safety-info', 'fa-circle-info');
 
+    // Mark the ROWS an alert is about. A bar that says "Ibuprofen and
+    // Diclofenac are both NSAIDs" leaves the prescriber to find those two
+    // lines by eye on a list of nine; the alerts carry the drug names, so
+    // the lines can just say so themselves.
+    markRxRows(alerts);
+
     if (coverage && coverage.note) {
         html += '<div class="op-safety-bar op-safety-info"><div class="op-safety-line">' +
                 '<i class="fa-solid fa-flask-vial mt-1"></i><span>' + opEsc(coverage.note) + '</span></div></div>';
     }
     bar.innerHTML = html;
+}
+
+/**
+ * Outlines the prescription rows named in a safety alert.
+ *
+ * Cleared on every run, so a row stops being flagged the moment the line
+ * that flagged it is corrected — a stale outline is worse than none.
+ */
+function markRxRows(alerts) {
+    const rows = document.querySelectorAll('#op-rx-tbody tr');
+    rows.forEach(function (row) {
+        row.classList.remove('op-rx-flag-danger', 'op-rx-flag-warn');
+        row.removeAttribute('title');
+    });
+    if (!alerts || !alerts.length) return;
+
+    const norm = function (v) { return String(v || '').toLowerCase().trim(); };
+
+    alerts.forEach(function (a) {
+        if (!a.drugs || !a.drugs.length) return;
+        const wanted = a.drugs.map(norm);
+        rows.forEach(function (row) {
+            const nameEl = row.querySelector('.op-rx-name');
+            if (!nameEl || wanted.indexOf(norm(nameEl.value)) === -1) return;
+            // Danger wins: a row already flagged red is not downgraded by a
+            // second, milder alert about the same line.
+            if (a.level === 'DANGER') {
+                row.classList.remove('op-rx-flag-warn');
+                row.classList.add('op-rx-flag-danger');
+            } else if (a.level === 'WARN' && !row.classList.contains('op-rx-flag-danger')) {
+                row.classList.add('op-rx-flag-warn');
+            }
+            const prev = row.getAttribute('title');
+            row.setAttribute('title', prev ? prev + '\n' + a.message : a.message);
+        });
+    });
 }
 
 // ============================================================================

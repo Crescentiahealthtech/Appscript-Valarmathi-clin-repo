@@ -102,6 +102,10 @@ var DEP_MAP = {
     "getVisitingConsultantState", "declareVisitingConsultant",
     "endVisitingConsultant", "listVisitingConsultants", "setupVisitingConsultant"
   ],
+  "Drug_Safety.gs": [
+    "ds_identify_", "checkDuplicateTherapy", "checkAllergyConflicts",
+    "testDrugSafety"
+  ],
   "Dose_Reference.gs": [
     "dref_sheet_", "dref_all_", "getDoseReference", "listDoseReference",
     "setupDoseReference"
