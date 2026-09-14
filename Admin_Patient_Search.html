@@ -64,6 +64,11 @@
     
     google.script.run.withSuccessHandler(res => {
       globalPatientDirectory = res || [];
+      if (!globalPatientDirectory.length && window.crescCan && !window.crescCan('patient.read')) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-warning py-4">' +
+          'Your account is not permitted to see the patient directory.</td></tr>';
+        return;
+      }
       renderPatientDirectoryTable(globalPatientDirectory);
     }).withFailureHandler(err => {
       // The "Fetching patient database..." row spun for ever when this
@@ -72,7 +77,7 @@
         'The patient list could not be loaded: ' +
         ((err && err.message) || 'the server did not reply') +
         ' <button class="btn btn-sm btn-outline-secondary ms-2" onclick="loadRoster()">Retry</button></td></tr>';
-    }).getAllPatients();
+    }).getAllPatients(window.sessionToken);
   }
 
   // 2. Render Table Rows

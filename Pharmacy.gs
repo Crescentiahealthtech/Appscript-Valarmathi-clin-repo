@@ -951,6 +951,11 @@ function generateAndStorePharmacyInvoicePDF(invoiceNo, htmlContent) {
     
     const file = monthFolder.createFile(pdfBlob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    // Registered so it can be un-shared. A link that nothing lists is a
+    // link nobody can revoke, and this file carries the patient's name and
+    // their results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
+    try { dpdpRegisterSharedFile(file, 'PHARMACY_INVOICE', invoiceNo, Session.getActiveUser().getEmail()); } catch (e) {}
     
     return { success: true, link: file.getUrl() };
   } catch (error) {

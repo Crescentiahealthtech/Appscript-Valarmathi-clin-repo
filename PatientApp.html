@@ -263,7 +263,7 @@
       restore();
       crescAlert('Your details could not be saved: ' + ((err && err.message) || 'the server did not reply') +
                  '. Nothing was changed — please try again.', 'err');
-    }).saveUserProfile(data);
+    }).saveUserProfile(data, window.sessionToken);
   }
 
   function refreshPatientDashboard() {

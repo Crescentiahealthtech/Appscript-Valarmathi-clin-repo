@@ -87,6 +87,13 @@ var DEP_MAP = {
     "acc_cashSince_", "acc_counterKey_", "getShiftState", "openShift",
     "closeShift", "getAllDrawerStates"
   ],
+  "DPDP_Compliance.gs": [
+    "dpdpSetup", "dpdpSetGrievanceOfficer", "getDPDPNotice", "recordConsent",
+    "getConsentStatus", "withdrawConsent", "raiseDPDPRequest",
+    "listDPDPRequests", "closeDPDPRequest", "exportPatientData",
+    "dpdpRegisterSharedFile", "dpdpExpireSharedLinks", "dpdpRetentionReport",
+    "dpdpReadinessCheck"
+  ],
   "Clinic_Profile.gs": [
     "cresc_clinic_", "getClinicProfile", "setClinicProfile"
   ],
