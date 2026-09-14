@@ -83,6 +83,44 @@ var DEP_MAP = {
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
+  "Accounts_Shifts.gs": [
+    "acc_cashSince_", "acc_counterKey_", "getShiftState", "openShift",
+    "closeShift", "getAllDrawerStates"
+  ],
+  "DPDP_Compliance.gs": [
+    "dpdpSetup", "dpdpSetGrievanceOfficer", "getDPDPNotice", "recordConsent",
+    "getConsentStatus", "withdrawConsent", "raiseDPDPRequest",
+    "listDPDPRequests", "closeDPDPRequest", "exportPatientData",
+    "dpdpRegisterSharedFile", "dpdpExpireSharedLinks", "dpdpRetentionReport",
+    "dpdpReadinessCheck"
+  ],
+  "Clinic_Profile.gs": [
+    "cresc_clinic_", "getClinicProfile", "setClinicProfile"
+  ],
+  "Patient_Profile_Edit.gs": [
+    "updatePatientProfile", "getPatientProfileHistory", "ppe_validate_"
+  ],
+  "Lab_Cancellation.gs": [
+    "labEnsureCancellationColumns", "labCancelPendingOrder", "labCancelBill",
+    "labListCancelled", "labx_billFor_", "labx_orderStatus_"
+  ],
+  "Doctor_Visiting.gs": [
+    "dv_sheet_", "dv_isVisitingSlot_", "dv_identityFor_", "dv_signature_",
+    "getVisitingConsultantState", "declareVisitingConsultant",
+    "endVisitingConsultant", "listVisitingConsultants", "setupVisitingConsultant"
+  ],
+  "OP_Doctor_Engine.gs": [
+    "op_referralSheet_", "createOPReferral", "respondToOPReferral",
+    "listMyOPReferrals", "getOPReferralLetter"
+  ],
+  "Drug_Safety.gs": [
+    "ds_identify_", "checkDuplicateTherapy", "checkAllergyConflicts",
+    "testDrugSafety"
+  ],
+  "Dose_Reference.gs": [
+    "dref_sheet_", "dref_all_", "getDoseReference", "listDoseReference",
+    "setupDoseReference"
+  ],
   "OP_Rx_Engine.gs":        ["checkRxSafety", "getPatientAllergies", "savePatientAllergies",
                              "rx_genericMap_", "rx_seedSheet_", "getComposerContext",
                              "listRxBundles", "buildTaperPlan", "suggestPaediatricDose"],

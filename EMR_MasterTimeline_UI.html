@@ -109,7 +109,9 @@
   // 1. STATE MANAGEMENT & INITIALIZATION
   // =========================================================================
   let masterLedgerData = [];
-  let currentActivePatientId = ""; 
+  let currentActivePatientId = "";
+  /** The last patient the timeline loaded, as the server sent it. */
+  let currentPatientRecord = null;
   let currentPatientEvents = []; 
 
   /* The directory used to be fetched from a DOMContentLoaded listener. This
@@ -453,6 +455,11 @@ function buildIPCard(ev) {
 
     currentPatientEvents = res.events || [];
 
+    // The patient AS DATA, kept for the handoff into the OP consultation.
+    // executeEMRRoute() used to reconstruct age and sex by scraping the
+    // banner's rendered text — see the note there for what that cost.
+    currentPatientRecord = res.patient || null;
+
     document.getElementById('tl-pat-name').innerText = res.patient.name || "Unknown Patient";
     // Escaped. These four are typed into the Patients sheet by staff and
     // land in innerHTML: an ampersand in an address or an angle bracket in a
@@ -576,16 +583,47 @@ function buildIPCard(ev) {
       window.currentPatientId = currentActivePatientId;
       activeOpEncounterId = apptId === "NEW-CONSULT" ? "" : apptId;
 
-      const patName = document.getElementById('tl-pat-name').innerText;
-      const patDemo = document.getElementById('tl-pat-details').innerText; 
-      
-      let age = "--", sex = "--";
-      if(patDemo.includes('Age:')) age = patDemo.split('Age:')[1].split('&')[0].trim();
-      if(patDemo.includes('Sex:')) sex = patDemo.split('Sex:')[1].split('&')[0].trim();
-      
+      // ────────────────────────────────────────────────────────────────
+      // THE PATIENT'S AGE, FROM THE RECORD — NOT FROM THE SCREEN.
+      //
+      // This used to read the banner back out of the DOM and pull the two
+      // fields apart on a literal '&':
+      //
+      //     patDemo.split('Age:')[1].split('&')[0]
+      //
+      // The banner is built with `&nbsp;` separators in innerHTML, and by
+      // the time innerText reads it back those entities have BECOME SPACES.
+      // There is no '&' left to split on, so split('&')[0] returned the
+      // whole remainder of the line and `age` came out as
+      //
+      //     "25   |   Sex: Male   |   Mobile: 8838723513"
+      //
+      // which was then written into #hd-pat-demo. The dose calculator picks
+      // the age out of that element with /(\d+)\s*Y/ — and the last number
+      // before the " Y" this code appends is the MOBILE NUMBER. So opening
+      // the calculator on a patient reached through the timeline offered a
+      // paediatric dose for a ten-digit-year-old, and the paediatric
+      // suggestion in offerPaediatricDose() was suppressed for the same
+      // reason.
+      //
+      // Nothing needs to be parsed: renderTimeline() already has the
+      // patient as an object. The DOM read is kept only as a fallback for
+      // the case where this runs before any timeline load.
+      // ────────────────────────────────────────────────────────────────
+      const rec = currentPatientRecord || {};
+      const patName = rec.name || document.getElementById('tl-pat-name').innerText;
+      const age = String(rec.age === 0 || rec.age ? rec.age : '--').trim() || '--';
+      const sex = String(rec.sex || '--').trim() || '--';
+
       const hdName = document.getElementById('hd-pat-name'); if (hdName) hdName.innerText = patName;
       const hdId = document.getElementById('hd-pat-id'); if (hdId) hdId.innerText = currentActivePatientId;
       const hdDemo = document.getElementById('hd-pat-demo'); if (hdDemo) hdDemo.innerText = `${age} Y | ${sex}`;
+
+      // Downstream screens read these for WhatsApp / email dispatch, and the
+      // handoff never set them — so a consultation opened from the timeline
+      // carried the PREVIOUS patient's mobile number into the dispatch box.
+      window.currentPatientMobile = rec.mobile || '';
+      window.currentPatientEmail  = rec.email || '';
   }
 
   function triggerNewOPD() {

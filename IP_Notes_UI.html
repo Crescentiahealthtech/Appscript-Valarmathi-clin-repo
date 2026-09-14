@@ -1009,14 +1009,41 @@
                   <option value="Mannitol 20%">Mannitol 20%</option>
                   <option value="Albumin 25%">Albumin 25%</option>
                 </select>
-                <select class="ip-form-select" id="ip-iv-pints" style="flex:1; min-width:100px;">
+                <select class="ip-form-select" id="ip-iv-pints" style="flex:1; min-width:100px;" onchange="ipnIVSummary('dr')">
                   <option value="1 Pint (500ml)">1 Pint (500ml)</option>
                   <option value="2 Pints (1000ml)">2 Pints (1000ml)</option>
                   <option value="Half Pint (250ml)">Half Pint (250ml)</option>
                   <option value="100ml">100ml</option>
                   <option value="150ml">150ml</option>
                 </select>
-                <input type="text" class="ip-form-input" id="ip-iv-rate" placeholder="Rate (e.g. 75 ml/hr)" style="flex:1; min-width:140px;">
+                <input type="text" class="ip-form-input" id="ip-iv-rate" placeholder="Rate (e.g. 75 ml/hr)" style="flex:1; min-width:140px;" oninput="ipnIVSummary('dr')">
+                <!-- What the bag is carrying. Potassium, insulin and
+                     multivitamins added to a drip used to be written into the
+                     free-text instruction, where the nursing chart showed them
+                     as part of the rate and the pharmacy never saw them at
+                     all. A KCl addition is not a footnote. -->
+                <input type="text" class="ip-form-input" id="ip-iv-additive"
+                       placeholder="Additives (KCl 20 mEq, Insulin 6 U...)" style="flex:2; min-width:200px;">
+                <!-- When it should finish. A rate on its own does not say
+                     whether this is one bag over six hours or a continuous
+                     infusion, and the two are handed over differently. -->
+                <select class="ip-form-select" id="ip-iv-duration" style="flex:1; min-width:130px;" onchange="ipnIVSummary('dr')">
+                  <option value="">Duration…</option>
+                  <option value="STAT / fast">STAT / fast</option>
+                  <option value="over 1 hr">over 1 hr</option>
+                  <option value="over 2 hr">over 2 hr</option>
+                  <option value="over 4 hr">over 4 hr</option>
+                  <option value="over 6 hr">over 6 hr</option>
+                  <option value="over 8 hr">over 8 hr</option>
+                  <option value="over 12 hr">over 12 hr</option>
+                  <option value="over 24 hr">over 24 hr</option>
+                  <option value="continuous">Continuous</option>
+                </select>
+                <!-- The arithmetic a nurse would otherwise do on paper: a
+                     500 ml bag at 75 ml/hr finishes in 6 h 40 m. Saying so
+                     here is how a rate that does not match the intended
+                     duration gets noticed before the drip goes up. -->
+                <div id="ip-iv-summary" class="w-100 small" style="color:var(--info-fg);"></div>
               </div>
             </div>
           </div>
@@ -1429,14 +1456,41 @@
                   <option value="Mannitol 20%">Mannitol 20%</option>
                   <option value="Albumin 25%">Albumin 25%</option>
                 </select>
-                <select class="ip-form-select" id="cons-iv-pints" style="flex:1; min-width:100px;">
+                <select class="ip-form-select" id="cons-iv-pints" style="flex:1; min-width:100px;" onchange="ipnIVSummary('cons')">
                   <option value="1 Pint (500ml)">1 Pint (500ml)</option>
                   <option value="2 Pints (1000ml)">2 Pints (1000ml)</option>
                   <option value="Half Pint (250ml)">Half Pint (250ml)</option>
                   <option value="100ml">100ml</option>
                   <option value="150ml">150ml</option>
                 </select>
-                <input type="text" class="ip-form-input" id="cons-iv-rate" placeholder="Rate in ml/hr (e.g. 75 ml/hr)" style="flex:1; min-width:150px;">
+                <input type="text" class="ip-form-input" id="cons-iv-rate" placeholder="Rate in ml/hr (e.g. 75 ml/hr)" style="flex:1; min-width:150px;" oninput="ipnIVSummary('cons')">
+                <!-- What the bag is carrying. Potassium, insulin and
+                     multivitamins added to a drip used to be written into the
+                     free-text instruction, where the nursing chart showed them
+                     as part of the rate and the pharmacy never saw them at
+                     all. A KCl addition is not a footnote. -->
+                <input type="text" class="ip-form-input" id="cons-iv-additive"
+                       placeholder="Additives (KCl 20 mEq, Insulin 6 U...)" style="flex:2; min-width:200px;">
+                <!-- When it should finish. A rate on its own does not say
+                     whether this is one bag over six hours or a continuous
+                     infusion, and the two are handed over differently. -->
+                <select class="ip-form-select" id="cons-iv-duration" style="flex:1; min-width:130px;" onchange="ipnIVSummary('cons')">
+                  <option value="">Duration…</option>
+                  <option value="STAT / fast">STAT / fast</option>
+                  <option value="over 1 hr">over 1 hr</option>
+                  <option value="over 2 hr">over 2 hr</option>
+                  <option value="over 4 hr">over 4 hr</option>
+                  <option value="over 6 hr">over 6 hr</option>
+                  <option value="over 8 hr">over 8 hr</option>
+                  <option value="over 12 hr">over 12 hr</option>
+                  <option value="over 24 hr">over 24 hr</option>
+                  <option value="continuous">Continuous</option>
+                </select>
+                <!-- The arithmetic a nurse would otherwise do on paper: a
+                     500 ml bag at 75 ml/hr finishes in 6 h 40 m. Saying so
+                     here is how a rate that does not match the intended
+                     duration gets noticed before the drip goes up. -->
+                <div id="cons-iv-summary" class="w-100 small" style="color:var(--info-fg);"></div>
               </div>
             </div>
           </div>
@@ -2703,14 +2757,16 @@ function ipn_prompt(message, value, done, opts) {
       name: 'ip-new-drug-name', dose: 'ip-new-drug-dose', freq: 'ip-new-drug-freq',
       route: 'ip-new-drug-route', instructions: 'ip-new-drug-instructions',
       extra: 'ip-iv-extra-fields', fluid: 'ip-iv-fluid-type', pints: 'ip-iv-pints',
-      rate: 'ip-iv-rate', autocomplete: 'ip-drug-autocomplete',
+      rate: 'ip-iv-rate', additive: 'ip-iv-additive', ivDuration: 'ip-iv-duration',
+      ivSummary: 'ip-iv-summary', autocomplete: 'ip-drug-autocomplete',
       container: 'dr-active-orders-container', store: 'newDrugOrders'
     },
     cons: {
       name: 'cons-new-drug-name', dose: 'cons-new-drug-dose', freq: 'cons-new-drug-freq',
       route: 'cons-new-drug-route', instructions: 'cons-new-drug-instructions',
       extra: 'cons-iv-extra-fields', fluid: 'cons-iv-fluid-type', pints: 'cons-iv-pints',
-      rate: 'cons-iv-rate', autocomplete: 'cons-drug-autocomplete',
+      rate: 'cons-iv-rate', additive: 'cons-iv-additive', ivDuration: 'cons-iv-duration',
+      ivSummary: 'cons-iv-summary', autocomplete: 'cons-drug-autocomplete',
       container: 'cons-new-orders-container', store: 'consNewDrugOrders'
     }
   };
@@ -2724,10 +2780,69 @@ function ipn_prompt(message, value, done, opts) {
     if (routeSelect.value === 'IV Fluid') {
       extra.classList.remove('d-none');
       extra.style.display = 'flex';
+      ipnIVSummary(scope);
     } else {
       extra.classList.add('d-none');
       extra.style.display = '';
     }
+  }
+
+  /** The millilitres in a volume label: "1 Pint (500ml)" -> 500. */
+  function ipnVolumeMl(label) {
+    const m = /([\d.]+)\s*ml/i.exec(String(label || ''));
+    return m ? parseFloat(m[1]) : 0;
+  }
+
+  /** The ml/hr in a rate box, however it was typed. */
+  function ipnRateMl(text) {
+    const m = /([\d.]+)/.exec(String(text || ''));
+    return m ? parseFloat(m[1]) : 0;
+  }
+
+  /**
+   * How long the bag will last, and whether that matches the duration asked
+   * for.
+   *
+   * A nurse hanging 500 ml at 75 ml/hr works out "about six and a half
+   * hours" on paper, every time, for every bag. Saying it here costs
+   * nothing and is how a rate that does not match the intended duration —
+   * 500 ml ordered "over 4 hr" at 75 ml/hr, which is really 6h40 — gets
+   * noticed before the drip goes up rather than at the next round.
+   */
+  function ipnIVSummary(scope) {
+    const out = ipnEl(scope, 'ivSummary');
+    if (!out) return;
+
+    const vol = ipnVolumeMl(ipnEl(scope, 'pints') ? ipnEl(scope, 'pints').value : '');
+    const rate = ipnRateMl(ipnEl(scope, 'rate') ? ipnEl(scope, 'rate').value : '');
+    const wanted = ipnEl(scope, 'ivDuration') ? ipnEl(scope, 'ivDuration').value : '';
+
+    if (!vol || !rate) { out.textContent = ''; return; }
+
+    const hours = vol / rate;
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    const runs = (h ? h + ' hr ' : '') + (m ? m + ' min' : (h ? '' : '<1 min'));
+
+    let text = vol + ' ml at ' + rate + ' ml/hr runs for about ' + runs.trim() + '.';
+
+    // Only a numbered "over N hr" can be compared; STAT and continuous have
+    // no target to disagree with.
+    const target = /over\s+([\d.]+)\s*hr/i.exec(wanted);
+    if (target) {
+      const want = parseFloat(target[1]);
+      const off = Math.abs(hours - want) / want;
+      if (off > 0.15) {
+        const needed = Math.round(vol / want);
+        text += ' That is not "' + wanted + '" — ' + needed +
+                ' ml/hr would be.';
+        out.style.color = 'var(--warning-fg)';
+        out.textContent = text;
+        return;
+      }
+    }
+    out.style.color = 'var(--info-fg)';
+    out.textContent = text;
   }
 
   function addNewDrugOrder(scope) {
@@ -2740,13 +2855,22 @@ function ipn_prompt(message, value, done, opts) {
       const fluidType = ipnEl(scope, 'fluid').value;
       const pints     = ipnEl(scope, 'pints').value;
       const rate      = ipnEl(scope, 'rate').value.trim();
+      const additive  = ipnEl(scope, 'additive') ? ipnEl(scope, 'additive').value.trim() : '';
+      const ivDur     = ipnEl(scope, 'ivDuration') ? ipnEl(scope, 'ivDuration').value : '';
       if (!fluidType) { ipnToast('Select an IV fluid type.', 'warn'); return; }
       if (!rate) { ipnToast('Enter the infusion rate in ml/hr.', 'warn'); return; }
-      drugName     = fluidType + ' — ' + pints;
-      dose         = pints;
+
+      // Additives belong in the NAME of the order, not buried in a free-text
+      // instruction. A bag of NS and a bag of NS with 20 mEq of potassium in
+      // it are different orders, and the nursing chart has to be able to say
+      // which one is hanging.
+      drugName = fluidType + ' — ' + pints + (additive ? ' + ' + additive : '');
+      dose     = pints;
+
       // The rate IS the order for a fluid. Keep it first in the instruction
       // so the nursing queue and the printed chart lead with it.
       instructions = ipnNormaliseRate(rate);
+      if (ivDur) instructions += ' (' + ivDur + ')';
       const extraNote = ipnEl(scope, 'instructions').value.trim();
       if (extraNote) instructions += ' — ' + extraNote;
     } else {
@@ -2794,6 +2918,9 @@ function ipn_prompt(message, value, done, opts) {
     extra.classList.add('d-none'); extra.style.display = '';
     ipnEl(scope, 'fluid').value = '';
     ipnEl(scope, 'rate').value = '';
+    if (ipnEl(scope, 'additive')) ipnEl(scope, 'additive').value = '';
+    if (ipnEl(scope, 'ivDuration')) ipnEl(scope, 'ivDuration').value = '';
+    if (ipnEl(scope, 'ivSummary')) ipnEl(scope, 'ivSummary').textContent = '';
     ipnEl(scope, 'autocomplete').classList.add('d-none');
   }
 

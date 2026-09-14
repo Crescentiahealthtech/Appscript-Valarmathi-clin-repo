@@ -41,6 +41,15 @@
       </div>
       <div class="modal-body" id="profileModalBody">
         </div>
+      <div class="modal-footer border-secondary">
+        <div class="me-auto small" id="profileModalMsg"></div>
+        <button type="button" class="btn btn-sm btn-outline-light d-none" id="profileCancelBtn"
+                onclick="cancelPatientEdit()">Cancel</button>
+        <button type="button" class="btn btn-sm btn-outline-info" id="profileEditBtn"
+                onclick="beginPatientEdit()"><i class="fa-solid fa-pen me-1"></i>Edit</button>
+        <button type="button" class="btn btn-sm btn-info fw-bold text-white d-none" id="profileSaveBtn"
+                onclick="savePatientEdit()"><i class="fa-solid fa-check me-1"></i>Save changes</button>
+      </div>
     </div>
   </div>
 </div>
@@ -55,6 +64,11 @@
     
     google.script.run.withSuccessHandler(res => {
       globalPatientDirectory = res || [];
+      if (!globalPatientDirectory.length && window.crescCan && !window.crescCan('patient.read')) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-warning py-4">' +
+          'Your account is not permitted to see the patient directory.</td></tr>';
+        return;
+      }
       renderPatientDirectoryTable(globalPatientDirectory);
     }).withFailureHandler(err => {
       // The "Fetching patient database..." row spun for ever when this
@@ -63,7 +77,7 @@
         'The patient list could not be loaded: ' +
         ((err && err.message) || 'the server did not reply') +
         ' <button class="btn btn-sm btn-outline-secondary ms-2" onclick="loadRoster()">Retry</button></td></tr>';
-    }).getAllPatients();
+    }).getAllPatients(window.sessionToken);
   }
 
   // 2. Render Table Rows
@@ -108,75 +122,262 @@
     renderPatientDirectoryTable(filtered);
   }
 
-  // 4. View Full Profile Modal
+  // ==========================================================================
+  // 4. THE PROFILE MODAL — view and edit, one definition
+  // --------------------------------------------------------------------------
+  // This modal was read-only, and nothing else in the application could change
+  // a patient's demographics either: registration wrote twenty-two columns and
+  // that was that. A mistyped mobile number or a misspelt name was permanent,
+  // and the workaround is a second registration — which is how a clinic ends
+  // up with one patient under two IDs and half their history under each.
+  //
+  // The fields are declared ONCE, below, and both the read view and the edit
+  // form are generated from that list. Two hand-written copies of nineteen
+  // fields is two copies that drift.
+  // ==========================================================================
+
+  /** The patient currently in the modal, as the server last sent them. */
+  let currentProfile = null;
+  let profileEditing = false;
+
+  const PROFILE_ESC = v => String(v == null ? '' : v)
+    .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /**
+   * key      — matches PPE_FIELDS in Patient_Profile_Edit.gs, which is what
+   *            the server will accept. A key not on that list is refused
+   *            rather than silently dropped.
+   * type     — how it is edited. 'select' carries its own options.
+   * width    — Bootstrap column width in the 12-column grid.
+   */
+  const PROFILE_FIELDS = [
+    { key: 'salutation',      label: 'Salutation',        type: 'text',  width: 2,
+      placeholder: 'Mr / Mrs / Dr' },
+    { key: 'name',            label: 'Name',              type: 'text',  width: 6, required: true },
+    { key: 'age',             label: 'Age (years)',       type: 'number', width: 2 },
+    { key: 'gender',          label: 'Gender',            type: 'select', width: 2,
+      options: ['', 'Male', 'Female', 'Other'] },
+
+    { key: 'dob',             label: 'Date of birth',     type: 'date',  width: 3 },
+    { key: 'bloodGroup',      label: 'Blood group',       type: 'select', width: 3,
+      options: ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'] },
+    { key: 'maritalStatus',   label: 'Marital status',    type: 'select', width: 3,
+      options: ['', 'Single', 'Married', 'Widowed', 'Divorced'] },
+    { key: 'mobile',          label: 'Primary mobile',    type: 'tel',   width: 3 },
+
+    { key: 'whatsapp',        label: 'WhatsApp',          type: 'tel',   width: 3 },
+    { key: 'email',           label: 'Email',             type: 'email', width: 5 },
+    { key: 'occupation',      label: 'Occupation',        type: 'text',  width: 4 },
+
+    { key: 'address',         label: 'Residential address', type: 'text', width: 8 },
+    { key: 'education',       label: 'Education',         type: 'text',  width: 4 },
+
+    { key: 'comorb',          label: 'Co-morbidities',    type: 'text',  width: 6,
+      placeholder: 'Nil' },
+    { key: 'referredBy',      label: 'Referred by',       type: 'text',  width: 6 },
+
+    { key: 'relationType',    label: 'Relation type',     type: 'text',  width: 3,
+      placeholder: 'Father / Spouse…' },
+    { key: 'relationName',    label: 'Relative / guardian', type: 'text', width: 3 },
+    { key: 'emergencyName',   label: 'Emergency contact', type: 'text',  width: 3 },
+    { key: 'emergencyNumber', label: 'Emergency number',  type: 'tel',   width: 3 }
+  ];
+
+  function profileMsg(text, tone) {
+    const el = document.getElementById('profileModalMsg');
+    if (!el) return;
+    el.className = 'me-auto small text-' + (tone || 'muted');
+    el.textContent = text || '';
+  }
+
+  /** The read view: the same fields, as text. */
+  function renderProfileView(p) {
+    const cells = PROFILE_FIELDS.map(f => {
+      let v = p[f.key];
+      if (v === null || v === undefined || String(v).trim() === '') v = '—';
+      const tone = (f.key === 'bloodGroup' && v !== '—') ? 'text-danger'
+                 : (f.key === 'comorb' && v !== '—' && String(v).toLowerCase() !== 'nil') ? 'text-warning'
+                 : 'text-white';
+      return `<div class="col-md-${f.width} col-6">
+                <span class="text-muted small d-block">${PROFILE_ESC(f.label)}</span>
+                <b class="${tone}">${PROFILE_ESC(v)}</b>
+              </div>`;
+    }).join('');
+
+    return `
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <p class="text-muted mb-0 small">Patient</p>
+          <h4 class="fw-bold m-0 text-white">${PROFILE_ESC((p.salutation || '') + ' ' + (p.name || ''))}</h4>
+        </div>
+        <div class="text-end">
+          <p class="text-muted mb-0 small">Patient ID</p>
+          <h5 class="fw-bold m-0 text-info">${PROFILE_ESC(p.id)}</h5>
+          ${p.regDate ? `<span class="text-muted" style="font-size:.72rem;">Registered ${PROFILE_ESC(String(p.regDate).substring(0, 10))}</span>` : ''}
+        </div>
+      </div>
+      <hr class="border-secondary my-3">
+      <div class="row g-3">${cells}</div>`;
+  }
+
+  /** The edit form: the same fields, as inputs. */
+  function renderProfileEdit(p) {
+    const cells = PROFILE_FIELDS.map(f => {
+      const val = (p[f.key] === null || p[f.key] === undefined) ? '' : String(p[f.key]);
+      let control;
+      if (f.type === 'select') {
+        control = `<select class="form-select form-select-sm bg-dark text-white border-secondary" id="pf-${f.key}">` +
+          f.options.map(o =>
+            `<option value="${PROFILE_ESC(o)}"${o === val ? ' selected' : ''}>${PROFILE_ESC(o || '—')}</option>`
+          ).join('') +
+          // A value already on the record that is not in the list must not be
+          // silently replaced by the first option the moment anyone opens the
+          // form. It is offered back as it stands.
+          (val && f.options.indexOf(val) === -1
+            ? `<option value="${PROFILE_ESC(val)}" selected>${PROFILE_ESC(val)} (on record)</option>` : '') +
+          `</select>`;
+      } else {
+        control = `<input type="${f.type}" class="form-control form-control-sm bg-dark text-white border-secondary"
+                     id="pf-${f.key}" value="${PROFILE_ESC(val)}"
+                     placeholder="${PROFILE_ESC(f.placeholder || '')}">`;
+      }
+      return `<div class="col-md-${f.width} col-12">
+                <label class="text-muted small d-block mb-1" for="pf-${f.key}">
+                  ${PROFILE_ESC(f.label)}${f.required ? ' <span class="text-danger">*</span>' : ''}
+                </label>${control}
+              </div>`;
+    }).join('');
+
+    return `
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <div>
+          <p class="text-muted mb-0 small">Editing</p>
+          <h5 class="fw-bold m-0 text-white">${PROFILE_ESC(p.name || '')}</h5>
+        </div>
+        <div class="text-end">
+          <p class="text-muted mb-0 small">Patient ID</p>
+          <h5 class="fw-bold m-0 text-info">${PROFILE_ESC(p.id)}</h5>
+        </div>
+      </div>
+      <!-- The ID and the portal password are not on this form on purpose.
+           The ID is printed on barcodes and referenced by every admission,
+           bill and note; the password is a credential the browser is never
+           sent. Neither is a demographic correction. -->
+      <div class="alert alert-secondary py-2 px-3 small mb-3">
+        The patient ID cannot be changed — it is printed on their barcode and
+        referenced by every record they have. Every change here is logged with
+        its previous value.
+      </div>
+      <div class="row g-3">${cells}</div>`;
+  }
+
+  function paintProfileButtons() {
+    const edit = document.getElementById('profileEditBtn');
+    const save = document.getElementById('profileSaveBtn');
+    const cancel = document.getElementById('profileCancelBtn');
+    // The Edit button is offered only to a session the server would actually
+    // let write. Offering a control that will be refused is the rudest
+    // possible way to communicate a permission.
+    const mayEdit = !window.crescCan || window.crescCan('patient.write');
+    if (edit) {
+      edit.classList.toggle('d-none', profileEditing || !mayEdit);
+      edit.disabled = false;
+    }
+    if (save) save.classList.toggle('d-none', !profileEditing);
+    if (cancel) cancel.classList.toggle('d-none', !profileEditing);
+  }
+
   function viewPatientProfile(patientId) {
     const modal = new bootstrap.Modal(document.getElementById('patientProfileModal'));
-    document.getElementById('profileModalBody').innerHTML = '<div class="text-center text-muted my-5"><i class="fa-solid fa-spinner fa-spin fa-2x mb-3"></i><br>Loading comprehensive profile...</div>';
+    currentProfile = null;
+    profileEditing = false;
+    profileMsg('');
+    paintProfileButtons();
+    document.getElementById('profileModalBody').innerHTML =
+      '<div class="text-center text-muted my-5"><i class="fa-solid fa-spinner fa-spin fa-2x mb-3"></i><br>Loading comprehensive profile...</div>';
     modal.show();
 
-    // Fetch the 22-column profile data securely
     google.script.run.withFailureHandler(err => {
       document.getElementById('profileModalBody').innerHTML =
         '<div class="text-danger text-center my-4">The profile could not be loaded: ' +
         ((err && err.message) || 'the server did not reply') + '</div>';
     }).withSuccessHandler(profile => {
-      if(!profile) {
-        document.getElementById('profileModalBody').innerHTML = '<div class="text-danger text-center my-4">Failed to locate profile records.</div>';
+      if (!profile) {
+        document.getElementById('profileModalBody').innerHTML =
+          '<div class="text-danger text-center my-4">Failed to locate profile records.</div>';
         return;
       }
-
-      const html = `
-        <div class="row g-3">
-          <div class="col-md-8">
-            <p class="text-muted mb-0 small">Patient Name</p>
-            <h4 class="fw-bold m-0 text-white">${profile.salutation || ''} ${profile.name}</h4>
-          </div>
-          <div class="col-md-4 text-md-end">
-            <p class="text-muted mb-0 small">Patient ID</p>
-            <h5 class="fw-bold m-0 text-info">${profile.id}</h5>
-          </div>
-        </div>
-        
-        <hr class="border-secondary my-3">
-        
-        <div class="row g-3 mb-3">
-          <div class="col-md-3"><span class="text-muted small d-block">Age / Gender</span><b class="text-white">${profile.age} Yrs, ${profile.gender}</b></div>
-          <div class="col-md-3"><span class="text-muted small d-block">Date of Birth</span><b class="text-white">${profile.dob || '-'}</b></div>
-          <div class="col-md-3"><span class="text-muted small d-block">Blood Group</span><b class="text-danger">${profile.bloodGroup || '-'}</b></div>
-          <div class="col-md-3"><span class="text-muted small d-block">Marital Status</span><b class="text-white">${profile.maritalStatus || '-'}</b></div>
-        </div>
-
-        <div class="row g-3 mb-3">
-          <div class="col-md-3"><span class="text-muted small d-block">Primary Mobile</span><b class="text-white">${profile.mobile}</b></div>
-          <div class="col-md-3"><span class="text-muted small d-block">WhatsApp</span><b class="text-white">${profile.whatsapp || '-'}</b></div>
-          <div class="col-md-6"><span class="text-muted small d-block">Email Address</span><b class="text-white">${profile.email || '-'}</b></div>
-        </div>
-
-        <div class="row g-3 mb-3">
-          <div class="col-12"><span class="text-muted small d-block">Residential Address</span><b class="text-white">${profile.address || '-'}</b></div>
-        </div>
-
-        <div class="row g-3 mb-4">
-          <div class="col-md-6"><span class="text-muted small d-block">Occupation / Education</span><b class="text-white">${profile.occupation || '-'} / ${profile.education || '-'}</b></div>
-          <div class="col-md-6"><span class="text-muted small d-block">Co-morbidities</span><b class="text-warning">${profile.comorb || 'Nil'}</b></div>
-        </div>
-
-        <div class="bg-dark rounded p-3 border border-secondary">
-          <h6 class="fw-bold text-muted mb-3"><i class="fa-solid fa-truck-medical me-2"></i>Emergency & Guardian Details</h6>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <span class="text-muted small d-block">Relative/Guardian (${profile.relationType || '-'})</span>
-              <b class="text-white">${profile.relationName || '-'}</b>
-            </div>
-            <div class="col-md-6">
-              <span class="text-muted small d-block">Emergency Contact</span>
-              <b class="text-white">${profile.emergencyName || '-'} <br> ${profile.emergencyNumber || '-'}</b>
-            </div>
-          </div>
-        </div>
-      `;
-      
-      document.getElementById('profileModalBody').innerHTML = html;
+      currentProfile = profile;
+      document.getElementById('profileModalBody').innerHTML = renderProfileView(profile);
+      paintProfileButtons();
     }).getUserProfile(patientId, window.sessionToken);
   }
+
+  function beginPatientEdit() {
+    if (!currentProfile) return;
+    profileEditing = true;
+    profileMsg('');
+    document.getElementById('profileModalBody').innerHTML = renderProfileEdit(currentProfile);
+    paintProfileButtons();
+    const first = document.getElementById('pf-name');
+    if (first) first.focus();
+  }
+
+  function cancelPatientEdit() {
+    if (!currentProfile) return;
+    profileEditing = false;
+    profileMsg('');
+    document.getElementById('profileModalBody').innerHTML = renderProfileView(currentProfile);
+    paintProfileButtons();
+  }
+
+  function savePatientEdit() {
+    if (!currentProfile) return;
+
+    // Only what actually changed is sent. A full-row write from a partial
+    // form is how fifteen untouched fields get blanked by a screen that
+    // edits four.
+    const patch = {};
+    PROFILE_FIELDS.forEach(f => {
+      const el = document.getElementById('pf-' + f.key);
+      if (!el) return;
+      const now = String(el.value == null ? '' : el.value).trim();
+      const was = String(currentProfile[f.key] == null ? '' : currentProfile[f.key]).trim();
+      if (now !== was) patch[f.key] = now;
+    });
+
+    if (!Object.keys(patch).length) {
+      profileMsg('Nothing has been changed.', 'muted');
+      return;
+    }
+
+    const save = document.getElementById('profileSaveBtn');
+    if (save) { save.disabled = true; save.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Saving…'; }
+    profileMsg('');
+
+    google.script.run
+      .withSuccessHandler(res => {
+        if (save) { save.disabled = false; save.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save changes'; }
+        if (!res || !res.success) {
+          profileMsg((res && res.message) || 'The server did not reply.', 'danger');
+          return;
+        }
+        currentProfile = res.profile || currentProfile;
+        profileEditing = false;
+        document.getElementById('profileModalBody').innerHTML = renderProfileView(currentProfile);
+        paintProfileButtons();
+        profileMsg(res.message, 'success');
+        if (window.showToast) window.showToast('Patient updated', res.message, 'success');
+        // The directory behind the modal still shows the old name and mobile
+        // number until it is refetched, and a search that cannot find what
+        // was just corrected is the next thing anyone tries.
+        loadRoster();
+      })
+      .withFailureHandler(err => {
+        if (save) { save.disabled = false; save.innerHTML = '<i class="fa-solid fa-check me-1"></i>Save changes'; }
+        profileMsg('Could not save: ' + ((err && err.message) || 'the server did not reply.'), 'danger');
+      })
+      .updatePatientProfile(currentProfile.id, patch, window.sessionToken);
+  }
+
 </script>

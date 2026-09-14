@@ -72,6 +72,39 @@ function acc_dayStr_(d) {
   if (isNaN(dt.getTime())) return "";
   return Utilities.formatDate(dt, ACC_CFG.TZ, "dd-MMM-yyyy");
 }
+
+/**
+ * "yyyy-MM-dd" for a date, or "" when there is no readable date.
+ *
+ * THIS IS WHY THE FINANCE HUB WOULD NOT OPEN.
+ *
+ * getAccountsDashboard() stamped every row with
+ *
+ *     isToday: Utilities.formatDate(ts, ACC_CFG.TZ, "yyyy-MM-dd") === todayStr
+ *
+ * and `ts` is acc_toDate_(...), which returns NULL for a cell whose date
+ * cannot be read - a blank Timestamp on a bill, or a day-first string the
+ * parser rejects. Utilities.formatDate(null, ...) does not return "": it
+ * throws "The parameters (null,String,String) don't match the method
+ * signature".
+ *
+ * In the ledger loop that throw was swallowed by a bare `catch (e) {}`, so
+ * every manual expense simply vanished from the hub. In the clinical-income
+ * loop it was not caught at all, so ONE paid bill with an unreadable date
+ * took down getAccountsDashboard() entirely - it returned
+ * { success:false } and the Finance Hub, the Master Ledger, the Cash Drawer
+ * and every spoke that loads behind it showed nothing, for every role
+ * including admin.
+ *
+ * A row with no readable date is not today. Saying so costs nothing and
+ * cannot throw.
+ */
+function acc_ymd_(d) {
+  if (!d) return "";
+  var dt = (d instanceof Date) ? d : acc_toDate_(d);
+  if (!dt || isNaN(dt.getTime())) return "";
+  return Utilities.formatDate(dt, ACC_CFG.TZ, "yyyy-MM-dd");
+}
 /**
  * A date from a ledger, bill or shift row - or null.
  *
@@ -287,27 +320,46 @@ function getAccountsDashboard() {
     var todayStr = Utilities.formatDate(new Date(), ACC_CFG.TZ, "yyyy-MM-dd");
     var masterList = [];
 
+    // Anything a row could not be read for. Returned to the client so a
+    // broken cell is visible on the hub instead of quietly shrinking the
+    // month's figures - the failure mode this whole function had.
+    var readWarnings = [];
+
     // 1. Pull Expenses & Manual entries from Finance_Master_Ledger
+    //
+    // ONE BAD ROW USED TO COST EVERY ROW AFTER IT. The loop sat inside a
+    // single `try { ... } catch (e) {}`, so the first cell that threw
+    // abandoned the rest of the sheet and reported nothing at all - the hub
+    // showed fewer expenses than the ledger held, with no way to tell.
+    // The sheet read stays outside (a missing sheet really is fatal to this
+    // block); each ROW is now its own failure boundary.
     try {
       var lData = acc_sheet_(ACC_CFG.LEDGER).getDataRange().getValues();
       for (var i = 1; i < lData.length; i++) {
         var r = lData[i];
-        if (!r[0] || r[0] === "Txn_ID") continue; 
-        var ts = acc_toDate_(r[1]);
-        masterList.push({
-          txnId: acc_str_(r[0]),
-          ts: ts, 
-          period: acc_period_(ts),
-          category: acc_str_(r[3]),
-          entity: acc_str_(r[6]),
-          mode: acc_str_(r[7]),
-          amtIn: acc_money_(r[8]),
-          amtOut: acc_money_(r[9]),
-          locked: (acc_str_(r[12]).toUpperCase() === 'TRUE') || acc_isLocked_(acc_period_(ts)),
-          isToday: Utilities.formatDate(ts, ACC_CFG.TZ, "yyyy-MM-dd") === todayStr
-        });
+        if (!r[0] || r[0] === "Txn_ID") continue;
+        try {
+          var ts = acc_toDate_(r[1]);
+          masterList.push({
+            txnId: acc_str_(r[0]),
+            ts: ts,
+            period: acc_period_(ts),
+            category: acc_str_(r[3]),
+            entity: acc_str_(r[6]),
+            mode: acc_str_(r[7]),
+            amtIn: acc_money_(r[8]),
+            amtOut: acc_money_(r[9]),
+            locked: (acc_str_(r[12]).toUpperCase() === 'TRUE') || acc_isLocked_(acc_period_(ts)),
+            isToday: (acc_ymd_(ts) === todayStr)
+          });
+        } catch (rowErr) {
+          readWarnings.push('Ledger row ' + (i + 1) + ' (' + acc_str_(r[0]) +
+                            ') could not be read: ' + rowErr.message);
+        }
       }
-    } catch(e) {}
+    } catch (e) {
+      readWarnings.push('The expense ledger could not be read: ' + e.message);
+    }
 
     // 2. Pull Clinical Income (Virtual Merge)
     //    Hospital_Invoices joins pharmacy, lab and OP as a fourth source: OP
@@ -318,7 +370,8 @@ function getAccountsDashboard() {
       .concat(acc_opRows_())
       .concat(acc_hospitalRowsSafe_());
     virtualIncome.forEach(function(inc) {
-      if (inc.realized) {
+      if (!inc.realized) return;
+      try {
         var ts = inc.realizedDate;
         masterList.push({
           txnId: inc.billId,
@@ -333,8 +386,11 @@ function getAccountsDashboard() {
           amtIn: (inc.realizedAmount === undefined) ? inc.net : inc.realizedAmount,
           amtOut: 0,
           locked: acc_isLocked_(acc_period_(ts)),
-          isToday: Utilities.formatDate(ts, ACC_CFG.TZ, "yyyy-MM-dd") === todayStr
+          isToday: (acc_ymd_(ts) === todayStr)
         });
+      } catch (incErr) {
+        readWarnings.push(acc_str_(inc.source) + ' bill ' + acc_str_(inc.billId) +
+                          ' could not be read: ' + incErr.message);
       }
     });
 
@@ -450,7 +506,11 @@ function getAccountsDashboard() {
       currentPeriod: thisPeriod,
       periodLocked: acc_isLocked_(thisPeriod),
       lockedPeriods: acc_lockedSet_(),
-      ledger: displayRows
+      ledger: displayRows,
+      // Capped: a sheet with a systematic date problem would otherwise send
+      // one warning per row through google.script.run.
+      warnings: readWarnings.slice(0, 10),
+      warningCount: readWarnings.length
     };
   } catch (e) {
     return { success: false, message: e.message };

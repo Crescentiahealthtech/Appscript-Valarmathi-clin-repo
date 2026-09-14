@@ -700,67 +700,24 @@ function checkRxSafety(patientId, meds, sessionToken) {
       });
     }
 
-    meds.forEach(function (md) {
-      var name = dc_str_(md.drugName);
-      if (!name) return;
-      var lower = name.toLowerCase();
-      var entry = gm.map[lower];
-      var generic = entry ? entry.generic : "";
+    // ---- allergy conflicts ------------------------------------------------
+    // Moved to Drug_Safety.gs. What was here matched with a plain indexOf in
+    // both directions: an allergy recorded as "ASA" fired on Asacol and every
+    // nasal preparation, while an allergy recorded as "Penicillin" did NOT
+    // fire on Amoxicillin — which is the one that matters. The replacement
+    // matches whole words and knows the cross-reactive families a clinic
+    // actually records allergies in terms of.
+    checkAllergyConflicts(allergies, meds, gm).forEach(function (a) { alerts.push(a); });
 
-      allergies.forEach(function (al) {
-        if (!al || al.length < 3) return;
-        var hit = (lower.indexOf(al) !== -1) ||
-                  (generic && generic.indexOf(al) !== -1) ||
-                  (al.indexOf(lower) !== -1);
-        if (hit) {
-          alerts.push({
-            level: "DANGER", type: "ALLERGY",
-            message: name + " may match the recorded allergy \u201c" + al + "\u201d. Confirm before prescribing."
-          });
-        }
-      });
-    });
-
-    // ---- duplicate therapy ----------------------------------------------
-    var byGeneric = {};
-    meds.forEach(function (md) {
-      var name = dc_str_(md.drugName);
-      if (!name) return;
-      var entry = gm.map[name.toLowerCase()];
-      if (!entry || !entry.generic) return;
-      if (!byGeneric[entry.generic]) byGeneric[entry.generic] = [];
-      byGeneric[entry.generic].push(name);
-    });
-
-    Object.keys(byGeneric).forEach(function (g) {
-      if (byGeneric[g].length < 2) return;
-      alerts.push({
-        level: "WARN", type: "DUPLICATE",
-        message: byGeneric[g].join(" and ") + " both contain " + g + " \u2014 duplicate therapy."
-      });
-    });
-
-    // ---- the same drug listed twice --------------------------------------
-    // The generic check above only fires when BOTH rows carry a Generic name
-    // in Pharmacy_Inventory. The commonest mistake — the identical brand added
-    // twice, usually from a double-click on a slow save — has to be caught on
-    // the name itself, whatever the formulary knows.
-    var byName = {};
-    meds.forEach(function (md) {
-      var name = dc_str_(md.drugName);
-      if (!name) return;
-      var k = name.toLowerCase().replace(/\s+/g, " ");
-      byName[k] = (byName[k] || 0) + 1;
-    });
-    Object.keys(byName).forEach(function (k) {
-      if (byName[k] < 2) return;
-      alerts.push({
-        level: "DANGER", type: "SAME_DRUG",
-        message: "\u201c" + k + "\u201d appears " + byName[k] +
-                 " times on this list. Remove the extra line unless two " +
-                 "different strengths are genuinely intended."
-      });
-    });
+    // ---- duplicate therapy and therapeutic-class overlap ------------------
+    // Also moved. The old pair of checks covered only drugs carrying a
+    // Generic in Pharmacy_Inventory, matched the same-drug case on an exact
+    // lower-cased string ("Tab Paracetamol 500" != "PARACETAMOL 500mg"), and
+    // had nothing at all for two NSAIDs or an ACE inhibitor beside an ARB —
+    // the duplicates that reach the patient, because they look like two
+    // different drugs on the page.
+    var dup = checkDuplicateTherapy(meds, gm);
+    dup.alerts.forEach(function (a) { alerts.push(a); });
 
     // ---- drug-drug interactions ------------------------------------------
     var inter = checkDrugInteractions(meds, gm);
@@ -778,11 +735,23 @@ function checkRxSafety(patientId, meds, sessionToken) {
         withGenericName: gm.withGeneric,
         percent: coveragePct,
         interactionRules: inter.rulesLoaded,
+        identifiedOnThisRx: dup.identified,
+        drugsOnThisRx: dup.checked,
         note: (function () {
           var notes = [];
+          // The honest figure is not what proportion of the formulary has a
+          // generic name — it is how many drugs ON THIS PRESCRIPTION the
+          // checker could actually identify. A 95%-complete formulary is no
+          // comfort when the two drugs in front of you are the other 5%.
+          if (dup.checked && dup.identified < dup.checked) {
+            notes.push((dup.checked - dup.identified) + " of the " + dup.checked +
+                       " drugs on this prescription are in neither Pharmacy_Inventory " +
+                       "nor Drug_Dose_Reference, so only exact duplicates of them can " +
+                       "be caught.");
+          }
           if (coveragePct < 90) {
-            notes.push("Duplicate-therapy checking only covers drugs with a Generic name in " +
-                       "Pharmacy_Inventory (" + coveragePct + "% of your formulary).");
+            notes.push("Generic names are filled in for " + coveragePct +
+                       "% of Pharmacy_Inventory.");
           }
           // An empty interaction table must never read as a clean prescription.
           notes.push(inter.rulesLoaded

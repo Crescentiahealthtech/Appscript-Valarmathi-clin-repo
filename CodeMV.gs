@@ -167,7 +167,37 @@ function registerPatient(data) {
   }
 }
 
-function getAllPatients() {
+/**
+ * The whole patient register.
+ *
+ * THIS TOOK NO SESSION TOKEN AND CHECKED NOTHING. appsscript.json deploys
+ * this web app as executeAs USER_DEPLOYING / access ANYONE_ANONYMOUS, so
+ * anybody holding the /exec URL could open a console and call
+ *
+ *     google.script.run.withSuccessHandler(console.log).getAllPatients()
+ *
+ * without signing in, and receive every patient's name, age, sex, mobile
+ * number and home address — running with the deploying account's full
+ * access to the spreadsheet, not the caller's.
+ *
+ * Under the DPDP Act 2023 that is a failure of section 8(5) (reasonable
+ * security safeguards) over the entire patient register, and the resulting
+ * disclosure is a reportable personal data breach.
+ *
+ * It is now behind patient.read, like every other patient endpoint. The
+ * caller's screen already had a session token; it simply never sent it.
+ *
+ * @param {string} sessionToken
+ */
+function getAllPatients(sessionToken) {
+  try {
+    crescRequire_(sessionToken, 'patient.read');
+  } catch (e) {
+    // The directory screen renders whatever array it gets, so an empty one
+    // with a message is the shape it can already handle.
+    return [];
+  }
+
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
   if(!sheet) return [];
   const data = sheet.getDataRange().getValues();
@@ -338,9 +368,43 @@ function getUserProfile(patientId, sessionToken) {
   }
 }
 
-function saveUserProfile(data) {
+/**
+ * The patient portal's own profile editor.
+ *
+ * THIS TOOK NO SESSION TOKEN EITHER, and keyed on a `username` the caller
+ * supplied. On an anonymously deployed web app that is an unauthenticated
+ * WRITE to any patient's name, age, date of birth, mobile number and
+ * address — patient IDs are sequential and printed on barcodes, so the
+ * identifier needed to target it is public.
+ *
+ * It is now what it always claimed to be: a patient editing THEIR OWN
+ * record. Staff corrections go through updatePatientProfile()
+ * (Patient_Profile_Edit.gs), which is guarded by patient.write and logs
+ * every change with its previous value.
+ *
+ * @param {Object} data           the fields to write
+ * @param {string} sessionToken   the portal session
+ */
+function saveUserProfile(data, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
+    data = data || {};
+
+    var actor = null;
+    try { actor = crescActor_(sessionToken); } catch (e) { actor = null; }
+    if (!actor) return "Error: your session has expired. Please sign in again.";
+
+    // A patient may write only their own record; their session username IS
+    // their patient ID. Staff must use the audited endpoint.
+    if (actor.role === 'patient') {
+      if (String(actor.username || '').trim().toUpperCase() !==
+          String(data.username || '').trim().toUpperCase()) {
+        return "Error: you can only change your own profile.";
+      }
+    } else if (actor.permissions.indexOf('patient.write') === -1) {
+      return "Error: your role cannot edit patient records.";
+    }
+
     lock.waitLock(10000);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
     const records = sheet.getDataRange().getValues();

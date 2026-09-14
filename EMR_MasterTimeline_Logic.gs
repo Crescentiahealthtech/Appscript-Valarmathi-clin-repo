@@ -48,7 +48,11 @@ function buildLongitudinalTimeline(patientId) {
           name: pData[i][2],
           age: pData[i][3],
           sex: pData[i][4],
-          mobile: pData[i][6]
+          mobile: pData[i][6],
+          // Q: Email. Carried so the handoff into the OP consultation can set
+          // the dispatch address from the record rather than leaving whatever
+          // the previous patient left behind.
+          email: pData[i][16] || ""
         };
         break;
       }

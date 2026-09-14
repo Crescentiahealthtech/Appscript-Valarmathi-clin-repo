@@ -21,7 +21,23 @@ const AccShift = (function () {
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
   const COUNTERS = ['Reception', 'Pharmacy', 'Lab'];
+
+  /**
+   * What each till actually takes money for.
+   *
+   * Named on screen because the auto-calculated figure used to be the WHOLE
+   * clinic's cash in all three drawers — see the note above acc_cashSince_()
+   * in Accounts_Shifts.gs. Saying which bills feed a drawer is how the person
+   * counting it can tell whether the number in front of them is plausible.
+   */
+  const COUNTER_SOURCES = {
+    'Reception': 'OP consultations and hospital bills',
+    'Pharmacy':  'pharmacy invoices',
+    'Lab':       'lab bills'
+  };
+
   let SELECTED = 'Reception', OPEN_SHIFT = null, AUTO = { collected: 0, petty: 0 };
+  let ALL_DRAWERS = null;
 
   /**
    * Delegates to the one toast in Shell_UX.html (top-centre).
@@ -41,6 +57,63 @@ const AccShift = (function () {
   }
   function pick(c) { SELECTED = c; load(); }
 
+  /**
+   * All three tills at once, above the one being worked on.
+   *
+   * A cashier closing the pharmacy drawer at six o'clock needs to know
+   * whether reception and the lab are still open, because the clinic's cash
+   * position is the three added together and a shift closed against a
+   * partial picture is the reason a "mismatch" flag stops meaning anything.
+   */
+  function renderOverview() {
+    const d = ALL_DRAWERS;
+    if (!d || !d.drawers) return '';
+    const t = d.totals || {};
+    const cards = d.drawers.map(function (x) {
+      const live = x.counter === SELECTED;
+      return '<div class="col">' +
+        '<div class="p-3 rounded-3 h-100" style="background:var(--surface-3);' +
+          'border:1px solid ' + (live ? 'var(--accent-purple)' : 'var(--border-color)') + ';">' +
+          '<div class="d-flex justify-content-between align-items-center mb-1">' +
+            '<span class="small fw-bold text-uppercase" style="font-size:.68rem;letter-spacing:.04em;">' +
+              esc(x.counter) + '</span>' +
+            (x.open
+              ? '<span class="badge bg-success bg-opacity-25 text-success" style="font-size:.6rem;">OPEN</span>'
+              : '<span class="badge bg-secondary bg-opacity-25 text-secondary" style="font-size:.6rem;">CLOSED</span>') +
+          '</div>' +
+          (x.open
+            ? '<h5 class="fw-bold mb-0 text-main">' + inr(x.expected) + '</h5>' +
+              '<div class="text-muted" style="font-size:.68rem;">float ' + inr(x.opening) +
+                ' + in ' + inr(x.cashIn) + ' &minus; out ' + inr(x.cashOut) + '</div>' +
+              (x.note ? '<div class="text-warning mt-1" style="font-size:.66rem;">' + esc(x.note) + '</div>' : '')
+            : '<div class="text-muted small mt-1">No shift open.</div>') +
+        '</div></div>';
+    }).join('');
+
+    return '<div class="mb-4">' +
+      '<div class="d-flex justify-content-between align-items-end mb-2 flex-wrap gap-2">' +
+        '<h6 class="fw-bold mb-0"><i class="fas fa-cash-register me-2 text-info"></i>All drawers</h6>' +
+        '<div class="text-end"><div class="text-muted small">Clinic cash on hand</div>' +
+          '<h5 class="fw-bold mb-0 text-main">' + inr(t.expected) + '</h5></div>' +
+      '</div>' +
+      '<div class="row row-cols-1 row-cols-md-3 g-3">' + cards + '</div>' +
+      '<p class="small text-muted mt-2 mb-0">Each till is reconciled against its own ' +
+        'bills only. The three add up to the clinic\u2019s cash position, which is ' +
+        'what the Finance Hub shows.</p>' +
+    '</div>';
+  }
+
+  /** Refreshes the overview, then repaints. Never blocks the drawer itself. */
+  function loadOverview() {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        ALL_DRAWERS = (res && res.success) ? res : null;
+        if (OPEN_SHIFT !== undefined) renderPanel();
+      })
+      .withFailureHandler(function () { ALL_DRAWERS = null; })
+      .getAllDrawerStates(window.sessionToken);
+  }
+
   function load() {
     const p = $('acc-drawer-panel');
     if (p) p.innerHTML = tabs() + '<div class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading ' + esc(SELECTED) + '…</div>';
@@ -51,6 +124,7 @@ const AccShift = (function () {
         AUTO.collected = res.suggestion ? Number(res.suggestion.cashIn) || 0 : 0;
         AUTO.petty = res.suggestion ? Number(res.suggestion.cashOut) || 0 : 0;
         renderPanel(); renderHistory(res.history || []);
+        loadOverview();
       })
       .withFailureHandler(function (err) { toast(err.message || 'Server error — is Accounts_Shifts.js deployed?', false); if (p) p.innerHTML = tabs(); })
       .getShiftState(SELECTED);
@@ -66,14 +140,16 @@ const AccShift = (function () {
   function renderPanel() {
     const p = $('acc-drawer-panel'); if (!p) return;
     if (!OPEN_SHIFT) {
-      p.innerHTML = tabs() +
+      p.innerHTML = renderOverview() + tabs() +
         '<h5 class="fw-bold mb-3">Open Shift: ' + esc(SELECTED) + '</h5>' +
         '<div class="row g-3 align-items-end" style="max-width:520px;">' +
           '<div class="col-8"><label class="form-label text-muted small">Opening Float (₹)</label>' +
           '<input type="number" min="0" step="0.01" id="acc-shift-open-amt" class="form-control" placeholder="Count physical cash…"></div>' +
           '<div class="col-4"><button class="btn btn-success w-100 fw-bold" onclick="AccShift.open()"><i class="fas fa-unlock me-1"></i>Open Drawer</button></div>' +
         '</div>' +
-        '<p class="small text-muted mt-3 mb-0">Each counter runs independently — opening ' + esc(SELECTED) + ' won\'t affect other drawers.</p>';
+        '<p class="small text-muted mt-3 mb-0">Each counter runs independently. This till ' +
+          'reconciles against ' + esc(COUNTER_SOURCES[SELECTED] || 'its own bills') +
+          ' only &mdash; opening ' + esc(SELECTED) + ' will not affect the other drawers.</p>';
       return;
     }
     const s = OPEN_SHIFT, openAmt = Number(s.opening) || 0;
@@ -85,11 +161,15 @@ const AccShift = (function () {
       '<div class="input-group"><span class="input-group-text">Final</span>' +
         '<input type="number" step="0.01" id="' + id + '" class="form-control fw-bold" value="' + val + '" oninput="AccShift.recalc()"></div></div>';
 
-    p.innerHTML = tabs() +
+    p.innerHTML = renderOverview() + tabs() +
       '<div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-2">' +
         '<div><h5 class="fw-bold mb-1">Active Shift: ' + esc(s.counter) + ' <span class="badge bg-success bg-opacity-25 text-success align-middle">OPEN</span></h5>' +
         '<span class="text-success small fw-semibold"><i class="fas fa-circle-dot me-1"></i>Opened ' + esc(s.date) + ' ' + esc(s.openTime || '') + ' · ' + esc(s.incharge || s.user) + ' · ' + esc(s.shiftId) + '</span></div>' +
         '<div class="text-end"><div class="text-muted small">Opening Float</div><h4 class="mb-0">' + inr(openAmt) + '</h4></div></div>' +
+      '<div class="small text-muted mb-3"><i class="fas fa-circle-info me-1"></i>' +
+        'Auto figures count ' + esc(COUNTER_SOURCES[s.counter] || 'this counter\u2019s bills') +
+        ' settled in cash since this shift opened, and the petty cash booked to ' +
+        esc(s.counter) + '. Nothing from the other tills.</div>' +
       '<div class="row g-4 mb-4">' +
         fld('Cash Collected', AUTO.collected, 'acc-shift-col', AUTO.collected, true) +
         fld('Petty Cash Paid', AUTO.petty, 'acc-shift-pet', AUTO.petty, true) +

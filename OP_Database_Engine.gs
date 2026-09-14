@@ -737,6 +737,16 @@ function generateAndStoreOPPrescriptionPDF(encounterId) {
     const file = monthFolder.createFile(pdfBlob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
+    // Registered so it can be un-shared. A link that nothing lists is a
+    // link nobody can revoke, and this file carries the patient's name and
+    // their results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
+    try {
+      var pdfPatientId = '';
+      try { pdfPatientId = String(getEncounterForPrint(encounterId).data.patientId || ''); } catch (e2) {}
+      dpdpRegisterSharedFile(file, 'OP_PRESCRIPTION', pdfPatientId,
+                             Session.getActiveUser().getEmail());
+    } catch (e) {}
+
     // 5. Return the Secure Drive Link to Frontend
     return { success: true, link: file.getUrl() };
 

@@ -141,6 +141,10 @@
               title="Account" onclick="crescToggleAccountMenu(event)">?</button>
       <div class="profile-details">
         <h6 id="display-user-name" class="m-0 text-white small">Loading...</h6>
+        <!-- Only ever visible on the shared visiting slot. The whole risk of
+             a shared login is forgetting which person you are signed in as,
+             so the answer sits next to the name, permanently. -->
+        <div id="cresc-visiting-chip" onclick="crescVisitingOpen()"></div>
         <small><a href="#" onclick="signOut(); return false;" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
       </div>
     </div>

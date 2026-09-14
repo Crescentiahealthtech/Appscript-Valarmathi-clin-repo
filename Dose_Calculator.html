@@ -143,6 +143,14 @@
         </div>
       </div>
 
+      <!-- WHAT THE CLINIC SAYS THIS DRUG'S RANGE IS.
+           The calculator's arithmetic is only as safe as the mg/kg figure
+           typed above it, and nothing used to check that figure against the
+           drug at all. This strip is filled from Drug_Dose_Reference
+           (Dose_Reference.gs) and says plainly when a drug is not on file,
+           because a blank strip reads as "checked, and fine". -->
+      <div id="dc-ref" class="dc-out d-none" style="margin-top:.65rem;"></div>
+
       <div class="dc-out" id="dc-out">
         <div class="dc-sub">Enter a weight and a dose.</div>
       </div>
@@ -160,10 +168,38 @@
 (function () {
   'use strict';
 
-  var ctx = { row: null, sigSelector: '', sig: '' };
+  var ctx = { row: null, sigSelector: '', sig: '', ref: null, refFor: '' };
+
+  /** The largest age, in years, that can be a person. Anything above this is
+      a data fault, and the one that actually happened was a mobile number. */
+  var MAX_HUMAN_YEARS = 130;
 
   function el(id) { return document.getElementById(id); }
   function num(id) { var v = parseFloat((el(id) || {}).value); return isNaN(v) ? 0 : v; }
+
+  /**
+   * Writes an age into the form, or clears it.
+   *
+   * A REJECTED AGE IS BLANK, NOT WRONG. The calculator uses age for the
+   * neonatal and infant sanity bands; an impossible age would silently
+   * disable exactly the check that matters.
+   */
+  function setAge(value, unit) {
+    var input = el('dc-age');
+    var unitEl = el('dc-age-unit');
+    if (!input) return;
+
+    var n = (value === null || value === undefined) ? NaN : Number(value);
+    var u = unit || 'years';
+    var years = (u === 'months') ? n / 12 : (u === 'days') ? n / 365.25 : n;
+
+    if (!isFinite(n) || n < 0 || years > MAX_HUMAN_YEARS) {
+      input.value = '';
+      return;
+    }
+    input.value = String(n);
+    if (unitEl) unitEl.value = u;
+  }
 
   /** Age in months, from whichever unit was chosen. */
   function ageMonths() {
@@ -200,6 +236,131 @@
     if (lbl) lbl.textContent = (form === 'liq') ? 'mg in' : 'mg per tablet';
     if (perml) perml.hidden = (form !== 'liq');
     if (el('dc-strength')) el('dc-strength').disabled = (form === 'none');
+  }
+
+  // =====================================================================
+  // REFERENCE RANGES
+  //
+  // Drug_Dose_Reference (Dose_Reference.gs) is the clinic's own table. It is
+  // fetched once per drug name, cached on ctx for the life of the panel, and
+  // used for two different things:
+  //
+  //   1. PREFILL — the usual mg/kg, the ceilings and the frequency, so the
+  //      common case is typed by nobody and therefore mistyped by nobody.
+  //   2. CHECK — the figure actually in the box is compared against the
+  //      recorded range every time it changes.
+  //
+  // A drug that is not on file says so. That is the point: silence would be
+  // indistinguishable from a clean check.
+  // =====================================================================
+  var refCache = {};
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function renderReference() {
+    var box = el('dc-ref');
+    if (!box) return;
+    var r = ctx.ref;
+
+    if (!ctx.refFor) { box.classList.add('d-none'); box.innerHTML = ''; return; }
+    box.classList.remove('d-none');
+
+    if (r === 'loading') {
+      box.innerHTML = '<div class="dc-sub"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>' +
+                      'Looking up the reference range…</div>';
+      return;
+    }
+    if (!r) {
+      box.innerHTML = '<div class="dc-sub"><i class="fa-solid fa-circle-question me-2"></i>' +
+        'No dose reference on file for <b>' + esc(ctx.refFor) + '</b>. ' +
+        'The arithmetic below is still correct; nothing has checked the mg/kg ' +
+        'figure against this drug.</div>';
+      return;
+    }
+
+    var bits = [];
+    if (r.minPerKg !== null || r.maxPerKg !== null) {
+      var lo = (r.minPerKg === null) ? '?' : r.minPerKg;
+      var hi = (r.maxPerKg === null) ? '?' : r.maxPerKg;
+      bits.push('<b>' + lo + '–' + hi + ' mg/kg/' + (r.basis === 'dose' ? 'dose' : 'day') + '</b>');
+    }
+    if (r.maxSingle !== null) bits.push('max ' + r.maxSingle + ' mg per dose');
+    if (r.maxDaily !== null) bits.push('max ' + r.maxDaily + ' mg per day');
+    if (r.adultDose) bits.push('adult: ' + esc(r.adultDose));
+
+    box.innerHTML =
+      '<div class="dc-sub"><i class="fa-solid fa-book-medical me-2"></i>' +
+        '<b>' + esc(r.drug) + '</b>' +
+        (r.generic && r.generic !== r.drug ? ' <span class="label-bright">(' + esc(r.generic) + ')</span>' : '') +
+        (r.klass ? ' &middot; ' + esc(r.klass) : '') +
+      '</div>' +
+      (bits.length ? '<div class="dc-sub mt-1">' + bits.join(' &middot; ') + '</div>' : '') +
+      (r.formulations ? '<div class="dc-sub mt-1">Forms: ' + esc(r.formulations) + '</div>' : '') +
+      (r.notes ? '<div class="dc-sub mt-1" style="font-style:italic;">' + esc(r.notes) + '</div>' : '') +
+      (String(r.source || '').toUpperCase().indexOf('SEED') === 0
+        ? '<div class="dc-warn soft mt-2">This row has not been reviewed by the clinic yet ' +
+          '(Source is still &ldquo;' + esc(r.source) + '&rdquo;). Verify against the product label.</div>'
+        : '');
+  }
+
+  /** Applies a reference row to the empty boxes. Never overwrites typing. */
+  function applyReference(r, force) {
+    if (!r) return;
+    function fill(id, value) {
+      var e = el(id);
+      if (!e || value === null || value === undefined || value === '') return;
+      if (!force && String(e.value || '').trim() !== '') return;
+      e.value = value;
+    }
+    if (r.basis && el('dc-basis')) el('dc-basis').value = (r.basis === 'dose') ? 'dose' : 'day';
+    fill('dc-mgkg', r.usualPerKg);
+    fill('dc-maxdose', r.maxSingle);
+    fill('dc-maxday', r.maxDaily);
+    if (r.dosesPerDay && el('dc-freq')) {
+      var opt = el('dc-freq').querySelector('option[value="' + r.dosesPerDay + '"]');
+      if (opt) el('dc-freq').value = String(r.dosesPerDay);
+    }
+  }
+
+  function loadReference(drugName, prefill) {
+    var name = String(drugName || '').trim();
+    ctx.refFor = name;
+    ctx.ref = null;
+    if (!name) { renderReference(); return; }
+
+    var key = name.toLowerCase();
+    if (refCache.hasOwnProperty(key)) {
+      ctx.ref = refCache[key];
+      if (prefill) applyReference(ctx.ref, false);
+      renderReference();
+      calc();
+      return;
+    }
+    if (typeof google === 'undefined' || !google.script) { renderReference(); return; }
+
+    ctx.ref = 'loading';
+    renderReference();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var hit = (res && res.success && res.found) ? res.reference : null;
+        refCache[key] = hit;
+        // The panel may have moved to another drug while this was in flight.
+        if (ctx.refFor !== name) return;
+        ctx.ref = hit;
+        if (prefill) applyReference(hit, false);
+        renderReference();
+        calc();
+      })
+      .withFailureHandler(function () {
+        if (ctx.refFor !== name) return;
+        ctx.ref = null;
+        renderReference();
+      })
+      .getDoseReference(name);
   }
 
   function calc() {
@@ -271,6 +432,43 @@
       sig = perDose.toFixed(1) + ' mg ' + freqWord(freq);
     }
 
+    // ---- against the clinic's recorded range for THIS drug --------------
+    //
+    // The ceilings below catch an answer that is too big. This catches the
+    // INPUT being wrong for the drug — 15 mg/kg is routine for paracetamol
+    // and a catastrophe for digoxin, and the arithmetic cannot tell them
+    // apart. Only a reference row can.
+    var ref = (ctx.ref && ctx.ref !== 'loading') ? ctx.ref : null;
+    if (ref && (ref.minPerKg !== null || ref.maxPerKg !== null)) {
+      // Compare like with like: the reference states its own basis.
+      var refBasis = (ref.basis === 'dose') ? 'dose' : 'day';
+      var typedInRefBasis = (basis === refBasis)
+        ? per
+        : (basis === 'dose' ? per * freq : per / freq);
+      var unit = ' mg/kg/' + refBasis;
+
+      if (ref.maxPerKg !== null && typedInRefBasis > ref.maxPerKg * 1.001) {
+        lines.push('<div class="dc-warn hard">Above the recorded range for ' +
+          esc(ref.drug) + ': ' + (Math.round(typedInRefBasis * 100) / 100) + unit +
+          ' against a maximum of ' + ref.maxPerKg + unit + '.</div>');
+      } else if (ref.minPerKg !== null && typedInRefBasis < ref.minPerKg * 0.999) {
+        lines.push('<div class="dc-warn soft">Below the recorded range for ' +
+          esc(ref.drug) + ': ' + (Math.round(typedInRefBasis * 100) / 100) + unit +
+          ' against a minimum of ' + ref.minPerKg + unit +
+          '. A sub-therapeutic dose is a treatment failure, not a safe error.</div>');
+      }
+    }
+    if (ref && ref.minAgeMonths !== null) {
+      var amRef = ageMonths();
+      if (amRef !== null && amRef < ref.minAgeMonths) {
+        lines.push('<div class="dc-warn soft">' + esc(ref.drug) + ' is recorded as being for ' +
+          (ref.minAgeMonths >= 12
+            ? (Math.round(ref.minAgeMonths / 12) + ' years')
+            : (ref.minAgeMonths + ' months')) +
+          ' and over. This patient is younger.</div>');
+      }
+    }
+
     // ---- the checks the old calculator had none of ----------------------
     if (maxDose > 0 && perDose > maxDose) {
       lines.push('<div class="dc-warn hard">Over the stated maximum per dose: ' +
@@ -334,17 +532,36 @@
     var w = o.weightElId && el(o.weightElId) ? el(o.weightElId).value : '';
     if (el('dc-weight')) el('dc-weight').value = w || '';
 
-    if (o.demoElId && el(o.demoElId)) {
+    // ────────────────────────────────────────────────────────────────
+    // AGE.
+    //
+    // `o.age` is the age as DATA, and it is what every caller should pass.
+    // The demographics element is scraped only as a fallback, and it is
+    // scraped defensively now: a banner built by one screen and read back by
+    // another has already put a MOBILE NUMBER in this box once (see the note
+    // in EMR_MasterTimeline_UI.executeEMRRoute). So the first number before
+    // a "Y" wins rather than the last, and anything that is not a plausible
+    // human age is discarded instead of being dosed against.
+    // ────────────────────────────────────────────────────────────────
+    if (o.age !== undefined && o.age !== null && String(o.age).trim() !== '') {
+      setAge(parseFloat(o.age), o.ageUnit || 'years');
+    } else if (o.demoElId && el(o.demoElId)) {
       var demo = el(o.demoElId).innerText || '';
-      var y = demo.match(/(\d+)\s*Y/i);
-      var mo = demo.match(/(\d+)\s*M(?:onths?)?\b/i);
-      if (y) { el('dc-age').value = y[1]; el('dc-age-unit').value = 'years'; }
-      else if (mo) { el('dc-age').value = mo[1]; el('dc-age-unit').value = 'months'; }
-      else { el('dc-age').value = ''; }
+      var y = demo.match(/(\d{1,3})\s*(?:Y|yr|yrs|years?)\b/i);
+      var mo = demo.match(/(\d{1,3})\s*(?:M|mo|months?)\b/i);
+      if (y) setAge(parseInt(y[1], 10), 'years');
+      else if (mo) setAge(parseInt(mo[1], 10), 'months');
+      else setAge(null);
     }
 
     var nameEl = (ctx.row && o.nameSelector) ? ctx.row.querySelector(o.nameSelector) : null;
-    if (el('dc-drug')) el('dc-drug').textContent = (nameEl && nameEl.value) ? nameEl.value : '';
+    var drugName = (nameEl && nameEl.value) ? nameEl.value : (o.drugName || '');
+    if (el('dc-drug')) el('dc-drug').textContent = drugName;
+
+    // Clear what the LAST drug left behind before anything is prefilled for
+    // this one. A ceiling belonging to a different drug is worse than none.
+    ['dc-maxdose', 'dc-maxday'].forEach(function (id) { if (el(id)) el(id).value = ''; });
+
     if (nameEl && nameEl.dataset && nameEl.dataset.refdose) {
       var n = String(nameEl.dataset.refdose).match(/[\d.]+/);
       if (n && el('dc-mgkg')) el('dc-mgkg').value = n[0];
@@ -353,8 +570,19 @@
     }
 
     syncFormRow();
+    // Prefills only the boxes still empty, then re-runs the arithmetic.
+    loadReference(drugName, true);
     calc();
     host.hidden = false;
+  };
+
+  /**
+   * Re-checks against a different drug without closing the panel — for a
+   * screen that lets the name be edited while the calculator is open.
+   */
+  window.crescDoseSetDrug = function (drugName) {
+    if (el('dc-drug')) el('dc-drug').textContent = String(drugName || '');
+    loadReference(drugName, false);
   };
 
   window.crescDoseClose = function () {

@@ -130,6 +130,16 @@
     <?!= include('Modals'); ?>
     <?!= include('Lab_Results_Peek'); ?>
     <?!= include('Dose_Calculator'); ?>
+    <!-- One invoice layout for pharmacy, lab and hospital billing. Both
+         billing desks are lazy bundles, so it belongs in the shell. -->
+    <?!= include('Invoice_Template'); ?>
+    <!-- Dictation. One floating control that follows the focused field, so
+         every free-text box in every lazily loaded clinical module is
+         dictatable without any of them registering anything. -->
+    <?!= include('Voice_Input'); ?>
+    <!-- The shared visiting-consultant slot asks who is on it at sign-in,
+         before any clinical bundle has loaded, so it belongs in the shell. -->
+    <?!= include('Visiting_Consultant'); ?>
   </div>
 
   <?!= include('ScriptsMV'); ?>

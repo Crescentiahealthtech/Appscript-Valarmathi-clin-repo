@@ -45,6 +45,9 @@
   .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
   .op-safety-danger { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); }
   .op-safety-warn   { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning-fg); }
+  /* The prescription line a safety alert is about. Set by markRxRows(). */
+  #op-rx-tbody tr.op-rx-flag-danger > td { box-shadow: inset 3px 0 0 var(--danger); background: var(--danger-bg); }
+  #op-rx-tbody tr.op-rx-flag-warn   > td { box-shadow: inset 3px 0 0 var(--warning); background: var(--warning-bg); }
   .op-safety-info   { background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-muted); }
   .op-safety-line { display: flex; align-items: flex-start; gap: 8px; padding: 2px 0; }
 
@@ -142,19 +145,103 @@
         <i class="fa-solid fa-user-doctor"></i> Refer
       </button>
 
+      <!-- ═══════════════════════════════════════════════════════════════
+           REFERRAL
+
+           What this box collected was a doctor and a sentence. What it did
+           not collect, and what a referral is useless without:
+
+             URGENCY. A routine second opinion and a patient who needs
+             seeing this afternoon arrived in the receiving doctor's queue
+             looking identical.
+
+             WHAT THE REFERRING DOCTOR ALREADY KNOWS. The reason field
+             fills up with "please see", because the alternative is
+             retyping the history — so the receiving doctor opens the
+             chart from scratch every time. The summary is now prefilled
+             from the consultation on screen.
+
+             ANYWHERE OUTSIDE THE CLINIC. Referring out had no option at
+             all, so it was written on a pad: nothing in the record said
+             the patient had been sent anywhere and nothing chased whether
+             they went.
+           ═══════════════════════════════════════════════════════════ -->
       <div class="modal fade" id="opReferModal" tabindex="-1">
-       <div class="modal-dialog modal-dialog-centered modal-sm">
+       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content text-white" style="background-color:var(--bg-input); border:1px solid var(--warning);">
          <div class="modal-header py-2 border-secondary">
-            <h6 class="m-0 text-warning"><i class="fa-solid fa-user-doctor"></i> Refer to a colleague</h6>
+            <h6 class="m-0 text-warning"><i class="fa-solid fa-user-doctor"></i> Refer this patient</h6>
            <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
          </div>
           <div class="modal-body p-3">
-           <label class="hd-label">Refer to</label>
-            <select class="hd-input mb-2" id="ref-to-doctor"><option value="">Select doctor</option></select>
+
+            <div class="d-flex gap-2 mb-3">
+              <button type="button" class="btn btn-sm btn-warning fw-bold flex-fill" id="ref-tab-internal"
+                      onclick="setReferralKind('INTERNAL')">A colleague here</button>
+              <button type="button" class="btn btn-sm btn-outline-warning fw-bold flex-fill" id="ref-tab-external"
+                      onclick="setReferralKind('EXTERNAL')">Outside the clinic</button>
+            </div>
+
+            <div id="ref-internal-block">
+              <label class="hd-label">Refer to</label>
+              <select class="hd-input mb-2" id="ref-to-doctor"><option value="">Select doctor</option></select>
+            </div>
+
+            <div id="ref-external-block" class="d-none">
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label class="hd-label">Doctor</label>
+                  <input type="text" class="hd-input" id="ref-external-to" placeholder="Dr. …">
+                </div>
+                <div class="col-6">
+                  <label class="hd-label">Hospital / centre</label>
+                  <input type="text" class="hd-input" id="ref-external-facility" placeholder="Where they should go">
+                </div>
+              </div>
+              <label class="hd-label">Speciality sought</label>
+              <input type="text" class="hd-input mb-2" id="ref-specialty" list="ref-specialty-list"
+                     placeholder="Cardiology, Neurosurgery, …">
+              <datalist id="ref-specialty-list">
+                <option value="Cardiology"></option><option value="Neurology"></option>
+                <option value="Neurosurgery"></option><option value="Nephrology"></option>
+                <option value="Gastroenterology"></option><option value="Pulmonology"></option>
+                <option value="Endocrinology"></option><option value="Oncology"></option>
+                <option value="Orthopaedics"></option><option value="General Surgery"></option>
+                <option value="Urology"></option><option value="ENT"></option>
+                <option value="Ophthalmology"></option><option value="Dermatology"></option>
+                <option value="Psychiatry"></option><option value="Obstetrics &amp; Gynaecology"></option>
+                <option value="Paediatrics"></option><option value="Rheumatology"></option>
+                <option value="Vascular Surgery"></option><option value="Plastic Surgery"></option>
+              </datalist>
+            </div>
+
+            <label class="hd-label">Urgency</label>
+            <div class="d-flex gap-2 mb-2" id="ref-urgency-group">
+              <button type="button" class="btn btn-sm btn-outline-secondary flex-fill ref-urg on"
+                      data-urg="ROUTINE" onclick="setReferralUrgency('ROUTINE')">Routine</button>
+              <button type="button" class="btn btn-sm btn-outline-warning flex-fill ref-urg"
+                      data-urg="URGENT" onclick="setReferralUrgency('URGENT')">Urgent</button>
+              <button type="button" class="btn btn-sm btn-outline-danger flex-fill ref-urg"
+                      data-urg="EMERGENCY" onclick="setReferralUrgency('EMERGENCY')">Emergency</button>
+            </div>
+
             <label class="hd-label">Reason for referral <span class="text-danger">*</span></label>
-            <textarea class="hd-input" id="ref-reason" rows="3" placeholder="What do you want their opinion on?"></textarea>
-            <div class="small mt-2" style="color:var(--text-muted);">The patient appears in their queue as a referral. The  reason becomes part of the record.</div>
+            <textarea class="hd-input mb-2" id="ref-reason" rows="2"
+                      placeholder="What do you want their opinion on? A sentence, not &ldquo;please see&rdquo;."></textarea>
+
+            <label class="hd-label d-flex justify-content-between align-items-center">
+              <span>Clinical summary</span>
+              <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.65rem;"
+                      onclick="fillReferralSummary()"><i class="fa-solid fa-wand-magic-sparkles"></i> From this consult</button>
+            </label>
+            <textarea class="hd-input" id="ref-summary" rows="4"
+                      placeholder="History, findings, what has been tried."></textarea>
+
+            <div class="small mt-2" style="color:var(--text-muted);">
+              An internal referral puts the patient in that doctor&rsquo;s queue.
+              An external one is recorded here and printed as a letter for the
+              patient to carry.
+            </div>
          </div>
          <div class="modal-footer py-1 border-secondary">
            <button class="btn btn-sm btn-outline-light" data-bs-dismiss="modal">Cancel</button>
@@ -387,6 +474,29 @@
             <option value="Isolyte P 500ml"></option>
             <option value="Isolyte M 500ml"></option>
             <option value="Mannitol 20% 100ml"></option>
+            <option value="Isolyte S 500ml"></option>
+            <option value="D25W (25% Dextrose) 100ml"></option>
+            <option value="Half Normal Saline (0.45% NS) 500ml"></option>
+            <option value="Sterofundin 500ml"></option>
+            <option value="Albumin 20% 100ml"></option>
+          </datalist>
+
+          <!-- The drugs a nebulisation is actually written for. Same
+               reasoning as the fluids: a datalist suggests, it does not
+               restrict. -->
+          <datalist id="op-neb-drug-list">
+            <option value="Salbutamol (Asthalin) 2.5 mg respule"></option>
+            <option value="Salbutamol (Asthalin) 5 mg respule"></option>
+            <option value="Levosalbutamol 0.63 mg respule"></option>
+            <option value="Levosalbutamol 1.25 mg respule"></option>
+            <option value="Ipratropium (Ipravent) 500 mcg respule"></option>
+            <option value="Duolin (Levosalbutamol + Ipratropium) respule"></option>
+            <option value="Budesonide (Budecort) 0.5 mg respule"></option>
+            <option value="Budesonide (Budecort) 1 mg respule"></option>
+            <option value="Adrenaline 1:1000 (croup)"></option>
+            <option value="Hypertonic Saline 3%"></option>
+            <option value="Normal Saline 0.9% (plain)"></option>
+            <option value="Acetylcysteine (Mucomix)"></option>
           </datalist>
         </div>
       </div>
@@ -473,54 +583,61 @@
 </div>
 
 <!-- ===================== DIAL PAD ===================== -->
+<!-- ═══════════════════════════════════════════════════════════════════════
+     THE DIAL PAD
+
+     What it was missing, in the order it mattered:
+
+       NO DISPLAY. The pad is a modal, and the field it writes into is
+       behind it. Every press was blind: a doctor pressing 1, BD, AF had
+       no way to see "1(AF)-0-1(AF)" until they closed the pad, and the
+       only way to correct a wrong press was Clear-and-start-again.
+
+       NO BACKSPACE. Clear erased the whole value for one wrong digit.
+
+       HALF THE UNITS. mg, tablets, puffs, nebulisation and insulin units
+       were absent, so every one of those had to be typed by hand — which
+       is the thing this pad exists to avoid on a phone.
+
+       HALF THE FREQUENCIES. HS (at night), 4/6/8-hourly, alternate-day
+       and weekly are all routine and none were here; only OD/BD/TDS/QID.
+
+     The grid is now built from a table rather than forty hand-written
+     divs, so adding a key is one line and the layout cannot drift.
+     ═══════════════════════════════════════════════════════════════════ -->
 <div class="modal fade" id="opDialPadModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered" style="max-width: 270px;">
+  <div class="modal-dialog modal-sm modal-dialog-centered" style="max-width: 300px;">
     <div class="modal-content text-white shadow-lg" style="background-color: var(--bg-input); border: 1px solid var(--border-hover);">
       <div class="modal-body p-3">
-        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3">
+        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-2">
           <h6 class="text-info m-0" style="font-size:0.8rem;" id="op-dial-title">Smart Input</h6>
-          <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.7rem;" onclick="clearOPDial()"><i class="fa-solid fa-eraser"></i> Clear</button>
-        </div>
-
-        <div id="op-dial-rx-grid" class="row g-1 mb-2 d-none">
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('0')">0</button></div>
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('1/2')">1/2</button></div>
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('1')">1</button></div>
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('2')">2</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('OD')">OD</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('BD')">BD</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('TDS')">TDS</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="appendOPDial('QID')">QID</button></div>
-          <div class="col-3"><button class="btn btn-outline-warning dial-btn w-100 text-warning" onclick="appendOPDial('STAT')">STAT</button></div>
-          <div class="col-3"><button class="btn btn-outline-warning dial-btn w-100 text-warning" onclick="appendOPDial('SOS')">SOS</button></div>
-          <div class="col-3"><button class="btn btn-outline-success dial-btn w-100 text-success" onclick="appendOPDial('BF')">BF</button></div>
-          <div class="col-3"><button class="btn btn-outline-success dial-btn w-100 text-success" onclick="appendOPDial('AF')">AF</button></div>
-          <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="appendOPDial('ml')">ml</button></div>
-          <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="appendOPDial('Drops')">Drops</button></div>
-          <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="appendOPDial('Oint')">Oint</button></div>
-          <div class="col-12 mt-2 border-top border-secondary pt-2">
-            <button class="btn btn-outline-warning w-100 py-1 fw-bold" style="font-size:0.7rem;" onclick="openTaperFromDial()"><i class="fa-solid fa-stairs"></i> Taper Mode</button>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;"
+                    title="Delete the last entry" onclick="backspaceOPDial()"><i class="fa-solid fa-delete-left"></i></button>
+            <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.7rem;"
+                    onclick="clearOPDial()"><i class="fa-solid fa-eraser"></i></button>
           </div>
         </div>
 
-        <div id="op-dial-dur-grid" class="row g-1 mb-2 d-none">
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('1')">1</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('2')">2</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('3')">3</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('4')">4</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('5')">5</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('6')">6</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('7')">7</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('14')">14</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="appendOPDial('30')">30</button></div>
-          <div class="col-12 mt-2 border-top border-secondary pt-2"></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="appendOPDial(' Days')">Days</button></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="appendOPDial(' Wks')">Weeks</button></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="appendOPDial(' Mths')">Months</button></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="appendOPDial(' Yrs')">Years</button></div>
+        <!-- What the field will say. Without this every press was blind. -->
+        <div id="op-dial-display"
+             style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;
+                    padding:.45rem .6rem;margin-bottom:.6rem;min-height:2.1rem;
+                    font-family:monospace;font-size:.95rem;font-weight:700;
+                    color:var(--warning-fg);word-break:break-word;">&nbsp;</div>
+        <div id="op-dial-hint" class="text-muted mb-2" style="font-size:.66rem;min-height:1rem;"></div>
+
+        <div id="op-dial-rx-grid" class="row g-1 mb-2 d-none"></div>
+        <div id="op-dial-dur-grid" class="row g-1 mb-2 d-none"></div>
+
+        <div id="op-dial-taper-host" class="border-top border-secondary pt-2 d-none">
+          <button class="btn btn-outline-warning w-100 py-1 fw-bold" style="font-size:0.7rem;"
+                  onclick="openTaperFromDial()"><i class="fa-solid fa-stairs"></i> Taper Mode</button>
         </div>
 
-        <button class="btn btn-primary w-100 mt-3 py-1 fw-bold text-white on-accent" style="font-size:0.8rem; background-color: var(--info-solid); border:none;" data-bs-dismiss="modal">Confirm</button>
+        <button class="btn btn-primary w-100 mt-2 py-1 fw-bold text-white on-accent"
+                style="font-size:0.8rem; background-color: var(--info-solid); border:none;"
+                data-bs-dismiss="modal">Confirm</button>
       </div>
     </div>
   </div>
@@ -782,7 +899,10 @@ function op_prompt(message, value, done, opts) {
 // text box holds the one being typed; confirmed ones become chips. The saved
 // value is the full comma-separated list, so nothing downstream changes.
 // ============================================================================
+// Exposed so the referral builder can read the diagnoses off the consult
+// rather than asking the doctor to retype what is already on the page.
 var opDxList = [];
+window.opDxList = opDxList;
 
 function opAddDx(text) {
     const el = document.getElementById('clin-diagnosis');
@@ -829,8 +949,12 @@ function opCollectDx() {
 
 /** Replaces the whole list — used by recall, templates and drafts. */
 function opSetDx(value) {
-    opDxList = String(value || '').split(',')
-        .map(function (d) { return d.trim(); }).filter(Boolean);
+    // Replaced in place, for the same reason as the reset above.
+    opDxList.length = 0;
+    String(value || '').split(',')
+        .map(function (d) { return d.trim(); })
+        .filter(Boolean)
+        .forEach(function (d) { opDxList.push(d); });
     const el = document.getElementById('clin-diagnosis');
     if (el) el.value = '';
     opRenderDxList();
@@ -854,6 +978,7 @@ let opComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup:
 let opConsultTemplates = [];
 let opPatientAllergies = { recorded: false, raw: "", list: [] };
 let currentOPDialTarget = null;
+let currentOPDialMode = 'rx';
 let activeOpEncounterId = "";
 /* opDoseTargetRow / _opDoseSig retired with the local calculator; the
    shared one in Dose_Calculator.html keeps its own target row. */
@@ -1295,7 +1420,10 @@ function resetOPConsultForm() {
     applyExamDefaults(opSysDefaults || {});
 
     // --- diagnosis / advice / review ---------------------------------------
-    opDxList = [];
+    // Emptied in place, not reassigned: window.opDxList aliases this array so
+    // the referral builder can read it, and a reassignment would leave that
+    // alias pointing at the previous patient's diagnoses.
+    opDxList.length = 0;
     opRenderDxList();
     ['clin-diagnosis', 'op-advice-free', 'clin-review-date',
      'op-rad-orders', 'op-rad-findings', 'op-future-labs', 'op-lab-other']
@@ -1573,11 +1701,53 @@ function renderSafetyBar(alerts, coverage) {
     html += block(warn, 'op-safety-warn', 'fa-circle-exclamation');
     html += block(info, 'op-safety-info', 'fa-circle-info');
 
+    // Mark the ROWS an alert is about. A bar that says "Ibuprofen and
+    // Diclofenac are both NSAIDs" leaves the prescriber to find those two
+    // lines by eye on a list of nine; the alerts carry the drug names, so
+    // the lines can just say so themselves.
+    markRxRows(alerts);
+
     if (coverage && coverage.note) {
         html += '<div class="op-safety-bar op-safety-info"><div class="op-safety-line">' +
                 '<i class="fa-solid fa-flask-vial mt-1"></i><span>' + opEsc(coverage.note) + '</span></div></div>';
     }
     bar.innerHTML = html;
+}
+
+/**
+ * Outlines the prescription rows named in a safety alert.
+ *
+ * Cleared on every run, so a row stops being flagged the moment the line
+ * that flagged it is corrected — a stale outline is worse than none.
+ */
+function markRxRows(alerts) {
+    const rows = document.querySelectorAll('#op-rx-tbody tr');
+    rows.forEach(function (row) {
+        row.classList.remove('op-rx-flag-danger', 'op-rx-flag-warn');
+        row.removeAttribute('title');
+    });
+    if (!alerts || !alerts.length) return;
+
+    const norm = function (v) { return String(v || '').toLowerCase().trim(); };
+
+    alerts.forEach(function (a) {
+        if (!a.drugs || !a.drugs.length) return;
+        const wanted = a.drugs.map(norm);
+        rows.forEach(function (row) {
+            const nameEl = row.querySelector('.op-rx-name');
+            if (!nameEl || wanted.indexOf(norm(nameEl.value)) === -1) return;
+            // Danger wins: a row already flagged red is not downgraded by a
+            // second, milder alert about the same line.
+            if (a.level === 'DANGER') {
+                row.classList.remove('op-rx-flag-warn');
+                row.classList.add('op-rx-flag-danger');
+            } else if (a.level === 'WARN' && !row.classList.contains('op-rx-flag-danger')) {
+                row.classList.add('op-rx-flag-warn');
+            }
+            const prev = row.getAttribute('title');
+            row.setAttribute('title', prev ? prev + '\n' + a.message : a.message);
+        });
+    });
 }
 
 // ============================================================================
@@ -2175,35 +2345,173 @@ function applyAssistAdvice() {
 // ============================================================================
 // INTERNAL REFERRAL
 // ============================================================================
+let opReferralKind = 'INTERNAL';
+let opReferralUrgency = 'ROUTINE';
+
+function setReferralKind(kind) {
+    opReferralKind = (kind === 'EXTERNAL') ? 'EXTERNAL' : 'INTERNAL';
+    const ext = opReferralKind === 'EXTERNAL';
+    document.getElementById('ref-internal-block').classList.toggle('d-none', ext);
+    document.getElementById('ref-external-block').classList.toggle('d-none', !ext);
+    document.getElementById('ref-tab-internal').className =
+      'btn btn-sm fw-bold flex-fill ' + (ext ? 'btn-outline-warning' : 'btn-warning');
+    document.getElementById('ref-tab-external').className =
+      'btn btn-sm fw-bold flex-fill ' + (ext ? 'btn-warning' : 'btn-outline-warning');
+}
+
+function setReferralUrgency(level) {
+    opReferralUrgency = level;
+    document.querySelectorAll('#ref-urgency-group .ref-urg').forEach(function (b) {
+        b.classList.toggle('on', b.dataset.urg === level);
+        // The chosen one is filled; the rest stay outlined. A selection you
+        // cannot see is a selection nobody trusts.
+        const tone = b.dataset.urg === 'EMERGENCY' ? 'danger'
+                   : b.dataset.urg === 'URGENT' ? 'warning' : 'secondary';
+        b.className = 'btn btn-sm flex-fill ref-urg ' +
+          (b.dataset.urg === level ? 'btn-' + tone + ' fw-bold' : 'btn-outline-' + tone) +
+          (b.dataset.urg === level ? ' on' : '');
+    });
+}
+
+/**
+ * Fills the summary from the consultation on screen.
+ *
+ * The reason field filled up with "please see" because the alternative was
+ * retyping the history that is already in front of the doctor. It is already
+ * on the page; copying it is not the doctor's job.
+ */
+function fillReferralSummary() {
+    const lines = [];
+    const collect = function (tbodyId, label) {
+        const vals = [];
+        document.querySelectorAll('#' + tbodyId + ' .op-array-text').forEach(function (i) {
+            const v = (i.value || '').trim();
+            if (!v) return;
+            const pre = i.closest('tr')?.querySelector('.op-array-prefix');
+            const dur = i.closest('tr')?.querySelector('.op-array-dur');
+            vals.push((pre && pre.value ? pre.value + ' ' : '') + v +
+                      (dur && dur.value ? ' (' + dur.value + ')' : ''));
+        });
+        if (vals.length) lines.push(label + ': ' + vals.join('; '));
+    };
+    collect('op-cc-tbody', 'Complaints');
+    collect('op-hx-tbody', 'History');
+
+    // Diagnoses are chips plus whatever is still in the box being typed.
+    const dxAll = (window.opDxList || []).slice();
+    const dxBox = document.getElementById('clin-diagnosis');
+    if (dxBox && dxBox.value.trim()) dxAll.push(dxBox.value.trim());
+    if (dxAll.length) lines.push('Diagnosis: ' + dxAll.join(', '));
+
+    // Vitals, only the ones actually recorded.
+    const vitals = [];
+    [['op-vit-sys', 'BP'], ['op-vit-pr', 'HR'], ['op-vit-spo2', 'SpO2'],
+     ['op-vit-temp', 'Temp'], ['op-vit-wt', 'Wt']].forEach(function (pair) {
+        const e = document.getElementById(pair[0]);
+        if (!e || !e.value.trim()) return;
+        if (pair[1] === 'BP') {
+            const dia = document.getElementById('op-vit-dia');
+            vitals.push('BP ' + e.value.trim() + (dia && dia.value ? '/' + dia.value.trim() : '') + ' mmHg');
+        } else vitals.push(pair[1] + ' ' + e.value.trim());
+    });
+    if (vitals.length) lines.push('Vitals: ' + vitals.join(', '));
+
+    // What they are already on. The single most useful thing to send with a
+    // referral and the thing most often left out of one.
+    const meds = [];
+    document.querySelectorAll('#op-rx-tbody tr').forEach(function (row) {
+        const n = row.querySelector('.op-rx-name');
+        if (!n || !n.value.trim()) return;
+        const sig = row.querySelector('.op-rx-sig');
+        meds.push(n.value.trim() + (sig && sig.value ? ' ' + sig.value.trim() : ''));
+    });
+    if (meds.length) lines.push('Current medication: ' + meds.join('; '));
+
+    const allergy = (window.opPatientAllergies && opPatientAllergies.raw) ? opPatientAllergies.raw : '';
+    if (allergy) lines.push('Allergies: ' + allergy);
+
+    const box = document.getElementById('ref-summary');
+    if (!lines.length) {
+        opToast('There is nothing on the consultation yet to summarise.', 'warn');
+        return;
+    }
+    // Appended, never overwritten: a doctor who has already typed something
+    // here meant it.
+    box.value = (box.value.trim() ? box.value.trim() + '\n' : '') + lines.join('\n');
+}
+
 function openReferModal() {
     const pId = opCurrentPatientId();
     if (!pId || pId === '--') { opToast('Fetch a patient first.', 'warn'); return; }
-    document.getElementById('ref-reason').value = '';
+    ['ref-reason', 'ref-summary', 'ref-external-to', 'ref-external-facility', 'ref-specialty']
+      .forEach(function (id) { const e = document.getElementById(id); if (e) e.value = ''; });
     document.getElementById('ref-to-doctor').value = '';
+    setReferralKind('INTERNAL');
+    setReferralUrgency('ROUTINE');
     new bootstrap.Modal(document.getElementById('opReferModal')).show();
 }
 
 function sendReferral() {
     const btn = document.getElementById('btn-send-referral');
+    const external = opReferralKind === 'EXTERNAL';
+    const val = function (id) { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+
+    if (!external && !val('ref-to-doctor')) { opToast('Choose the doctor you are referring to.', 'warn'); return; }
+    if (external && !val('ref-external-to') && !val('ref-external-facility')) {
+        opToast('Name the doctor or the hospital you are referring to.', 'warn'); return;
+    }
+    if (val('ref-reason').length < 10) {
+        opToast('Say what you want their opinion on, in a sentence.', 'warn'); return;
+    }
+
     btn.disabled = true;
     google.script.run
         .withSuccessHandler(function (r) {
             btn.disabled = false;
-            if (r && r.success) {
-                bootstrap.Modal.getInstance(document.getElementById('opReferModal'))?.hide();
-                opToast(r.message, 'warn');
-            } else opToast((r && r.message) || 'Could not create the referral.', 'err');
+            if (!r || !r.success) {
+                opToast((r && r.message) || 'Could not create the referral.', 'err');
+                return;
+            }
+            bootstrap.Modal.getInstance(document.getElementById('opReferModal'))?.hide();
+            opToast(r.message, 'warn');
+            // An external referral is only useful as a letter in the
+            // patient's hand, so it is offered immediately rather than
+            // waiting to be found again in a list.
+            if (r.referralType === 'EXTERNAL') printReferralLetter(r.referralId);
         })
         .withFailureHandler(function (e) { btn.disabled = false; opToast('Network error: ' + e.message, 'err'); })
         .createOPReferral({
             fromDoctorId: window.currentDoctorId || '',
             patientId: opCurrentPatientId(),
             patientName: document.getElementById('hd-pat-name').innerText,
-            toDoctorId: document.getElementById('ref-to-doctor').value,
-            reason: document.getElementById('ref-reason').value,
+            referralType: opReferralKind,
+            toDoctorId: val('ref-to-doctor'),
+            externalTo: val('ref-external-to'),
+            externalFacility: val('ref-external-facility'),
+            specialty: val('ref-specialty'),
+            urgency: opReferralUrgency,
+            reason: val('ref-reason'),
+            clinicalSummary: val('ref-summary'),
             sourceEncounterId: activeOpEncounterId,
             date: new Date().toISOString().split('T')[0]
         }, window.sessionToken);
+}
+
+/** The referral as a letter, in its own window, on the clinic's letterhead. */
+function printReferralLetter(referralId) {
+    if (!referralId) return;
+    google.script.run
+        .withSuccessHandler(function (r) {
+            if (!r || !r.success) {
+                opToast((r && r.message) || 'The letter could not be built.', 'err');
+                return;
+            }
+            if (typeof crescInvoicePrintHtml === 'function') {
+                crescInvoicePrintHtml(r.html, 'Referral ' + r.referralId);
+            }
+        })
+        .withFailureHandler(function (e) { opToast('Could not print the letter: ' + e.message, 'err'); })
+        .getOPReferralLetter(referralId, window.sessionToken);
 }
 
 // ============================================================================
@@ -2309,14 +2617,15 @@ function addOPRxRow(pre) {
     const tr = document.createElement('tr');
     tr.innerHTML =
         '<td>' +
+            // Six forms covered tablets through drops and nothing else, so a
+            // nebulisation, an inhaler, a pessary, a patch and an insulin
+            // order were all written as "Tab" or typed into the Notes column
+            // as free text — where the pharmacy never saw them and the
+            // printed plan showed a route that was not the one intended.
             '<select class="hd-input op-rx-type" style="padding:0.1rem;" onchange="onOPRxTypeChange(this)">' +
-                '<option value="Tab">Tab</option><option value="Cap">Cap</option><option value="Syp">Syp</option>' +
-                '<option value="Inj">Inj</option><option value="Oint">Oint</option><option value="Drops">Drops</option>' +
-                // IV fluids are prescribed in OP too — a day-care infusion, a
-                // dehydrated child, a pre-transfer drip. Without this the
-                // fluid was written into the Notes column as free text and
-                // never reached the pharmacy or the printed plan as an order.
-                '<option value="IV">IV Fluid</option>' +
+                OP_RX_FORMS.map(function (f) {
+                  return '<option value="' + f.value + '">' + f.label + '</option>';
+                }).join('') +
             '</select>' +
         '</td>' +
         '<td style="position:relative;">' +
@@ -2362,29 +2671,88 @@ function addOPRxRow(pre) {
     return tr;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   DOSAGE FORMS
+
+   Six of these existed: Tab, Cap, Syp, Inj, Oint, Drops — plus IV Fluid,
+   added when day-care infusions turned out to be prescribed in OP too.
+   Everything else had to be written as one of those six or typed into the
+   Notes column as free text, where the pharmacy never saw it and the
+   printed plan showed a route nobody intended. A nebulisation written as
+   "Tab Salbutamol" is not a clerical detail.
+
+   `rate`  the row needs a second numeric box beside the dose (an infusion
+           rate, or the diluent a nebulisation is made up in).
+   `calc`  the mg/kg calculator applies. It does not to a litre of saline.
+   ═══════════════════════════════════════════════════════════════════ */
+var OP_RX_FORMS = [
+  { value: 'Tab',    label: 'Tab',      dose: 'Dosage',  name: 'Search drug / brand...' },
+  { value: 'Cap',    label: 'Cap',      dose: 'Dosage',  name: 'Search drug / brand...' },
+  { value: 'Syp',    label: 'Syp',      dose: 'Dosage',  name: 'Search drug / brand...' },
+  { value: 'Inj',    label: 'Inj',      dose: 'Dose',    name: 'Search drug / brand...' },
+  { value: 'IV',     label: 'IV Fluid', dose: 'Volume',  name: 'Fluid (NS, RL, DNS, D5...)',
+    rate: true, rateHint: 'ml/hr', calc: false, list: 'op-iv-fluid-list' },
+  { value: 'Neb',    label: 'Nebulisation', dose: 'Dose', name: 'Drug (Salbutamol, Budesonide, Ipratropium...)',
+    rate: true, rateHint: 'NS ml', rateTitle: 'Diluent — normal saline, in ml', list: 'op-neb-drug-list' },
+  { value: 'Inhaler',label: 'Inhaler',  dose: 'Puffs',   name: 'Inhaler / MDI...' },
+  { value: 'Rotacap',label: 'Rotacap',  dose: 'Caps',    name: 'Rotacap / DPI...' },
+  { value: 'Oint',   label: 'Ointment', dose: 'Apply',   name: 'Search drug / brand...', calc: false },
+  { value: 'Cream',  label: 'Cream',    dose: 'Apply',   name: 'Search drug / brand...', calc: false },
+  { value: 'Drops',  label: 'Drops',    dose: 'Drops',   name: 'Search drug / brand...' },
+  { value: 'Spray',  label: 'Nasal spray', dose: 'Sprays', name: 'Search drug / brand...' },
+  { value: 'Supp',   label: 'Suppository', dose: 'Dose', name: 'Search drug / brand...' },
+  { value: 'Pessary',label: 'Pessary',  dose: 'Dose',    name: 'Search drug / brand...' },
+  { value: 'Patch',  label: 'Patch',    dose: 'Patches', name: 'Search drug / brand...', calc: false },
+  { value: 'Sachet', label: 'Sachet',   dose: 'Dose',    name: 'Search drug / brand...' },
+  { value: 'Gargle', label: 'Gargle',   dose: 'Volume',  name: 'Search drug / brand...', calc: false },
+  { value: 'Insulin',label: 'Insulin',  dose: 'Units',   name: 'Insulin (Mixtard, Lantus, Actrapid...)', calc: false }
+];
+
+/** The form record for a value, or the Tab default. */
+function opRxForm(value) {
+  for (var i = 0; i < OP_RX_FORMS.length; i++) {
+    if (OP_RX_FORMS[i].value === value) return OP_RX_FORMS[i];
+  }
+  return OP_RX_FORMS[0];
+}
+
 /**
- * Switches one prescription row between a drug and an IV fluid.
+ * Applies a form's behaviour to its prescription row.
  *
- * A fluid is ordered by RATE, not by a 1-0-1 dosage: "NS 500 ml at 75 ml/hr"
- * is the whole order. So for an IV row the dosage box becomes the volume and
- * a rate box appears beside it; the dose calculator, which computes mg/kg,
- * is hidden because it has nothing to say about a litre of saline.
+ * An IV fluid is ordered by RATE, not by a 1-0-1 dosage: "NS 500 ml at
+ * 75 ml/hr" is the whole order. A nebulisation is ordered as a dose made up
+ * in a diluent: "Salbutamol 2.5 mg in 3 ml NS, 6-hourly". Both need a second
+ * numeric box; a tablet does not, and offering one is how a form gets filled
+ * in wrongly.
  */
 function onOPRxTypeChange(typeSel) {
     const tr = typeSel.closest('tr');
     if (!tr) return;
-    const isIV = (typeSel.value === 'IV');
+    const form = opRxForm(typeSel.value);
 
     const rate = tr.querySelector('.op-rx-rate');
     const sig  = tr.querySelector('.op-rx-sig');
     const calc = tr.querySelector('.op-rx-dosecalc');
     const name = tr.querySelector('.op-rx-name');
 
-    if (rate) rate.classList.toggle('d-none', !isIV);
-    if (calc) calc.classList.toggle('d-none', isIV);
-    if (sig)  sig.placeholder = isIV ? 'Volume' : 'Dosage';
-    if (name) name.placeholder = isIV ? 'Fluid (NS, RL, DNS...)' : 'Search drug / brand...';
-    if (isIV && rate) { rate.style.width = '72px'; }
+    if (rate) {
+      rate.classList.toggle('d-none', !form.rate);
+      rate.placeholder = form.rateHint || 'ml/hr';
+      rate.title = form.rateTitle || 'Infusion rate in ml/hr';
+      rate.style.width = '72px';
+      if (!form.rate) rate.value = '';
+    }
+    // The calculator computes mg/kg. That is meaningful for a nebulised drug
+    // and meaningless for a litre of saline or a patch.
+    if (calc) calc.classList.toggle('d-none', form.calc === false);
+    if (sig)  sig.placeholder = form.dose;
+    if (name) {
+      name.placeholder = form.name;
+      // Each form offers its own suggestions: fluids for an IV row,
+      // nebulisable drugs for a nebulisation, the formulary otherwise.
+      if (form.list) name.setAttribute('list', form.list);
+      else name.removeAttribute('list');
+    }
 }
 
 // ============================================================================
@@ -2519,28 +2887,146 @@ function markOPAllWNL() { ['cvs', 'rs', 'pa', 'cns'].forEach(s => setOPSysExam(s
 // ============================================================================
 // DIAL PAD
 // ============================================================================
+/* ═══════════════════════════════════════════════════════════════════════
+   THE DIAL PAD — keys, and what each one does
+
+   The grid is data. Adding a key is one row here; before this it was a
+   hand-written <div class="col-3"> in the markup, and the two grids had
+   already drifted apart on sizing.
+
+   `group` is what makes a key EXCLUSIVE. Pressing Days then Months means
+   the doctor changed their mind, so the new token replaces the old one
+   rather than appending — "3 Days Months" was the bug this solves, and
+   the same rule now covers the dose units and the frequencies, which had
+   it only for duration.
+   ═══════════════════════════════════════════════════════════════════ */
+var OP_DIAL_KEYS = {
+  rx: [
+    // digits and fractions — these accumulate, that is how a number is typed
+    { k: '0',   w: 3 }, { k: '1/4', w: 3 }, { k: '1/2', w: 3 }, { k: '1', w: 3 },
+    { k: '2',   w: 3 }, { k: '3',   w: 3 }, { k: '5',   w: 3 }, { k: '10', w: 3 },
+
+    // the 1-0-1 patterns. HS and the hourly schedules were missing, and a
+    // night-only dose is one of the commonest prescriptions there is.
+    { k: 'OD',  w: 3, style: 'info' }, { k: 'BD',  w: 3, style: 'info' },
+    { k: 'TDS', w: 3, style: 'info' }, { k: 'QID', w: 3, style: 'info' },
+    { k: 'HS',  w: 3, style: 'info', title: 'At bedtime' },
+    { k: 'Q6H', w: 3, style: 'info', title: '6-hourly' },
+    { k: 'Q8H', w: 3, style: 'info', title: '8-hourly' },
+    { k: 'Q12H',w: 3, style: 'info', title: '12-hourly' },
+    { k: 'Alt day', w: 6, style: 'info', title: 'Alternate days' },
+    { k: 'Weekly',  w: 6, style: 'info' },
+
+    { k: 'STAT', w: 3, style: 'warning' }, { k: 'SOS', w: 3, style: 'warning' },
+    { k: 'BF',   w: 3, style: 'success', title: 'Before food' },
+    { k: 'AF',   w: 3, style: 'success', title: 'After food' },
+
+    // units. mg, tablets, puffs, nebulisation and insulin units all had to
+    // be typed by hand, which on a phone is the whole problem.
+    { k: 'mg',   w: 3, style: 'secondary' }, { k: 'ml',    w: 3, style: 'secondary' },
+    { k: 'tab',  w: 3, style: 'secondary' }, { k: 'Drops', w: 3, style: 'secondary' },
+    { k: 'puff', w: 3, style: 'secondary' }, { k: 'neb',   w: 3, style: 'secondary', title: 'Per nebulisation' },
+    { k: 'unit', w: 3, style: 'secondary', title: 'Insulin units' },
+    { k: 'Oint', w: 3, style: 'secondary' }
+  ],
+  dur: [
+    { k: '1', w: 4 }, { k: '2',  w: 4 }, { k: '3',  w: 4 },
+    { k: '4', w: 4 }, { k: '5',  w: 4 }, { k: '6',  w: 4 },
+    { k: '7', w: 4 }, { k: '10', w: 4 }, { k: '14', w: 4 },
+    { k: '21', w: 4 }, { k: '30', w: 4 }, { k: '90', w: 4 },
+    { k: 'Days',  w: 6, style: 'info' }, { k: 'Wks', w: 6, style: 'info' },
+    { k: 'Mths',  w: 6, style: 'info' }, { k: 'Yrs', w: 6, style: 'info' },
+    // A course that ends at review, and a single dose, are both durations
+    // and neither could be entered without the keyboard.
+    { k: 'Once',        w: 6, style: 'warning', title: 'A single dose' },
+    { k: 'Till review', w: 6, style: 'warning' },
+    { k: 'Continue',    w: 12, style: 'warning', title: 'Long-term / ongoing' }
+  ]
+};
+
+/** Token groups that REPLACE rather than append. */
+var OP_DIAL_GROUPS = {
+  DURATION: ['Days', 'Wks', 'Mths', 'Yrs', 'Once', 'Till review', 'Continue'],
+  DOSEUNIT: ['mg', 'ml', 'tab', 'Drops', 'puff', 'neb', 'unit', 'Oint'],
+  URGENCY:  ['STAT', 'SOS'],
+  SCHEDULE: ['HS', 'Q6H', 'Q8H', 'Q12H', 'Alt day', 'Weekly']
+};
+
+function opDialGrid(hostId, keys) {
+  var host = document.getElementById(hostId);
+  if (!host) return;
+  host.innerHTML = keys.map(function (key) {
+    var cls = key.style
+      ? 'btn btn-outline-' + key.style + ' dial-btn w-100 text-' +
+        (key.style === 'secondary' ? 'light' : key.style)
+      : 'btn dial-btn w-100 text-white';
+    return '<div class="col-' + key.w + '">' +
+      '<button type="button" class="' + cls + '" style="font-size:.72rem;padding:.3rem .1rem;"' +
+      (key.title ? ' title="' + opEsc(key.title) + '"' : '') +
+      ' onclick="appendOPDial(' + JSON.stringify(key.k) + ')">' + opEsc(key.k) + '</button></div>';
+  }).join('');
+}
+
 function openOPDialPad(inputEl, mode) {
     if (inputEl.disabled) return;
     currentOPDialTarget = inputEl;
-    document.getElementById('op-dial-title').innerText = mode === 'rx' ? "Smart Dosage" : "Select Duration";
+    currentOPDialMode = mode;
+
+    document.getElementById('op-dial-title').innerText =
+      mode === 'rx' ? 'Smart Dosage' : 'Select Duration';
+
+    // Built on open rather than once at parse time: this module is injected
+    // by the loader, and building here means the grid cannot be missing
+    // because the markup arrived after the script did.
+    opDialGrid('op-dial-rx-grid',  OP_DIAL_KEYS.rx);
+    opDialGrid('op-dial-dur-grid', OP_DIAL_KEYS.dur);
+
     document.getElementById('op-dial-rx-grid').classList.toggle('d-none', mode !== 'rx');
     document.getElementById('op-dial-dur-grid').classList.toggle('d-none', mode === 'rx');
+
+    // Taper only belongs on a dosage, and only on a real prescription row.
+    var taperHost = document.getElementById('op-dial-taper-host');
+    if (taperHost) {
+      taperHost.classList.toggle('d-none', mode !== 'rx' || !inputEl.closest('tr'));
+    }
+
+    paintOPDial();
     new bootstrap.Modal(document.getElementById('opDialPadModal')).show();
+}
+
+/**
+ * Shows what the field will say.
+ *
+ * The pad is a modal and the field is behind it, so every press used to be
+ * blind: 1, BD, AF gave no sight of "1(AF)-0-1(AF)" until the pad closed,
+ * and a wrong press could only be undone by clearing everything.
+ */
+function paintOPDial() {
+  var d = document.getElementById('op-dial-display');
+  var h = document.getElementById('op-dial-hint');
+  if (!d) return;
+  var v = currentOPDialTarget ? String(currentOPDialTarget.value || '').trim() : '';
+  d.textContent = v || '—';
+  d.style.color = v ? 'var(--warning-fg)' : 'var(--text-muted)';
+
+  if (!h) return;
+  if (currentOPDialMode === 'rx') {
+    h.textContent = v
+      ? 'A pattern key (OD, BD…) replaces the dose; a number typed first fills it in.'
+      : 'Type a number, then a pattern: 1 then BD gives 1-0-1.';
+  } else {
+    h.textContent = 'A number, then a unit. Pressing a second unit replaces the first.';
+  }
 }
 
 function appendOPDial(val) {
     if (!currentOPDialTarget) return;
     let cVal = currentOPDialTarget.value.trim();
     const v = val.trim();
-    const rxPatterns = { 'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1' };
-
-    // Mutually exclusive token groups. Pressing Days then Months means the
-    // doctor changed their mind, so the new unit REPLACES the old one —
-    // appending gave "3 Days Months", and pressing the same unit twice gave
-    // "3 Days Days".
-    const DURATION = ['Days', 'Wks', 'Mths', 'Yrs'];
-    const DOSEUNIT = ['ml', 'Drops', 'Oint'];
-    const URGENCY  = ['STAT', 'SOS'];
+    const rxPatterns = {
+      'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1',
+      'HS': '0-0-1'
+    };
 
     const swapToken = function (text, group, token) {
         // Strip every member of the group (with its separating space), then
@@ -2548,7 +3034,7 @@ function appendOPDial(val) {
         // eat the "ml" inside "5ml" typed by hand.
         let out = text;
         group.forEach(function (g) {
-            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
+            out = out.replace(new RegExp('\\s*\\b' + g.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), '');
         });
         out = out.trim();
         return out ? out + ' ' + token : token;
@@ -2573,15 +3059,19 @@ function appendOPDial(val) {
             currentOPDialTarget.value = cVal ? cVal + ' (' + v + ')' : '(' + v + ')';
         }
 
-    } else if (DURATION.indexOf(v) !== -1) {
-        currentOPDialTarget.value = swapToken(cVal, DURATION, v);
-    } else if (DOSEUNIT.indexOf(v) !== -1) {
-        currentOPDialTarget.value = swapToken(cVal, DOSEUNIT, v);
-    } else if (URGENCY.indexOf(v) !== -1) {
+    } else if (OP_DIAL_GROUPS.DURATION.indexOf(v) !== -1) {
+        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.DURATION, v);
+    } else if (OP_DIAL_GROUPS.DOSEUNIT.indexOf(v) !== -1) {
+        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.DOSEUNIT, v);
+    } else if (OP_DIAL_GROUPS.SCHEDULE.indexOf(v) !== -1) {
+        // A schedule is exclusive too: 8-hourly and 12-hourly are a change of
+        // mind, not two instructions.
+        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.SCHEDULE, v);
+    } else if (OP_DIAL_GROUPS.URGENCY.indexOf(v) !== -1) {
         // Pressing STAT twice clears it: it is a toggle, not an accumulator.
         const had = new RegExp('\\b' + v + '\\b', 'i').test(cVal);
         let out = cVal;
-        URGENCY.forEach(function (g) {
+        OP_DIAL_GROUPS.URGENCY.forEach(function (g) {
             out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
         });
         out = out.trim();
@@ -2591,9 +3081,40 @@ function appendOPDial(val) {
         // Digits and fractions still accumulate — that is how a number is typed.
         currentOPDialTarget.value = cVal + val;
     }
+
+    currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
+    paintOPDial();
 }
 
-function clearOPDial() { if (currentOPDialTarget) currentOPDialTarget.value = ''; }
+/**
+ * Removes the last thing entered, not the last character.
+ *
+ * "1-0-1 Days" backspaced a character at a time is five presses to undo one
+ * mistake, and the field spends four of them holding "1-0-1 Day", "1-0-1 Da"
+ * — values that mean nothing. A whole token goes at once.
+ */
+function backspaceOPDial() {
+  if (!currentOPDialTarget) return;
+  var v = String(currentOPDialTarget.value || '').trim();
+  if (!v) return;
+
+  // A trailing word (unit, schedule, urgency) goes whole; otherwise one
+  // character, because a number is built a digit at a time.
+  var m = /\s+\S+$/.exec(v);
+  if (m && /[A-Za-z)]$/.test(v)) v = v.slice(0, m.index);
+  else v = v.slice(0, -1);
+
+  currentOPDialTarget.value = v.trim();
+  currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
+  paintOPDial();
+}
+
+function clearOPDial() {
+  if (!currentOPDialTarget) return;
+  currentOPDialTarget.value = '';
+  currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
+  paintOPDial();
+}
 
 // ============================================================================
 // TAPER MODE
@@ -2803,11 +3324,21 @@ function collectRxRows() {
             comments: row.querySelector('.op-rx-comment')?.value || '',
             source: src
         };
-        // An IV order carries its rate. Normalised to "N ml/hr" so the printed
-        // prescription and the nursing chart read the same however it was typed.
-        if (type === 'IV') {
-            const raw = (row.querySelector('.op-rx-rate')?.value || '').trim();
-            if (raw) med.rate = /^[\d.]+$/.test(raw) ? (raw + ' ml/hr') : raw;
+        // The second numeric box means different things on different forms:
+        // an infusion RATE on an IV row, the DILUENT a nebulisation is made
+        // up in. Both are normalised with their unit so the printed
+        // prescription and the nursing chart read the same however it was
+        // typed — "75" and "75 ml/hr" are the same order and used to print
+        // as two different ones.
+        const extra = (row.querySelector('.op-rx-rate')?.value || '').trim();
+        if (extra && type === 'IV') {
+            med.rate = /^[\d.]+$/.test(extra) ? (extra + ' ml/hr') : extra;
+        } else if (extra && type === 'Neb') {
+            med.diluent = /^[\d.]+$/.test(extra) ? (extra + ' ml NS') : extra;
+            // Carried as `rate` too, because that is the field every
+            // downstream reader (the print kit, the pharmacy queue) already
+            // knows how to show.
+            med.rate = med.diluent;
         }
         if (nameEl.dataset.taper) {
             try { med.taper = JSON.parse(nameEl.dataset.taper); } catch (e) {}

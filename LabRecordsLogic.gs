@@ -256,6 +256,11 @@ function generateAndStoreLabReportPDF(orderId) {
     const file = monthFolder.createFile(pdfBlob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
+    // Registered so it can be un-shared. A link that nothing lists is a link
+    // nobody can revoke, and this file carries the patient's name and their
+    // results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
+    try { dpdpRegisterSharedFile(file, 'LAB_REPORT', (typeof patientId !== 'undefined' ? patientId : ''), Session.getActiveUser().getEmail()); } catch (e) {}
+
     console.log("5. Success! File URL: " + file.getUrl());
 
     // 5. Return the Secure Drive Link to Frontend
@@ -304,6 +309,11 @@ function getArchiveInvoiceLink(orderId) {
 
     const file = monthFolder.createFile(pdfBlob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    // Registered so it can be un-shared. A link that nothing lists is a link
+    // nobody can revoke, and this file carries the patient's name and their
+    // results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
+    try { dpdpRegisterSharedFile(file, 'LAB_ARCHIVE_INVOICE', (typeof patientId !== 'undefined' ? patientId : ''), Session.getActiveUser().getEmail()); } catch (e) {}
 
     return { success: true, link: file.getUrl() };
   } catch (error) {

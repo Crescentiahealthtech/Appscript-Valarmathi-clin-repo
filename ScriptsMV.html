@@ -89,7 +89,54 @@ function crescPaintRBAC() {
  *        server is the authority, and this is only the fallback for the
  *        moment before it answers.
  */
-function applyRBAC(role) {
+/**
+ * A rail item that is missing looks exactly like a rail item you are not
+ * allowed to have, and the two have completely different remedies.
+ *
+ * THIS IS WHY AN ADMIN COULD NOT REACH ACCOUNTS. Every id in
+ * CRESC_UI_PERMS is hidden before the permission fetch and revealed by its
+ * answer. If that ONE call did not come back — a dropped round trip, a cold
+ * start, a reply lost on the way home (google.script.run hands the success
+ * handler `null` in that case) — crescPerms was set to {} and every
+ * permissioned entry stayed hidden. The user is signed in, the rail shows
+ * Dashboard and nothing else, and nothing anywhere says why.
+ *
+ * So a failed fetch is now retried once, and a second failure says so on
+ * screen with a button that tries again, instead of presenting a stripped
+ * rail as though it were this account's permissions.
+ */
+function crescRbacProblem(message, canRetry) {
+  var id = 'cresc-rbac-warning';
+  var old = document.getElementById(id);
+  if (old) old.parentNode.removeChild(old);
+  if (!message) return;
+
+  var bar = document.createElement('div');
+  bar.id = id;
+  bar.className = 'alert alert-warning d-flex align-items-center gap-2 mb-0 rounded-0';
+  bar.style.cssText = 'position:sticky;top:0;z-index:1500;font-size:.85rem;';
+  bar.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span></span>';
+  bar.querySelector('span').textContent = message;
+  if (canRetry) {
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-outline-dark ms-auto';
+    btn.textContent = 'Try again';
+    btn.onclick = function () { applyRBAC(window.loggedInRole); };
+    bar.appendChild(btn);
+  }
+  var host = document.querySelector('.main-content') || document.body;
+  host.insertBefore(bar, host.firstChild);
+}
+
+/**
+ * @param {string} role  kept for the existing call site in Auth.html; the
+ *        server is the authority, and this is only the fallback for the
+ *        moment before it answers.
+ * @param {number} [attempt]  internal: retry counter.
+ */
+function applyRBAC(role, attempt) {
+  attempt = attempt || 0;
+
   // Hide everything first, so a slow reply never flashes an accountant's
   // revenue card at a pharmacist.
   Object.keys(CRESC_UI_PERMS).forEach(function (id) {
@@ -102,26 +149,38 @@ function applyRBAC(role) {
     return;
   }
 
+  function failed(reason, sessionGone) {
+    // One silent retry. A single dropped round trip is the common case and
+    // does not deserve a banner.
+    if (!sessionGone && attempt < 1) {
+      setTimeout(function () { applyRBAC(role, attempt + 1); }, 900);
+      return;
+    }
+    window.crescPerms = {};
+    crescPaintRBAC();
+    if (sessionGone) {
+      crescRbacProblem(reason + ' Sign in again to restore your access.', false);
+      if (window.showToast) window.showToast('Signed out', reason, 'warning');
+    } else {
+      crescRbacProblem('Your permissions could not be confirmed, so most of the ' +
+                       'menu is hidden. This is a connection problem, not a ' +
+                       'restriction on your account.', true);
+    }
+  }
+
   google.script.run
     .withSuccessHandler(function (res) {
-      if (res && res.success) {
+      // A null reply is a failed round trip, not an answer of "no permissions".
+      if (!res) { failed('', false); return; }
+      if (res.success) {
         window.crescPerms = res.permissions || {};
-      } else {
-        // The session is gone. Show nothing rather than guessing from a
-        // role name the server has just declined to confirm.
-        window.crescPerms = {};
-        if (res && res.message && window.showToast) {
-          window.showToast('Signed out', res.message, 'warning');
-        }
+        crescRbacProblem('');       // clear any banner from an earlier attempt
+        crescPaintRBAC();
+        return;
       }
-      crescPaintRBAC();
+      failed(res.message || 'Your session is no longer valid.', true);
     })
-    .withFailureHandler(function () {
-      // Unreachable server: the rail stays minimal. Every screen behind it
-      // would fail its own permission check anyway.
-      window.crescPerms = {};
-      crescPaintRBAC();
-    })
+    .withFailureHandler(function () { failed('', false); })
     .crescGetMyPermissions(window.sessionToken);
 }
  
