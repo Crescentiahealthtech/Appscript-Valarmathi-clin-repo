@@ -83,6 +83,9 @@ var DEP_MAP = {
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
+  "Clinic_Profile.gs": [
+    "cresc_clinic_", "getClinicProfile", "setClinicProfile"
+  ],
   "Patient_Profile_Edit.gs": [
     "updatePatientProfile", "getPatientProfileHistory", "ppe_validate_"
   ],

@@ -806,18 +806,27 @@
           if (res && res.success) {
             if (res.duplicate) { crescAlert("ℹ️ " + res.message + " (Invoice " + res.invoiceNo + ")"); return; }
           
-            // 1. Generate Pure HTML specifically optimized for Apps Script PDF Blob
-            const rawHtml = buildPrintInvoiceRaw(res.print);
-          
-            // 2. Inject to A4 Print Screen
-            document.getElementById('ph-invoice-print').innerHTML = rawHtml;
-          
-            // 3. Store full doc in memory for backend Dispatch
-            currentDispatchHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{padding:20px; color:var(--text-main); background:var(--bg-card); font-family:sans-serif;}</style></head><body>${rawHtml}</body></html>`;
-          
-            // 4. Trigger the Interceptor Hub (Success Modal)
-            document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
-            document.getElementById('ph-dispatch-modal').style.display = 'flex';
+            // The letterhead is a server round trip on the first print of a
+            // session (crescInvoiceWarm() below normally pays for it when the
+            // desk opens), so the invoice is built through a callback.
+            buildPrintInvoiceRaw(res.print, function (rawHtml) {
+              document.getElementById('ph-invoice-print').innerHTML = rawHtml;
+
+              // The document sent to the PDF and to the email. It used to be
+              // wrapped in `body{color:var(--text-main);background:var(--bg-card)}`
+              // — variables that exist only inside this tab, so the PDF and the
+              // email arrived unstyled or unreadable. Absolute values only.
+              currentDispatchHtml =
+                '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+                '<title>Pharmacy invoice ' + (window.crescInvEsc ? crescInvEsc(res.invoiceNo) : '') + '</title>' +
+                '<style>*{box-sizing:border-box;margin:0;padding:0;}' +
+                "body{background:#ffffff;color:#111827;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:16px;}" +
+                '@media print{@page{margin:1cm;}}' +
+                '</style></head><body>' + rawHtml + '</body></html>';
+
+              document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
+              document.getElementById('ph-dispatch-modal').style.display = 'flex';
+            });
 
           } else crescAlert("❌ " + ((res && res.message) || "Save failed."));
         })
@@ -826,173 +835,114 @@
     }
   }
 
-  function buildPrintInvoiceRaw(d) {
-    if (!d) return "";
+  /**
+   * Builds the pharmacy invoice through the SHARED renderer.
+   *
+   * What was here was the same layout as the lab receipt, drawn entirely in
+   * CSS VARIABLES — var(--text-main), var(--bg-card), var(--border-color).
+   * Those resolve inside this tab and resolve to NOTHING everywhere this
+   * invoice actually goes: the PDF blob generated for WhatsApp, the body of
+   * the dispatch email, and a print stylesheet that does not carry the
+   * application's theme. A themed invoice is not an invoice; it is a
+   * screenshot of one, and off this page it came out unstyled or unreadable.
+   *
+   * crescInvoiceHtml (Invoice_Template.html, in the shell) renders the same
+   * design in absolute colours, from the letterhead in Clinic_Profile.gs —
+   * which is also where the clinic name, address and phone number now live,
+   * instead of being typed into this file as string literals that no longer
+   * matched the lab receipt's.
+   */
+  function buildPrintInvoiceRaw(d, done) {
+    if (!d) { if (done) done(""); return ""; }
+    const E = window.crescInvEsc || (v => String(v == null ? '' : v));
 
-    // Helper to safely escape characters for HTML injection
-    function _esc(s) {
-      return String(s == null ? '' : s).replace(/[&<>"'`=\/]/g, function (match) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '/': '&#x2F;', '`': '&#x60;', '=': '&#x3D;' }[match];
-      });
-    }
-
-    // 1. Calculate GST Slabs for the summary footer
+    // GST slabs, for the summary block beside the totals.
     const slabs = {};
-    d.items.forEach(it => { 
-      if (!slabs[it.gst]) slabs[it.gst] = { taxable: 0, gst: 0 }; 
-      slabs[it.gst].taxable += it.taxable; 
-      slabs[it.gst].gst += it.gstAmt; 
+    d.items.forEach(it => {
+      if (!slabs[it.gst]) slabs[it.gst] = { taxable: 0, gst: 0 };
+      slabs[it.gst].taxable += it.taxable;
+      slabs[it.gst].gst += it.gstAmt;
     });
-    
-    // 2. Generate the dynamic rows for dispensed medicines
-    const rows = d.items.map((it, i) => `
-      <tr>
-        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); vertical-align:top;">${i + 1}</td>
-        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); vertical-align:top;">
-          <strong style="color:var(--text-main);">${_esc(it.drug)}</strong>
-          ${it.generic ? `<br><span style="font-size:10px;color:var(--text-faint);">${_esc(it.generic)}</span>` : ''}
-        </td>
-        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); font-size:12px; vertical-align:top; color:var(--text-faint);">
-          ${_esc(it.batch)}<br><span style="font-size:10px;color:var(--text-faint);">Exp: ${_esc(it.expiry)}</span>
-        </td>
-        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top;">${it.qty}</td>
-        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top;">₹${it.mrp.toFixed(2)}</td>
-        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top; color:var(--text-faint);">${it.gst}%</td>
-        <td style="padding:8px 10px; border-bottom:1px solid var(--border-color); text-align:right; vertical-align:top; font-weight:600;">₹${it.lineTotal.toFixed(2)}</td>
-      </tr>`).join('');
-      
-    // 3. Generate GST Summary Rows
-    const slabRows = Object.keys(slabs).map(k => {
-      const half = slabs[k].gst / 2;
-      return `
-        <tr>
-          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color);">${k}%</td>
-          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${slabs[k].taxable.toFixed(2)}</td>
-          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${half.toFixed(2)}</td>
-          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${half.toFixed(2)}</td>
-          <td style="padding:4px 10px; border-bottom:1px solid var(--border-color); text-align:right;">₹${slabs[k].gst.toFixed(2)}</td>
-        </tr>`;
-    }).join('');
 
-    // Clinic Defaults (Hardcoded here as PropertiesService is backend-only)
-    const clinicName    = 'Crescentia HealthTech';
-    const clinicAddress = 'Medical District, City';
-    const clinicPhone   = '+91 9876543210';
-    const gstNumber     = '';
+    const rows = d.items.map((it, i) => ([
+      String(i + 1),
+      '<strong>' + E(it.drug) + '</strong>' +
+        (it.generic ? '<br><span style="font-size:10px;color:#9ca3af;">' + E(it.generic) + '</span>' : ''),
+      E(it.batch) + '<br><span style="font-size:10px;color:#9ca3af;">Exp: ' + E(it.expiry) + '</span>',
+      String(it.qty),
+      '₹' + it.mrp.toFixed(2),
+      it.gst + '%',
+      '<strong>₹' + it.lineTotal.toFixed(2) + '</strong>'
+    ]));
+
+    const slabKeys = Object.keys(slabs);
+    const gstBlock = slabKeys.length ? {
+      title: 'GST summary',
+      html:
+        '<table style="width:100%;border-collapse:collapse;font-size:11px;color:#6b7280;">' +
+          '<thead><tr style="background:#f3f4f6;">' +
+            ['Slab', 'Taxable', 'CGST', 'SGST', 'Total GST'].map((h, i) =>
+              '<th style="padding:4px 10px;text-align:' + (i ? 'right' : 'left') +
+              ';font-weight:700;">' + h + '</th>').join('') +
+          '</tr></thead><tbody>' +
+          slabKeys.map(k => {
+            const half = slabs[k].gst / 2;
+            return '<tr>' +
+              '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;">' + E(k) + '%</td>' +
+              ['₹' + slabs[k].taxable.toFixed(2), '₹' + half.toFixed(2),
+               '₹' + half.toFixed(2), '₹' + slabs[k].gst.toFixed(2)]
+                .map(v => '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">' + v + '</td>')
+                .join('') +
+            '</tr>';
+          }).join('') +
+        '</tbody></table>'
+    } : null;
 
     const isIp = (d.billType === 'IPD' || d.billType === 'IP_ACCOUNT');
-    
-    const payLine = isIp
-      ? `<div style="font-weight:700;color:var(--info-fg);">Posted to IP Account &bull; Settled at discharge</div>`
-      : `<div>Payment: <strong>${_esc(d.payMode)}</strong> &bull; Status: <strong style="${d.payStatus === 'PAID' ? 'color:var(--success-fg);' : 'color:var(--danger-fg);'}">${_esc(d.payStatus)}</strong></div>`;
 
-    // Constructing Demographic String dynamically
-    let patientInfo = `<strong>${_esc(d.patientName || 'Walk-in Patient')}</strong>`;
-    if (d.patientId && d.patientId !== 'WALK-IN') patientInfo += ` &bull; ${_esc(d.patientId)}`;
-    let demo = [];
-    if (d.age) demo.push(`${d.age}y`);
+    const totals = [
+      { label: 'Gross amount', value: '₹' + d.gross.toFixed(2) },
+      { label: 'of which GST', value: '₹' + d.totalGst.toFixed(2) }
+    ];
+    if (d.discount > 0) {
+      totals.push({ label: 'Discount', value: '- ₹' + d.discount.toFixed(2), tone: 'ok' });
+    }
+    totals.push({ label: 'Net payable', value: '₹' + d.net.toFixed(2), strong: true });
+
+    const demo = [];
+    if (d.age) demo.push(d.age + 'y');
     if (d.sex) demo.push(d.sex);
-    if (d.mobile) demo.push(d.mobile);
-    if (demo.length > 0) patientInfo += ` <span style="color:var(--text-faint);font-size:12px;margin-left:6px;">(${demo.join(' / ')})</span>`;
 
-    // Returning the Premium Template HTML (Inline styling preserves formatting during Google Blob PDF rendering)
-    return `
-      <div style="max-width:760px;margin:18px auto;border:1px solid var(--border-color);border-radius:10px;overflow:hidden;font-family:'Helvetica Neue',Arial,sans-serif;color:var(--text-main);background:var(--bg-card);box-sizing:border-box;">
-        
-        <div style="padding:18px 24px;border-bottom:2px solid var(--info);display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
-            <div style="font-size:20px;font-weight:800;color:var(--info-fg);text-transform:uppercase;">${_esc(clinicName)}</div>
-            ${clinicAddress ? `<div style="font-size:12px;color:var(--text-faint);margin-top:4px;">${_esc(clinicAddress)}</div>` : ''}
-            ${clinicPhone ? `<div style="font-size:12px;color:var(--text-faint);">Phone: ${_esc(clinicPhone)}</div>` : ''}
-            ${gstNumber ? `<div style="font-size:11px;color:var(--text-faint);margin-top:2px;">GSTIN: ${_esc(gstNumber)}</div>` : ''}
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:16px;font-weight:800;letter-spacing:1px;color:var(--text-main);">PHARMACY INVOICE</div>
-            <div style="font-size:12px;color:var(--text-faint);margin-top:4px;">Inv: <strong>${_esc(d.invoiceNo)}</strong></div>
-            <div style="font-size:11px;color:var(--text-faint);">Date: ${_esc(d.date)}</div>
-          </div>
-        </div>
-
-        <div style="padding:12px 24px;background:var(--bg-card);border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;font-size:13px;">
-          <div><span style="color:var(--text-faint);">Patient:</span> ${patientInfo}</div>
-          <div><span style="color:var(--text-faint);">Doctor:</span> ${_esc(d.doctor)}</div>
-        </div>
-        ${d.address ? `<div style="padding:6px 24px;background:var(--bg-card);border-bottom:1px solid var(--border-color);font-size:12px;color:var(--text-faint);">${_esc(d.address)}</div>` : ''}
-
-        <div style="padding:16px 24px;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead>
-              <tr style="background:var(--bg-input);">
-                <th style="padding:8px 10px;text-align:left;color:var(--text-faint);font-size:11px;text-transform:uppercase;">#</th>
-                <th style="padding:8px 10px;text-align:left;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Medicine</th>
-                <th style="padding:8px 10px;text-align:left;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Batch / Exp</th>
-                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Qty</th>
-                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">MRP</th>
-                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">GST</th>
-                <th style="padding:8px 10px;text-align:right;color:var(--text-faint);font-size:11px;text-transform:uppercase;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
-        </div>
-
-        <div style="padding:8px 24px 16px;display:flex;justify-content:space-between;align-items:flex-start;">
-          
-          <div style="width:50%;">
-            ${Object.keys(slabs).length > 0 ? `
-              <div style="font-size:11px;color:var(--text-faint);margin-bottom:6px;font-weight:700;text-transform:uppercase;">GST Summary</div>
-              <table style="width:100%;border-collapse:collapse;font-size:11px;color:var(--text-faint);">
-                <thead>
-                  <tr style="background:var(--bg-card);">
-                    <th style="padding:4px 10px;text-align:left;font-weight:600;">Slab</th>
-                    <th style="padding:4px 10px;text-align:right;font-weight:600;">Taxable</th>
-                    <th style="padding:4px 10px;text-align:right;font-weight:600;">CGST</th>
-                    <th style="padding:4px 10px;text-align:right;font-weight:600;">SGST</th>
-                    <th style="padding:4px 10px;text-align:right;font-weight:600;">Total GST</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${slabRows}
-                </tbody>
-              </table>
-            ` : ''}
-          </div>
-          
-          <div style="width:40%;">
-            <table style="width:100%;font-size:13px;border-collapse:collapse;">
-              <tr>
-                <td style="padding:4px 10px;color:var(--text-faint);">Gross Amount</td>
-                <td style="padding:4px 10px;text-align:right;">₹${d.gross.toFixed(2)}</td>
-              </tr>
-              <tr>
-                <td style="padding:0px 10px 4px;color:var(--text-muted);font-size:10px;">(Includes GST: ₹${d.totalGst.toFixed(2)})</td>
-                <td style="padding:0px 10px 4px;"></td>
-              </tr>
-              ${d.discount > 0 ? `
-              <tr>
-                <td style="padding:4px 10px;color:var(--success-fg);">Discount</td>
-                <td style="padding:4px 10px;text-align:right;color:var(--success-fg);">- ₹${d.discount.toFixed(2)}</td>
-              </tr>` : ''}
-              <tr style="border-top:2px solid var(--border-color);">
-                <td style="padding:8px 10px;font-weight:800;font-size:15px;color:var(--text-main);">Net Payable</td>
-                <td style="padding:8px 10px;text-align:right;font-weight:800;font-size:16px;color:var(--info-fg);">₹${d.net.toFixed(2)}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-
-        <div style="padding:12px 24px;background:var(--bg-card);border-top:1px solid var(--border-color);font-size:12px;color:var(--text-faint);display:flex;justify-content:space-between;align-items:center;">
-          ${payLine}
-          <div style="color:var(--text-muted);text-align:right;font-size:11px;">
-            This is a computer-generated invoice.<br>
-            <span style="font-size:9px;">Medicines once sold are not returnable except as per policy.</span>
-          </div>
-        </div>
-
-      </div>
-    `;
+    return crescInvoiceHtml({
+      kind: 'PHARMACY INVOICE',
+      invoiceNo: d.invoiceNo,
+      date: d.date,
+      patient: {
+        name: d.patientName || 'Walk-in Patient',
+        id: (d.patientId && d.patientId !== 'WALK-IN') ? d.patientId : '',
+        ageSex: demo.join(' / '),
+        mobile: d.mobile,
+        address: d.address
+      },
+      meta: [['Doctor', d.doctor]],
+      columns: [
+        { label: '#', align: 'left', width: '32px' },
+        { label: 'Medicine', align: 'left' },
+        { label: 'Batch / Exp', align: 'left', width: '130px' },
+        { label: 'Qty', align: 'right', width: '50px' },
+        { label: 'MRP', align: 'right', width: '80px' },
+        { label: 'GST', align: 'right', width: '56px' },
+        { label: 'Amount', align: 'right', width: '96px' }
+      ],
+      rows: rows,
+      totals: totals,
+      blocks: gstBlock ? [gstBlock] : [],
+      footNote: isIp
+        ? '<strong style="color:#0369a1;">Posted to IP account &bull; settled at discharge</strong>'
+        : 'Payment: <strong>' + E(d.payMode) + '</strong> &bull; Status: <strong style="color:' +
+          (d.payStatus === 'PAID' ? '#047857' : '#b91c1c') + ';">' + E(d.payStatus) + '</strong>' +
+          '<br><span style="font-size:10px;color:#9ca3af;">Medicines once sold are not returnable except as per policy.</span>'
+    }, done);
   }
 
   // ===================================================================
@@ -1041,7 +991,20 @@
       .emailPharmacyInvoice(invNo, currentDispatchHtml, targetEmail);
   }
 
-  function printPharmaInvoice() { window.print(); }
+  /**
+   * Prints the invoice in its own window rather than printing the page.
+   *
+   * window.print() printed whatever the dispatch modal happened to be
+   * sitting on top of, at the mercy of one @media print rule. The shared
+   * printer carries only the invoice, and reprints without the screen.
+   */
+  function printPharmaInvoice() {
+    if (currentDispatchHtml && typeof crescInvoicePrintHtml === 'function') {
+      crescInvoicePrintHtml(currentDispatchHtml, 'Pharmacy invoice');
+      return;
+    }
+    window.print();
+  }
 
   function closeDispatchHubAndReset() {
     document.getElementById('ph-dispatch-modal').style.display = 'none';
@@ -1175,6 +1138,8 @@
   // every entry, so a pharmacist never bills against a stale count.
   // ===================================================================
   function openPharmacyBilling() {
+    // Fetch the letterhead now, not while a print dialog is opening.
+    if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
     fetchLivePharmacyStock();
     const tbody = document.getElementById('phBillingBody');
     if (tbody && tbody.children.length === 0) addPharmacyRow();

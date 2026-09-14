@@ -247,11 +247,17 @@ function getLabReceiptHtml(billId) {
     }).join('');
 
     // Branding Properties (Fallback if not set)
-    const props = PropertiesService.getScriptProperties().getProperties();
-    const clinicName    = props['CLINIC_NAME']    || 'Crescentia HealthTech';
-    const clinicAddress = props['CLINIC_ADDRESS'] || 'Medical District, City';
-    const clinicPhone   = props['CLINIC_PHONE']   || '+91 9876543210';
-    const gstNumber     = props['CLINIC_GST']     || '';
+    // One letterhead for every document the clinic prints — see
+    // Clinic_Profile.gs. This file used to default to "Crescentia
+    // HealthTech" while LabIntegrationEngine.gs defaulted to "Crescentia
+    // Clinic" and the pharmacy invoice had the name typed into its markup,
+    // so a patient holding all three receipts was holding paper from what
+    // looked like different organisations.
+    const clinic        = cresc_clinic_();
+    const clinicName    = clinic.name;
+    const clinicAddress = clinic.address;
+    const clinicPhone   = clinic.phone;
+    const gstNumber     = clinic.gstin;
 
     const isIp = (b.category === 'IP_ACCOUNT');
     

@@ -62,14 +62,12 @@
   }
   #tab-admin-billing .hb-visit:hover { border-color: var(--accent-purple); }
   #tab-admin-billing .hb-visit.hb-used { opacity: .55; cursor: default; }
-  #hb-print { display: none; }
-
-  @media print {
-    body * { visibility: hidden !important; }
-    #hb-print, #hb-print * { visibility: visible !important; }
-    #hb-print { display: block !important; position: absolute; left: 0; top: 0; width: 100%;
-                background: #fff; color: #000; padding: 10px 4px; font-family: Arial, sans-serif; }
-  }
+  /* The invoice used to be printed by hiding the entire application with
+     `body * { visibility: hidden }` and revealing one div. That prints
+     whatever else the page happens to contain the moment a selector is
+     wrong, and there is no way to reprint without the screen behind it.
+     crescInvoicePrint() opens a window carrying only the invoice, so this
+     page needs no print stylesheet at all. */
 </style>
 
 <div id="tab-admin-billing" class="page-section d-none">
@@ -317,7 +315,8 @@
     </div>
   </div>
 
-  <div id="hb-print"></div>
+  <!-- The old hidden print host. Nothing writes to it any more; the
+       invoice is rendered into its own window by crescInvoicePrint(). -->
 </div>
 
 <script>
@@ -829,8 +828,7 @@
     google.script.run
       .withSuccessHandler(function (res) {
         if (!res || !res.success) { msg('Saved, but it could not be re-read for printing.', 'warning'); return; }
-        $('hb-print').innerHTML = invoiceHtml(res.data.invoice, res.data.items);
-        window.print();
+        crescInvoicePrint(invoiceDoc(res.data.invoice, res.data.items));
         clearBill(true);
       })
       .withFailureHandler(function () { msg('Saved. Open it from the ledger to print.', 'warning'); })
@@ -853,64 +851,73 @@
       return { lineNo: i + 1, particulars: it.particulars || it.serviceCode, qty: it.qty,
                rate: it.rate, discount: it.discount, amount: lineAmount(it) };
     });
-    $('hb-print').innerHTML = invoiceHtml(invoice, items, true);
-    window.print();
+    crescInvoicePrint(invoiceDoc(invoice, items, true));
   }
 
-  function invoiceHtml(inv, items, provisional) {
+  /**
+   * Builds this bill as the SHARED invoice document.
+   *
+   * What was here instead: twelve-point Arial on white, a bare "CRESCENTIA
+   * HEALTHTECH" heading, and nothing else of the clinic — no address, no
+   * phone, no GSTIN, no card, no footer. The pharmacy and lab receipts from
+   * the same visit carry a full letterhead, so a patient holding all three
+   * was holding paper from what looked like two different organisations,
+   * and only one of them looked like a document you could take to an
+   * insurer.
+   *
+   * crescInvoiceHtml (Invoice_Template.html, in the shell) is now the only
+   * place that layout exists. The letterhead comes from Clinic_Profile.gs,
+   * so changing the clinic's phone number changes it on all three.
+   */
+  function invoiceDoc(inv, items, provisional) {
+    var E = window.crescInvEsc || esc;
+
     var rows = (items || []).map(function (it) {
-      return '<tr><td>' + it.lineNo + '</td><td>' + esc(it.particulars) + '</td>' +
-        '<td style="text-align:center">' + (it.qty || '') + '</td>' +
-        '<td style="text-align:right">' + money(it.rate) + '</td>' +
-        '<td style="text-align:right">' + (it.discount ? money(it.discount) : '') + '</td>' +
-        '<td style="text-align:right">' + money(it.amount) + '</td></tr>';
-    }).join('');
+      return [
+        String(it.lineNo),
+        '<strong>' + E(it.particulars) + '</strong>',
+        (it.qty === 0 || it.qty) ? String(it.qty) : '',
+        money(it.rate),
+        it.discount ? money(it.discount) : '',
+        money(it.amount)
+      ];
+    });
 
-    return '' +
-      '<div style="font-family:Arial,sans-serif;color:#000;">' +
-      '<h2 style="margin:0;font-size:20px;">CRESCENTIA HEALTHTECH</h2>' +
-      '<div style="font-size:13px;color:#555;margin-bottom:12px;">' +
-        (provisional ? 'Provisional Estimate' : 'Hospital Bill') + '</div>' +
-      '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:10px;">' +
-        '<div><strong>' + esc(inv.patientName) + '</strong><br>' + esc(inv.patientId || '') +
-          (inv.ageSex ? ' · ' + esc(inv.ageSex) : '') +
-          (inv.mobile ? '<br>' + esc(inv.mobile) : '') +
-          (inv.address ? '<br>' + esc(inv.address) : '') + '</div>' +
-        '<div style="text-align:right;">Invoice: <strong>' + esc(inv.invoiceNo) + '</strong><br>' +
-          'Date: ' + esc(inv.date) + '<br>' +
-          (inv.doctorName ? 'Doctor: ' + esc(inv.doctorName) + '<br>' : '') +
-          (inv.ipNumber ? 'IP: ' + esc(inv.ipNumber) : '') + '</div>' +
-      '</div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-        '<thead><tr style="background:#f1f1f1;">' +
-          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:left;">#</th>' +
-          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:left;">Particulars</th>' +
-          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:center;">Qty</th>' +
-          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:right;">Rate</th>' +
-          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:right;">Disc.</th>' +
-          '<th style="border-bottom:1px solid #ccc;padding:5px;text-align:right;">Amount</th>' +
-        '</tr></thead><tbody>' + rows + '</tbody></table>' +
-      '<table style="width:100%;margin-top:8px;font-size:12px;">' +
-        row2('Gross', inv.gross) + row2('Discount', -inv.discount) +
-        (inv.tax ? row2('Tax', inv.tax) : '') +
-        '<tr><td style="text-align:right;padding:4px;font-weight:bold;font-size:14px;">Net payable</td>' +
-          '<td style="text-align:right;padding:4px;font-weight:bold;font-size:14px;width:130px;">' +
-          money(inv.net) + '</td></tr>' +
-        row2('Received (' + esc(inv.mode || '') + ')', inv.paid) +
-        row2('Balance', inv.balance) +
-      '</table>' +
-      (inv.notes ? '<div style="font-size:11px;margin-top:8px;">' + esc(inv.notes) + '</div>' : '') +
-      (provisional
-        ? '<div style="margin-top:14px;border:2px solid #b91c1c;color:#b91c1c;display:inline-block;' +
-          'padding:3px 10px;font-weight:bold;">PROVISIONAL — NOT A RECEIPT</div>'
-        : '<div style="font-size:11px;margin-top:18px;color:#555;">Computer-generated bill. ' +
-          'Thank you.</div>') +
-      '</div>';
-  }
+    var totals = [
+      { label: 'Gross', value: money(inv.gross) }
+    ];
+    if (inv.discount) totals.push({ label: 'Discount', value: '- ' + money(inv.discount), tone: 'ok' });
+    if (inv.tax) totals.push({ label: 'Tax', value: money(inv.tax) });
+    totals.push({ label: 'Net payable', value: money(inv.net), strong: true });
+    if (!provisional) {
+      totals.push({ label: 'Received' + (inv.mode ? ' (' + inv.mode + ')' : ''), value: money(inv.paid) });
+      if (Number(inv.balance) > 0) {
+        totals.push({ label: 'Balance', value: money(inv.balance), tone: 'danger' });
+      }
+    }
 
-  function row2(label, value) {
-    return '<tr><td style="text-align:right;padding:3px;">' + label + '</td>' +
-      '<td style="text-align:right;padding:3px;width:130px;">' + money(value) + '</td></tr>';
+    return {
+      kind: 'HOSPITAL BILL',
+      invoiceNo: provisional ? '' : inv.invoiceNo,
+      date: inv.date,
+      patient: {
+        name: inv.patientName, id: inv.patientId,
+        ageSex: inv.ageSex, mobile: inv.mobile, address: inv.address
+      },
+      meta: [['Doctor', inv.doctorName], ['IP', inv.ipNumber]],
+      columns: [
+        { label: '#', align: 'left', width: '34px' },
+        { label: 'Particulars', align: 'left' },
+        { label: 'Qty', align: 'center', width: '56px' },
+        { label: 'Rate', align: 'right', width: '90px' },
+        { label: 'Disc.', align: 'right', width: '80px' },
+        { label: 'Amount', align: 'right', width: '100px' }
+      ],
+      rows: rows,
+      totals: totals,
+      footNote: inv.notes ? E(inv.notes) : '',
+      stamp: provisional ? 'PROVISIONAL — NOT A RECEIPT' : ''
+    };
   }
 
   // ---------------------------------------------------------------------
@@ -1006,8 +1013,7 @@
     google.script.run
       .withSuccessHandler(function (res) {
         if (!res || !res.success) { crescAlert((res && res.message) || 'Could not load that invoice.'); return; }
-        $('hb-print').innerHTML = invoiceHtml(res.data.invoice, res.data.items);
-        window.print();
+        crescInvoicePrint(invoiceDoc(res.data.invoice, res.data.items));
       })
       .withFailureHandler(function (err) { crescAlert('Could not load that invoice: ' + (err && err.message)); })
       .hb_getInvoice(token(), invoiceNo);
@@ -1044,6 +1050,9 @@
     // Defaulted so the one router in ScriptsMV can open this screen with no
     // arguments, the same way it opens every other screen.
     type = type || 'hospital';
+
+    // Fetch the letterhead now rather than while a print dialog is opening.
+    if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
     $('billing-workspace-hospital').classList.add('d-none');
     $('billing-workspace-records').classList.add('d-none');
     var target = $('billing-workspace-' + type);

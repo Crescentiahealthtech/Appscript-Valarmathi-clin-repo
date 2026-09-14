@@ -2223,11 +2223,13 @@ function getLabBillHtml(orderId) {
     var items = [];
     try { items = JSON.parse(b.itemsJSON); } catch (ex) { items = []; }
 
-    var props = PropertiesService.getScriptProperties().getProperties();
-    var clinicName    = props['CLINIC_NAME']    || 'Crescentia Clinic';
-    var clinicAddress = props['CLINIC_ADDRESS'] || '';
-    var clinicPhone   = props['CLINIC_PHONE']   || '';
-    var gstNumber     = props['CLINIC_GST']     || '';
+    // Clinic_Profile.gs is the one reader; the fallback here used to say
+    // "Crescentia Clinic" while the billing desk said "Crescentia HealthTech".
+    var clinic        = cresc_clinic_();
+    var clinicName    = clinic.name;
+    var clinicAddress = clinic.address;
+    var clinicPhone   = clinic.phone;
+    var gstNumber     = clinic.gstin;
 
     var isIp = (b.category === 'IP_ACCOUNT');
 
@@ -2327,8 +2329,7 @@ function _buildReportHtmlGrouped(o, groups, bill, now) {
   var vBy = '', vAt = '';
   for (var i = 0; i < allRows.length; i++) { if (allRows[i].verifiedBy) { vBy = allRows[i].verifiedBy; vAt = allRows[i].verifiedAt; break; } }
 
-  var props = PropertiesService.getScriptProperties().getProperties();
-  var clinicName = props['CLINIC_NAME'] || 'Crescentia Clinic';
+  var clinicName = cresc_clinic_().name;
 
   // Patient-ID barcode. The report is printed on a white card so the bars can
   // be black; the rest of the report is dark, which no scanner would read.

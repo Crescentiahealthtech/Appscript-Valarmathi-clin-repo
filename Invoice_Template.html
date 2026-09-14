@@ -1,0 +1,329 @@
+<!-- =====================================================================
+     🧾 ONE INVOICE — pharmacy, lab and hospital billing
+
+     There were three, and they did not look like the same clinic's paper.
+
+       LAB (getLabReceiptHtml, server side)
+         A proper document: letterhead with the clinic's name, address,
+         phone and GSTIN; a bordered card; a coloured rule under the header;
+         a totals block; a footer. Printed from its own window.
+
+       PHARMACY (buildPrintInvoiceRaw)
+         The same layout, drawn in CSS VARIABLES — var(--text-main),
+         var(--bg-card). Those resolve on screen and resolve to NOTHING
+         anywhere the variables are not defined, which is exactly where an
+         invoice ends up: a print stylesheet, a PDF blob, an email body.
+
+       HOSPITAL BILLING (invoiceHtml)
+         Twelve-point Arial on white. No clinic name beyond a bare heading,
+         no address, no phone, no GSTIN, no card, no footer. A patient
+         holding this and a pharmacy bill from the same visit is holding
+         paper from two different organisations.
+
+     This is the one renderer. It produces the lab's layout — the one that
+     was already right — in ABSOLUTE colours, so it prints and converts to
+     PDF identically wherever it is used, and it reads the letterhead from
+     Clinic_Profile.gs so the clinic's own details are written down once.
+
+     It is in the SHELL because hospital billing and pharmacy are separate
+     lazy bundles and both need it.
+
+     USAGE
+
+       crescInvoiceHtml({
+         kind:        'PHARMACY INVOICE',        // the band at top right
+         invoiceNo:   'INV-2609-0042',
+         date:        '14-Sep-2026 11:04',
+         patient:     { name, id, ageSex, mobile, address },
+         meta:        [ ['Doctor', 'Dr. …'], ['IP', 'IP2609-0003'] ],
+         columns:     [ {label:'#', align:'left', width:'32px'}, … ],
+         rows:        [ ['1', 'Paracetamol 500mg', '10', '₹2.00', '₹20.00'], … ],
+         totals:      [ {label:'Gross', value:'₹420.00'},
+                        {label:'Net payable', value:'₹400.00', strong:true} ],
+         blocks:      [ {title:'GST summary', html:'<table>…</table>'} ],
+         footNote:    'Posted to IP account · settled at discharge',
+         stamp:       'PROVISIONAL — NOT A RECEIPT'
+       })
+
+     Every cell is escaped by the caller or passed through crescInvEsc().
+     ===================================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  // ------------------------------------------------------------------
+  // THE PALETTE IS ABSOLUTE, NOT THEMED.
+  //
+  // An invoice is not a screen. It goes to a printer, into a PDF blob and
+  // into the body of an email, and in two of those three there is no
+  // document whose CSS variables could be resolved. The pharmacy invoice
+  // was drawn in var(--text-main) and var(--bg-card) and was therefore
+  // black-on-black, or invisible, everywhere but the tab it was built in.
+  // ------------------------------------------------------------------
+  var C = {
+    ink:    '#111827',
+    muted:  '#6b7280',
+    faint:  '#9ca3af',
+    line:   '#e5e7eb',
+    band:   '#f3f4f6',
+    panel:  '#f9fafb',
+    accent: '#0369a1',
+    danger: '#b91c1c',
+    ok:     '#047857'
+  };
+
+  var FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif";
+
+  /** Cached so a reprint does not pay for the letterhead again. */
+  var clinicCache = null;
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  window.crescInvEsc = esc;
+
+  /**
+   * Fetches the clinic's letterhead once and keeps it.
+   *
+   * `cb` is called with the profile, or with the fallbacks if the call
+   * fails — an invoice must print whether or not the letterhead could be
+   * read, and a bill with no address on it still beats no bill.
+   */
+  function withClinic(cb) {
+    if (clinicCache) { cb(clinicCache); return; }
+    var fallback = { name: 'Crescentia HealthTech', address: '', phone: '',
+                     email: '', gstin: '', regNo: '',
+                     footer: 'This is a computer-generated document.' };
+    if (typeof google === 'undefined' || !google.script) { cb(fallback); return; }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        clinicCache = (res && res.success && res.clinic) ? res.clinic : fallback;
+        cb(clinicCache);
+      })
+      .withFailureHandler(function () { cb(fallback); })
+      .getClinicProfile();
+  }
+
+  /**
+   * Warms the letterhead cache. Called by a billing screen when it opens so
+   * the first print does not wait on a round trip with a print dialog
+   * already on top of it.
+   */
+  window.crescInvoiceWarm = function () { withClinic(function () {}); };
+
+  function letterhead(clinic, kind, invoiceNo, date) {
+    var left =
+      '<div>' +
+        '<div style="font-size:20px;font-weight:800;color:' + C.accent + ';text-transform:uppercase;letter-spacing:.02em;">' +
+          esc(clinic.name) + '</div>' +
+        (clinic.address ? '<div style="font-size:12px;color:' + C.muted + ';margin-top:4px;">' + esc(clinic.address) + '</div>' : '') +
+        (clinic.phone ? '<div style="font-size:12px;color:' + C.muted + ';">Phone: ' + esc(clinic.phone) + '</div>' : '') +
+        (clinic.email ? '<div style="font-size:12px;color:' + C.muted + ';">' + esc(clinic.email) + '</div>' : '') +
+        (clinic.gstin ? '<div style="font-size:11px;color:' + C.muted + ';margin-top:2px;">GSTIN: ' + esc(clinic.gstin) + '</div>' : '') +
+        (clinic.regNo ? '<div style="font-size:11px;color:' + C.muted + ';">Reg: ' + esc(clinic.regNo) + '</div>' : '') +
+      '</div>';
+
+    var right =
+      '<div style="text-align:right;">' +
+        '<div style="font-size:16px;font-weight:800;letter-spacing:1px;color:' + C.ink + ';">' + esc(kind) + '</div>' +
+        (invoiceNo ? '<div style="font-size:12px;color:' + C.muted + ';margin-top:4px;">No: <strong>' + esc(invoiceNo) + '</strong></div>' : '') +
+        (date ? '<div style="font-size:11px;color:' + C.muted + ';">Date: ' + esc(date) + '</div>' : '') +
+      '</div>';
+
+    return '<div style="padding:18px 24px;border-bottom:2px solid ' + C.accent + ';' +
+           'display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">' +
+           left + right + '</div>';
+  }
+
+  function patientBlock(p, meta) {
+    p = p || {};
+    var demo = [];
+    if (p.ageSex) demo.push(p.ageSex);
+    if (p.mobile) demo.push(p.mobile);
+
+    var who = '<strong>' + esc(p.name || 'Walk-in') + '</strong>' +
+      (p.id ? ' <span style="color:' + C.muted + ';">&bull; ' + esc(p.id) + '</span>' : '') +
+      (demo.length ? ' <span style="color:' + C.faint + ';font-size:12px;">(' + esc(demo.join(' / ')) + ')</span>' : '');
+
+    var right = (meta || []).filter(function (m) { return m && m[1]; })
+      .map(function (m) {
+        return '<span style="color:' + C.muted + ';">' + esc(m[0]) + ':</span> ' + esc(m[1]);
+      }).join('<span style="color:' + C.line + ';"> &nbsp;|&nbsp; </span>');
+
+    return '<div style="padding:12px 24px;background:' + C.panel + ';border-bottom:1px solid ' + C.line + ';' +
+             'display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:13px;color:' + C.ink + ';">' +
+             '<div><span style="color:' + C.muted + ';">Patient:</span> ' + who + '</div>' +
+             (right ? '<div>' + right + '</div>' : '') +
+           '</div>' +
+           (p.address
+             ? '<div style="padding:6px 24px;background:' + C.panel + ';border-bottom:1px solid ' + C.line +
+               ';font-size:12px;color:' + C.muted + ';">' + esc(p.address) + '</div>'
+             : '');
+  }
+
+  function itemTable(columns, rows) {
+    columns = columns || [];
+    rows = rows || [];
+    var head = columns.map(function (c) {
+      return '<th style="padding:8px 10px;text-align:' + (c.align || 'left') + ';color:' + C.muted +
+             ';font-size:11px;text-transform:uppercase;letter-spacing:.03em;font-weight:700;' +
+             (c.width ? 'width:' + c.width + ';' : '') + '">' + esc(c.label) + '</th>';
+    }).join('');
+
+    var body = rows.length
+      ? rows.map(function (r) {
+          return '<tr>' + r.map(function (cell, i) {
+            var c = columns[i] || {};
+            // A cell may carry its own markup (a second line under a drug
+            // name, a batch and expiry). Callers escape their own text.
+            return '<td style="padding:8px 10px;border-bottom:1px solid ' + C.line +
+                   ';text-align:' + (c.align || 'left') + ';vertical-align:top;color:' + C.ink +
+                   ';font-size:13px;">' + (cell == null ? '' : cell) + '</td>';
+          }).join('') + '</tr>';
+        }).join('')
+      : '<tr><td colspan="' + Math.max(1, columns.length) + '" style="padding:18px;text-align:center;color:' +
+        C.faint + ';font-size:12px;">Nothing itemised on this bill.</td></tr>';
+
+    return '<div style="padding:16px 24px 8px;">' +
+             '<table style="width:100%;border-collapse:collapse;">' +
+               '<thead><tr style="background:' + C.band + ';">' + head + '</tr></thead>' +
+               '<tbody>' + body + '</tbody>' +
+             '</table>' +
+           '</div>';
+  }
+
+  function totalsBlock(totals, blocks) {
+    var rows = (totals || []).map(function (t) {
+      if (t.strong) {
+        return '<tr style="border-top:2px solid ' + C.ink + ';">' +
+                 '<td style="padding:6px 10px;font-weight:800;font-size:15px;color:' + C.ink + ';">' + esc(t.label) + '</td>' +
+                 '<td style="padding:6px 10px;text-align:right;font-weight:800;font-size:16px;color:' + C.accent + ';">' + esc(t.value) + '</td>' +
+               '</tr>';
+      }
+      var colour = t.tone === 'danger' ? C.danger : t.tone === 'ok' ? C.ok : C.muted;
+      return '<tr><td style="padding:4px 10px;color:' + colour + ';font-size:13px;">' + esc(t.label) + '</td>' +
+             '<td style="padding:4px 10px;text-align:right;font-size:13px;color:' +
+               (t.tone ? colour : C.ink) + ';">' + esc(t.value) + '</td></tr>';
+    }).join('');
+
+    var side = (blocks || []).map(function (b) {
+      return '<div style="margin-bottom:10px;">' +
+               (b.title ? '<div style="font-size:11px;color:' + C.muted +
+                 ';margin-bottom:6px;font-weight:700;text-transform:uppercase;">' + esc(b.title) + '</div>' : '') +
+               (b.html || '') +
+             '</div>';
+    }).join('');
+
+    return '<div style="padding:0 24px 16px;display:flex;justify-content:space-between;' +
+             'align-items:flex-start;gap:24px;flex-wrap:wrap;">' +
+             '<div style="flex:1 1 280px;min-width:0;">' + side + '</div>' +
+             '<table style="font-size:13px;min-width:260px;">' + rows + '</table>' +
+           '</div>';
+  }
+
+  /**
+   * The invoice, as one self-contained block of markup.
+   *
+   * SYNCHRONOUS when the letterhead is already cached, which it is on every
+   * print after the first — so a caller may use the return value directly.
+   * Pass `done` to be safe on the very first print of a session, or call
+   * crescInvoiceWarm() when the billing screen opens.
+   *
+   * @param {Object} doc
+   * @param {function(string)} [done]
+   * @return {string} '' if the letterhead has not arrived yet
+   */
+  window.crescInvoiceHtml = function (doc, done) {
+    doc = doc || {};
+    var out = '';
+    withClinic(function (clinic) {
+      out =
+        '<div style="max-width:780px;margin:16px auto;border:1px solid ' + C.line + ';border-radius:10px;' +
+          'overflow:hidden;font-family:' + FONT + ';color:' + C.ink + ';background:#ffffff;' +
+          'box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;">' +
+
+          letterhead(clinic, doc.kind || 'INVOICE', doc.invoiceNo, doc.date) +
+          patientBlock(doc.patient, doc.meta) +
+          itemTable(doc.columns, doc.rows) +
+          totalsBlock(doc.totals, doc.blocks) +
+
+          '<div style="padding:12px 24px;background:' + C.panel + ';border-top:1px solid ' + C.line + ';' +
+            'font-size:12px;color:' + C.ink + ';display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;">' +
+            '<div>' + (doc.footNote || '') + '</div>' +
+            '<div style="color:' + C.faint + ';">' + esc(clinic.footer || '') + '</div>' +
+          '</div>' +
+
+          // A provisional estimate that can be mistaken for a receipt is a
+          // dispute waiting to happen, so it is stamped rather than captioned.
+          (doc.stamp
+            ? '<div style="padding:12px 24px 18px;">' +
+                '<span style="border:2px solid ' + C.danger + ';color:' + C.danger + ';' +
+                  'display:inline-block;padding:4px 12px;font-weight:800;letter-spacing:.05em;' +
+                  'border-radius:4px;font-size:12px;">' + esc(doc.stamp) + '</span>' +
+              '</div>'
+            : '') +
+        '</div>';
+      if (typeof done === 'function') done(out);
+    });
+    return out;
+  };
+
+  /**
+   * Opens the invoice in its own window and prints it.
+   *
+   * The alternative — a hidden div plus `@media print { body * { visibility:
+   * hidden } }`, which is how hospital billing did it — prints whatever else
+   * happens to be in the document if one selector is wrong, and cannot be
+   * re-printed without the screen behind it. A standalone window carries
+   * only the invoice.
+   */
+  /**
+   * Prints markup that has ALREADY been built — for a screen holding the
+   * exact bytes it also sent to the PDF and the email, which must print as
+   * the same document rather than as a second rendering of it.
+   */
+  window.crescInvoicePrintHtml = function (html, title) {
+    openPrintWindow(html, title || 'Invoice');
+  };
+
+  window.crescInvoicePrint = function (doc) {
+    window.crescInvoiceHtml(doc, function (html) {
+      openPrintWindow(html, (doc.kind || 'Invoice') + ' ' + (doc.invoiceNo || ''));
+    });
+  };
+
+  function openPrintWindow(html, title) {
+    (function () {
+      var w = window.open('', '_blank', 'width=900,height=820,top=40,left=40');
+      if (!w) {
+        if (window.crescAlert) {
+          window.crescAlert('The pop-up blocker stopped the invoice window. ' +
+                            'Allow pop-ups for this page and print again.');
+        }
+        return;
+      }
+      // Already a whole document (the pharmacy desk holds one, so that the
+      // printed copy is byte-for-byte what went to the PDF and the email).
+      var whole = /^\s*<!DOCTYPE/i.test(html);
+      w.document.open();
+      w.document.write(whole ? html :
+        '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+        '<title>' + esc(title) + '</title>' +
+        '<style>*{box-sizing:border-box;margin:0;padding:0;}' +
+        'body{background:#fff;font-family:' + FONT + ';}' +
+        '@media print{@page{margin:1cm;} .no-print{display:none!important;}}' +
+        '</style></head><body>' + html +
+        '<div class="no-print" style="text-align:center;padding:16px 0 28px;">' +
+          '<button onclick="window.print();" style="background:' + C.accent + ';color:#fff;border:0;' +
+          'padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">' +
+          'Print / Save PDF</button></div>' +
+        '</body></html>');
+      w.document.close();
+      w.focus();
+      setTimeout(function () { try { w.print(); } catch (e) {} }, 400);
+    })();
+  }
+})();
+</script>
