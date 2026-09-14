@@ -119,14 +119,11 @@ function getActiveIPAdmissionsForNotes(sessionToken) {
       if (status !== 'ACTIVE') continue;
       if (!canSee(row[0])) continue;
 
-      let doaFormatted = "--";
-      try {
-        doaFormatted = Utilities.formatDate(
-          new Date(row[4]),
-          Session.getScriptTimeZone(),
-          "dd-MMM-yyyy"
-        );
-      } catch(e) { doaFormatted = row[4] ? row[4].toString() : "--"; }
+      // Shared_Dates.gs. new Date(row[4]) threw for a day-first text DOA,
+      // and the catch then printed the raw cell - so the ward list showed
+      // "13/09/2026" beside "13-Sep-2026" depending on how each row was typed.
+      let doaFormatted = cresc_formatDate_(row[4], "dd-MMM-yyyy") ||
+                         (row[4] ? String(row[4]) : "--");
 
       activeAdmissions.push({
         ipNumber:   String(row[0]).trim(),
@@ -237,11 +234,7 @@ function getClinicalContext(ipNumber, sessionToken) {
                 pulse: nd.vitals.pulse || "--",
                 spo2:  nd.vitals.spo2  || "--",
                 temp:  nd.vitals.temp  || "--",
-                recorded: Utilities.formatDate(
-                  new Date(tlData[i][0]),
-                  Session.getScriptTimeZone(),
-                  "hh:mm a"
-                )
+                recorded: cresc_formatDate_(tlData[i][0], "hh:mm a") || "--"
               };
               break;
             }
@@ -353,20 +346,13 @@ function getIPTimeline(ipNumber, sessionToken) {
       let noteData = {};
       try { noteData = JSON.parse(data[i][4] || "{}"); } catch(e) {}
 
-      let tsFormatted = "--";
-      try {
-        tsFormatted = Utilities.formatDate(
-          new Date(data[i][0]),
-          Session.getScriptTimeZone(),
-          "dd-MMM-yyyy hh:mm a"
-        );
-      } catch(e) {}
+      let tsFormatted = cresc_formatDate_(data[i][0], "dd-MMM-yyyy hh:mm a") || "--";
 
       timeline.push({
         noteId:    String(at(data[i], "Note_ID", 8) || "") ||
                    (data[i][0] ? String(data[i][0].getTime ? data[i][0].getTime() : data[i][0]) : "--"),
         timestamp: tsFormatted,
-        rawTs:     data[i][0] ? new Date(data[i][0]).toISOString() : null,
+        rawTs:     (function (v) { var d = cresc_parseDate_(v); return d ? d.toISOString() : null; })(data[i][0]),
         ipNumber:  String(data[i][1] || ""),
         patientId: String(data[i][2] || ""),
         roleType:  String(data[i][3] || ""),
@@ -806,14 +792,7 @@ function getIPPharmacyQueue(ipNumber, sessionToken) {
       const actionFlag = String(data[i][11] || "ACTIVE").toUpperCase();
       if (actionFlag !== 'ACTIVE') continue;
 
-      let orderedAtFormatted = "--";
-      try {
-        orderedAtFormatted = Utilities.formatDate(
-          new Date(data[i][10]),
-          Session.getScriptTimeZone(),
-          "dd-MMM hh:mm a"
-        );
-      } catch(e) {}
+      let orderedAtFormatted = cresc_formatDate_(data[i][10], "dd-MMM hh:mm a") || "--";
 
       results.push({
         queueId:      String(data[i][0]),
@@ -928,8 +907,7 @@ function getIPLabResults(ipNumber, patientId, sessionToken) {
       const rowPID = String(data[i][2] || "").trim();
       if (rowIP !== String(ipNumber).trim() && rowPID !== String(patientId).trim()) continue;
 
-      let orderedAtFmt = "--";
-      try { orderedAtFmt = Utilities.formatDate(new Date(data[i][4]), Session.getScriptTimeZone(), "dd-MMM hh:mm a"); } catch(e) {}
+      let orderedAtFmt = cresc_formatDate_(data[i][4], "dd-MMM hh:mm a") || "--";
 
       let resultData = {};
       try { resultData = JSON.parse(data[i][8] || "{}"); } catch(e) {}
@@ -982,8 +960,8 @@ function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
 
     var adm = ipc_admissionRow_(ipNumber);
 
-    var from = opts.from ? new Date(opts.from) : null;
-    var to   = opts.to   ? new Date(opts.to)   : null;
+    var from = cresc_dateOnly_(opts.from);
+    var to   = cresc_dateOnly_(opts.to);
     if (to) to.setHours(23, 59, 59, 999);
 
     var wanted = null;
@@ -1073,11 +1051,27 @@ function ipn_printScope_(rows, wanted, onlyIds) {
   var single      = !!onlyIds && rows.length === 1;
 
   if (single) {
-    var label = IPN_PRINT_LABELS[dc_upper_(rows[0].roleType)] || "Clinical Note";
+    // One note as a document in its own right - for a referral, a second
+    // opinion, or the relative at the counter asking for what was written
+    // yesterday. It is titled and signed by the note's OWN author and role,
+    // not by the treating consultant: a nursing note signed off as a
+    // consultant's document misrepresents who wrote it.
+    var role   = dc_upper_(rows[0].roleType);
+    var label  = IPN_PRINT_LABELS[role] || "Clinical Note";
     var author = dc_str_(rows[0].author);
+    var when   = dc_str_(rows[0].timestamp);
+    var SIGN_ROLE = {
+      NURSE: "Nurse", DOCTOR: "Doctor", CONSULTANT: "Consultant",
+      PROCEDURE: "Operator", QUICK: "Author"
+    };
     return {
-      docTitle: label, sectionTitle: label, showChart: false,
-      signRole: (dc_upper_(rows[0].roleType) === "NURSE") ? "Nurse" : "Author",
+      // The date is part of the title on a single-note document: without it
+      // two printed progress notes for the same patient are indistinguishable
+      // once they are on a desk.
+      docTitle: when ? (label + " — " + when) : label,
+      sectionTitle: label,
+      showChart: false,
+      signRole: SIGN_ROLE[role] || "Author",
       signName: function () { return author || "Author"; }
     };
   }

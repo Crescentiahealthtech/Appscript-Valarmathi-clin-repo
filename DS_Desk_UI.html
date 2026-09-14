@@ -111,6 +111,36 @@
   .ds-section table td { border-bottom:1px solid var(--border-soft); padding:.2rem .25rem;
                          vertical-align:top; }
 
+  /* ---- The two prescription tables ------------------------------------
+     Fixed layout so the declared column widths hold: with `auto`, one long
+     drug name pushed the Days column off the row and the table reflowed on
+     every keystroke. The name column is the one that should absorb a long
+     value, and it does - the cell wraps rather than the table resizing. */
+  .ds-section .ds-rx-table            { table-layout:fixed; }
+  .ds-section .ds-rx-table td,
+  .ds-section .ds-rx-table th         { word-break:break-word; }
+  .ds-section .ds-rx-table input,
+  .ds-section .ds-rx-table select     { padding:.3rem .4rem; font-size:.82rem; }
+  .ds-section .ds-rx-table input::placeholder { color:var(--text-faint); opacity:.55; }
+  /* Dosage reads as an instruction, so it is set apart the way the OP Rx
+     table sets it apart. */
+  .ds-section .ds-rx-table td:nth-child(3) input { text-align:center; font-weight:600; }
+  .ds-section .ds-rx-table td:nth-child(4) input { text-align:center; }
+
+  @media (max-width: 640px) {
+    /* A five-column prescription does not fit a phone. Let it scroll
+       sideways inside its own box rather than squeezing every cell to
+       three characters. */
+    .ds-section .ds-rx-table { table-layout:auto; min-width:34rem; }
+  }
+
+  /* The inline lab panel that sits under Significant investigations.
+     Tinted and rule-marked so it reads as REFERENCE beside the sections
+     that are being written - nothing in it is editable. */
+  .ds-labpanel   { border-left:3px solid var(--info); background:var(--surface-2); }
+  .ds-labpanel h6 { font-size:.85rem; }
+  .ds-labpanel .lp-order { margin-bottom:.55rem; }
+
   .ds-srcchip    { display:inline-block; font-size:.65rem; padding:.05rem .4rem; border-radius:6px;
                    background:var(--surface-3); color:var(--text-muted); border:0;
                    margin:.1rem .2rem .1rem 0; cursor:pointer; }
@@ -216,11 +246,11 @@
       <div class="mt-1" id="ds-ed-statusline"></div>
     </div>
     <div class="d-flex flex-wrap gap-2 align-items-start">
-      <!-- Writing the investigations and the pending-results sections means
-           reading the actual numbers. This opens them here rather than
-           sending the writer to the Lab module and back. -->
+      <!-- The results are ON the page, under Significant investigations.
+           This jumps to them rather than opening an overlay over the boxes
+           the writer is filling in. -->
       <button type="button" class="btn btn-sm btn-outline-info" id="ds-ed-labs"
-              onclick="dsPeekLabs()" title="This patient's verified lab results">
+              onclick="dsJumpToLabs()" title="Jump to this patient's verified lab results">
         <i class="fa-solid fa-flask-vial me-1"></i> Labs
       </button>
       <div class="d-flex flex-wrap gap-2" id="ds-ed-actions"></div>

@@ -143,7 +143,12 @@
     google.script.run
       .withSuccessHandler((response) => {
         if(!response.success) {
-          tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-4">${response.message}</td></tr>`;
+          // A server message quotes sheet values back at you ("Brand <x>
+          // not found"), so it is escaped rather than parsed as markup.
+          const msg = window.crescEsc ? window.crescEsc(response.message)
+            : String(response.message == null ? '' : response.message)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-4">${msg}</td></tr>`;
           return;
         }
         

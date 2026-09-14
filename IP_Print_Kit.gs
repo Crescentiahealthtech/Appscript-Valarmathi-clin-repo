@@ -200,6 +200,9 @@ function ipp_sig_(name, caption) {
 /** "dd-MMM-yyyy hh:mm a" in the script's timezone, tolerant of junk input. */
 function ipp_when_(d, pattern) {
   try {
+    if (typeof cresc_formatDate_ === 'function') {
+      return cresc_formatDate_(d, pattern || "dd-MMM-yyyy hh:mm a");
+    }
     var dt = (d instanceof Date) ? d : new Date(d);
     if (isNaN(dt.getTime())) return "";
     return Utilities.formatDate(dt, Session.getScriptTimeZone(), pattern || "dd-MMM-yyyy hh:mm a");

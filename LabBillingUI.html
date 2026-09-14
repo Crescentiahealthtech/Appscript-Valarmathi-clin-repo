@@ -1,15 +1,19 @@
 <div id="lab-billing-workspace" class="page-section d-none">
 
-  <div id="lbOv" class="position-fixed top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center flex-column" style="background:var(--overlay-scrim);z-index:2000;">
-    <div class="spinner-border mb-3" style="color:var(--success-fg);width:3rem;height:3rem;"></div>
-    <div class="fw-semibold" id="lbOvMsg" style="color:var(--success-fg);">Loading…</div>
-  </div>
-
   <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-3">
       <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('lab-workspace-view');"><i class="fa-solid fa-arrow-left me-1"></i>Back to Lab</button>
       <div>
-        <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-receipt me-2" style="color:var(--success-fg);"></i>Lab Billing Desk</h3>
+        <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-receipt me-2" style="color:var(--success-fg);"></i>Lab Billing Desk
+          <!-- A fixed, full-viewport scrim used to cover the WHOLE
+               application - sidebar included - for the length of every call,
+               including the routine reload after a bill. The work is
+               announced here instead. -->
+          <span class="cresc-busy-chip ms-2" id="lbOv" role="status" aria-live="polite" hidden>
+            <span class="spinner-border" aria-hidden="true"></span>
+            <span id="lbOvMsg">Loading…</span>
+          </span>
+        </h3>
         <div class="label-bright small" id="lbSub">Loading today's collections…</div>
       </div>
     </div>
@@ -87,8 +91,24 @@ var LabBill=(function(){
   /* ─── UTILS ─── */
   function g(id){return document.getElementById(id);}
   function e(s){if(s==null)return '';return String(s).replace(/[&<>"'`=\/]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#x60;','=':'&#x3D;','/':'&#x2F;'}[c];});}
-  function spin(m){var el=g('lbOv');if(el){el.classList.remove('d-none');el.classList.add('d-flex');}if(g('lbOvMsg'))g('lbOvMsg').textContent=m||'Loading…';}
-  function stop(){var el=g('lbOv');if(el){el.classList.add('d-none');el.classList.remove('d-flex');}}
+  /**
+   * The clock time on a bill row.
+   *
+   * `new Date(b.billedAt).toLocaleTimeString()` printed "Invalid Date" in
+   * the column whenever the stored timestamp was a day-first string, which
+   * is most of them. crescParseDate (Auth.html) reads those.
+   */
+  function lbBillTime(v){
+    if(!v) return '';
+    var d = (typeof window.crescParseDate === 'function')
+      ? window.crescParseDate(v) : new Date(v);
+    if(!d || isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+  }
+  /* Counted, so two overlapping calls cannot clear each other's spinner. */
+  var _lbBusy=0;
+  function spin(m){_lbBusy++;var el=g('lbOv');if(el)el.hidden=false;if(g('lbOvMsg'))g('lbOvMsg').textContent=m||'Loading…';}
+  function stop(){_lbBusy=Math.max(0,_lbBusy-1);if(_lbBusy)return;var el=g('lbOv');if(el)el.hidden=true;}
   function flash(msg,ok){
     var b=g('lbFlash');if(!b)return;
     b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'var(--success)':'var(--danger)')+'"><i class="fa-solid '+(ok?'fa-circle-check text-success':'fa-circle-exclamation text-danger')+'"></i><span class="text-white-force flex-grow-1">'+e(msg)+'</span><span style="cursor:pointer;color:var(--text-muted);" onclick="this.parentNode.remove()">×</span></div>';
@@ -295,7 +315,7 @@ var LabBill=(function(){
           <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 13px; font-weight: 600;">${b.patientName}</td>
           <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; color: var(--text-faint);">${b.testNames}</td>
           <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; text-align: center;">${b.paymentMode}</td>
-          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; text-align: right;">${b.billedAt ? new Date(b.billedAt).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'}) : ''}</td>
+          <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 12px; text-align: right;">${lbBillTime(b.billedAt)}</td>
           <td style="padding: 8px; border-bottom: 1px solid var(--border-color); font-size: 14px; font-weight: bold; text-align: right;">₹${Number(b.net).toFixed(2)}</td>
         </tr>
       `;

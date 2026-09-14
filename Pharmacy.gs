@@ -23,6 +23,8 @@ var PH_SHEETS = {
   OPD_QUEUE:    "Pharmacy_Queue_DB",
   IP_CASESHEET: "IP_CaseSheets_DB",
   IP_QUEUE:     "IP_Pharmacy_Queue",
+  DS_SUMMARIES: "DS_Summaries",
+  DS_SNAPSHOTS: "DS_Snapshots",
   MASTER_LEDGER:"Pharmacy_Master"
 };
 
@@ -170,7 +172,15 @@ function getPatientBillingContext(query) {
     var rx = []
       .concat(_readOpdPrescriptions_(ss, pid))
       .concat(_readIpCasesheetPrescriptions_(ss, pid))
-      .concat(_readIpWardPrescriptions_(ss, pid));
+      .concat(_readIpWardPrescriptions_(ss, pid))
+      // THE DISCHARGE SCRIPT. This was the missing fourth source: the
+      // counter could see what the patient was given on the ward and what
+      // the OP consult wrote, but not what the discharge summary actually
+      // sends them home on - which is the one prescription they are
+      // standing at the counter to collect. It was being read off a printed
+      // sheet and typed in again, which is how a dose gets transcribed
+      // wrong on the last transaction of an admission.
+      .concat(_readDischargePrescriptions_(ss, pid));
     return { success: true, patient: patient, prescriptions: _dedupePrescriptions_(rx) };
   } catch (error) {
     return { success: false, message: "Lookup failed: " + error.toString() };
@@ -281,6 +291,115 @@ function _readIpWardPrescriptions_(ss, pid) {
       dose: [data[j][4], data[j][5], data[j][6]].filter(String).join(" "),
       orderedBy: "Doctor", date: _fmtDate_(data[j][10]), instructions: String(data[j][7] || "") });
   }
+  return out;
+}
+
+/**
+ * The take-home medicines from a SIGNED discharge summary.
+ *
+ * Reads through the discharge engine's own accessors (DS_Data.gs) rather
+ * than parsing DS_Snapshots here, so the payload's chunking, its schema
+ * version and its column migration stay in one place. Those functions live
+ * in a different .gs file, and Apps Script leaves a function undefined
+ * rather than failing to load when a file was not copied across - so a
+ * project without the discharge module simply contributes nothing here,
+ * exactly as it does today.
+ *
+ * ONLY SIGNED summaries are read. A draft is a document still being argued
+ * over; dispensing against one would hand the patient a prescription the
+ * consultant had not agreed to.
+ *
+ * @param {Spreadsheet} ss
+ * @param {string} pid
+ * @return {Array<{source, drugName, dose, orderedBy, date, instructions}>}
+ */
+function _readDischargePrescriptions_(ss, pid) {
+  var out = [];
+  if (!pid) return out;
+  if (typeof dsx_latestSnapshotOfType_ !== "function" ||
+      typeof dsx_summaryIdFor_ !== "function") return out;
+  if (!ss.getSheetByName(PH_SHEETS.DS_SUMMARIES)) return out;
+
+  try {
+    var sh = ss.getSheetByName(PH_SHEETS.DS_SUMMARIES);
+    var data = sh.getDataRange().getValues();
+    if (data.length < 2) return out;
+
+    var hdr = data[0].map(function (h) { return String(h || "").trim(); });
+    var cPid = hdr.indexOf("Patient_ID"), cId = hdr.indexOf("Summary_ID"),
+        cStatus = hdr.indexOf("Status"), cSigned = hdr.indexOf("Signed_At");
+    if (cPid === -1 || cId === -1 || cStatus === -1) return out;
+
+    // The most recently signed summary for this patient. A patient with two
+    // admissions has two, and the one they are collecting against is the
+    // latest - the earlier one was dispensed at the time.
+    var bestId = "", bestMs = -1, bestSignedAt = "";
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][cPid] || "").trim().toUpperCase() !== pid.toUpperCase()) continue;
+      var st = String(data[i][cStatus] || "").trim().toUpperCase();
+      if (st !== "SIGNED" && st !== "AMENDMENT_IN_PROGRESS") continue;
+      var ms = (cSigned > -1) ? _dateKeyNum_(data[i][cSigned]) : 0;
+      if (ms >= bestMs) {
+        bestMs = ms;
+        bestId = String(data[i][cId] || "").trim();
+        bestSignedAt = (cSigned > -1) ? data[i][cSigned] : "";
+      }
+    }
+    if (!bestId) return out;
+
+    var snap = dsx_latestSnapshotOfType_(bestId, "SIGNED");
+    if (!snap || !snap.payload || !snap.payload.sections) return out;
+
+    var sec = snap.payload.sections.DISCHARGE_MEDICATIONS;
+    if (!sec || !sec.content || !sec.content.rows || !sec.content.columns) return out;
+
+    // BY COLUMN NAME. The columns changed once already (Generic/Brand/... ->
+    // the OP/IP five), and a signed summary keeps whichever set it was
+    // signed with, so both shapes are read here.
+    var cols = sec.content.columns.map(function (c) { return String(c || "").trim().toUpperCase(); });
+    var at = function (names) {
+      for (var n = 0; n < names.length; n++) {
+        var k = cols.indexOf(names[n].toUpperCase());
+        if (k > -1) return k;
+      }
+      return -1;
+    };
+    var iName  = at(["Medicine Name", "Brand", "Generic"]);
+    var iType  = at(["Type"]);
+    var iSig   = at(["Dosage / Sig", "Strength / Dose", "Dose"]);
+    var iDays  = at(["Days", "Duration"]);
+    var iNotes = at(["Notes / Timing", "Instructions", "Timing"]);
+    if (iName === -1) return out;
+
+    var when = _fmtDate_(bestSignedAt);
+
+    sec.content.rows.forEach(function (r) {
+      var name = String(r[iName] || "").trim();
+      if (!name) return;
+      // The medicine cell may carry "BRAND (GENERIC)". The pharmacy matches
+      // on the brand it stocks, so the generic goes to the instructions
+      // where a substitution decision is actually made.
+      var generic = "";
+      var paren = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      if (paren) { name = paren[1].trim(); generic = paren[2].trim(); }
+
+      var type = (iType > -1) ? String(r[iType] || "").trim() : "";
+      var days = (iDays > -1) ? String(r[iDays] || "").trim() : "";
+      var notes = [generic ? "generic " + generic : "",
+                   (iNotes > -1) ? String(r[iNotes] || "").trim() : "",
+                   days ? days + (/^\d+$/.test(days) ? " day(s)" : "") : ""]
+                  .filter(String).join(" · ");
+
+      out.push({
+        source: "DISCHARGE",
+        drugName: type ? (type + " " + name) : name,
+        dose: (iSig > -1) ? String(r[iSig] || "").trim() : "",
+        orderedBy: "Discharge summary",
+        date: when,
+        instructions: notes
+      });
+    });
+  } catch (e) { /* the other three sources must still reach the counter */ }
   return out;
 }
 
@@ -494,11 +613,20 @@ function _nextInvoiceNo_(headerSheet, now) {
 }
 
 function round2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
-function _fmtDate_(v) { return v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), "dd-MMM-yyyy") : String(v || ""); }
+function _fmtDate_(v) { return cresc_formatDate_(v, "dd-MMM-yyyy") || String(v || ""); }
+
+/**
+ * 'yyyy-MM-dd' for a prescription row.
+ *
+ * This used to recognise only a yyyy-MM-dd substring and return the raw text
+ * for everything else. A ward order dated "13/09/2026" therefore keyed as
+ * "13/09/2026", and _dateKeyNum_ turned that into 13092026 - a number that
+ * sorts BELOW 20260913. Picking "the latest note" then picked the wrong one,
+ * and the pharmacy dispensed against a superseded prescription.
+ */
 function _dateKey_(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  var s = String(v || ""), m = s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  return m ? m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2) : s;
+  var k = cresc_dayKey_(v);
+  return k || String(v || "");
 }
 function _dateKeyNum_(v) { var n = parseInt(_dateKey_(v).replace(/[-\/]/g, ""), 10); return isNaN(n) ? 0 : n; }
 function _expiryToSortKey_(exp) {

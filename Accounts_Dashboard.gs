@@ -147,7 +147,7 @@ function recordBankTransfer(payload) {
     if (amt <= 0) return { success: false, message: "Amount must be greater than 0." };
     if (dir !== 'DEPOSIT' && dir !== 'WITHDRAW') return { success: false, message: "Invalid transfer direction." };
     if (typeof acc_isLocked_ === 'function' && acc_isLocked_(acc_period_(new Date()))) return { success: false, message: "Current period is locked." };
-    var sh = acc_sheet_(ACC_CFG.LEDGER), txnId = "TRF-" + Date.now().toString().slice(-9), ts = new Date(), user = acc_str_(payload.loggedBy) || 'UNKNOWN';
+    var sh = acc_sheet_(ACC_CFG.LEDGER), txnId = acc_newId_("TRF"), ts = new Date(), user = acc_str_(payload.loggedBy) || 'UNKNOWN';
     if (dir === 'DEPOSIT') sh.appendRow([txnId, ts, 'Transfer', 'CASH_DEPOSIT', '', acc_str_(payload.refId), 'Bank Deposit', 'Cash', 0, amt, user, '', "FALSE", acc_str_(payload.notes)]);
     else sh.appendRow([txnId, ts, 'Transfer', 'CASH_WITHDRAWAL', '', acc_str_(payload.refId), 'Bank Withdrawal', 'Cash', amt, 0, user, '', "FALSE", acc_str_(payload.notes)]);
     acc_audit_(user, dir === 'DEPOSIT' ? 'CASH_DEPOSIT' : 'CASH_WITHDRAWAL', 'Finance_Master_Ledger', txnId, '', amt, acc_str_(payload.notes));

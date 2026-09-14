@@ -673,6 +673,11 @@ function _zeros12_() { return [0,0,0,0,0,0,0,0,0,0,0,0]; }
 
 /** Robust date parse for Date objects, ISO, dd/MM/yyyy, MM/dd/yyyy timestamps. */
 function _dashToDate_(v) {
+  // Shared_Dates.gs. The dashboard counts admissions and collections PER DAY,
+  // so a date read one day out (which is what `new Date("2026-09-13")` does
+  // west of Greenwich, and what a day-first string did everywhere) moved
+  // money and patients between days on every chart.
+  if (typeof cresc_parseDate_ === 'function') return cresc_parseDate_(v);
   if (!v) return null;
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
   var s = String(v).trim(); if (!s) return null;

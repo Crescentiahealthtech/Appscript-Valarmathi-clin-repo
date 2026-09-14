@@ -171,6 +171,15 @@ function dsx_renderDocumentHtml_(summaryId, snapshotRef, mode, opts) {
   });
 }
 
+/* Printed column widths for the two prescription tables.
+   Without them the browser's auto layout gives Type and Days as much room
+   as the medicine name, and a long brand wraps to three lines beside two
+   nearly empty columns. */
+var DSX_PRINT_COL_WIDTHS = {
+  DISCHARGE_MEDICATIONS: ['9%', '32%', '21%', '9%', '29%'],
+  TREATMENT_GIVEN:       ['9%', '30%', '19%', '22%', '20%']
+};
+
 /** One section, rendered by its format through the shared print kit. */
 function dsx_printSection_(key, sec, empty) {
   var title = dsx_str_(sec.title) || key;
@@ -202,11 +211,18 @@ function dsx_printSection_(key, sec, empty) {
         sec.content.rows.map(function (r) {
           return sec.content.columns.map(function (c, i) {
             var v = r[i] === undefined ? '' : r[i];
-            // Generic names print in capitals: that is what a pharmacist reads.
-            if (/^generic$/i.test(c)) return '<strong>' + ipp_esc_(String(v).toUpperCase()) + '</strong>';
+            // The medicine name is what a pharmacist reads off the page and
+            // what a patient reads at home, so it is the one thing on the
+            // row set in bold. (It was the Generic column until Treatment
+            // given and Discharge medications adopted the OP/IP columns; the
+            // generic now rides inside the name cell.)
+            if (/^medicine name$/i.test(c) || /^generic$/i.test(c)) {
+              return '<strong>' + ipp_esc_(v) + '</strong>';
+            }
             return ipp_esc_(v);
           });
-        })));
+        }),
+        DSX_PRINT_COL_WIDTHS[key] || null));
 
     case 'FIELDS':
       var pairs = Object.keys(sec.content)

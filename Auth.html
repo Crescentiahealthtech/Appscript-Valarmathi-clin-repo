@@ -284,6 +284,10 @@
   // ward). That reads like five separate bugs. This maps the symbol back to the
   // file that declares it, so one banner replaces the guesswork.
   window.CRESC_SYMBOL_HOME = {
+    cresc_parseDate_: 'Shared_Dates.gs', cresc_formatDate_: 'Shared_Dates.gs',
+    cresc_dayKey_: 'Shared_Dates.gs', cresc_los_: 'Shared_Dates.gs',
+    cresc_ms_: 'Shared_Dates.gs', cresc_dateOnly_: 'Shared_Dates.gs',
+    cresc_timeText_: 'Shared_Dates.gs', cresc_daysBetween_: 'Shared_Dates.gs',
     resolveScope_: 'Doctor_Core.gs', resolveWriteDoctor_: 'Doctor_Core.gs',
     dc_invalidate_: 'Doctor_Core.gs', dc_sheetValues_: 'Doctor_Core.gs',
     dc_headerMap_: 'Doctor_Core.gs', dc_ensureSheet_: 'Doctor_Core.gs',
@@ -296,7 +300,7 @@
     ipc_admissionRow_: 'IP_Clinical_Access.gs', ipc_authorLabel_: 'IP_Clinical_Access.gs',
     ipc_wardVisibilityFilter_: 'IP_Clinical_Access.gs',
     ipc_currentCasesheet_: 'IP_Casesheet_Engine.gs', ipc_writeCasesheetRow_: 'IP_Casesheet_Engine.gs',
-    checkDrugInteractions: 'Drug_Interactions.gs', di_rules_: 'Drug_Interactions.gs',
+    checkDrugInteractions: 'Drug_Interaction.gs', di_rules_: 'Drug_Interaction.gs',
     _normDrug_: 'IP_Notes_Logic.gs',
     createLabRequest: 'LabIntegrationEngine.gs'
   };
@@ -336,6 +340,203 @@
         ? window.crescExplainError(msg)
         : String(msg == null ? '' : msg);
     } catch (e) { return String(msg == null ? '' : msg); }
+  };
+
+  // ==========================================
+  //  SHARED DATE PARSING  (client mirror of Shared_Dates.gs)
+  // ------------------------------------------
+  // Dates reach the browser as strings, and the browser's own Date()
+  // constructor reads a slashed date MONTH-FIRST. This clinic writes them
+  // day-first, so "13/09/2026" was Invalid Date and "01/02/2026" silently
+  // became 2 January - the same pair of bugs Shared_Dates.gs fixes on the
+  // server, reaching the screen by a different route.
+  //
+  // Kept deliberately in step with the server helper, including the two
+  // guards that settle an ambiguous date by arithmetic before falling back
+  // to the day-first convention.
+  // ==========================================
+
+  var CRESC_MON = { JAN:0, FEB:1, MAR:2, APR:3, MAY:4, JUN:5,
+                    JUL:6, AUG:7, SEP:8, SEPT:8, OCT:9, NOV:10, DEC:11 };
+
+  /** A Date, or null. Never throws. */
+  window.crescParseDate = function (v) {
+    if (v === null || v === undefined || v === '') return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+    if (typeof v === 'number') {
+      if (!isFinite(v) || v === 0) return null;
+      var n = new Date(v);
+      return isNaN(n.getTime()) ? null : n;
+    }
+
+    var s = String(v).trim();
+    if (!s) return null;
+
+    var build = function (y, mo, d, h, mi, se) {
+      if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+      var x = new Date(y, mo - 1, d, h || 0, mi || 0, se || 0, 0);
+      if (isNaN(x.getTime())) return null;
+      // "31/02/2026" would roll into March. A date nobody can have been
+      // admitted on is an error to show, not a date to invent.
+      if (x.getMonth() !== mo - 1 || x.getDate() !== d) return null;
+      return x;
+    };
+    var year = function (y) { return y >= 1000 ? y : (y >= 70 && y <= 99 ? 1900 + y : 2000 + y); };
+    var clock = function (t) {
+      var c = String(t || '').trim()
+        .match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*([AaPp][Mm])?/);
+      if (!c) return null;
+      var h = +c[1], mi = +c[2], se = c[3] ? +c[3] : 0;
+      var mer = c[4] ? c[4].toUpperCase() : '';
+      if (mer === 'PM' && h < 12) h += 12;
+      if (mer === 'AM' && h === 12) h = 0;
+      if (h > 23 || mi > 59 || se > 59) return null;
+      return { h: h, mi: mi, se: se };
+    };
+
+    var m;
+
+    // ISO date only, built locally: new Date('2026-09-13') is UTC midnight,
+    // which is the PREVIOUS day in any zone west of Greenwich.
+    m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if (m) return build(+m[1], +m[2], +m[3], 0, 0, 0);
+
+    m = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})[T ](.+)$/);
+    if (m) {
+      var ic = clock(m[4]);
+      if (ic) return build(+m[1], +m[2], +m[3], ic.h, ic.mi, ic.se);
+      var iso = new Date(s);
+      return isNaN(iso.getTime()) ? null : iso;
+    }
+
+    // dd-MMM-yyyy / dd MMM yyyy, with an optional time.
+    m = s.match(/^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s,]*(\d{2,4})(?:[T\s,]+(.+))?$/);
+    if (m) {
+      var mo1 = CRESC_MON[m[2].substring(0, 3).toUpperCase()];
+      if (mo1 === undefined) return null;
+      var c1 = m[4] ? clock(m[4]) : null;
+      return build(year(+m[3]), mo1 + 1, +m[1], c1 && c1.h, c1 && c1.mi, c1 && c1.se);
+    }
+    // MMM dd, yyyy.
+    m = s.match(/^([A-Za-z]{3,9})[-\s]+(\d{1,2})[-\s,]+(\d{2,4})(?:[T\s,]+(.+))?$/);
+    if (m) {
+      var mo2 = CRESC_MON[m[1].substring(0, 3).toUpperCase()];
+      if (mo2 === undefined) return null;
+      var c2 = m[4] ? clock(m[4]) : null;
+      return build(year(+m[3]), mo2 + 1, +m[2], c2 && c2.h, c2 && c2.mi, c2 && c2.se);
+    }
+
+    // All-numeric dd/MM/yyyy and friends.
+    m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})(?:[T ,]+(.+))?$/);
+    if (m) {
+      var a = +m[1], b = +m[2], d3, mo3;
+      if (a > 12)      { d3 = a; mo3 = b; }   // settled: only a day exceeds 12
+      else if (b > 12) { d3 = b; mo3 = a; }   // an imported MM/dd still lands
+      else             { d3 = a; mo3 = b; }   // ambiguous -> day-first, as written here
+      var c3 = m[4] ? clock(m[4]) : null;
+      return build(year(+m[3]), mo3, d3, c3 && c3.h, c3 && c3.mi, c3 && c3.se);
+    }
+
+    var fallback = new Date(s);
+    return isNaN(fallback.getTime()) ? null : fallback;
+  };
+
+  /** 'dd-MMM-yyyy' style formatting without pulling in a date library. */
+  window.crescFormatDate = function (v, opts) {
+    var d = window.crescParseDate(v);
+    if (!d) return '';
+    var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    var out = p2(d.getDate()) + '-' + MON[d.getMonth()] + '-' + d.getFullYear();
+    if (opts && opts.time) {
+      var h = d.getHours() % 12; if (h === 0) h = 12;
+      out += ' ' + p2(h) + ':' + p2(d.getMinutes()) + ' ' + (d.getHours() < 12 ? 'AM' : 'PM');
+    }
+    return out;
+  };
+
+  /** 'yyyy-MM-dd', the value an <input type="date"> takes. */
+  window.crescDateInputValue = function (v) {
+    var d = window.crescParseDate(v);
+    if (!d) return '';
+    var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+  };
+
+  /** Whole days from `a` to `b` (default now), compared at midnight, or null. */
+  window.crescDaysBetween = function (a, b) {
+    var from = window.crescParseDate(a);
+    if (!from) return null;
+    var to = b ? window.crescParseDate(b) : new Date();
+    if (!to) return null;
+    var f = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    var t = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+    return Math.round((t.getTime() - f.getTime()) / 86400000);
+  };
+
+  // ==========================================
+  //  SHARED LOADING STATE
+  // ------------------------------------------
+  // Every module had invented its own way of saying "working": a full-screen
+  // scrim over the whole page (the lab), a bare row of dots, or nothing at
+  // all. A scrim is the wrong instrument - it blanks content the user was
+  // reading, hides where the work is happening, and makes a 200ms call feel
+  // like a fault.
+  //
+  // Three pieces replace it:
+  //   crescBusyButton(btn, on, label)  the control you pressed spins
+  //   crescInlineSpinner(text)         markup for "this panel is filling"
+  //   crescSkeleton(rows)              grey bars the size of what is coming
+  // ==========================================
+
+  /**
+   * Puts a button into its working state and restores it afterwards.
+   * The original label is parked on the element, so nested calls and
+   * double-clicks cannot lose it.
+   *
+   * @param {HTMLElement|string} btn  element or element id
+   * @param {boolean} on
+   * @param {string} [label]  text while working; defaults to the original
+   */
+  window.crescBusyButton = function (btn, on, label) {
+    var el = (typeof btn === 'string') ? document.getElementById(btn) : btn;
+    if (!el) return;
+    if (on) {
+      if (el.dataset.crescLabel === undefined) el.dataset.crescLabel = el.innerHTML;
+      el.disabled = true;
+      el.setAttribute('aria-busy', 'true');
+      el.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"' +
+        ' aria-hidden="true"></span>' + window.crescEsc(label || 'Working…');
+    } else {
+      if (el.dataset.crescLabel !== undefined) {
+        el.innerHTML = el.dataset.crescLabel;
+        delete el.dataset.crescLabel;
+      }
+      el.disabled = false;
+      el.removeAttribute('aria-busy');
+    }
+  };
+
+  /** Centred spinner markup for a panel that is filling. */
+  window.crescInlineSpinner = function (text) {
+    return '<div class="cresc-inline-spinner" role="status" aria-live="polite">' +
+      '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>' +
+      '<span>' + window.crescEsc(text || 'Loading…') + '</span></div>';
+  };
+
+  /**
+   * Grey bars roughly the shape of the content being fetched. Preferred over
+   * a spinner wherever the shape is known - a list, a table, a card grid -
+   * because the page does not jump when the data lands.
+   */
+  window.crescSkeleton = function (rows, opts) {
+    var n = Math.max(1, rows || 3);
+    var o = opts || {};
+    var out = '<div class="cresc-skeleton" aria-hidden="true">';
+    for (var i = 0; i < n; i++) {
+      out += '<div class="cresc-sk-row" style="width:' + (o.width || (60 + (i % 4) * 12)) + '%"></div>';
+    }
+    return out + '</div>';
   };
 
   /**
@@ -398,8 +599,16 @@
     var book = document.getElementById('pat-book-date');
     if (book) { book.setAttribute('min', strToday); book.setAttribute('max', strMax); }
 
-    var avail = document.getElementById('avail-date');
-    if (avail) { avail.setAttribute('min', strToday); avail.removeAttribute('max'); }
+    // The availability screen has a start AND an end date, both named for
+    // which end they are. This looked for a single "avail-date", which
+    // exists nowhere, so the lower bound reached neither and a schedule
+    // could be published into a month that has already been billed.
+    ['avail-start-date', 'avail-end-date'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('min', strToday);
+      el.removeAttribute('max');
+    });
 
     var ab = document.getElementById('ab-date');
     if (ab) ab.setAttribute('min', strToday);

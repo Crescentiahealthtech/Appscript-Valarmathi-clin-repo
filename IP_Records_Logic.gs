@@ -168,6 +168,9 @@ function ipr_gaps_(r, now) {
 function ipr_when_(v, pattern) {
   try {
     if (v === null || v === undefined || v === "") return "";
+    if (typeof cresc_formatDate_ === 'function') {
+      return cresc_formatDate_(v, pattern || "dd MMM yyyy, hh:mm a") || dc_str_(v);
+    }
     var d = (v instanceof Date) ? v : new Date(v);
     if (isNaN(d.getTime())) return dc_str_(v);
     return Utilities.formatDate(d, Session.getScriptTimeZone(), pattern || "dd MMM yyyy, hh:mm a");
@@ -178,6 +181,7 @@ function ipr_when_(v, pattern) {
 function ipr_ms_(v) {
   try {
     if (v === null || v === undefined || v === "") return 0;
+    if (typeof cresc_ms_ === 'function') return cresc_ms_(v);
     var d = (v instanceof Date) ? v : new Date(v);
     var ms = d.getTime();
     return isNaN(ms) ? 0 : ms;

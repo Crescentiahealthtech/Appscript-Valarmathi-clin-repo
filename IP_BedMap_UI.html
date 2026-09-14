@@ -182,6 +182,13 @@
    */
   function lengthOfStay(doa) {
     if (!doa) return null;
+    // crescParseDate (Auth.html) reads the day-first dates this clinic
+    // writes. `new Date(doa)` did not, which is why an occupied bed whose
+    // DOA had been typed rather than picked showed the "DOA?" badge instead
+    // of its day count.
+    if (typeof window.crescDaysBetween === 'function') {
+      return window.crescDaysBetween(doa, null);
+    }
     var d = new Date(doa);
     if (isNaN(d.getTime())) return null;
     return Math.floor((Date.now() - d.getTime()) / 86400000);

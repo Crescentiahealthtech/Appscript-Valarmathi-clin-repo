@@ -190,10 +190,13 @@ function saveAdminAvailability(dateStr, blockedSlots) {
     rowsToDelete.forEach(r => sheet.deleteRow(r));
     if (blockedSlots.length > 0) {
       const newRows = [];
-      let startId = sheet.getLastRow();
       let timestamp = new Date().toISOString();
       blockedSlots.forEach((slot, index) => {
-        let apptId = "APT-" + (startId + index).toString().padStart(4, '0');
+        // Row-count-derived ids, generated immediately after deleting rows
+        // from the same sheet: getLastRow() has just dropped, so the next
+        // block hands out ids that are already on real bookings. Appointment
+        // .gs's generator is unique and does not care how many rows exist.
+        let apptId = apt_newId_();
         newRows.push([apptId, 'ADMIN', 'BLOCKED', dateStr, slot, 'Doctor Unavailable', 'Blocked', 0, timestamp]);
       });
       sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);

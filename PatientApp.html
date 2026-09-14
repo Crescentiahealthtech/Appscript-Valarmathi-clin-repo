@@ -228,6 +228,12 @@
       document.getElementById('e-gender').value = data.gender || "Male"; document.getElementById('e-dob').value = data.dob || "";
       document.getElementById('e-mobile').value = data.mobile || ""; document.getElementById('e-whatsapp').value = data.whatsapp || "";
       document.getElementById('e-address').value = data.address || ""; document.getElementById('e-comorb').value = data.comorb || "";
+    }).withFailureHandler(err => {
+      // Without this the call failed silently and the profile screen sat on
+      // whatever it happened to be showing - usually the placeholder dashes -
+      // with nothing to say the fetch had failed.
+      if (typeof showToast === 'function')
+        showToast('Could not load your profile', (err && err.message) || 'Please try again.', 'error');
     }).getUserProfile(loggedInUser, window.sessionToken);
   }
 
@@ -241,17 +247,35 @@
 
   function saveProfile() {
     const btn = document.querySelector('#profile-edit button');
-    btn.innerText = "Saving...";
+    // The button used to be set to "Saving..." with no failure handler behind
+    // it, so a dropped call left it reading "Saving..." for ever - and the
+    // patient, reasonably, pressed it again. It is disabled while the call is
+    // in flight and restored on BOTH outcomes now.
+    const restore = () => { btn.disabled = false; btn.innerText = "Save Changes"; };
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
     const data = {
       username: loggedInUser, name: document.getElementById('e-name').value, age: document.getElementById('e-age').value, gender: document.getElementById('e-gender').value, dob: document.getElementById('e-dob').value, mobile: document.getElementById('e-mobile').value, whatsapp: document.getElementById('e-whatsapp').value, address: document.getElementById('e-address').value, comorb: document.getElementById('e-comorb').value
     };
     google.script.run.withSuccessHandler(res => {
-      crescAlert(res); btn.innerText = "Save Changes"; fetchProfileData(); toggleEditProfile();
+      restore(); crescAlert(res); fetchProfileData(); toggleEditProfile();
+    }).withFailureHandler(err => {
+      restore();
+      crescAlert('Your details could not be saved: ' + ((err && err.message) || 'the server did not reply') +
+                 '. Nothing was changed — please try again.', 'err');
     }).saveUserProfile(data);
   }
 
   function refreshPatientDashboard() {
     google.script.run.withSuccessHandler(stats => {
+      // google.script.run hands the SUCCESS handler null when the reply could
+      // not be carried back, so `stats.lastVisit` threw and took the rest of
+      // the dashboard render down with it.
+      if (!stats) {
+        if (typeof showToast === 'function')
+          showToast('Could not refresh your dashboard', 'Pull down to try again.', 'error');
+        return;
+      }
       document.getElementById('dash-last-visit').innerText = stats.lastVisit;
       if(document.getElementById('dash-emr-next-visit')) document.getElementById('dash-emr-next-visit').innerText = stats.emrNextVisit;
       if(document.getElementById('dash-emr-next-lab')) document.getElementById('dash-emr-next-lab').innerText = stats.emrNextLab;
@@ -265,6 +289,10 @@
           bookingsHtml = `<span class="text-abnormal fw-bold" id="dash-next-appt">Not Scheduled</span>`;
       }
       document.getElementById('dash-upcoming-bookings').innerHTML = bookingsHtml;
+    }).withFailureHandler(err => {
+      if (typeof showToast === 'function')
+        showToast('Could not refresh your dashboard',
+                  (err && err.message) || 'Please try again in a moment.', 'error');
     }).getPatientDashboardStats(loggedInUser);
   }
 
@@ -380,12 +408,25 @@
     const btn = document.getElementById('btn-submit-booking');
     btn.innerText = "Processing..."; btn.disabled = true;
     const apptObj = { patientId: loggedInUser, patientName: loggedInName, date: document.getElementById('pat-book-date').value, time: selectedTimeSlot, purpose: document.getElementById('pat-book-reason').value, fee: 0 };
+    const restoreBtn = () => {
+      btn.innerText = selectedTimeSlot ? `Confirm Booking • ${selectedTimeSlot}` : 'Select a Time Slot';
+      btn.disabled = !selectedTimeSlot;
+    };
     google.script.run.withSuccessHandler(res => {
-      if(res.success) { 
-        crescAlert("Appointment Confirmed!"); loadPatientSlots(); refreshPatientDashboard(); 
-      } else { 
-        crescAlert("Error: " + res.message); btn.innerText = `Confirm Booking • ${selectedTimeSlot}`; btn.disabled = false; 
+      if (res && res.success) {
+        crescAlert("Appointment Confirmed!"); loadPatientSlots(); refreshPatientDashboard();
+      } else {
+        crescAlert("Error: " + ((res && res.message) || 'the booking was not accepted.'), 'err');
+        restoreBtn();
       }
+    }).withFailureHandler(err => {
+      // This is the worst one to leave hanging: the button read "Processing..."
+      // for ever, so the patient could not tell whether they had an
+      // appointment or not, and the natural response - press it again - risks
+      // a double booking.
+      restoreBtn();
+      crescAlert('The booking did not go through: ' + ((err && err.message) || 'the server did not reply') +
+                 '. No appointment was made — please try again.', 'err');
     }).submitNewAppointment(apptObj);
   }
 

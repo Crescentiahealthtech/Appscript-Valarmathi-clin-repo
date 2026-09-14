@@ -20,6 +20,14 @@
  * the file that defines it. Extend this when you add a cross-file dependency.
  */
 var DEP_MAP = {
+  // Shared_Dates.gs is listed FIRST because everything else depends on it:
+  // every module's own date helper now delegates here, so a project missing
+  // this one file loses dates on every screen at once.
+  "Shared_Dates.gs": [
+    "cresc_parseDate_", "cresc_formatDate_", "cresc_dateOnly_", "cresc_dayKey_",
+    "cresc_timeText_", "cresc_dateTimeText_", "cresc_daysBetween_", "cresc_los_",
+    "cresc_ms_", "cresc_isSheetEpoch_"
+  ],
   "Doctor_Core.gs": [
     "dc_headerMap_", "dc_col_", "dc_ensureColumn_", "dc_ensureSheet_",
     "dc_invalidate_", "dc_resetCache_", "dc_sheetValues_",
@@ -31,6 +39,13 @@ var DEP_MAP = {
     "dc_normaliseTeamRole_", "getIPTeamRoles"
   ],
   "Doctor_Session_Store.gs": ["dc_validateSession_", "dc_sessionName_", "revokeSession"],
+  // Pharmacy.gs reads the signed discharge script through these, so the
+  // take-home prescription reaches the counter. Both are optional at runtime
+  // (a project without the discharge module just contributes nothing), but
+  // listing them means verifyDeployment() names the file when they are gone.
+  "DS_Data.gs": ["dsx_latestSnapshotOfType_", "dsx_summaryIdFor_", "dsx_unpackPayload_",
+                 "dsx_upgradePayload_", "dsx_toDate_"],
+  "Appointment.gs":          ["apt_newId_", "submitNewAppointment", "getAppointmentsByDate"],
   "Doctors_Engine.gs":       ["getTenantId_", "validateSession_", "issueSession_", "logAudit_", "getActiveDoctors"],
   "IP_Clinical_Access.gs": [
     "ipc_timelineSheet_", "ipc_casesheetSheet_", "resolveIPWrite_", "resolveIPRead_",
@@ -54,7 +69,7 @@ var DEP_MAP = {
   "IP_Schema_Repair.gs": [
     "repairCasesheetHeaderDrift", "runIPHealthCheck", "repairDuplicatePharmacyQueueRows"
   ],
-  "Drug_Interactions.gs": [
+  "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
   "OP_Rx_Engine.gs":        ["checkRxSafety", "getPatientAllergies", "savePatientAllergies",

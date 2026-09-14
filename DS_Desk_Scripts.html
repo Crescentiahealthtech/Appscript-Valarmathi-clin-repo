@@ -115,7 +115,10 @@ var DSState = {
   reasonHandler: null,
   diffMode: 'staff',
   pickers: null,           // ds_getPickers payload, fetched once per session
-  pickersPending: false
+  pickersPending: false,
+  labsOpen: true,          // the inline lab panel under INVESTIGATIONS
+  labsHtml: '',            // its last fetched markup, replayed on re-render
+  labsFor: ''              // the summary that markup belongs to
 };
 
 /* Sections whose lines are "condition — duration" pairs. Stored as one
@@ -449,6 +452,8 @@ function dsDoInitiate() {
 function dsOpenEditor(summaryId) {
   DSState.summaryId = summaryId;
   DSState.dirty = {};
+  // A different patient's results must never be replayed from the cache.
+  dsInvalidateLabs();
   if (typeof switchTab === 'function') switchTab(DS_IDS.editorView);
   dsLoadSummary();
   dsStartPresence();
@@ -638,8 +643,39 @@ function dsRenderActions() {
   var wrap = dsEl(DS_IDS.edActions);
   wrap.innerHTML = out.join('');
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-act]'), function (b) {
-    b.addEventListener('click', function () { dsAction(b.getAttribute('data-ds-act')); });
+    b.addEventListener('click', function () { dsAction(b.getAttribute('data-ds-act'), b); });
   });
+}
+
+/**
+ * Marks the action bar busy while a workflow move is in flight.
+ *
+ * Submitting, signing, regenerating and amending are all server round trips
+ * on a document that can be several hundred kilobytes. Before this, the bar
+ * looked idle throughout, so "Submit for signature" got pressed twice - and
+ * the second press raced the first through a row-version check, which is the
+ * conflict dialog nobody could explain.
+ *
+ * @param {HTMLElement|null} btn  the button pressed
+ * @param {boolean} on
+ * @param {string} [label]        what it is doing, while it is doing it
+ */
+function dsActionsBusy(btn, on, label) {
+  var wrap = dsEl(DS_IDS.edActions);
+  if (wrap) {
+    Array.prototype.forEach.call(wrap.querySelectorAll('button'), function (b) {
+      b.disabled = on;
+    });
+  }
+  if (!btn) return;
+  if (on) {
+    if (btn.dataset.dsLabel === undefined) btn.dataset.dsLabel = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>' +
+                    dsEsc(label || 'Working…');
+  } else if (btn.dataset.dsLabel !== undefined) {
+    btn.innerHTML = btn.dataset.dsLabel;
+    delete btn.dataset.dsLabel;
+  }
 }
 
 function dsSectionKeys() {
@@ -733,7 +769,29 @@ function dsLoadPickers(after) {
   runner.ds_getPickers(dsToken());
 }
 
-/** Opens the shared lab viewer for the patient this summary belongs to. */
+/**
+ * Scrolls to the inline lab panel, opening it if it was collapsed.
+ *
+ * Replaces the overlay this button used to raise. The results live on the
+ * page now, under Significant investigations, which is the section being
+ * written from them.
+ */
+function dsJumpToLabs() {
+  var panel = document.querySelector('#ds-ed-sections .ds-labpanel');
+  if (!panel) { dsPeekLabs(); return; }     // sections not drawn yet
+  if (!DSState.labsOpen) {
+    DSState.labsOpen = true;
+    var host = dsEl('ds-labs-inline');
+    var btn = dsEl('ds-labs-toggle');
+    if (host) host.hidden = false;
+    if (btn) btn.textContent = 'Hide';
+    dsFillLabPanel();
+  }
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** Opens the shared lab viewer in the overlay. Kept as the fallback for
+    when the editor's sections have not been drawn yet. */
 function dsPeekLabs() {
   var b = (DSState.payload && DSState.payload.sections &&
            DSState.payload.sections.PATIENT_BANNER &&
@@ -832,6 +890,25 @@ function dsPhraseItems(sourceName) {
   });
 }
 
+/**
+ * A formulary row's free-typed type ("TABLET", "tab.", "Injection") mapped
+ * onto the fixed list the Type column offers. Falls back to Tab, which is
+ * what most of a discharge script is.
+ */
+function dsRxTypeFor(item) {
+  var t = String((item && item.type) || '').toUpperCase();
+  var n = String((item && item.brand) || '').toUpperCase();
+  if (/INJ/.test(t) || /\bINJ\b|INJECTION/.test(n)) return 'Inj';
+  if (/^IV|FLUID|INFUS/.test(t)) return 'IV';
+  if (/NEB/.test(t) || /NEB/.test(n)) return 'Neb';
+  if (/DROP/.test(t) || /DROPS?\b/.test(n)) return 'Drops';
+  if (/OINT|CREAM|GEL/.test(t) || /OINT|CREAM|\bGEL\b/.test(n)) return 'Oint';
+  if (/SYR|SYP|SUSP|LIQ/.test(t) || /\bSYR|SYP|SUSP/.test(n)) return 'Syp';
+  if (/CAP/.test(t) || /\bCAP\b/.test(n)) return 'Cap';
+  if (/TAB/.test(t)) return 'Tab';
+  return 'Tab';
+}
+
 /** Formulary items shaped for dsAttachPicker. */
 function dsDrugItems() {
   var drugs = (DSState.pickers && DSState.pickers.drugs) || [];
@@ -889,12 +966,94 @@ function dsRenderSections() {
         '<h6>' + dsEsc(sec.title || key) + '</h6>' +
         (sec.edited ? '<span class="ds-muted">edited by ' + dsEsc(sec.editedBy) + '</span>' : '') +
         reviewToggle +
-      '</div>' + pin + body + flag + chips + '</div>';
+      '</div>' + pin + body + flag + chips + '</div>' +
+      // The verified lab results sit directly BELOW the investigations
+      // section, not behind a button. Writing "Significant investigations"
+      // and "Results pending at discharge" means reading the actual
+      // numbers, and an overlay that covers the boxes you are filling in is
+      // the wrong instrument for a value you are copying across. The
+      // overlay is still there for every other screen that wants a quick
+      // look; this is the one place the numbers are being transcribed.
+      (key === 'INVESTIGATIONS' ? dsLabPanelHtml() : '');
   }).join('');
 
   var wrap = dsEl(DS_IDS.edSections);
   wrap.innerHTML = html;
   dsWireSectionInputs(wrap);
+  dsFillLabPanel();
+}
+
+/* The shell of the inline lab panel. Collapsible, and remembered for the
+   session: a preparer copying twenty values wants it open the whole time,
+   and a doctor signing off wants it out of the way. */
+function dsLabPanelHtml() {
+  var open = DSState.labsOpen !== false;
+  return '<div class="ds-section ds-labpanel" data-ds-sec="__LABS">' +
+    '<div class="d-flex align-items-center gap-2 mb-2">' +
+      '<h6><i class="fa-solid fa-flask-vial me-2" style="color:var(--info-fg)"></i>Lab results</h6>' +
+      '<span class="ds-muted">verified values, this admission and before</span>' +
+      '<button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="ds-labs-toggle">' +
+        (open ? 'Hide' : 'Show') + '</button>' +
+    '</div>' +
+    '<div id="ds-labs-inline"' + (open ? '' : ' hidden') + '></div>' +
+  '</div>';
+}
+
+/* Fetches into the panel once per editor session. Re-rendering the sections
+   (which happens on every added row) must not re-fetch. */
+function dsFillLabPanel() {
+  var host = dsEl('ds-labs-inline');
+  if (!host) return;
+
+  var toggle = dsEl('ds-labs-toggle');
+  if (toggle) {
+    toggle.addEventListener('click', function () {
+      DSState.labsOpen = !!host.hidden;
+      host.hidden = !DSState.labsOpen;
+      toggle.textContent = DSState.labsOpen ? 'Hide' : 'Show';
+      if (DSState.labsOpen) dsFillLabPanel();
+    });
+  }
+  if (host.hidden) return;
+
+  // dsRenderSections() replaces the whole editor on every added row, so the
+  // panel element is new each time. The RESULTS are cached on DSState
+  // instead of on the element, or typing in a medicine row would fire a
+  // fresh server call per keystroke-driven re-render.
+  if (DSState.labsHtml && DSState.labsFor === DSState.summaryId) {
+    host.classList.add('lp-scope');
+    host.innerHTML = DSState.labsHtml;
+    return;
+  }
+
+  if (typeof window.crescLabResultsInto !== 'function') {
+    host.innerHTML = '<div class="ds-muted">The lab viewer is not available on this ' +
+      'deployment (Lab_Results_Peek.html is missing from the shell).</div>';
+    return;
+  }
+  var b = (DSState.payload && DSState.payload.sections &&
+           DSState.payload.sections.PATIENT_BANNER &&
+           DSState.payload.sections.PATIENT_BANNER.content) || {};
+  var forSummary = DSState.summaryId;
+  window.crescLabResultsInto(host, b.patientId || '', {
+    emptyText: 'No verified results for this patient. Anything still on the bench ' +
+               'belongs under "Results pending at discharge" above.',
+    // Cache what landed, so the next re-render replays it instead of
+    // calling the server again. Guarded on the summary id: a slow fetch
+    // that returns after the user has opened a DIFFERENT patient must not
+    // file its results under theirs.
+    done: function (html) {
+      if (DSState.summaryId !== forSummary) return;
+      DSState.labsHtml = html;
+      DSState.labsFor  = forSummary;
+    }
+  });
+}
+
+/** Drops the cached results, so the next render fetches again. */
+function dsInvalidateLabs() {
+  DSState.labsHtml = '';
+  DSState.labsFor = '';
 }
 
 function dsSourceChips(refs) {
@@ -1038,39 +1197,81 @@ function dsRenderList(key, sec, readOnly) {
     '<i class="fa-solid fa-plus me-1"></i>Add line</button></div>';
 }
 
+/* The prescribing forms the OP consult offers, in the same order, so a
+   doctor picks from one list wherever they prescribe. */
+var DS_RX_TYPES = ['Tab', 'Cap', 'Syp', 'Inj', 'IV', 'Oint', 'Drops', 'Neb', 'Other'];
+
+/* Column widths for the prescription tables, keyed by column name. The
+   medicine name gets the room; Type and Days need almost none. Anything not
+   listed shares what is left. */
+var DS_RX_WIDTHS = {
+  'Type': '9%', 'Medicine Name': '30%', 'Dosage / Sig': '20%',
+  'Days': '9%', 'Duration': '20%', 'Notes / Timing': '24%'
+};
+
+/** True for the two tables that hold medicines rather than data. */
+function dsIsRxTable(key) {
+  return key === 'DISCHARGE_MEDICATIONS' || key === 'TREATMENT_GIVEN';
+}
+
 function dsRenderTable(key, sec, readOnly) {
   var c = sec.content || { columns: [], rows: [] };
   if (!c.rows.length && readOnly) return '<div class="ds-muted">Nothing recorded.</div>';
 
-  var head = '<tr>' + c.columns.map(function (h) { return '<th>' + dsEsc(h) + '</th>'; }).join('') +
-             (readOnly ? '' : '<th></th>') + '</tr>';
+  var isRx = dsIsRxTable(key);
+  var head = '<tr>' + c.columns.map(function (h) {
+    var w = isRx && DS_RX_WIDTHS[h] ? ' style="width:' + DS_RX_WIDTHS[h] + '"' : '';
+    return '<th' + w + '>' + dsEsc(h) + '</th>';
+  }).join('') + (readOnly ? '' : '<th style="width:4%"></th>') + '</tr>';
 
-  // The discharge script's Generic and Brand columns autocomplete from the
-  // formulary with live pharmacy stock, the same list OP and IP prescribe
-  // from. Picking a drug fills the row's generic, brand and dose together.
-  var drugCols = (key === 'DISCHARGE_MEDICATIONS')
-    ? { generic: c.columns.indexOf('Generic'), brand: c.columns.indexOf('Brand') }
-    : { generic: -1, brand: -1 };
+  // The discharge script's Medicine Name autocompletes from the formulary
+  // with live pharmacy stock, the same list OP and IP prescribe from.
+  // Choosing a drug fills the type, the name and the reference dose at once,
+  // because a half-filled drug row is the thing a pharmacist rings back about.
+  var nameCol = (key === 'DISCHARGE_MEDICATIONS') ? c.columns.indexOf('Medicine Name') : -1;
+  var typeCol = isRx ? c.columns.indexOf('Type') : -1;
 
   var body = c.rows.map(function (row, ri) {
     var cells = c.columns.map(function (col, ci) {
       var v = row[ci] === undefined ? '' : row[ci];
       if (readOnly) return '<td>' + dsEsc(v) + '</td>';
-      var isDrug = (ci === drugCols.generic || ci === drugCols.brand);
+
+      // Type is a fixed vocabulary, so it is a select rather than a box to
+      // type "tablet", "TAB" and "Tab." into on three consecutive rows.
+      if (ci === typeCol) {
+        var known = DS_RX_TYPES.indexOf(v) > -1;
+        return '<td><select data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci + '">' +
+          (known ? '' : '<option value="' + dsEsc(v) + '" selected>' + dsEsc(v || '—') + '</option>') +
+          DS_RX_TYPES.map(function (t) {
+            return '<option value="' + dsEsc(t) + '"' + (t === v ? ' selected' : '') + '>' +
+                   dsEsc(t) + '</option>';
+          }).join('') + '</select></td>';
+      }
+
+      var isDrug = (ci === nameCol);
       return '<td' + (isDrug ? ' class="ds-pick"' : '') + '>' +
              '<input type="text" data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci + '"' +
              (isDrug ? ' data-ds-drug="' + dsEsc(key) + '|' + ri + '"' : '') +
+             (isRx ? ' placeholder="' + dsEsc(col) + '"' : '') +
              ' value="' + dsEsc(v) + '"></td>';
     }).join('');
     return '<tr>' + cells + (readOnly ? '' :
       '<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-ds-rowdel="' +
-      dsEsc(key) + '|' + ri + '"><i class="fa-solid fa-xmark"></i></button></td>') + '</tr>';
+      dsEsc(key) + '|' + ri + '" title="Remove this row"><i class="fa-solid fa-xmark"></i></button></td>') + '</tr>';
   }).join('');
 
-  return '<div class="table-responsive"><table><thead>' + head + '</thead><tbody>' + body +
-         '</tbody></table></div>' +
+  var empty = (!c.rows.length && !readOnly)
+    ? '<div class="ds-muted mb-2">' +
+      (key === 'DISCHARGE_MEDICATIONS'
+        ? 'Nothing prescribed yet. Add each medicine the patient goes home on.'
+        : 'Nothing recorded.') + '</div>'
+    : '';
+
+  return empty + '<div class="table-responsive"><table' + (isRx ? ' class="ds-rx-table"' : '') +
+         '><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
     (readOnly ? '' : '<button class="btn btn-sm btn-outline-primary mt-2" data-ds-rowadd="' +
-     dsEsc(key) + '"><i class="fa-solid fa-plus me-1"></i>Add row</button>');
+     dsEsc(key) + '"><i class="fa-solid fa-plus me-1"></i>' +
+     (isRx ? 'Add medicine' : 'Add row') + '</button>');
 }
 
 function dsWireSectionInputs(wrap) {
@@ -1144,11 +1345,29 @@ function dsWireSectionInputs(wrap) {
         var ci = cols.indexOf(name);
         if (ci > -1 && value) row[ci] = value;
       };
-      set('Generic', String(item.generic || '').toUpperCase());
-      set('Brand', item.brand);
-      set('Strength / Dose', item.dose);
+      // The brand carries the generic with it, so a pharmacist substituting
+      // a stock item reads both from the one cell the script actually shows.
+      var generic = String(item.generic || '').toUpperCase();
+      var brand = String(item.brand || '');
+      var name = (generic && brand.toUpperCase().indexOf(generic) === -1)
+        ? (brand + ' (' + generic + ')') : brand;
+      set('Medicine Name', name);
+      set('Type', dsRxTypeFor(item));
+      // Only SUGGEST the reference dose: a dose already typed for this
+      // patient is a decision, and picking the drug again must not undo it.
+      var sigCol = cols.indexOf('Dosage / Sig');
+      if (sigCol > -1 && !String(row[sigCol] || '').trim()) row[sigCol] = item.dose || '';
       mark(secKey);
       dsRenderSections();
+    });
+  });
+
+  // The Type column is a <select>, so it fires `change`, not `input`.
+  Array.prototype.forEach.call(wrap.querySelectorAll('select[data-ds-cell]'), function (el) {
+    el.addEventListener('change', function () {
+      var p = el.getAttribute('data-ds-cell').split('|');
+      DSState.payload.sections[p[0]].content.rows[parseInt(p[1], 10)][parseInt(p[2], 10)] = el.value;
+      mark(p[0]);
     });
   });
 
@@ -1164,9 +1383,11 @@ function dsWireSectionInputs(wrap) {
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-listadd]'), function (el) {
     el.addEventListener('click', function () {
       var key = el.getAttribute('data-ds-listadd');
+      var idx = DSState.payload.sections[key].content.length;
       DSState.payload.sections[key].content.push('');
       mark(key);
       dsRenderSections();
+      dsFocusLine(key, idx);
     });
   });
 
@@ -1191,9 +1412,16 @@ function dsWireSectionInputs(wrap) {
     el.addEventListener('click', function () {
       var key = el.getAttribute('data-ds-rowadd');
       var sec = DSState.payload.sections[key];
+      var ri = sec.content.rows.length;
       sec.content.rows.push(sec.content.columns.map(function () { return ''; }));
       mark(key);
       dsRenderSections();
+      // dsRenderSections() rebuilds the whole editor, so the caret was left
+      // wherever the browser put it - usually nowhere. Pressing "Add
+      // medicine" means "I am about to type a medicine", so the cursor goes
+      // to the cell that is about to be typed into. On a prescription table
+      // that is the NAME, not the type dropdown beside it.
+      dsFocusRow(key, ri);
     });
   });
 
@@ -1211,6 +1439,30 @@ function dsWireSectionInputs(wrap) {
       dsOpenSource(p[0], p[1]);
     });
   });
+}
+
+/**
+ * Puts the caret in a table row that has just been added.
+ *
+ * On a prescription table that is the Medicine Name box, which also opens
+ * the formulary picker under it - so "Add medicine" lands the user exactly
+ * where a drug is chosen. Everywhere else it is the first cell.
+ */
+function dsFocusRow(key, ri) {
+  var sec = DSState.payload.sections[key];
+  var cols = (sec && sec.content && sec.content.columns) || [];
+  var want = cols.indexOf('Medicine Name');
+  if (want === -1) want = 0;
+  var el = document.querySelector(
+    '[data-ds-cell="' + key + '|' + ri + '|' + want + '"]');
+  if (el && el.focus) el.focus();
+}
+
+/** The same, for a LIST section's new line. */
+function dsFocusLine(key, idx) {
+  var el = document.querySelector('[data-ds-listitem="' + key + '|' + idx + '"]') ||
+           document.querySelector('[data-ds-pairc="' + key + '|' + idx + '"]');
+  if (el && el.focus) el.focus();
 }
 
 /* ---- readiness and timeline ---- */
@@ -1283,7 +1535,7 @@ function dsPatchesFromDirty() {
   return patches;
 }
 
-function dsSave(silent) {
+function dsSave(silent, btn) {
   if (!dsIsDirty()) {
     if (!silent) dsNotice('info', 'Nothing to save.');
     return;
@@ -1291,9 +1543,13 @@ function dsSave(silent) {
   if (DSState.saveTimer) { clearTimeout(DSState.saveTimer); DSState.saveTimer = null; }
 
   var patches = dsPatchesFromDirty();
+  // An autosave stays quiet; a pressed Save button says it is saving.
+  if (!silent) dsActionsBusy(btn, true, 'Saving…');
+  var done = function () { if (!silent) dsActionsBusy(btn, false); };
 
   google.script.run
     .withSuccessHandler(function (res) {
+      done();
       try {
         if (dsHandleFailure(res)) return;
         DSState.dirty = {};
@@ -1303,30 +1559,46 @@ function dsSave(silent) {
         dsLoadSummary();
       } catch (e) { dsNotice('danger', 'Saved, but the screen could not refresh: ' + e.message); }
     })
-    .withFailureHandler(function (err) { dsNotice('danger', 'Save failed: ' + err.message); })
+    .withFailureHandler(function (err) {
+      done();
+      dsNotice('danger', 'Save failed: ' + err.message);
+    })
     .ds_saveWorking(dsToken(), DSState.summaryId, DSState.header.rowVersion, patches);
 }
 
-/** Saves pending edits first so a workflow move never discards typing. */
-function dsSaveThen(fn) {
+/**
+ * Saves pending edits first so a workflow move never discards typing.
+ *
+ * @param {function} fn        runs once the save has landed
+ * @param {function} [onAbort] runs instead, if the save never lands - so a
+ *                             caller that disabled its buttons before
+ *                             calling can put them back. Without it, a save
+ *                             that failed here left the action bar disabled
+ *                             with no way out but a reload.
+ */
+function dsSaveThen(fn, onAbort) {
   if (!dsIsDirty()) { fn(); return; }
+  var abort = function (msg) {
+    if (typeof onAbort === 'function') onAbort();
+    if (msg) dsNotice('danger', msg);
+  };
   google.script.run
     .withSuccessHandler(function (res) {
       try {
-        if (dsHandleFailure(res)) return;
+        if (dsHandleFailure(res)) { abort(''); return; }
         DSState.dirty = {};
         DSState.header.rowVersion = res.data.rowVersion;
         fn();
-      } catch (e) { dsNotice('danger', e.message); }
+      } catch (e) { abort(e.message); }
     })
-    .withFailureHandler(function (err) { dsNotice('danger', 'Save failed: ' + err.message); })
+    .withFailureHandler(function (err) { abort('Save failed: ' + err.message); })
     .ds_saveWorking(dsToken(), DSState.summaryId, DSState.header.rowVersion, dsPatchesFromDirty());
 }
 
 /* ---------------------------------------------------------------------
    ACTIONS
    ------------------------------------------------------------------ */
-function dsAction(what) {
+function dsAction(what, btn) {
   switch (what) {
     case 'back':
       // The router wrapper below asks about unsaved changes and stops the
@@ -1336,8 +1608,8 @@ function dsAction(what) {
       if (stillHere && stillHere.classList.contains('active-section')) return;  // cancelled
       dsLoadQueue();
       break;
-    case 'save':   dsSave(false); break;
-    case 'regen':  dsRegenerate(); break;
+    case 'save':   dsSave(false, btn); break;
+    case 'regen':  dsRegenerate(btn); break;
     case 'diff':   dsOpenDiff('staff'); break;
     case 'submit': dsSubmit(); break;
     case 'return': dsOpenReturn(); break;
@@ -1361,21 +1633,23 @@ function dsAction(what) {
 }
 
 /** Runs a mutating endpoint that takes (token, summaryId, rowVersion, ...rest). */
-function dsCall(fnName, rest, successText) {
+function dsCall(fnName, rest, successText, onSettled) {
   var args = [dsToken(), DSState.summaryId, DSState.header.rowVersion].concat(rest || []);
+  var settle = function () { if (typeof onSettled === 'function') onSettled(); };
   var runner = google.script.run
     .withSuccessHandler(function (res) {
+      settle();
       try {
         if (dsHandleFailure(res)) return;
         dsNotice('success', (res && res.message) || successText || 'Done.');
         dsLoadSummary();
       } catch (e) { dsNotice('danger', 'Done, but the screen could not refresh: ' + e.message); }
     })
-    .withFailureHandler(function (err) { dsNotice('danger', err.message); });
+    .withFailureHandler(function (err) { settle(); dsNotice('danger', err.message); });
   runner[fnName].apply(runner, args);
 }
 
-function dsRegenerate() {
+function dsRegenerate(btn) {
   crescConfirm(
       'Regenerate from the clinical record?\n\n' +
       '- Sections nobody has edited are refreshed from the notes and results.\n' +
@@ -1384,7 +1658,13 @@ function dsRegenerate() {
       'Nothing you typed is lost.', { okLabel: 'Regenerate' })
     .then(function (ok) {
       if (!ok) return;
-      dsSaveThen(function () { dsCall('ds_regenerate', [], 'Regenerated.'); });
+      // Re-assembling a whole admission from its notes, results and case
+      // sheets is the slowest call in this module.
+      dsActionsBusy(btn, true, 'Regenerating…');
+      var free = function () { dsActionsBusy(btn, false); };
+      dsSaveThen(function () {
+        dsCall('ds_regenerate', [], 'Regenerated.', free);
+      }, free);
     });
 }
 

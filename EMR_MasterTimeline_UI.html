@@ -454,7 +454,17 @@ function buildIPCard(ev) {
     currentPatientEvents = res.events || [];
 
     document.getElementById('tl-pat-name').innerText = res.patient.name || "Unknown Patient";
-    document.getElementById('tl-pat-details').innerHTML = `<span style="color:var(--text-main) !important;">ID: ${res.patient.id || '--'} &nbsp;|&nbsp; Age: ${res.patient.age || '--'} &nbsp;|&nbsp; Sex: ${res.patient.sex || '--'} &nbsp;|&nbsp; Mobile: ${res.patient.mobile || '--'}</span>`;
+    // Escaped. These four are typed into the Patients sheet by staff and
+    // land in innerHTML: an ampersand in an address or an angle bracket in a
+    // note field would break the banner's markup, and worse is possible.
+    // crescEsc lives in the shell (Auth.html) and is always parsed first.
+    const tlEsc = (v) => (window.crescEsc ? window.crescEsc(v)
+      : String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+    document.getElementById('tl-pat-details').innerHTML =
+      `<span style="color:var(--text-main) !important;">ID: ${tlEsc(res.patient.id || '--')}` +
+      ` &nbsp;|&nbsp; Age: ${tlEsc(res.patient.age || '--')}` +
+      ` &nbsp;|&nbsp; Sex: ${tlEsc(res.patient.sex || '--')}` +
+      ` &nbsp;|&nbsp; Mobile: ${tlEsc(res.patient.mobile || '--')}</span>`;
 
     const container = document.getElementById('clinical-stream-container');
     
@@ -668,9 +678,15 @@ function buildIPCard(ev) {
           if (document.getElementById('op-future-labs')) document.getElementById('op-future-labs').value = futureMatch ? futureMatch[1] : "";
           
           if(document.getElementById('clin-review-date') && ev.followUp && ev.followUp !== "None") {
-              try { 
-                  let d = new Date(ev.followUp); 
-                  if(!isNaN(d)) document.getElementById('clin-review-date').value = d.toISOString().split('T')[0]; 
+              try {
+                  // The stored follow-up is whatever the consult wrote -
+                  // "13-Sep-2026" as often as an ISO date. crescParseDate
+                  // reads both; new Date() read only one of them, so the
+                  // review-date box came up empty on a real follow-up.
+                  var iso = (typeof window.crescDateInputValue === 'function')
+                    ? window.crescDateInputValue(ev.followUp) : '';
+                  if (!iso) { var d = new Date(ev.followUp); if (!isNaN(d)) iso = d.toISOString().split('T')[0]; }
+                  if (iso) document.getElementById('clin-review-date').value = iso;
               } catch(e) {}
           }
       }, 100);

@@ -1,11 +1,5 @@
 <div id="lab-workspace-view" class="page-section d-none position-relative">
 
-  <div id="lx-loader" class="position-absolute top-0 start-0 w-100 h-100 align-items-center justify-content-center flex-column d-none"
-       style="background:var(--overlay-scrim);z-index:1060;border-radius:.5rem;">
-    <div class="spinner-border mb-2" style="color:var(--warning-fg);"></div>
-    <span class="label-bright small" id="lx-loader-txt">Working…</span>
-  </div>
-
   <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
     <div class="d-flex align-items-center gap-3">
       <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('workspace-lab');">
@@ -13,11 +7,22 @@
       </button>
       <div>
         <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-microscope text-warning me-2"></i>Lab Command Center</h3>
-        <div class="label-bright small" id="lx-subtitle">—</div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <div class="label-bright small" id="lx-subtitle">—</div>
+          <!-- The whole workspace used to disappear behind a black scrim with
+               a spinner in the middle of it whenever anything was loading.
+               It hid the counts and the queue the user was reading, and made
+               a half-second call look like a fault. The work is announced
+               here instead, beside the thing being counted. -->
+          <span class="cresc-busy-chip" id="lx-loader" role="status" aria-live="polite" hidden>
+            <span class="spinner-border" aria-hidden="true"></span>
+            <span id="lx-loader-txt">Working…</span>
+          </span>
+        </div>
       </div>
     </div>
     <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-outline-secondary" onclick="LabX.load();" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+      <button class="btn btn-sm btn-outline-secondary" id="lx-refresh" onclick="LabX.load();" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
       <button class="btn btn-sm fw-semibold" style="background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg);" onclick="LabX.openWalkin();">
         <i class="fa-solid fa-user-plus me-1"></i>New Walk-in Order
       </button>
@@ -290,8 +295,22 @@ var LabX = (function () {
   /* ── plumbing ── */
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-  function spin(m){ var e=$('lx-loader'); if(e){e.classList.remove('d-none');e.classList.add('d-flex');} if($('lx-loader-txt'))$('lx-loader-txt').textContent=m||'Working…'; }
-  function stop(){ var e=$('lx-loader'); if(e){e.classList.add('d-none');e.classList.remove('d-flex');} }
+  /* Busy state: a chip beside the subtitle plus a spinning refresh icon.
+     Counted, because two calls can overlap (a reload started while a walk-in
+     order is saving) and the first to finish must not clear the other's. */
+  var _busy = 0;
+  function spin(m){
+    _busy++;
+    var e=$('lx-loader'); if(e) e.hidden=false;
+    if($('lx-loader-txt')) $('lx-loader-txt').textContent = m||'Working…';
+    var r=$('lx-refresh'); if(r){ r.disabled=true; var i=r.querySelector('i'); if(i) i.classList.add('fa-spin'); }
+  }
+  function stop(){
+    _busy = Math.max(0, _busy-1);
+    if(_busy) return;
+    var e=$('lx-loader'); if(e) e.hidden=true;
+    var r=$('lx-refresh'); if(r){ r.disabled=false; var i=r.querySelector('i'); if(i) i.classList.remove('fa-spin'); }
+  }
   function flash(m, ok){
     var b=$('lx-msg'); if(!b) return;
     b.innerHTML='<div class="d-flex align-items-center gap-2 px-3 py-2 rounded small mb-3" style="background:var(--bg-input);border:1px solid '+(ok?'var(--success)':'var(--danger)')+';">'+
@@ -316,6 +335,14 @@ var LabX = (function () {
 
   /* ════════ LOAD & RENDER ════════ */
   function load(){
+    // Grey cards the shape of the ones that are coming, so the queue area
+    // is never blank and the page does not jump when the data lands.
+    var cards=$('lx-cards');
+    if(cards && !_orders.length && typeof window.crescSkeleton === 'function'){
+      cards.innerHTML = '<div class="lx-card p-3 mb-2">' + window.crescSkeleton(2) + '</div>' +
+                        '<div class="lx-card p-3 mb-2">' + window.crescSkeleton(2) + '</div>' +
+                        '<div class="lx-card p-3">'     + window.crescSkeleton(2) + '</div>';
+    }
     run('getLabWorkspaceData', [], function(res){
       if(!res||!res.success){ flash((res&&res.message)||'Workspace load failed.', false); return; }
       _orders=res.orders||[]; _stats=res.stats||{};

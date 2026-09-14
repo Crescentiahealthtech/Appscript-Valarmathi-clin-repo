@@ -459,6 +459,106 @@ function dsx_genericFuzzy_(index, brand) {
   return hits.length === 1 ? hits[0] : '';
 }
 
+/* ---------------------------------------------------------------------------
+   THE SHARED PRESCRIPTION COLUMNS
+
+   One definition, used by the assembler, the printer, the validators and the
+   editor, so the three of them can never drift apart. They are the columns
+   the OP consult and the IP case sheet already use (OP_Module.html, around
+   the "Treatment (Rx)" table), because a prescription should read the same
+   wherever it is written.
+
+   Treatment given is a RECORD of a stay, so its fourth column is a span of
+   dates; the discharge script is an INSTRUCTION for the days ahead, so its
+   fourth column is a count of days. Everything else is identical.
+   ------------------------------------------------------------------------ */
+var DSX_RX_COLUMNS        = ['Type', 'Medicine Name', 'Dosage / Sig', 'Days', 'Notes / Timing'];
+var DSX_TREATMENT_COLUMNS = ['Type', 'Medicine Name', 'Dosage / Sig', 'Duration', 'Notes / Timing'];
+
+/** The index of a named column, or -1. Never assume a position. */
+function dsx_colIndex_(section, name) {
+  if (!section || !section.content || !section.content.columns) return -1;
+  return section.content.columns.indexOf(name);
+}
+
+/**
+ * The dispensing form, in the vocabulary the OP prescriber picks from.
+ * Derived from the route and the ordered name, because ward notes carry no
+ * drug type of their own.
+ */
+function dsx_drugType_(d) {
+  var route = dsx_upper_(d.route);
+  var name  = dsx_upper_(d.brand);
+  if (d.injectable) return 'Inj';
+  if (/^IV\b|INFUS/.test(route) || /^(NS|DNS|RL|D5W|D10W|ISOLYTE)\b/.test(name)) return 'IV';
+  if (/NEB/.test(route) || /NEB/.test(name)) return 'Neb';
+  if (/DROP/.test(route) || /\bE\/D\b|\bEYE DROP|\bDROPS?\b/.test(name)) return 'Drops';
+  if (/TOP|LOCAL/.test(route) || /OINT|CREAM|GEL\b/.test(name)) return 'Oint';
+  if (/\bSYR|SYP|SUSP|ELIXIR|\bML\b/.test(name)) return 'Syp';
+  if (/\bCAP\b|CAPSULE/.test(name)) return 'Cap';
+  return 'Tab';
+}
+
+/**
+ * "AUGMENTIN 625 (AMOXICILLIN + CLAVULANATE)".
+ *
+ * The generic used to have a column to itself, which left it blank on most
+ * rows - ward notes are written in brand names, and the generic is only
+ * resolved when the brand happens to be in Pharmacy_Inventory. A column that
+ * is empty four times out of five is a column that teaches the reader to
+ * skip it, so the generic now rides with the brand, where a pharmacist
+ * substituting a stock item actually reads it.
+ */
+function dsx_drugNameCell_(d) {
+  var brand = dsx_str_(d.brand);
+  var generic = dsx_str_(d.generic);
+  if (!generic) return brand;
+  if (dsx_upper_(brand).indexOf(dsx_upper_(generic)) > -1) return brand;
+  return brand + ' (' + generic + ')';
+}
+
+/** "500 mg · 1-0-1" from the two halves a ward note records separately. */
+function dsx_sigCell_(dose, freq) {
+  return [dsx_str_(dose), dsx_str_(freq)].filter(String).join(' · ');
+}
+
+/**
+ * How long a drug actually ran, as one readable cell.
+ *
+ * Replaces the Started / Stopped / Status columns. The state is said in
+ * WORDS here rather than as a bare "HELD" or "STOPPED" in a column of its
+ * own, because the fact that matters to whoever reads this - that the drug
+ * is not running now - belongs beside the dates that show when it ran.
+ *
+ * @param {Object} d    one entry from dsx_replayMedications_
+ * @param {Date}   dod  the discharge date, or null while the patient is in
+ */
+function dsx_stayDuration_(d, dod) {
+  var start = d.startedAt ? dsx_fmt_(d.startedAt, 'dd-MMM') : '';
+  var stop  = d.stoppedAt ? dsx_fmt_(d.stoppedAt, 'dd-MMM') : '';
+  var state = dsx_upper_(d.state);
+
+  var days = null;
+  if (d.startedAt) {
+    var end = d.stoppedAt || dod || new Date();
+    if (typeof cresc_los_ === 'function') days = cresc_los_(d.startedAt, end);
+  }
+  var dayText = (days === null) ? '' : (days + ' day' + (days === 1 ? '' : 's'));
+
+  if (!start) {
+    // Continued from the admission casesheet and never re-ordered on a note.
+    return d.continuedFromAdmission ? 'From admission' : (dayText || '');
+  }
+  if (state === 'STOPPED') {
+    return start + ' to ' + (stop || '?') + (dayText ? ' (' + dayText + ')' : '') + ' — stopped';
+  }
+  if (state === 'HELD') {
+    return start + ' onwards' + (dayText ? ' (' + dayText + ')' : '') + ' — on hold';
+  }
+  var to = dod ? dsx_fmt_(dod, 'dd-MMM') : 'discharge';
+  return start + ' to ' + to + (dayText ? ' (' + dayText + ')' : '');
+}
+
 function dsx_isInjectable_(route, brand) {
   var r = dsx_upper_(route);
   if (/^(IV|IM|SC|S\/C|I\/V|I\/M|INJ|INTRAVENOUS|INTRAMUSCULAR|SUBCUTANEOUS)\b/.test(r)) return true;
@@ -607,17 +707,37 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
   var admissionMeds = cs ? dsx_admissionMeds_(cs, warnings) : [];
   var replay = dsx_replayMedications_(bundle.notes, admissionMeds);
 
+  // TREATMENT GIVEN and DISCHARGE MEDICATIONS now share the column set the
+  // OP consult and the IP case sheet prescribe in:
+  //
+  //     Type | Medicine Name | Dosage / Sig | Days | Notes / Timing
+  //
+  // Eight columns had grown here that exist nowhere else in the application
+  // (Generic, Brand, Dose, Route, Frequency, Started, Stopped, Status). A
+  // doctor who prescribes in one shape all day had to read a second shape on
+  // the one document that follows the patient home, and the two halves of a
+  // single instruction were split across three narrow columns - "500mg" in
+  // Dose, "1-0-1" in Frequency, "after food" in Instructions - which is
+  // exactly how a discharge script comes to disagree with itself.
+  //
+  // Nothing is lost in the narrowing. Generic rides with the brand in the
+  // name cell, route folds into the type (an IV drug is type Inj), and the
+  // four date/state columns become ONE Duration cell that says the same
+  // thing in words a patient can read: "10-Sep to 13-Sep (4 days)", or
+  // "10-Sep to 12-Sep - stopped". A drug that was stopped or held still says
+  // so; it simply says it where the dates are, instead of in a column of its
+  // own that repeated them.
   var given = replay.drugs.map(function (d) {
     return [
-      d.generic || '', d.brand, d.dose, d.route, d.freq,
-      dsx_fmt_(d.startedAt, 'dd-MMM'),
-      d.stoppedAt ? dsx_fmt_(d.stoppedAt, 'dd-MMM') : '',
-      d.state
+      dsx_drugType_(d),
+      dsx_drugNameCell_(d),
+      dsx_sigCell_(d.dose, d.freq),
+      dsx_stayDuration_(d, dod),
+      dsx_str_(d.instructions)
     ];
   });
   sections.TREATMENT_GIVEN = dsx_newSection_('Treatment given during the stay', 'TABLE',
-    { columns: ['Generic', 'Brand', 'Dose', 'Route', 'Frequency', 'Started', 'Stopped', 'Status'],
-      rows: given },
+    { columns: DSX_TREATMENT_COLUMNS, rows: given },
     'AUTO', dsx_refsFrom_('NOTE', bundle.notes.filter(function (n) {
       return n.data && n.data.medOrders && n.data.medOrders.length;
     }).map(function (n) { return n.noteId; })));
@@ -634,9 +754,7 @@ function dsx_buildSections_(bundle, dischargeType, warnings) {
   // Treatment given during the stay (above) still carries the full replay, so
   // nothing is lost from the record — it simply is not the discharge script.
   sections.DISCHARGE_MEDICATIONS = dsx_newSection_('Discharge medications', 'TABLE',
-    { columns: ['Generic', 'Brand', 'Strength / Dose', 'Route', 'Frequency', 'Timing',
-                'Food', 'Duration', 'Instructions', 'Status'],
-      rows: [] },
+    { columns: DSX_RX_COLUMNS, rows: [] },
     'MANUAL', []);
   sections.DISCHARGE_MEDICATIONS.reviewed = false;
 
@@ -1195,14 +1313,33 @@ function dsx_humanise_(camel) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/**
+ * Drugs named twice on the discharge script.
+ *
+ * Reads the medicine-name column BY NAME. It used to read r[0], which was
+ * the Generic column; r[0] is now Type, so the old version compared "Tab"
+ * with "Tab" and reported every script with two tablets on it as a
+ * duplicate-drug error.
+ *
+ * The comparison is on the normalised drug key, so "AUGMENTIN 625" and
+ * "Augmentin-625 (Amoxicillin)" are recognised as the same medicine - which
+ * is the duplicate worth catching, and the one a generic-column comparison
+ * missed whenever the generic had not resolved.
+ */
 function dsx_duplicateGenerics_(section) {
   if (!section || !section.content || !section.content.rows) return [];
+  var col = dsx_colIndex_(section, 'Medicine Name');
+  if (col === -1) col = 0;
   var seen = {}, dup = [];
   section.content.rows.forEach(function (r) {
-    var g = dsx_upper_(r[0]);
-    if (!g) return;
-    if (seen[g] && dup.indexOf(g) === -1) dup.push(g);
-    seen[g] = true;
+    var raw = dsx_str_(r[col]);
+    if (!raw) return;
+    // The name cell may carry "BRAND (GENERIC)"; compare on the brand.
+    var name = raw.replace(/\s*\(.*\)\s*$/, '');
+    var k = (typeof _normDrug_ === 'function') ? _normDrug_(name) : dsx_upper_(name);
+    if (!k) return;
+    if (seen[k] && dup.indexOf(seen[k]) === -1) dup.push(seen[k]);
+    seen[k] = dsx_upper_(name);
   });
   return dup;
 }

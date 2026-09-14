@@ -124,15 +124,54 @@ const AccX = (function () {
 
   // ---------- unified ledger ----------
   function matchesFilter(row) {
+    if (!matchesSearch(row)) return false;
     if (CURRENT_FILTER === 'ALL') return true;
     const cat = (row.category || '').toLowerCase().replace(/_/g, ' ');
     if (CURRENT_FILTER === 'OP_Consultation') return /op|ip|consult/.test(cat);
     return cat.indexOf(CURRENT_FILTER.toLowerCase().replace(/_/g, ' ')) !== -1;
   }
+
+  /* Free-text search across the columns an accountant actually looks things
+     up by. The ledger had category buttons and nothing else, so finding one
+     transaction meant scrolling a list capped at a hundred rows. */
+  let LEDGER_SEARCH = '';
+  function matchesSearch(row) {
+    if (!LEDGER_SEARCH) return true;
+    return (String(row.txnId || '') + ' ' + String(row.entity || '') + ' ' +
+            String(row.category || '') + ' ' + String(row.mode || '') + ' ' +
+            String(row.ts || '')).toLowerCase().indexOf(LEDGER_SEARCH) !== -1;
+  }
+  function search(text) {
+    LEDGER_SEARCH = String(text || '').toLowerCase().trim();
+    renderLedger();
+  }
+
+  /* The running totals of what is ON SCREEN. A filtered or searched view
+     with no total under it is a list; with one it answers the question that
+     sent you to the ledger. */
+  function renderLedgerTotals(rows) {
+    const el = $('acc-ledger-totals');
+    if (!el) return;
+    let tin = 0, tout = 0;
+    rows.forEach(function (r) { tin += Number(r.amtIn) || 0; tout += Number(r.amtOut) || 0; });
+    el.innerHTML = rows.length
+      ? rows.length + ' row' + (rows.length === 1 ? '' : 's') +
+        ' &nbsp;·&nbsp; In <span class="text-success fw-bold">' + inr(tin) + '</span>' +
+        ' &nbsp;·&nbsp; Out <span class="text-danger fw-bold">' + inr(tout) + '</span>' +
+        ' &nbsp;·&nbsp; Net <span class="fw-bold">' + inr(tin - tout) + '</span>'
+      : '';
+  }
+
   function renderLedger() {
     const tb = $('master-ledger-tbody'); if (!tb) return;
     const rows = LEDGER_CACHE.filter(matchesFilter);
-    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No transactions found.</td></tr>'; return; }
+    renderLedgerTotals(rows);
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">' +
+        (LEDGER_SEARCH ? 'Nothing matches &ldquo;' + esc(LEDGER_SEARCH) + '&rdquo;.'
+                       : 'No transactions found.') + '</td></tr>';
+      return;
+    }
     tb.innerHTML = rows.map(function (r) {
       const lk = r.locked ? ' <i class="fas fa-lock text-warning ms-1" title="Locked"></i>' : '';
       const ic = r.amtIn > 0 ? '<span class="text-success fw-semibold">' + inr(r.amtIn) + '</span>' : '<span class="text-muted">—</span>';
@@ -144,6 +183,55 @@ const AccX = (function () {
     }).join('');
   }
   function filter(cat) { CURRENT_FILTER = cat || 'ALL'; renderLedger(); }
+
+  /**
+   * Downloads what the ledger is currently showing, as CSV.
+   *
+   * The Export button has been on this toolbar from the start with NO
+   * handler behind it at all - an accountant pressed it and nothing
+   * happened, every time.
+   *
+   * It exports the FILTERED view rather than everything, because the filter
+   * and the search are how the view was narrowed to what is wanted. Built
+   * and downloaded in the browser: the rows are already here, so a server
+   * round trip would only add a way for it to fail.
+   */
+  function exportLedger() {
+    const rows = LEDGER_CACHE.filter(matchesFilter);
+    if (!rows.length) { toast('Nothing to export in this view.', false); return; }
+
+    // A field starting with =, +, - or @ is run as a FORMULA by Excel and by
+    // Sheets when the file is opened. Entity names come from vendor and
+    // patient records, so they are prefixed out of harm's way.
+    const cell = function (v) {
+      let t = String(v === null || v === undefined ? '' : v);
+      if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+      return '"' + t.replace(/"/g, '""') + '"';
+    };
+    // Amounts are written UNQUOTED so the spreadsheet reads them as numbers.
+    // Quoted, they import as text and the first thing anyone does with an
+    // exported ledger - select the column and look at the sum - gives zero.
+    const num = function (v) { const n = Number(v); return isFinite(n) ? String(n) : '0'; };
+    const head = ['Date & Time', 'Txn ID', 'Category', 'Entity', 'Mode', 'In (INR)', 'Out (INR)', 'Locked'];
+    const body = rows.map(function (r) {
+      return [cell(r.ts), cell(r.txnId), cell(r.category), cell(r.entity), cell(r.mode),
+              num(r.amtIn), num(r.amtOut), cell(r.locked ? 'YES' : '')].join(',');
+    });
+    // The BOM makes Excel read it as UTF-8, so a rupee sign in a note is not
+    // mangled on the accountant's machine.
+    const csv = '\ufeff' + head.map(cell).join(',') + '\r\n' + body.join('\r\n') + '\r\n';
+
+    const stamp = (window.crescDateInputValue ? window.crescDateInputValue(new Date())
+                                              : new Date().toISOString().slice(0, 10));
+    const name = 'ledger-' + (CURRENT_FILTER === 'ALL' ? 'all' : CURRENT_FILTER.toLowerCase()) +
+                 '-' + stamp + '.csv';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast(rows.length + ' row' + (rows.length === 1 ? '' : 's') + ' exported.', true);
+  }
 
   // ---------- receivables (running tab, in Discharges spoke) ----------
   function loadReceivables() {
@@ -210,23 +298,54 @@ const AccX = (function () {
 
   // ---------- dashboard ----------
   function setText(id, t) { const e = $(id); if (e) e.textContent = t; }
+
+  /* A tile's count, styled by whether it means "attend to this".
+     Was three raw numbers in three different hard-coded colours, one of
+     which ("0 Mismatches") was painted danger-red even when it said zero. */
+  function setFlag(id, n, oneLabel, manyLabel) {
+    const e = $(id); if (!e) return;
+    const count = Number(n) || 0;
+    e.textContent = count + ' ' + (count === 1 ? oneLabel : manyLabel);
+    e.classList.toggle('is-flagged', count > 0);
+    e.classList.toggle('is-clear', count === 0);
+  }
+
+  /* The hub's own busy state. The refresh button spins and a chip appears
+     beside the subtitle; nothing is covered over. */
+  function hubBusy(on) {
+    const chip = $('acc-busy'); if (chip) chip.hidden = !on;
+    const btn = $('acc-refresh');
+    if (btn) { btn.disabled = on; const i = btn.querySelector('i'); if (i) i.classList.toggle('fa-spin', on); }
+  }
+
   function load() {
     const tb = $('master-ledger-tbody');
     if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading financial data…</td></tr>';
+    hubBusy(true);
     google.script.run
       .withSuccessHandler(function (res) {
+        hubBusy(false);
         if (!res || !res.success) { toast((res && res.message) || 'Load failed.', false); LEDGER_CACHE = []; renderLedger(); return; }
         CURRENT_PERIOD = res.currentPeriod; LEDGER_CACHE = res.ledger || [];
-        setText('acc-kpi-revenue', inr(res.kpis.collectedMTD));
-        setText('acc-kpi-expense', inr(res.kpis.paidMTD));
-        setText('acc-kpi-cash', inr(res.kpis.drawerCash));
-        const f = res.flags;
-        setText('acc-flag-mismatch', f.cashMismatch + ' Mismatch' + (f.cashMismatch === 1 ? '' : 'es'));
-        setText('acc-flag-claims', f.delayedClaims);
-        setText('acc-flag-discharges', f.pendingDischarges);
+
+        // These four write into the KPI strip at the top of the hub. Until
+        // that strip existed in the markup, setText() found no element and
+        // every one of these numbers was computed and discarded.
+        const k = res.kpis || {};
+        setText('acc-kpi-revenue', inr(k.collectedMTD));
+        setText('acc-kpi-expense', inr(k.paidMTD));
+        setText('acc-kpi-cash', inr(k.drawerCash));
+        // Net is the number anyone actually asks for, and it is the only one
+        // the hub did not show. It is derived, so no backend change is needed.
+        setText('acc-kpi-net', inr((Number(k.collectedMTD) || 0) - (Number(k.paidMTD) || 0)));
+
+        const f = res.flags || {};
+        setFlag('acc-flag-mismatch', f.cashMismatch, 'mismatch', 'mismatches');
+        setFlag('acc-flag-claims', f.delayedClaims, 'claim delayed', 'claims delayed');
+        setFlag('acc-flag-discharges', f.pendingDischarges, 'pending', 'pending');
         renderLedger();
       })
-      .withFailureHandler(function (err) { LEDGER_CACHE = []; renderLedger(); toast(err.message || 'Server error.', false); })
+      .withFailureHandler(function (err) { hubBusy(false); LEDGER_CACHE = []; renderLedger(); toast(err.message || 'Server error.', false); })
       .getAccountsDashboard();
   }
   function lockPeriod() {
@@ -242,7 +361,8 @@ const AccX = (function () {
     });
   }
 
-  return { load, openEntry, lockPeriod, switchPage, filter, loadReceivables, settle };
+  return { load, openEntry, lockPeriod, switchPage, filter, search, exportLedger,
+           loadReceivables, settle };
 })();
 
 function switchAccountsPage(pageId) { AccX.switchPage(pageId); }

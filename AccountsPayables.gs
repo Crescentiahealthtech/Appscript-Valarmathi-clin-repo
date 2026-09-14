@@ -25,8 +25,12 @@ function pay_objs_() {
   return out;
 }
 function pay_col_(sh, name) { return sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (x) { return acc_str_(x).trim(); }).indexOf(name) + 1; }
-function pay_id_() { return 'PAY-' + Date.now().toString().slice(-9) + Math.floor(Math.random() * 90 + 10); }
-function pay_days_(due) { var d = acc_toDate_(due); if (!d) return null; return Math.floor(((new Date()).setHours(0, 0, 0, 0) - d.setHours(0, 0, 0, 0)) / 86400000); }
+function pay_id_() { return acc_newId_('PAY'); }
+function pay_days_(due) {
+  if (typeof cresc_daysBetween_ === 'function') return cresc_daysBetween_(due, null);
+  var d = acc_toDate_(due); if (!d) return null;
+  return Math.floor(((new Date()).setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000);
+}
 
 // RECEIVE a bill (no cash). payload = {entityType, name, documentType, invoiceRef,
 //   amount, gstInput, dueDate, notes, user, payNow, payMode}
@@ -90,7 +94,7 @@ function payPayable(payload) {
       sh.getRange(row, cStat + 1).setValue(status);
       if (cPaidAt >= 0) sh.getRange(row, cPaidAt + 1).setValue(now);
 
-      acc_sheet_(ACC_CFG.LEDGER).appendRow([target + '-P' + Date.now().toString().slice(-5), now, 'Payable', entity, name, target, doc + ' · ' + name, mode, 0, amt, user, '', 'FALSE', acc_str_(payload.notes)]);
+      acc_sheet_(ACC_CFG.LEDGER).appendRow([acc_newId_(target + '-P'), now, 'Payable', entity, name, target, doc + ' · ' + name, mode, 0, amt, user, '', 'FALSE', acc_str_(payload.notes)]);
       acc_audit_(user, 'PAYABLE_PAY', PAY_CFG.SHEET, target, 'Pending: ' + pending, 'Paid: ' + amt, mode + ' | now ' + status);
       SpreadsheetApp.flush();
       return { success: true, message: "Paid ₹" + amt + " · " + name + " (" + status + ").", status: status, pending: newPending };
@@ -113,7 +117,7 @@ function getPayables(filter) {
         id: acc_str_(r['Payable_ID']), entity: entity, name: acc_str_(r['Vendor_Doctor_Name']),
         doc: acc_str_(r['Document_Type']), ref: acc_str_(r['Invoice_Ref']),
         total: acc_money_(r['Total_Amount']), paid: acc_money_(r['Amount_Paid']), pending: pending,
-        status: status, due: acc_str_(r['Due_Date']) ? Utilities.formatDate(acc_toDate_(r['Due_Date']), ACC_CFG.TZ, 'dd-MMM') : '', drawer: acc_str_(r['Drawer']),
+        status: status, due: (typeof cresc_formatDate_ === 'function') ? cresc_formatDate_(r['Due_Date'], 'dd-MMM') : acc_str_(r['Due_Date']), drawer: acc_str_(r['Drawer']),
         overdueDays: (days !== null && days > 0 && pending > 0) ? days : 0
       };
       if (status === 'PAID') { paidRecent.push(rec); return; }

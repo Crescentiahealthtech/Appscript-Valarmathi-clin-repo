@@ -6,6 +6,29 @@ var APPT_STATUS_WRITERS   = ['admin', 'doctor', 'receptionist', 'reception', 'nu
 // ==========================================
 
 // Helper to prevent Google Sheets from corrupting Time formats into hidden Date objects
+/**
+ * A unique appointment id: APT-260913-174233-A19F4C.
+ *
+ * Sortable, readable, and unique - which none of the three schemes this
+ * replaces was. Nothing parses an appointment id; they are matched whole,
+ * so rows already written keep the ids they have.
+ */
+function apt_newId_() {
+  var stamp;
+  try {
+    stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Kolkata', 'yyMMdd-HHmmss');
+  } catch (e) {
+    stamp = String(Date.now());
+  }
+  var rand;
+  try {
+    rand = Utilities.getUuid().replace(/-/g, '').substring(0, 6).toUpperCase();
+  } catch (e) {
+    rand = ('000000' + Math.floor(Math.random() * 2176782336).toString(36).toUpperCase()).slice(-6);
+  }
+  return 'APT-' + stamp + '-' + rand;
+}
+
 function formatTimeSafely(timeVal) {
   if(!timeVal) return "";
   if(timeVal instanceof Date) {
@@ -166,9 +189,16 @@ function submitNewAppointment(apptObj) {
       }
     }
 
-    // Timestamp-derived, not row-count-derived: deleting a row must never let the
-    // next booking reuse an id that is already printed on a bill.
-    const newId = "APT-" + Date.now().toString().slice(-8);
+    // Timestamp-derived, not row-count-derived: deleting a row must never let
+    // the next booking reuse an id that is already printed on a bill.
+    //
+    // The slice(-8) this replaces kept the last EIGHT digits of a
+    // thirteen-digit millisecond clock, which is a window of about 27 hours
+    // and 46 minutes. Two appointments booked a day and a bit apart were
+    // therefore given the SAME id - routinely, in a clinic that books every
+    // day. The id is built from a readable timestamp plus six characters of
+    // a UUID now, so it stays sortable and stops colliding.
+    const newId = apt_newId_();
     sheet.appendRow([
       newId, apptObj.patientId, apptObj.patientName, apptObj.date, apptObj.time,
       apptObj.purpose, apptObj.status || 'Booked', apptObj.fee || 0, new Date().toISOString()
@@ -334,7 +364,12 @@ function saveEnterpriseAvailability(payload) {
       datesToProcess.forEach(dateStr => {
         blockedSlots.forEach((slot) => {
           startId++;
-          let apptId = "APT-" + startId.toString().padStart(4, '0');
+          // Was "APT-" + the sheet's row count, padded. That is exactly the
+          // row-count-derived id submitNewAppointment refuses to use: delete
+          // some rows and the next block reuses ids that are already on real
+          // bookings, and a blocked slot then collides with a patient's
+          // appointment. Same generator as a real booking now.
+          let apptId = apt_newId_();
           newRows.push([apptId, 'ADMIN', 'BLOCKED', dateStr, slot, 'Doctor Unavailable', 'Blocked', 0]);
         });
       });

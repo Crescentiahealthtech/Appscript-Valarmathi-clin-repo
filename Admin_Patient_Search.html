@@ -54,8 +54,15 @@
     tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i> Fetching patient database...</td></tr>';
     
     google.script.run.withSuccessHandler(res => {
-      globalPatientDirectory = res || []; 
+      globalPatientDirectory = res || [];
       renderPatientDirectoryTable(globalPatientDirectory);
+    }).withFailureHandler(err => {
+      // The "Fetching patient database..." row spun for ever when this
+      // failed, which reads as a slow server rather than a failed call.
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">' +
+        'The patient list could not be loaded: ' +
+        ((err && err.message) || 'the server did not reply') +
+        ' <button class="btn btn-sm btn-outline-secondary ms-2" onclick="loadRoster()">Retry</button></td></tr>';
     }).getAllPatients();
   }
 
@@ -108,7 +115,11 @@
     modal.show();
 
     // Fetch the 22-column profile data securely
-    google.script.run.withSuccessHandler(profile => {
+    google.script.run.withFailureHandler(err => {
+      document.getElementById('profileModalBody').innerHTML =
+        '<div class="text-danger text-center my-4">The profile could not be loaded: ' +
+        ((err && err.message) || 'the server did not reply') + '</div>';
+    }).withSuccessHandler(profile => {
       if(!profile) {
         document.getElementById('profileModalBody').innerHTML = '<div class="text-danger text-center my-4">Failed to locate profile records.</div>';
         return;

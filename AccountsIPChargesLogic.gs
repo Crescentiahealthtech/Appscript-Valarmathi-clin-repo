@@ -39,7 +39,16 @@ function ipc_charges_() { return ipc_ensure_(IPC_CFG.CHARGES, ['Charge_ID', 'IP_
 function ipc_advances_() { return ipc_ensure_(IPC_CFG.ADVANCES, ['Advance_ID', 'IP_Number', 'Timestamp', 'Amount', 'Pay_Mode', 'Txn_ID', 'Status', 'Settlement_ID', 'Collected_By']); }
 function ipc_settlements_() { return ipc_ensure_(IPC_CFG.SETTLEMENTS, ['Settlement_ID', 'IP_Number', 'Timestamp', 'Gross_Tab', 'Package_Code', 'Package_Cap', 'Package_Adjustment', 'Capped_Gross', 'Discount_Percent', 'Discount_Amount', 'NonPayable_Total', 'Advance_Applied', 'Insurance_Approved', 'Insurer_JSON', 'Insurance_Status', 'Patient_Liability', 'Patient_Paid', 'Patient_Pay_Mode', 'Refund_Due', 'Recognized_Realized', 'Settled_By', 'Notes']); }
 function ipc_drafts_() { return ipc_ensure_('IP_Discharge_Drafts', ['IP_Number', 'Updated_At', 'Discount_Percent', 'Package_Code', 'Package_Cap', 'Insurance_Approved', 'Insurers_JSON', 'Ward_JSON', 'Remarks', 'Updated_By']); }
-function ipc_los_(doa) { var d = acc_toDate_(doa); if (!d) return 1; var ms = (new Date()).getTime() - d.getTime(); return Math.max(1, Math.floor(ms / 86400000) + 1); }
+function ipc_los_(doa) {
+  // Shared_Dates.gs counts whole days at midnight, so an admission at 23:00
+  // and a bill raised at 01:00 the next morning is two days on the bill, not
+  // one - which is what the ward, the discharge summary and the bed map all
+  // already said. Counting from the raw timestamps disagreed with them.
+  if (typeof cresc_los_ === 'function') { var n = cresc_los_(doa, null); return n === null ? 1 : n; }
+  var d = acc_toDate_(doa); if (!d) return 1;
+  var ms = (new Date()).getTime() - d.getTime();
+  return Math.max(1, Math.floor(ms / 86400000) + 1);
+}
 function ipc_objs_(sh) {
   var d = sh.getDataRange().getValues(); if (d.length < 2) return [];
   var h = d[0].map(function (x) { return acc_str_(x).trim(); }), out = [];
@@ -48,7 +57,7 @@ function ipc_objs_(sh) {
 }
 function ipc_isTrue_(v) { var s = acc_str_(v).trim().toUpperCase(); return s === 'TRUE' || s === 'YES' || s === '1'; }
 function ipc_cash_(m) { return acc_str_(m).toLowerCase().indexOf('cash') !== -1; }
-function ipc_id_(p) { return p + '-' + Date.now().toString().slice(-9) + Math.floor(Math.random() * 90 + 10); }
+function ipc_id_(p) { return acc_newId_(p); }
 
 // resolve a patient's single ACTIVE admission (used to auto-route IP credit bills)
 function ipc_activeAdmissionByPatient_(patientId) {

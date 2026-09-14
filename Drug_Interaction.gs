@@ -1,5 +1,5 @@
 // ============================================================================
-// Drug_Interactions.gs  —  Crescentia HealthTech
+// Drug_Interaction.gs  —  Crescentia HealthTech
 // Drug–drug interaction checking, driven by a sheet the clinic maintains.
 // ----------------------------------------------------------------------------
 // WHY A SHEET, NOT A HARD-CODED TABLE

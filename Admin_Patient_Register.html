@@ -179,7 +179,12 @@
   function calculateAge() {
     const dobInput = document.getElementById('reg-dob').value;
     if (dobInput) {
-      const dob = new Date(dobInput);
+      // A yyyy-MM-dd value parses as UTC midnight through new Date(), which
+      // is the previous day west of Greenwich - an age one year out on a
+      // birthday. crescParseDate builds it locally.
+      const dob = (typeof window.crescParseDate === 'function')
+        ? window.crescParseDate(dobInput) : new Date(dobInput);
+      if (!dob) { document.getElementById('reg-age').value = ''; return; }
       const today = new Date();
       let age = today.getFullYear() - dob.getFullYear();
       const m = today.getMonth() - dob.getMonth();
