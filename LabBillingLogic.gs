@@ -39,7 +39,13 @@ function getLabBillingWorkspace() {
       bHeaders.forEach((h, i) => b[h] = row[i]);
       
       if (!b.BillID) return;
-      if (b.OrderID) billedOrderIds.add(b.OrderID);
+
+      // A CANCELLED bill is not a bill. Counting its order as "already
+      // billed" is what would strand that order: it would never come back to
+      // the pending queue and could never be billed correctly, which is the
+      // usual reason for voiding one in the first place.
+      var isCancelled = String(b.PaymentStatus || '').trim().toUpperCase() === 'CANCELLED';
+      if (b.OrderID && !isCancelled) billedOrderIds.add(b.OrderID);
 
       let billDateObj = null;
       let billDateStr = "";
@@ -61,10 +67,12 @@ function getLabBillingWorkspace() {
       if (isStrictlyToday || billDateStr === yesterdayStr) {
         
         let isIP = (b.PaymentMode === 'IP_ACCOUNT' || b.BillingCategory === 'IP_ACCOUNT' || b.AdmissionID);
-        let tType = isIP ? 'IP' : 'PAID';
-        
+        let tType = isCancelled ? 'CANCELLED' : (isIP ? 'IP' : 'PAID');
+
         billsList.push({
           tabType: tType,
+          cancelReason: b.CancelReason || '',
+          cancelledBy: b.CancelledBy || '',
           orderId: b.OrderID || '',
           billId: b.BillID,
           paymentMode: b.PaymentMode || 'CASH',
@@ -78,7 +86,7 @@ function getLabBillingWorkspace() {
           isStrictlyToday: isStrictlyToday 
         });
 
-        if (isStrictlyToday) {
+        if (isStrictlyToday && !isCancelled) {
           stats.todayCount++;
           if (isIP) {
             stats.todayIP += (Number(b.NetAmount) || 0);
@@ -99,9 +107,34 @@ function getLabBillingWorkspace() {
       
       if (!o.OrderID) return;
       
-      if (!billedOrderIds.has(o.OrderID) && o.OrderStatus !== 'CANCELLED' && o.OrderStatus !== 'DELETE') {
+      var oStatus = String(o.OrderStatus || '').trim().toUpperCase();
+
+      // Cancelled orders get their own tab rather than vanishing: a queue
+      // count is only trustworthy when what left it can still be seen.
+      if (oStatus === 'CANCELLED') {
+        billsList.push({
+          tabType: 'CANCELLED',
+          orderId: o.OrderID,
+          billId: '',
+          paymentMode: '',
+          patientName: o.PatientName || 'Unknown',
+          patientId: o.PatientID || '',
+          testNames: o.TestNames || 'Lab Tests',
+          receiptNumber: '',
+          billedAt: o.CancelledAt ? new Date(o.CancelledAt).toLocaleString('en-IN')
+                                  : (o.CreatedAt ? new Date(o.CreatedAt).toLocaleString('en-IN') : ''),
+          net: 0,
+          discount: 0,
+          cancelReason: o.CancelReason || '',
+          cancelledBy: o.CancelledBy || '',
+          isStrictlyToday: false
+        });
+        return;
+      }
+
+      if (!billedOrderIds.has(o.OrderID) && oStatus !== 'DELETE') {
         stats.pendingCount++;
-        
+
         billsList.push({
           tabType: 'PENDING',
           orderId: o.OrderID,

@@ -83,6 +83,10 @@ var DEP_MAP = {
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
+  "Lab_Cancellation.gs": [
+    "labEnsureCancellationColumns", "labCancelPendingOrder", "labCancelBill",
+    "labListCancelled", "labx_billFor_", "labx_orderStatus_"
+  ],
   "Doctor_Visiting.gs": [
     "dv_sheet_", "dv_isVisitingSlot_", "dv_identityFor_", "dv_signature_",
     "getVisitingConsultantState", "declareVisitingConsultant",
