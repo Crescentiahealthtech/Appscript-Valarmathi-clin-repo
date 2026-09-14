@@ -83,6 +83,10 @@ var DEP_MAP = {
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
+  "Dose_Reference.gs": [
+    "dref_sheet_", "dref_all_", "getDoseReference", "listDoseReference",
+    "setupDoseReference"
+  ],
   "OP_Rx_Engine.gs":        ["checkRxSafety", "getPatientAllergies", "savePatientAllergies",
                              "rx_genericMap_", "rx_seedSheet_", "getComposerContext",
                              "listRxBundles", "buildTaperPlan", "suggestPaediatricDose"],

@@ -377,15 +377,46 @@ const AccX = (function () {
     if (btn) { btn.disabled = on; const i = btn.querySelector('i'); if (i) i.classList.toggle('fa-spin', on); }
   }
 
+  /**
+   * Says on the hub itself why it is empty.
+   *
+   * A toast is gone in four seconds and the hub then looks merely idle:
+   * three em-dashes in the KPI strip and "No transactions found" under them,
+   * which is exactly what a quiet month looks like. A hub that FAILED has to
+   * say so where the eye lands, and stay saying it.
+   */
+  function hubProblem(text) {
+    const el = $('acc-hub-problem');
+    if (!el) return;
+    if (!text) { el.classList.add('d-none'); el.innerHTML = ''; return; }
+    el.classList.remove('d-none');
+    el.innerHTML = '<i class="fas fa-triangle-exclamation me-2"></i>' + esc(text) +
+      ' <button class="btn btn-sm btn-outline-light ms-2 py-0" onclick="AccX.load()">Retry</button>';
+  }
+
   function load() {
     const tb = $('master-ledger-tbody');
     if (tb) tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading financial data…</td></tr>';
     hubBusy(true);
+    hubProblem('');
     google.script.run
       .withSuccessHandler(function (res) {
         hubBusy(false);
-        if (!res || !res.success) { toast((res && res.message) || 'Load failed.', false); LEDGER_CACHE = []; renderLedger(); return; }
+        if (!res || !res.success) {
+          const why = (res && res.message) || 'the server did not reply';
+          toast('The Finance Hub could not load: ' + why, false);
+          hubProblem('The Finance Hub could not load: ' + why);
+          LEDGER_CACHE = []; renderLedger();
+          return;
+        }
         CURRENT_PERIOD = res.currentPeriod; LEDGER_CACHE = res.ledger || [];
+
+        // Rows the server could not read. Silently dropping them is what made
+        // a month's expenses quietly shrink, so they are named here.
+        if (res.warningCount) {
+          hubProblem(res.warningCount + ' record(s) could not be read and are ' +
+                     'missing from these figures — ' + (res.warnings || []).join('; '));
+        }
 
         // These four write into the KPI strip at the top of the hub. Until
         // that strip existed in the markup, setText() found no element and
