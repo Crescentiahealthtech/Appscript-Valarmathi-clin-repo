@@ -16,71 +16,115 @@
   }
   setInterval(updateClock, 1000); updateClock();
 
-  function applyRBAC(role) {
-  // 1. Define all restricted UI elements (Sidebar Links & Inner Cards)
-  // The money panels are listed here as well as gated on the server: the
-  // dashboard payload carries no revenue figures for a clinical role, and
-  // these ids keep the empty cards off their screen. 'dash-gateway-accounts'
-  // is gone with the Operational Hubs grid it belonged to.
-  const restrictedElements = [
-   'nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
-    'nav-tab-pharmacy', 'nav-tab-lab', 'nav-tab-accounts', 'card-hosp-billing',
-    'dash-card-revenue', 'dash-card-credit',
-    'an-card-bill', 'an-money-row', 'an-card-paymix'
-  ];
+/* ====================================================================
+   APPLY RBAC — DRAWING ONLY
 
-  // 2. Hide everything by default for security
-  restrictedElements.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.add('d-none');
-  });
+   Read this before changing anything below: NOTHING HERE PROTECTS
+   ANYTHING. It adds `d-none` to a list of element ids in the browser.
+   Deleting that class in devtools brings every hidden control back, and
+   the server answers the call either way. It exists so a user is not
+   offered a control that will be refused — an affordance, not a gate.
 
-  // 3. Selectively reveal based on the security matrix
-  const userRole = (role || "").toLowerCase();
+   The gate is crescRequire_() in RBAC.gs, on the server, in front of the
+   work. When you add a screen, add the permission check there first;
+   this list is the cosmetic follow-up, not the other way round.
 
-  let allowedElements = [];
+   WHAT CHANGED
 
-  switch (userRole) {
-    case 'admin':
-      allowedElements = restrictedElements;
-      break;
-    case 'accounts':
-      allowedElements = ['nav-tab-dash', 'nav-tab-accounts', 'card-hosp-billing',
-                         'dash-card-revenue', 'dash-card-credit',
-                         'an-card-bill', 'an-money-row', 'an-card-paymix'];
-      break;
-    case 'doctor':
-      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
-                         'nav-tab-pharmacy', 'nav-tab-lab'];
-      break;
-    case 'receptionist':
-    case 'reception':
-      allowedElements = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'card-hosp-billing',
-                         'dash-card-revenue', 'dash-card-credit',
-                         'an-card-bill', 'an-money-row', 'an-card-paymix'];
-      break;
-    case 'nurse':
-      // The ward and the discharge desk are both inside EMR, which is where a
-      // nurse works; the rail itself carries only the Dashboard and EMR.
-      allowedElements = ['nav-tab-dash', 'nav-tab-emr'];
-      break;
-    case 'pharmacy':
-      allowedElements = ['nav-tab-dash', 'nav-tab-pharmacy'];
-      break;
-    case 'lab':
-      allowedElements = ['nav-tab-dash', 'nav-tab-lab'];
-      break;
-    default:
-      allowedElements = ['nav-tab-dash'];
-      break;
-  }
+   This used to be a switch on the role name with its own hand-written
+   allow-list per role — a SECOND permission matrix, in a different
+   language, in a different file, which nothing kept in step with the
+   first. The two had already drifted: 'accounts' appeared here and
+   'accountant' did not, so an accountant whose Users row happened to say
+   "Accountant" fell through to `default` and was shown a rail with one
+   item on it.
 
-  // 4. Apply the reveals
-  allowedElements.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.classList.remove('d-none');
+   Now there is one matrix. The server's answer to crescGetMyPermissions()
+   decides, and each id below names the permission that earns it. A role
+   spelling the matrix knows how to resolve — and CRESC_ROLE_ALIAS knows
+   several — lands in the right place without an entry here.
+   ==================================================================== */
+
+/** Element id -> the permission that reveals it. */
+var CRESC_UI_PERMS = {
+  'nav-tab-dash':       null,              // everyone who is signed in
+  'nav-tab-appt':       'appointment.read',
+  'nav-tab-patients':   'patient.read',
+  'nav-tab-emr':        'emr.read',
+  'nav-tab-pharmacy':   'pharmacy.read',
+  'nav-tab-lab':        'lab.read',
+  'nav-tab-accounts':   'accounts.read',
+  'card-hosp-billing':  'billing.write',
+  // The money panels are gated here AND on the server: the dashboard
+  // payload carries no revenue figures for a clinical role, and these ids
+  // keep the empty cards off their screen.
+  'dash-card-revenue':  'accounts.read',
+  'dash-card-credit':   'accounts.read',
+  'an-card-bill':       'accounts.read',
+  'an-money-row':       'accounts.read',
+  'an-card-paymix':     'accounts.read'
+};
+
+/** What the server says this session may do. Null until it answers. */
+window.crescPerms = null;
+
+/** True when the signed-in user holds `perm`. Safe before the reply lands. */
+window.crescCan = function (perm) {
+  return !!(window.crescPerms && window.crescPerms[perm]);
+};
+
+function crescPaintRBAC() {
+  var perms = window.crescPerms || {};
+  Object.keys(CRESC_UI_PERMS).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var need = CRESC_UI_PERMS[id];
+    var show = (need === null) ? true : !!perms[need];
+    el.classList.toggle('d-none', !show);
   });
 }
+
+/**
+ * @param {string} role  kept for the existing call site in Auth.html; the
+ *        server is the authority, and this is only the fallback for the
+ *        moment before it answers.
+ */
+function applyRBAC(role) {
+  // Hide everything first, so a slow reply never flashes an accountant's
+  // revenue card at a pharmacist.
+  Object.keys(CRESC_UI_PERMS).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && CRESC_UI_PERMS[id] !== null) el.classList.add('d-none');
+  });
+
+  if (!window.sessionToken || typeof google === 'undefined' || !google.script) {
+    crescPaintRBAC();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        window.crescPerms = res.permissions || {};
+      } else {
+        // The session is gone. Show nothing rather than guessing from a
+        // role name the server has just declined to confirm.
+        window.crescPerms = {};
+        if (res && res.message && window.showToast) {
+          window.showToast('Signed out', res.message, 'warning');
+        }
+      }
+      crescPaintRBAC();
+    })
+    .withFailureHandler(function () {
+      // Unreachable server: the rail stays minimal. Every screen behind it
+      // would fail its own permission check anyway.
+      window.crescPerms = {};
+      crescPaintRBAC();
+    })
+    .crescGetMyPermissions(window.sessionToken);
+}
+ 
  
 function switchTab(tabId, clickedElement) {
     // The rail rests collapsed on every screen. Navigating is the end of a
@@ -89,6 +133,8 @@ function switchTab(tabId, clickedElement) {
     if (typeof window.crescCollapseSidebar === 'function') {
         window.crescCollapseSidebar();
     }
+    if (typeof window.crescNavMoved === 'function') window.crescNavMoved();
+
     document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active-section'));
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     
@@ -170,11 +216,43 @@ function crescResolveFn(path) {
   return (typeof ref === 'function') ? ref : null;
 }
 
+/* --------------------------------------------------------------------
+   NAVIGATION GENERATION
+
+   crescRunTabInit defers the entry point to the next tick so the switch
+   paints first. That is right, but it made every DEEP LINK into a
+   workspace fail silently, and the Discharge Settlement tile was the
+   visible case:
+
+     openDischargeDesk()
+       -> switchTab('workspace-accounts')      // schedules showAccounts()
+       -> switchAccountsPage('…-discharge')    // shows the settlement desk
+       ... next tick ...
+       -> showAccounts()                       // switches straight back
+
+   The user clicked the tile, the hub stayed on screen, and nothing in the
+   console said why. openIpTab() next to it worked only because it never
+   called switchTab at all.
+
+   So an init is now stamped with the navigation it was scheduled for, and
+   skipped if navigation has moved on since. Every deep link into a
+   workspace sub-page is fixed by this, not just the one that was
+   reported.
+   -------------------------------------------------------------------- */
+window.crescNavSeq = 0;
+
+/** Records that navigation has moved. Called by every router in the app. */
+window.crescNavMoved = function () { window.crescNavSeq++; };
+
 /** Runs a screen's entry point, on the next tick so the switch paints first. */
 function crescRunTabInit(tabId) {
   var path = CRESC_TAB_INIT[tabId];
   if (!path) return;
+  var seq = window.crescNavSeq;
   setTimeout(function () {
+    // Somebody navigated deeper while this was queued. Their destination
+    // wins; running the landing init now would throw it away.
+    if (seq !== window.crescNavSeq) return;
     var fn = crescResolveFn(path);
     if (fn) {
       try { fn(); } catch (e) { /* the screen is up; its fetch reports itself */ }

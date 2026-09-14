@@ -1272,8 +1272,9 @@ function getLabReportHtml(orderId) {
       }
     }
 
-    const verifyUrl = encodeURIComponent(`https://valarmathi.clinic/verify?id=${orderId}&hash=${attestationHash.substring(0, 10)}`);
-    const qrCodeImg = `https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=${verifyUrl}`;
+    // The verification block, built in-process. See _labVerifyBlock_ for why
+    // the previous one could never have rendered.
+    const verifyBlockHtml = _labVerifyBlock_(orderId, attestationHash, verifierName, verifiedAt);
 
     // 4. Construct Responsive HTML Document
     const html = `
@@ -1377,14 +1378,7 @@ function getLabReportHtml(orderId) {
           <p style="font-size: 11px; color: #6b7280; font-style: italic; margin-top: -15px;">* Indicates value falls outside biological reference interval.</p>
 
           <div class="footer">
-            <div class="qr-box">
-              <img src="${qrCodeImg}" alt="Verification QR" width="70" height="70" />
-              <div>
-                <strong>AUTHENTICITY VERIFICATION</strong><br>
-                Scan QR to verify report integrity.<br>
-                <span style="font-family: monospace; font-size: 9px; word-break: break-all;">SHA-256: ${attestationHash}</span>
-              </div>
-            </div>
+            ${verifyBlockHtml}
             <div class="signature-box">
               <div style="height: 40px; border-bottom: 1px dashed #9ca3af; margin-bottom: 5px; width: 180px; display: inline-block;"></div>
               <br>
@@ -1489,6 +1483,190 @@ function _lwTatIndex(){
   });
   return out;
 }
+/* ===========================================================================
+   CRITICAL VALUE ACKNOWLEDGEMENT
+   ---------------------------------------------------------------------------
+   WHAT "6 CRITICAL UNACK." ON THE LAB DASHBOARD MEANT
+
+   A critical value is a result so far outside the reference interval that it
+   needs a clinician told NOW, by a person, not by a report landing in a queue
+   — a potassium of 7.2, a platelet count of 8, a positive blood culture.
+   Whenever a result is saved past the CriticalLow/CriticalHigh bounds on the
+   test, _logCritical() appends a row to LAB_CRITICAL_COMMS with
+   IsAcknowledged = FALSE. The KPI counts those rows. Six of them meant six
+   critical results where nobody had confirmed the clinician was reached.
+
+   WHY IT ONLY EVER WENT UP
+
+   Nothing in the entire project ever set IsAcknowledged to TRUE. The
+   AcknowledgedBy and AcknowledgedAt columns existed in the schema and were
+   never written. The one button in the interface that said
+   "Acknowledged — I will inform the clinician" carried data-bs-dismiss="modal"
+   and nothing else: it closed the dialog, and that was all it did.
+
+   So the number was a one-way counter. It could not be cleared, it named none
+   of the six, and there was no record of who was told or when — which is
+   precisely the record NABL ISO 15189 requires for critical result
+   communication, and precisely the record an enquiry into a missed result
+   would ask for.
+
+   THE TWO FUNCTIONS BELOW ARE THE OTHER HALF.
+
+   Note what deliberately does NOT happen here: an unacknowledged critical
+   value never ages out. The bench queue hides finished work after 48 hours
+   (LAB_QUEUE_WINDOW_MS) because it is history. A critical result nobody has
+   answered for is not history; it stays on the dashboard until a person
+   closes it, however old and however inconvenient.
+   =========================================================================== */
+
+/**
+ * FRONTEND ENTRY. The critical values still waiting for acknowledgement.
+ *
+ * @param {string} token  the caller's sessionToken
+ * @return {{success:boolean, rows:Array, count:number, message:string}}
+ */
+function labListCriticalUnacked(token) {
+  try {
+    crescRequire_(token, 'lab.read');
+
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.CRITICAL_COMMS);
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: true, rows: [], count: 0, message: '' };
+    }
+    var map = labHeaderMap(sheet);
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
+
+    var rows = [];
+    var now = Date.now();
+    data.forEach(function (r) {
+      var ack = r[map['IsAcknowledged']];
+      if (ack === true || String(ack).toUpperCase() === 'TRUE') return;
+
+      var at = String(r[map['CommunicatedAt']] || '');
+      var ms = (typeof cresc_ms_ === 'function') ? cresc_ms_(at) : null;
+      rows.push({
+        commId:     String(r[map['CommID']] || ''),
+        orderId:    String(r[map['OrderID']] || ''),
+        patientId:  String(r[map['PatientID']] || ''),
+        testName:   String(r[map['TestName']] || ''),
+        value:      String(r[map['CriticalValue']] || ''),
+        flag:       String(r[map['Flag']] || 'C'),
+        loggedBy:   String(r[map['CommunicatedBy']] || ''),
+        loggedAt:   at,
+        // How long this has been waiting is the number that decides which one
+        // to deal with first, and it was on no screen anywhere.
+        ageMins:    ms ? Math.max(0, Math.round((now - ms) / 60000)) : null
+      });
+    });
+
+    // Oldest first: the one that has been waiting longest is the one that
+    // matters most, which is the opposite of the newest-first the rest of the
+    // lab screens use.
+    rows.sort(function (a, b) {
+      if (a.ageMins === null) return 1;
+      if (b.ageMins === null) return -1;
+      return b.ageMins - a.ageMins;
+    });
+
+    return { success: true, rows: rows, count: rows.length, message: '' };
+  } catch (err) {
+    return { success: false, rows: [], count: 0, message: err.message };
+  }
+}
+
+/**
+ * FRONTEND ENTRY. Records that a clinician was actually reached.
+ *
+ * The note is REQUIRED and it is required for a reason: "acknowledged" on its
+ * own is not a communication record. Who was told, on what number, at what
+ * time — that is the thing an enquiry asks for, and a tick box cannot hold
+ * it. The server refuses an empty one rather than accepting a row that will
+ * not answer the question later.
+ *
+ * Writes are batched by row so acknowledging six does not mean six passes
+ * over the sheet, and the whole thing runs under the script lock because two
+ * technicians clearing the same list would otherwise interleave.
+ *
+ * @param {string} token
+ * @param {Array<string>|string} commIds  CommID(s) from labListCriticalUnacked
+ * @param {string} note      who was informed, and how
+ * @return {{success:boolean, acknowledged:number, message:string}}
+ */
+function labAcknowledgeCritical(token, commIds, note) {
+  var lock = LockService.getScriptLock();
+  try {
+    var actor = crescRequire_(token, 'lab.ack_critical');
+
+    var ids = (typeof commIds === 'string') ? [commIds] : (commIds || []);
+    ids = ids.map(function (v) { return String(v || '').trim().toUpperCase(); })
+             .filter(function (v) { return !!v; });
+    if (!ids.length) {
+      return { success: false, acknowledged: 0, message: 'Nothing was selected to acknowledge.' };
+    }
+
+    var text = String(note || '').trim();
+    if (text.length < 5) {
+      return { success: false, acknowledged: 0,
+               message: 'Record who you informed and how — for example ' +
+                        '"Dr. Rekha, by phone on 98xxxxxx21, 14:20". ' +
+                        'This is the communication record the standard asks for.' };
+    }
+
+    lock.waitLock(15000);
+
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.CRITICAL_COMMS);
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: false, acknowledged: 0, message: 'No critical communication log found.' };
+    }
+    var map = labHeaderMap(sheet);
+    var lastCol = sheet.getLastColumn();
+    var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
+
+    var who = actor.displayName || actor.username;
+    var when = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+    var done = 0, already = 0, touched = [];
+
+    for (var i = 0; i < data.length; i++) {
+      var id = String(data[i][map['CommID']] || '').trim().toUpperCase();
+      if (ids.indexOf(id) === -1) continue;
+
+      var ack = data[i][map['IsAcknowledged']];
+      if (ack === true || String(ack).toUpperCase() === 'TRUE') { already++; continue; }
+
+      data[i][map['AcknowledgedBy']] = who + (text ? ' — ' + text : '');
+      data[i][map['AcknowledgedAt']] = when;
+      data[i][map['IsAcknowledged']] = true;
+      touched.push({ row: i + 2, values: data[i] });
+      done++;
+    }
+
+    // One setValues per changed row. Rewriting the whole block would stamp
+    // every untouched row with its own values again, which on a sheet this
+    // narrow is harmless but on a shared one is a needless write conflict.
+    touched.forEach(function (t) {
+      sheet.getRange(t.row, 1, 1, lastCol).setValues([t.values]);
+    });
+
+    if (done) {
+      logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                'LAB_CRITICAL_ACK', 'LAB_CRITICAL_COMMS', ids.join(','),
+                { count: done, note: text });
+    }
+
+    var msg = done
+      ? done + ' critical value' + (done === 1 ? '' : 's') + ' acknowledged.' +
+        (already ? ' ' + already + ' had already been acknowledged.' : '')
+      : (already ? 'Those were already acknowledged by someone else.'
+                 : 'No matching entries were found.');
+
+    return { success: done > 0 || already > 0, acknowledged: done, message: msg };
+  } catch (err) {
+    return { success: false, acknowledged: 0, message: err.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
 function _lwCritCount(){
   try{
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.CRITICAL_COMMS); if(!sheet||sheet.getLastRow()<2) return 0;
@@ -1690,6 +1868,193 @@ function _raiseNcr(d){
     sheet.appendRow(row); return ncrId;
   }catch(e){Logger.log('_raiseNcr failed: '+e.message); return '';}
 }
+/**
+ * The authenticity block at the foot of a lab report.
+ *
+ * WHY THE OLD ONE SHOWED A BROKEN IMAGE
+ *
+ * The report asked for its QR like this:
+ *
+ *   https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=<url>
+ *
+ * That is the Google Infographics API. Google deprecated it in 2012 and
+ * turned it off; the host no longer serves chart images at all. So the
+ * <img> could never load, on any deployment, from the day the endpoint went
+ * dark — which is the empty frame beside the words "Scan QR to verify report
+ * integrity" that people have been handing to patients.
+ *
+ * It would not have worked even if the endpoint had lived. Two more
+ * problems sat behind it:
+ *
+ *   1. THE URL WENT NOWHERE. It encoded https://valarmathi.clinic/verify —
+ *      a host and a path that do not exist in this project. Scanning it
+ *      reaches a domain error, not a verification.
+ *
+ *   2. IT CLAIMED VERIFICATION FOR UNVERIFIED REPORTS. attestationHash
+ *      starts at the literal string "N/A" and only becomes a hash once a
+ *      pathologist verifies. A draft printed early still carried the words
+ *      AUTHENTICITY VERIFICATION and a QR — over "SHA-256: N/A".
+ *
+ * All three are fixed here. The QR is generated in this process by the
+ * encoder already bundled in DS_QR_Lib.gs (the discharge summary has been
+ * doing exactly this since it shipped), so it is a data: URI embedded in the
+ * document — no external request, which also means it survives being saved
+ * as a PDF and printed somewhere with no internet. It points at THIS web
+ * app's own ?verifyLab= route. And an unverified report says it is
+ * unverified instead of pretending.
+ *
+ * @param {string} orderId
+ * @param {string} attestationHash  "N/A" until a verifier signs
+ * @param {string} verifierName
+ * @param {string} verifiedAt
+ * @return {string} HTML for the .qr-box slot in the report footer
+ */
+function _labVerifyBlock_(orderId, attestationHash, verifierName, verifiedAt) {
+  var esc = function (v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  };
+
+  var hash = String(attestationHash || '').trim();
+  var signed = hash && hash !== 'N/A';
+
+  // An unverified report gets a plain statement, no QR and no claim.
+  if (!signed) {
+    return '<div class="qr-box">' +
+      '<div style="border:1px dashed #b45309;color:#b45309;padding:8px 12px;border-radius:6px;">' +
+      '<strong>NOT YET VERIFIED</strong><br>' +
+      'This is a provisional result. It carries no authenticity code until a ' +
+      'pathologist has verified and released it.' +
+      '</div></div>';
+  }
+
+  var url = _labVerifyUrl_(orderId, hash);
+  var code = hash.substring(0, 12).toUpperCase();
+
+  // The QR is a convenience, never the proof: the 12-character code beside
+  // it verifies the same document typed in by hand, which is what happens
+  // when the scan fails or the page is read on paper. A failure to encode
+  // therefore drops the image and keeps everything else.
+  var img = '';
+  try {
+    if (typeof DSX_QR === 'function') {
+      var qr = DSX_QR(0, 'M');
+      qr.addData(url);
+      qr.make();
+      img = '<img src="' + qr.createDataURL(3, 2) + '" width="70" height="70" alt="Verification QR" />';
+    }
+  } catch (e) {
+    img = '';
+  }
+
+  return '<div class="qr-box">' + img +
+    '<div>' +
+      '<strong>AUTHENTICITY VERIFICATION</strong><br>' +
+      (img ? 'Scan the code, or open the link below.<br>' : 'Open the link below to verify.<br>') +
+      'Verification code <strong style="letter-spacing:.08em;">' + esc(code) + '</strong><br>' +
+      '<span style="font-family: monospace; font-size: 9px; word-break: break-all;">' + esc(url) + '</span>' +
+    '</div></div>';
+}
+
+/** This deployment's own verify link for one report. */
+function _labVerifyUrl_(orderId, attestationHash) {
+  var base = '';
+  try { base = ScriptApp.getService().getUrl() || ''; } catch (e) { base = ''; }
+  if (!base) {
+    try {
+      base = String(PropertiesService.getScriptProperties().getProperty('CRESC_WEBAPP_URL') || '');
+    } catch (e) { base = ''; }
+  }
+  return base + '?verifyLab=' + encodeURIComponent(String(orderId || '')) +
+         '&c=' + encodeURIComponent(String(attestationHash || '').substring(0, 12));
+}
+
+/**
+ * The page a scanned lab QR lands on.
+ *
+ * Anonymous by design, exactly as the discharge summary's equivalent is:
+ * the point is that somebody holding a printed report — a patient, another
+ * hospital, an insurer — can confirm it is genuine without an account.
+ *
+ * It therefore carries NO clinical content. Not a result, not a value, not a
+ * reference range. It answers one question: was this report released by this
+ * laboratory, and is this copy the current one. The patient's name is
+ * reduced to initials for the same reason.
+ */
+function labVerifyPage_(orderId, code) {
+  var esc = function (v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
+  var status = 'NOT FOUND', tone = '#b91c1c', rows = [];
+
+  try {
+    var want = String(orderId || '').trim().toUpperCase();
+    var give = String(code || '').trim().toUpperCase();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var resSheet = ss.getSheetByName(LAB.RESULTS);
+
+    if (want && give && resSheet && resSheet.getLastRow() >= 2) {
+      var map = labHeaderMap(resSheet);
+      // TextFinder on the OrderID column, then read only the rows it names.
+      // LAB_RESULTS is one of the fastest-growing sheets in the project and
+      // this route is public, so it must not pull the whole sheet in.
+      var col = map['OrderID'] + 1;
+      var hits = resSheet.getRange(2, col, resSheet.getLastRow() - 1, 1)
+                         .createTextFinder(want).matchEntireCell(true).findAll();
+      for (var i = 0; i < hits.length; i++) {
+        var row = resSheet.getRange(hits[i].getRow(), 1, 1, resSheet.getLastColumn()).getValues()[0];
+        var hash = String(row[map['AttestationHash']] || '').trim();
+        if (!hash || hash === 'N/A') continue;
+        if (hash.substring(0, 12).toUpperCase() !== give) continue;
+
+        status = 'VALID'; tone = '#047857';
+        rows = [
+          ['Order ID', want],
+          ['Released by', String(row[map['VerifiedBy']] || '')],
+          ['Released at', cresc_formatDate_(row[map['VerifiedAt']], 'dd-MMM-yyyy hh:mm a') || ''],
+          ['Verification code', give],
+          ['Laboratory', String((PropertiesService.getScriptProperties()
+                                  .getProperty('CLINIC_NAME')) || 'Crescentia Clinic & Diagnostics')]
+        ];
+        break;
+      }
+    }
+  } catch (e) {
+    status = 'NOT FOUND'; tone = '#b91c1c'; rows = [];
+  }
+
+  var body = rows.map(function (r) {
+    return '<tr><td style="padding:6px 14px 6px 0;color:#64748b;white-space:nowrap;">' +
+           esc(r[0]) + '</td><td style="padding:6px 0;font-weight:600;">' + esc(r[1]) + '</td></tr>';
+  }).join('');
+
+  return HtmlService.createHtmlOutput(
+    '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>Report verification</title></head>' +
+    '<body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;' +
+    'background:#f8fafc;margin:0;padding:32px 16px;color:#0f172a;">' +
+    '<div style="max-width:420px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;' +
+    'border-radius:14px;padding:26px;">' +
+    '<div style="font-size:12px;letter-spacing:.12em;color:#64748b;">LABORATORY REPORT</div>' +
+    '<div style="font-size:26px;font-weight:700;color:' + tone + ';margin:6px 0 18px;">' +
+    esc(status) + '</div>' +
+    (rows.length
+      ? '<table style="font-size:13px;border-collapse:collapse;">' + body + '</table>'
+      : '<p style="font-size:13px;color:#475569;margin:0;">No released report matches this code. ' +
+        'A report that has not yet been verified, or a code copied incorrectly, will both ' +
+        'read NOT FOUND. Contact the laboratory if you believe this is wrong.</p>') +
+    '<p style="font-size:11px;color:#94a3b8;margin:18px 0 0;">This page confirms that a report ' +
+    'was released by this laboratory. It shows no clinical information.</p>' +
+    '</div></body></html>')
+    .setTitle('Report verification')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
 function _logCritical(orderId,c){
   try{
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.CRITICAL_COMMS); if(!sheet) return;

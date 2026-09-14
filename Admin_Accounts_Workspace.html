@@ -163,7 +163,7 @@
     
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-            <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="switchAccountsPage('workspace-accounts')">
+            <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="backToAccountsHub()">
                 <i class="fas fa-arrow-left me-2"></i> Back to Hub
             </button>
             <h2 class="h5 text-main mb-0 fw-bold">Master Ledger</h2>
@@ -226,7 +226,26 @@
     </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════
+     THE SPOKES
+
+     Every one of these is entered from a tile on the hub above, and until
+     now six of the nine ended in a dead end: the Cash Drawer, Payables,
+     Tax & Audit, the Insurance Desk, Running IP Tabs and the settlement
+     desk had no way back. Only the Master Ledger and the Dashboard did.
+     The rail is not a substitute — it drops you on the Dashboard, which
+     is not where you came from, and on a phone it is a slide-out that
+     has to be opened first.
+
+     One header shape for all of them: back link, then the screen's name,
+     so a spoke always says where you are and how to leave.
+     ═══════════════════════════════════════════════════════════════ -->
+
 <div id="workspace-accounts-drawer" class="page-section d-none">
+  <div class="mb-3">
+    <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="backToAccountsHub()"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
+    <h2 class="h5 text-main mb-0 fw-bold">Cash Drawer</h2>
+  </div>
   <div class="premium-card p-4 mb-4">
     <div id="acc-drawer-panel"></div>
   </div>
@@ -235,27 +254,61 @@
     <div id="acc-drawer-history-wrap" class="table-responsive"></div>
   </div>
 </div>
-<div id="workspace-accounts-payables" class="page-section d-none"><div id="acc-pay-root"></div></div>
-<div id="workspace-accounts-tax" class="page-section d-none"><div id="acc-tax-root"></div></div>
 
+<div id="workspace-accounts-payables" class="page-section d-none">
+  <div class="mb-3">
+    <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="backToAccountsHub()"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
+    <h2 class="h5 text-main mb-0 fw-bold">Payables</h2>
+  </div>
+  <div id="acc-pay-root"></div>
+</div>
+
+<div id="workspace-accounts-tax" class="page-section d-none">
+  <div class="mb-3">
+    <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="backToAccountsHub()"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
+    <h2 class="h5 text-main mb-0 fw-bold">Tax &amp; Audit</h2>
+  </div>
+  <div id="acc-tax-root"></div>
+</div>
+
+<!-- Running IP Tabs: the MID-STAY view. Read-only, every open admission at
+     once, answering "what has this bed run up so far" for an attendant who
+     asks on day four. It settles nothing — that is the desk below. -->
 <div id="workspace-accounts-iptab" class="page-section d-none">
+  <div class="mb-3">
+    <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="backToAccountsHub()"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
+    <h2 class="h5 text-main mb-0 fw-bold">Running IP Tabs</h2>
+    <div class="small text-muted">Charges accruing on the ward, mid-stay. Nothing here is final.</div>
+  </div>
   <div class="premium-card p-4">
     <div id="acc-iptab-root"></div>
   </div>
 </div>
 
+<!-- Discharge Settlement: the END of ONE stay. Takes the same running tab,
+     applies the package cap, the discount, the advance and the insurer's
+     share, and closes it. This is the screen that writes a settlement and
+     frees the bed; the one above only reports. -->
 <div id="workspace-accounts-discharge" class="page-section d-none">
+  <div class="mb-3">
+    <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="backToAccountsHub()"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
+    <h2 class="h5 text-main mb-0 fw-bold">Discharge Settlement</h2>
+    <div class="small text-muted">One admission, settled and closed. Final bill, package cap, advance and insurer share.</div>
+  </div>
   <div class="premium-card p-4">
     <div id="acc-discharge-root"></div>
   </div>
 </div>
 
 <div id="workspace-accounts-insurance" class="page-section d-none">
-    <div id="acc-ins-root"></div>
+  <!-- No heading here: AccIns renders its own "Insurance / TPA Desk" title
+       into the root below, and two page titles is worse than none. -->
+  <button class="btn btn-link text-muted text-decoration-none p-0 mb-2" onclick="backToAccountsHub()"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
+  <div id="acc-ins-root"></div>
 </div>
 
 <div id="workspace-accounts-dashboard" class="page-section d-none">
-  <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="switchAccountsPage('workspace-accounts')"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
+  <button class="btn btn-link text-muted text-decoration-none p-0 mb-1" onclick="backToAccountsHub()"><i class="fas fa-arrow-left me-2"></i> Back to Hub</button>
   
   <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h2 class="h5 text-main mb-0 fw-bold">Accounts Dashboard</h2>

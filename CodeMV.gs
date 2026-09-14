@@ -13,6 +13,20 @@ function doGet(e) {
     return HtmlService.createHtmlOutput('Verification is not available on this deployment.');
   }
 
+  // 0b. Lab report verification. The same contract as the discharge summary
+  //     above: anonymous, no clinical content, one question answered. The QR
+  //     printed on every released report points here. It used to point at
+  //     https://valarmathi.clinic/verify, which does not exist, and was drawn
+  //     by a Google endpoint that was switched off years ago — so the block
+  //     on the report was an empty frame beside a promise nothing kept. See
+  //     _labVerifyBlock_ in LabIntegrationEngine.gs.
+  if (e && e.parameter && e.parameter.verifyLab) {
+    if (typeof labVerifyPage_ === 'function') {
+      return labVerifyPage_(e.parameter.verifyLab, e.parameter.c);
+    }
+    return HtmlService.createHtmlOutput('Verification is not available on this deployment.');
+  }
+
   // 1. WhatsApp / Patient Mobile Interceptor
   if (e && e.parameter && e.parameter.viewReport) {
     const orderId = e.parameter.viewReport;

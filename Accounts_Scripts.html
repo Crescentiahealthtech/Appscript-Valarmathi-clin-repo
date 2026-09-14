@@ -9,10 +9,29 @@ const AccX = (function () {
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const who = () => (window.currentUser || window.loggedInUser || window.userName || 'STAFF');
 
-    const PAGES = [
-    'workspace-accounts', 'workspace-accounts-dashboard', 'workspace-accounts-ledger',
-    'workspace-accounts-drawer', 'workspace-accounts-payables', 'workspace-accounts-tpa',
-    'workspace-accounts-discharges', 'workspace-accounts-tax', 'workspace-accounts-iptab', 'workspace-accounts-discharge', 'workspace-accounts-tax', 'workspace-accounts-insurance'
+  /**
+   * Every screen in the accounts area, hub first.
+   *
+   * The list used to name 'workspace-accounts-tax' twice and to carry
+   * 'workspace-accounts-discharges' — PLURAL — which is a different id
+   * from the settlement desk's 'workspace-accounts-discharge' and has no
+   * markup anywhere in the project. That was the Receivables screen: its
+   * controller (loadReceivables / settle, below) is intact, its tile was
+   * deleted, and its markup went with the tile, so switchPage would hide
+   * every other screen and then show nothing. Nothing routes to it now;
+   * see the note above loadReceivables().
+   */
+  const PAGES = [
+    'workspace-accounts',
+    'workspace-accounts-dashboard',
+    'workspace-accounts-ledger',
+    'workspace-accounts-drawer',
+    'workspace-accounts-payables',
+    'workspace-accounts-tpa',
+    'workspace-accounts-insurance',
+    'workspace-accounts-iptab',        // Running IP Tabs — mid-stay, read-only
+    'workspace-accounts-discharge',    // Discharge Settlement — the final bill
+    'workspace-accounts-tax'
   ];
 
   let CURRENT_PERIOD = '', LEDGER_CACHE = [], CURRENT_FILTER = 'ALL';
@@ -30,15 +49,29 @@ const AccX = (function () {
       o.style.display = 'flex';
     } else if (o) o.style.display = 'none';
   }
+  /**
+   * Delegates to the one toast in Shell_UX.html (top-centre).
+   *
+   * This module used to build its own bottom-right div. Nine modules did,
+   * each a copy of the same eight lines, all of them in the corner the
+   * eye never reaches — behind the floating action button on the pharmacy
+   * screens, and off the fold on a phone in landscape. Keeping the local
+   * name means the call sites below did not have to change.
+   */
   function toast(msg, ok) {
-    const t = document.createElement('div');
-    t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid';
-    t.style.zIndex = 3000; t.style.background = ok ? 'var(--success)' : 'var(--danger)';
-    t.textContent = msg; document.body.appendChild(t);
-    setTimeout(() => t.remove(), 3500);
+    if (typeof window.showToast === 'function') {
+      window.showToast(ok ? 'Done' : 'Could not complete', msg, ok ? 'success' : 'error');
+      return;
+    }
+    if (typeof crescAlert === 'function') crescAlert(msg);
   }
 
   function switchPage(pageId) {
+    // Tell the shell's router that navigation has moved on. Without this a
+    // deep link into a sub-page was undone one tick later by the hub's own
+    // landing init — see the NAVIGATION GENERATION note in ScriptsMV.html.
+    if (typeof window.crescNavMoved === 'function') window.crescNavMoved();
+
     PAGES.forEach(function (id) {
       const el = $(id); if (!el) return;
       const show = (id === pageId);
@@ -46,9 +79,18 @@ const AccX = (function () {
       el.classList.toggle('active-section', show);
     });
     if (pageId === 'workspace-accounts-ledger') renderLedger();
-    if (pageId === 'workspace-accounts-discharges') loadReceivables();
     window.scrollTo(0, 0);
   }
+
+  /**
+   * Back to the Finance Hub, from any spoke.
+   *
+   * Six of the nine accounts screens had no way back at all: the Cash
+   * Drawer, Payables, Tax & Audit, the Insurance Desk, Running IP Tabs and
+   * the settlement desk each ended in a dead end, and the only way out was
+   * the rail — which drops you at the Dashboard, not where you came from.
+   */
+  function backToHub() { switchPage('workspace-accounts'); load(); }
 
   // ---------- modals (expense + settle) ----------
   function injectModals() {
@@ -233,7 +275,24 @@ const AccX = (function () {
     toast(rows.length + ' row' + (rows.length === 1 ? '' : 's') + ' exported.', true);
   }
 
-  // ---------- receivables (running tab, in Discharges spoke) ----------
+  /* ---------- receivables — ORPHANED CONTROLLER -----------------------
+     This is the third per-patient money screen, and the one nobody can
+     reach. Running IP Tabs answers "what has THIS bed run up so far";
+     Discharge Settlement turns one stay into a final bill; Receivables
+     answers "who owes us money across pharmacy, lab and billing" — the
+     merged view the patient banner needs to show one outstanding balance
+     at every counter.
+
+     Its backend (getReceivables in Accounts_Receivables.gs) works. Its
+     markup — #acc-receivables-body, #acc-receivables-summary — was
+     deleted with the empty tile that used to open it, so every element
+     lookup below returns null and the whole function is a no-op against a
+     live server call.
+
+     Left in place, and no longer routed, because restoring the screen is
+     worth doing and throwing the controller away would mean writing it
+     twice. Nothing calls it until the markup comes back.
+     ------------------------------------------------------------------ */
   function loadReceivables() {
     const box = $('acc-receivables-body');
     if (box) box.innerHTML = '<div class="text-center text-muted py-5"><i class="fas fa-circle-notch fa-spin me-2"></i>Loading running tabs…</div>';
@@ -361,12 +420,15 @@ const AccX = (function () {
     });
   }
 
-  return { load, openEntry, lockPeriod, switchPage, filter, search, exportLedger,
-           loadReceivables, settle };
+  return { load, openEntry, lockPeriod, switchPage, backToHub, filter, search,
+           exportLedger, loadReceivables, settle };
 })();
 
 function switchAccountsPage(pageId) { AccX.switchPage(pageId); }
 function filterLedger(cat) { AccX.filter(cat); }
 function lockFinancialPeriod() { AccX.lockPeriod(); }
 function showAccounts() { AccX.switchPage('workspace-accounts'); AccX.load(); }
+
+/** The Back to Hub every accounts spoke calls. */
+function backToAccountsHub() { AccX.backToHub(); }
 </script>

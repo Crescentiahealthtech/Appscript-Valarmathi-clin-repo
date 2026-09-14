@@ -47,6 +47,17 @@ var DEP_MAP = {
                  "dsx_upgradePayload_", "dsx_toDate_"],
   "Appointment.gs":          ["apt_newId_", "submitNewAppointment", "getAppointmentsByDate"],
   "Doctors_Engine.gs":       ["getTenantId_", "validateSession_", "issueSession_", "logAudit_", "getActiveDoctors"],
+  // The permission matrix and the guard. Every module that carries a
+  // crescRequire_() call depends on this file being present, so a deployment
+  // missing it must be named rather than discovered one refusal at a time.
+  "RBAC.gs": ["crescRequire_", "crescActor_", "crescCan_", "crescPermsFor_",
+              "crescRequireOwnRecord_", "crescGetMyPermissions",
+              "crescRbacSelfTest", "crescRbacCoverage"],
+  // Sign-in audit and lockout. AuthLogin.gs calls into these on every
+  // attempt, so without this file nobody can sign in at all.
+  "Auth_Audit.gs": ["crescAuthAudit_", "crescAuthGuard_", "crescAuthFailed_",
+                    "crescAuthPassed_", "crescLogSignOut", "crescUnlockAccount",
+                    "crescGetLoginAudit"],
   "IP_Clinical_Access.gs": [
     "ipc_timelineSheet_", "ipc_casesheetSheet_", "resolveIPWrite_", "resolveIPRead_",
     "ipc_admissionRow_", "ipc_primaryDoctorId_", "ipc_ensurePrimaryOnCareTeam_",

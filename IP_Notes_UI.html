@@ -3629,6 +3629,17 @@ function ipn_prompt(message, value, done, opts) {
    * .com says", which shows clinicians a script URL instead of a message.
    */
   function ipnToast(msg, kind) {
+    // Top-centre, over the note being written, via the one toast in
+    // Shell_UX.html. This used to render bottom-right at z-index 20000 —
+    // the highest in the project — which put "Could not save this note"
+    // in the corner furthest from where the author was typing, on the
+    // screen where a lost message costs the most.
+    if (typeof window.showToast === 'function') {
+      const TYPE = { ok: 'success', err: 'error', warn: 'warning' };
+      window.showToast(kind === 'err' ? 'Could not save' : 'Ward notes', msg,
+                       TYPE[kind] || 'info');
+      return;
+    }
     let host = document.getElementById('ipn-toast-host');
     if (!host) {
       host = document.createElement('div');

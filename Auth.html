@@ -1,14 +1,58 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
+<style>
+  /* ------------------------------------------------------------------
+     THE GOOGLE BUTTON DOES NOT FOLLOW THE THEME.
+
+     It used to: `class="... text-dark ..."` with
+     `style="background-color: var(--bg-card)"`. In the light theme
+     --bg-card is #ffffff and that reads fine. In the DARK theme — the
+     application's default, and what the sign-in screen ships with —
+     --bg-card is #0f172a, so the label was Bootstrap's text-dark
+     (#212529) on near-black: a contrast ratio of about 1.2:1, which is
+     invisible. The button was there, and nobody could see what it said.
+
+     A themed Google button is the wrong fix, because Google's sign-in
+     branding is a fixed asset: white ground, #1f1f1f label, the
+     four-colour mark. Pinning it here makes it legible in both themes
+     AND correct, and it is the treatment users already recognise.
+
+     The mark is inline SVG rather than the Wikimedia hotlink it was:
+     that link is an external request on the sign-in critical path which
+     Wikimedia may refuse by referrer, and a broken image on the sign-in
+     screen is the worst place in the application to have one.
+     ------------------------------------------------------------------ */
+  #btn-google-login {
+    background-color: #ffffff;
+    color: #1f1f1f;
+    border: 1px solid #dadce0;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  #btn-google-login:hover,
+  #btn-google-login:focus-visible {
+    background-color: #f7f8f8;
+    color: #1f1f1f;
+    border-color: #d2d5d9;
+    box-shadow: 0 1px 3px rgba(60, 64, 67, .3);
+  }
+  #btn-google-login:disabled { opacity: .6; }
+  #btn-google-login svg { flex: 0 0 18px; }
+</style>
+
 <div id="auth-screen">
   <div class="auth-card shadow-lg text-center mx-auto mt-5" style="max-width: 400px; padding: 40px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 16px;">
     <img id="login-logo" src="" alt="CRESCENTIA HEALTHTECH" class="clinic-logo">
     <h2 class="fw-bold mb-1">CresRx</h2>
     <p class="mb-4 small label-bright" style="letter-spacing: 1px;">Care • Compassion • Cure</p>
 
-    <button id="btn-google-login" class="btn w-100 py-2 mb-3 fw-bold text-dark border shadow-sm" style="background-color: var(--bg-card);" onclick="handleGoogleLogin()">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" style="width: 18px; margin-right: 8px; margin-bottom: 2px;">
+    <button id="btn-google-login" class="btn w-100 py-2 mb-3 fw-bold shadow-sm" onclick="handleGoogleLogin()">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
       Sign in with Google
     </button>
 
@@ -103,6 +147,17 @@
   function logoutUser(message) {
     if (window.CrescScan) window.CrescScan.stop();   // before the token is cleared
     clearInterval(sessionInterval);
+    try {
+      var leaving = window.sessionToken || localStorage.getItem('sessionToken') || '';
+      // Explicit no-op handlers: a sign-out must never be blocked by the
+      // audit write, and a bare call trips tools/nofail.js.
+      if (leaving) {
+        google.script.run
+          .withSuccessHandler(function () {})
+          .withFailureHandler(function () {})
+          .crescLogSignOut(leaving);
+      }
+    } catch (e) { /* never block a timeout logout */ }
     clearStoredSession();
 
     if (message) crescAlert(message);
@@ -540,45 +595,19 @@
   };
 
   /**
-   * The application's toast.
+   * The application's toast now lives in Shell_UX.html.
    *
-   * Two pharmacy screens already called showToast() behind a
-   * `typeof showToast === 'function'` guard, but nothing in the project ever
-   * defined it. Adding stock fell back to a blocking alert(); saving an
-   * inventory edit had no fallback at all and confirmed nothing, so the only
-   * way to tell whether the edit had saved was to reopen the row.
+   * It used to be defined here, bottom-right, because that is where the
+   * Accounts screens had always put theirs. Bottom-right is behind the
+   * floating action button on both pharmacy screens and off the fold on a
+   * phone in landscape, so a failed save announced itself where nobody
+   * looks. Shell_UX.html defines ONE showToast(), top-centre, and every
+   * module's private copy now delegates to it.
    *
-   * It follows the pattern the Accounts screens use — bottom-right, solid
-   * semantic fill, auto-dismiss — and stacks rather than overlapping, so a
-   * burst of saves stays readable.
-   *
-   * @param {string} title
-   * @param {string} [message]
-   * @param {'success'|'error'|'warning'|'info'} [type='info']
+   * Nothing else changes for a caller: the signature is the same, and the
+   * `typeof showToast === 'function'` guards around the project still
+   * hold.
    */
-  window.showToast = function (title, message, type) {
-    var fill = { success: 'var(--success)', error: 'var(--danger)',
-                 warning: 'var(--warning)', info: 'var(--info)' }[type] || 'var(--info)';
-
-    var stack = document.getElementById('cresc-toast-stack');
-    if (!stack) {
-      stack = document.createElement('div');
-      stack.id = 'cresc-toast-stack';
-      stack.style.cssText = 'position:fixed;bottom:0;right:0;z-index:3000;display:flex;' +
-        'flex-direction:column;align-items:flex-end;gap:8px;padding:1.5rem;pointer-events:none;';
-      document.body.appendChild(stack);
-    }
-
-    var t = document.createElement('div');
-    t.className = 'px-4 py-3 rounded-3 shadow text-white toast-solid';
-    t.style.cssText = 'background:' + fill + ';max-width:min(360px, calc(100vw - 3rem));' +
-                      'pointer-events:auto;';
-    var esc = window.crescEsc;
-    t.innerHTML = '<div class="fw-bold small">' + esc(title) + '</div>' +
-      (message ? '<div class="small" style="opacity:.9;">' + esc(message) + '</div>' : '');
-    stack.appendChild(t);
-    setTimeout(function () { t.remove(); }, 3500);
-  };
 
   /**
    * Bounds every bookable date input in the application.
@@ -956,6 +985,24 @@
   function performSignOut() {
     if (window.CrescScan) window.CrescScan.stop();   // before the token is cleared
     clearInterval(sessionInterval);
+
+    // Record the sign-out and revoke the token server-side, BEFORE
+    // clearStoredSession() takes the token away. Fire and forget: a
+    // sign-out must never be able to fail. Without this the audit could
+    // show when a session began and never when it ended, which is half a
+    // record — and the durable Sessions row stayed valid for its full
+    // eight hours after the user believed they had left.
+    try {
+      var leaving = window.sessionToken || localStorage.getItem('sessionToken') || '';
+      // Explicit no-op handlers: a sign-out must never be blocked by the
+      // audit write, and a bare call trips tools/nofail.js.
+      if (leaving) {
+        google.script.run
+          .withSuccessHandler(function () {})
+          .withFailureHandler(function () {})
+          .crescLogSignOut(leaving);
+      }
+    } catch (e) { /* never block sign-out */ }
 
     try {
       if (typeof firebase !== 'undefined' && firebase.auth) {
