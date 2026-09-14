@@ -108,8 +108,18 @@ const AccX = (function () {
             <select class="form-select" id="acc-entry-mode"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option></select></div>
           <div class="col-6"><label class="form-label small text-muted">Category</label>
             <input class="form-control" id="acc-entry-category" placeholder="e.g. Utilities"></div>
-          <div class="col-6"><label class="form-label small text-muted">Department</label>
-            <input class="form-control" id="acc-entry-department" placeholder="e.g. Admin"></div>
+          <!-- Department decides WHICH DRAWER this comes out of. A cash
+               expense with no department is a clinic-level payment and is
+               charged to no single till, rather than to whichever one
+               happens to close first. -->
+          <div class="col-6"><label class="form-label small text-muted">Paid from</label>
+            <select class="form-select" id="acc-entry-department">
+              <option value="">Clinic-wide (no single till)</option>
+              <option value="Reception">Reception drawer</option>
+              <option value="Pharmacy">Pharmacy drawer</option>
+              <option value="Lab">Lab drawer</option>
+              <option value="Admin">Admin</option>
+            </select></div>
           <div class="col-6"><label class="form-label small text-muted">Payee</label>
             <input class="form-control" id="acc-entry-entity" placeholder="Vendor / party"></div>
           <div class="col-6"><label class="form-label small text-muted">Reference ID</label>
@@ -142,8 +152,9 @@ const AccX = (function () {
 
   function openEntry() {
     injectModals();
-    ['acc-entry-amount','acc-entry-category','acc-entry-department','acc-entry-entity','acc-entry-ref','acc-entry-notes']
+    ['acc-entry-amount','acc-entry-category','acc-entry-entity','acc-entry-ref','acc-entry-notes']
       .forEach(id => { const e = $(id); if (e) e.value = ''; });
+    if ($('acc-entry-department')) $('acc-entry-department').value = '';
     new bootstrap.Modal($('acc-entry-modal')).show();
   }
   function saveEntry() {
@@ -429,6 +440,9 @@ const AccX = (function () {
         // the hub did not show. It is derived, so no backend change is needed.
         setText('acc-kpi-net', inr((Number(k.collectedMTD) || 0) - (Number(k.paidMTD) || 0)));
 
+        // The three tills, each reconciled against its own billing source.
+        loadDrawerSplit();
+
         const f = res.flags || {};
         setFlag('acc-flag-mismatch', f.cashMismatch, 'mismatch', 'mismatches');
         setFlag('acc-flag-claims', f.delayedClaims, 'claim delayed', 'claims delayed');
@@ -438,6 +452,36 @@ const AccX = (function () {
       .withFailureHandler(function (err) { hubBusy(false); LEDGER_CACHE = []; renderLedger(); toast(err.message || 'Server error.', false); })
       .getAccountsDashboard();
   }
+  /**
+   * The per-counter cash breakdown under the drawer KPI.
+   *
+   * The hub's single "cash in drawer" number was computed by adding every
+   * open shift's float and then every cash transaction in the clinic since
+   * the EARLIEST of them — so it matched no till in the building and told
+   * nobody which drawer to go and count. getAllDrawerStates() reconciles
+   * each counter against its own billing source and totals them.
+   *
+   * Fails quietly: the KPI above it is still useful without this.
+   */
+  function loadDrawerSplit() {
+    const el = $('acc-kpi-cash-split');
+    if (!el) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success || !res.drawers) { el.innerHTML = ''; return; }
+        const t = res.totals || {};
+        if (t.expected !== undefined) setText('acc-kpi-cash', inr(t.expected));
+        el.innerHTML = res.drawers.map(function (d) {
+          return d.open
+            ? '<div class="text-muted">' + esc(d.counter) +
+              ' <span class="fw-bold text-main">' + inr(d.expected) + '</span></div>'
+            : '<div class="text-muted" style="opacity:.6;">' + esc(d.counter) + ' &mdash; closed</div>';
+        }).join('');
+      })
+      .withFailureHandler(function () { el.innerHTML = ''; })
+      .getAllDrawerStates(window.sessionToken);
+  }
+
   function lockPeriod() {
     if (!CURRENT_PERIOD) { toast('Open the hub first.', false); return; }
     crescConfirm('Lock period ' + CURRENT_PERIOD + '? Expense edits in this period will be frozen permanently.',

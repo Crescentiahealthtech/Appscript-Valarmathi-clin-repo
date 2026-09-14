@@ -83,6 +83,10 @@ var DEP_MAP = {
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
+  "Accounts_Shifts.gs": [
+    "acc_cashSince_", "acc_counterKey_", "getShiftState", "openShift",
+    "closeShift", "getAllDrawerStates"
+  ],
   "Clinic_Profile.gs": [
     "cresc_clinic_", "getClinicProfile", "setClinicProfile"
   ],
