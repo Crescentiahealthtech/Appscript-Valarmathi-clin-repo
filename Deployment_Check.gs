@@ -102,6 +102,10 @@ var DEP_MAP = {
     "getVisitingConsultantState", "declareVisitingConsultant",
     "endVisitingConsultant", "listVisitingConsultants", "setupVisitingConsultant"
   ],
+  "OP_Doctor_Engine.gs": [
+    "op_referralSheet_", "createOPReferral", "respondToOPReferral",
+    "listMyOPReferrals", "getOPReferralLetter"
+  ],
   "Drug_Safety.gs": [
     "ds_identify_", "checkDuplicateTherapy", "checkAllergyConflicts",
     "testDrugSafety"
