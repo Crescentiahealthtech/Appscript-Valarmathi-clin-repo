@@ -1,0 +1,424 @@
+<!-- =====================================================================
+     🎙️ VOICE TYPING — dictation into any clinical note field
+
+     A doctor on a ward round has a patient in front of them and a phone or
+     a laptop in one hand. Typing four lines of a progress note is the part
+     of the round that gets shortened, and a shortened note is the one that
+     later cannot answer what was found.
+
+     WHY ONE FLOATING CONTROL AND NOT A BUTTON PER FIELD
+
+     There are roughly seventy free-text fields across the OP consult, the
+     case sheet and ward notes, and they arrive in three separately loaded
+     bundles, injected long after this file is parsed. Stamping a button
+     onto each one means a scan on every injection, a second scan for the
+     rows that modules build at runtime, and seventy more elements in the
+     layout.
+
+     Instead there is ONE control, and it follows the focused field. Nothing
+     has to be registered, a field added tomorrow is dictatable the moment
+     it exists, and a screen that never dictates carries no extra markup.
+
+     WHAT IT DOES BEYOND TRANSCRIBING
+
+       • Spoken punctuation. "full stop", "comma", "new line", "new
+         paragraph" become the characters, because a paragraph of clinical
+         text with no punctuation is not a note.
+       • Clinical shorthand. Speech engines hear "B P" and "S P O two";
+         the chart wants BP and SpO2.
+       • Inserts AT THE CURSOR and keeps what is already typed. Dictation
+         that replaces a field is dictation nobody uses twice.
+       • Fires `input`, so every autosave, template-learner and safety
+         re-check downstream sees the text exactly as if it were typed.
+
+     WHAT IT IS NOT
+
+     It is the browser's own speech recognition (Web Speech API). In Chrome
+     that means audio is sent to Google's speech service to be transcribed
+     — the same path as dictating into any web page. Clinical text is
+     personal data under the DPDP Act, so the consent line below says so
+     before the first use rather than after, and a clinic that does not
+     want that can leave the feature off: it is opt-in per browser and
+     never records anything by itself.
+     ===================================================================== -->
+<style>
+  #cresc-voice-btn {
+    position: fixed; z-index: 3400; display: none;
+    width: 34px; height: 34px; border-radius: 50%;
+    align-items: center; justify-content: center;
+    background: var(--bg-elevated, #1e293b); color: var(--text-muted);
+    border: 1px solid var(--border-color); cursor: pointer;
+    box-shadow: var(--shadow-md, 0 4px 10px rgba(0,0,0,.25));
+    font-size: .85rem; padding: 0; transition: background .15s, color .15s;
+  }
+  #cresc-voice-btn.on { display: inline-flex; }
+  #cresc-voice-btn:hover { color: var(--text-main); border-color: var(--border-hover); }
+  #cresc-voice-btn.rec {
+    background: var(--danger); color: #fff; border-color: var(--danger);
+    animation: cresc-voice-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes cresc-voice-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, .55); }
+    50%      { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); }
+  }
+
+  /* What is being heard, before it is committed. Anchored to the control so
+     it never covers the field being dictated into. */
+  #cresc-voice-live {
+    position: fixed; z-index: 3401; display: none;
+    max-width: min(420px, 80vw);
+    background: var(--bg-elevated, #1e293b); color: var(--text-main);
+    border: 1px solid var(--border-color); border-radius: 10px;
+    padding: .45rem .7rem; font-size: .8rem; line-height: 1.45;
+    box-shadow: var(--shadow-lg, 0 10px 24px rgba(0,0,0,.35));
+  }
+  #cresc-voice-live.on { display: block; }
+  #cresc-voice-live .cv-interim { color: var(--text-muted); font-style: italic; }
+  #cresc-voice-live .cv-hint {
+    display: block; margin-top: .3rem; font-size: .68rem; color: var(--text-muted);
+  }
+</style>
+
+<button type="button" id="cresc-voice-btn" title="Dictate into this field"
+        aria-label="Dictate into this field"><i class="fa-solid fa-microphone"></i></button>
+<div id="cresc-voice-live" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var CONSENT_KEY = 'cresrx_voice_consent';
+  var LANG_KEY = 'cresrx_voice_lang';
+
+  var btn, live, target = null, rec = null, recording = false;
+  var baseValue = '', baseStart = 0, committed = '';
+
+  function el(id) { return document.getElementById(id); }
+
+  function store(key, value) {
+    try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); }
+    catch (e) { return null; }
+  }
+
+  // ------------------------------------------------------------------
+  // WHICH FIELDS CAN BE DICTATED INTO
+  //
+  // Free text only. A number box, a date, a password and a search filter
+  // are all worse with speech than with a keyboard, and offering the
+  // microphone on them is how a control stops being trusted.
+  // ------------------------------------------------------------------
+  function isDictatable(node) {
+    if (!node || node.disabled || node.readOnly) return false;
+    if (node.getAttribute && node.getAttribute('data-voice') === 'off') return false;
+    var tag = (node.tagName || '').toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    if (tag !== 'INPUT') return false;
+    var type = (node.type || 'text').toLowerCase();
+    if (type !== 'text' && type !== 'search') return false;
+    // A search box wants a word, not a sentence, and dictating into one
+    // fires a filter on every interim result.
+    if (type === 'search') return false;
+    var id = (node.id || '') + ' ' + (node.className || '') + ' ' + (node.placeholder || '');
+    if (/search|filter|query|barcode|scan/i.test(id)) return false;
+    return true;
+  }
+
+  function place(node) {
+    if (!btn) return;
+    var r = node.getBoundingClientRect();
+    // Top-right inside the field, clear of a scrollbar.
+    var left = Math.min(window.innerWidth - 44, r.right - 40);
+    var top = Math.max(6, r.top + 5);
+    btn.style.left = left + 'px';
+    btn.style.top = top + 'px';
+    if (live) {
+      live.style.left = Math.max(8, Math.min(window.innerWidth - 8 - live.offsetWidth, r.left)) + 'px';
+      live.style.top = (r.bottom + 8) + 'px';
+    }
+  }
+
+  function show(node) {
+    target = node;
+    btn.classList.add('on');
+    place(node);
+  }
+
+  function hide() {
+    if (recording) return;          // never disappear mid-dictation
+    btn.classList.remove('on');
+    if (live) live.classList.remove('on');
+    target = null;
+  }
+
+  // ------------------------------------------------------------------
+  // TRANSCRIPT CLEAN-UP
+  //
+  // Two different jobs. Punctuation, because a paragraph of clinical text
+  // with none is not a note and the alternative is reaching for the
+  // keyboard mid-sentence. And shorthand, because the engine hears what
+  // was said — "B P one forty over ninety" — and the chart wants "BP
+  // 140/90".
+  // ------------------------------------------------------------------
+  var PUNCTUATION = [
+    [/\b(full stop|period)\b/gi, '.'],
+    [/\bcomma\b/gi, ','],
+    [/\b(question mark)\b/gi, '?'],
+    [/\b(exclamation mark)\b/gi, '!'],
+    [/\bcolon\b/gi, ':'],
+    [/\bsemicolon\b/gi, ';'],
+    [/\b(new paragraph)\b/gi, '\n\n'],
+    [/\b(new line|next line)\b/gi, '\n'],
+    [/\b(open bracket)\b/gi, '('],
+    [/\b(close bracket)\b/gi, ')'],
+    [/\b(hyphen|dash)\b/gi, '-'],
+    [/\bslash\b/gi, '/']
+  ];
+
+  var SHORTHAND = [
+    [/\bb\.?\s?p\b/gi, 'BP'],
+    [/\bh\.?\s?r\b/gi, 'HR'],
+    [/\br\.?\s?r\b/gi, 'RR'],
+    [/\bs\.?\s?p\.?\s?o\.?\s?(two|2)\b/gi, 'SpO2'],
+    [/\bc\.?\s?b\.?\s?c\b/gi, 'CBC'],
+    [/\bc\.?\s?n\.?\s?s\b/gi, 'CNS'],
+    [/\bc\.?\s?v\.?\s?s\b/gi, 'CVS'],
+    [/\bp\.?\s?\/?\s?a\b/gi, 'P/A'],
+    [/\br\.?\s?\/?\s?s\b/gi, 'R/S'],
+    [/\bi\.?\s?v\b/gi, 'IV'],
+    [/\bi\.?\s?m\b/gi, 'IM'],
+    [/\bo\.?\s?d\b/gi, 'OD'],
+    [/\bb\.?\s?d\b/gi, 'BD'],
+    [/\bt\.?\s?d\.?\s?s\b/gi, 'TDS'],
+    [/\bq\.?\s?i\.?\s?d\b/gi, 'QID'],
+    [/\bs\.?\s?o\.?\s?s\b/gi, 'SOS'],
+    [/\bstat\b/gi, 'STAT'],
+    [/\bn\.?\s?p\.?\s?o\b/gi, 'NPO'],
+    [/\bo\.?\s?2\b/gi, 'O2'],
+    [/\bmilligram(s)?\b/gi, 'mg'],
+    [/\bmicrogram(s)?\b/gi, 'mcg'],
+    [/\bmillilitre(s)?\b|\bmilliliter(s)?\b/gi, 'ml'],
+    [/\bdegrees? celsius\b/gi, '°C'],
+    [/\bper cent\b|\bpercent\b/gi, '%'],
+    [/\bmillimetre(s)? of mercury\b/gi, 'mmHg'],
+    [/\bover\b(?=\s*\d)/gi, '/']
+  ];
+
+  function clean(text) {
+    var out = ' ' + String(text || '') + ' ';
+    PUNCTUATION.forEach(function (p) { out = out.replace(p[0], p[1]); });
+    SHORTHAND.forEach(function (p) { out = out.replace(p[0], p[1]); });
+    // Punctuation spoken as a word arrives with spaces around it.
+    out = out.replace(/\s+([.,;:?!])/g, '$1')
+             .replace(/\s*\n\s*/g, '\n')
+             .replace(/[ \t]{2,}/g, ' ')
+             .trim();
+    // First letter of each sentence, because dictation gives none.
+    out = out.replace(/(^|[.!?]\s+|\n)([a-z])/g, function (m, pre, ch) {
+      return pre + ch.toUpperCase();
+    });
+    return out;
+  }
+
+  /** Writes the running transcript into the field, at the cursor. */
+  function apply(finalText, interim) {
+    if (!target) return;
+    var text = clean(finalText + (interim ? ' ' + interim : ''));
+    var head = baseValue.slice(0, baseStart);
+    var tail = baseValue.slice(baseStart);
+    // A space only where one is actually needed; "findings:" + "chest clear"
+    // wants one, an empty field does not.
+    var joiner = (head && !/\s$/.test(head) && text) ? ' ' : '';
+    target.value = head + joiner + text + tail;
+    var caret = (head + joiner + text).length;
+    try { target.setSelectionRange(caret, caret); } catch (e) { /* not all inputs support it */ }
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function paintLive(interim) {
+    if (!live) return;
+    live.classList.add('on');
+    live.innerHTML =
+      '<span>' + (committed ? committed.replace(/[&<>]/g, '') : '') + '</span> ' +
+      '<span class="cv-interim">' + String(interim || '').replace(/[&<>]/g, '') + '</span>' +
+      '<span class="cv-hint">Say “full stop”, “comma”, “new line”. ' +
+      'Press the microphone or Escape to stop.</span>';
+    if (target) place(target);
+  }
+
+  // ------------------------------------------------------------------
+  // CONSENT
+  //
+  // Chrome's speech recognition sends the audio to Google to transcribe.
+  // Clinical dictation is personal data under the DPDP Act, so this is
+  // said BEFORE the first use, in the words of what actually happens, and
+  // the answer is remembered per browser. A clinic that does not want it
+  // simply never says yes.
+  // ------------------------------------------------------------------
+  function withConsent(then) {
+    if (store(CONSENT_KEY) === 'yes') { then(); return; }
+    var message =
+      'Voice typing uses your browser’s speech recognition. In Chrome and Edge ' +
+      'that means the audio is sent to the browser vendor’s speech service to be ' +
+      'turned into text — the same way dictation works on any website.\n\n' +
+      'You will be dictating patient information. Do not use it where someone ' +
+      'nearby should not hear the note, and do not use it if your clinic’s ' +
+      'policy does not allow audio to leave the building.\n\n' +
+      'Enable voice typing in this browser?';
+    if (typeof window.crescConfirm === 'function') {
+      window.crescConfirm(message, { title: 'Voice typing', okLabel: 'Enable' })
+        .then(function (ok) { if (ok) { store(CONSENT_KEY, 'yes'); then(); } });
+    } else if (window.confirm(message)) {
+      store(CONSENT_KEY, 'yes');
+      then();
+    }
+  }
+
+  function stop() {
+    recording = false;
+    if (btn) btn.classList.remove('rec');
+    if (live) live.classList.remove('on');
+    if (rec) { try { rec.stop(); } catch (e) {} }
+    rec = null;
+  }
+
+  function start() {
+    if (!target) return;
+    baseValue = target.value || '';
+    // Dictation goes where the cursor is, and keeps what is already there.
+    baseStart = (typeof target.selectionStart === 'number') ? target.selectionStart : baseValue.length;
+    committed = '';
+
+    rec = new SR();
+    rec.lang = store(LANG_KEY) || 'en-IN';
+    rec.continuous = true;
+    rec.interimResults = true;
+
+    rec.onresult = function (ev) {
+      var interim = '';
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        var t = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) committed += (committed ? ' ' : '') + t;
+        else interim += t;
+      }
+      apply(committed, interim);
+      paintLive(interim);
+    };
+
+    rec.onerror = function (ev) {
+      var why = ({
+        'not-allowed': 'The browser blocked the microphone. Allow it for this page and try again.',
+        'service-not-allowed': 'The browser blocked the microphone for this page.',
+        'no-speech': 'Nothing was heard.',
+        'audio-capture': 'No microphone was found.',
+        'network': 'The speech service could not be reached.'
+      })[ev.error] || ('Dictation stopped: ' + ev.error + '.');
+      stop();
+      if (ev.error !== 'no-speech' && window.showToast) {
+        window.showToast('Voice typing', why, 'warning');
+      }
+    };
+
+    // continuous:true still ends on a long silence in some builds. Restart
+    // rather than stopping mid-note — the user asked for dictation and did
+    // not ask for it to end because they paused to examine the patient.
+    rec.onend = function () {
+      if (!recording) return;
+      try { rec.start(); } catch (e) { stop(); }
+    };
+
+    try {
+      rec.start();
+      recording = true;
+      btn.classList.add('rec');
+      btn.title = 'Stop dictating';
+      paintLive('');
+    } catch (e) {
+      stop();
+      if (window.showToast) window.showToast('Voice typing', 'Could not start: ' + e.message, 'error');
+    }
+  }
+
+  function toggle() {
+    if (recording) { stop(); return; }
+    withConsent(start);
+  }
+
+  // ------------------------------------------------------------------
+  // Wiring
+  // ------------------------------------------------------------------
+  function init() {
+    btn = el('cresc-voice-btn');
+    live = el('cresc-voice-live');
+    if (!btn) return;
+
+    // Unsupported browser: no control at all, rather than one that fails
+    // when pressed. Firefox and most in-app browsers have no Web Speech API.
+    if (!SR) { btn.remove(); if (live) live.remove(); return; }
+
+    // Focus delegation: nothing has to be registered, and a field added by
+    // a module loaded an hour from now is dictatable the moment it exists.
+    document.addEventListener('focusin', function (ev) {
+      if (recording && ev.target !== target) return;   // do not chase focus mid-dictation
+      if (isDictatable(ev.target)) show(ev.target);
+      else hide();
+    }, true);
+
+    document.addEventListener('focusout', function (ev) {
+      // The click that lands on the button itself is a focusout from the
+      // field; deferring lets the button's own handler run first.
+      setTimeout(function () {
+        if (document.activeElement === btn) return;
+        if (isDictatable(document.activeElement)) return;
+        hide();
+      }, 120);
+    }, true);
+
+    // The field moves when the page scrolls or the window resizes.
+    ['scroll', 'resize'].forEach(function (e) {
+      window.addEventListener(e, function () { if (target) place(target); }, true);
+    });
+
+    // mousedown, not click: click would steal focus from the field first.
+    btn.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    btn.addEventListener('click', function (ev) { ev.preventDefault(); toggle(); });
+
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Escape' && recording) { ev.preventDefault(); stop(); return; }
+      // Ctrl/Cmd + Shift + D: dictate into the field you are already in.
+      if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && (ev.key === 'D' || ev.key === 'd')) {
+        if (isDictatable(document.activeElement)) {
+          ev.preventDefault();
+          show(document.activeElement);
+          toggle();
+        }
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // A small public surface, for a screen that wants its own dictate button.
+  window.crescVoice = {
+    supported: !!SR,
+    /** Starts dictating into a specific field. */
+    dictate: function (node) {
+      if (!SR || !isDictatable(node)) return false;
+      node.focus();
+      show(node);
+      if (!recording) withConsent(start);
+      return true;
+    },
+    stop: stop,
+    /** 'en-IN', 'en-GB', 'ta-IN', 'hi-IN' … remembered per browser. */
+    setLanguage: function (lang) { store(LANG_KEY, String(lang || 'en-IN')); },
+    language: function () { return store(LANG_KEY) || 'en-IN'; },
+    /** Clears the stored consent, so the notice is shown again. */
+    forgetConsent: function () { try { localStorage.removeItem(CONSENT_KEY); } catch (e) {} }
+  };
+})();
+</script>
