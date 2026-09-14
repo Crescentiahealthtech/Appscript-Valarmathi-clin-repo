@@ -1,0 +1,24 @@
+# Files that must NOT be pushed into the Apps Script project.
+#
+# Only matters if you adopt clasp (`clasp push`). There is no .clasp.json in
+# this repository today — files are copied into the editor by hand — but this
+# sits here so that the day someone does run `clasp push`, the developer tools
+# and the documentation do not land in the Apps Script project alongside the
+# application.
+#
+# clasp pushes everything that is NOT matched here.
+
+# Node scripts that read this repo as text. They use require() and __dirname,
+# which do not exist in Apps Script, and tools/dep.js declares a global called
+# DEP_MAP that would clobber the real one in Deployment_Check.gs.
+tools/**
+
+# Prose. Nothing here is code.
+docs/**
+README.md
+**/README.md
+
+# Repository metadata.
+.git/**
+.gitignore
+.claspignore

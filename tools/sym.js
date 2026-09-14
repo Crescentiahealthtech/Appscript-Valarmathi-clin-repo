@@ -1,3 +1,14 @@
+// ============================================================================
+// NOT APPS SCRIPT. Do not paste this file into the Apps Script editor.
+//
+// This is a Node.js script. It reads the project's .gs and .html files as text
+// and reports problems in them; it is not part of the application. Pasted into
+// the editor it would fail on require()/__dirname, and dep.js would additionally
+// clobber Deployment_Check.gs's DEP_MAP. See tools/README.md.
+//
+// Run it from the repository root:  node tools/sym.js
+// Or run every check at once:       ./tools/check.sh
+// ============================================================================
 const fs=require('fs'), path=require('path');
 const ROOT = process.env.REPO || require('path').resolve(__dirname, '..');
 const auth=fs.readFileSync(path.join(ROOT,'Auth.html'),'utf8');

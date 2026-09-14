@@ -1,3 +1,14 @@
+// ============================================================================
+// NOT APPS SCRIPT. Do not paste this file into the Apps Script editor.
+//
+// This is a Node.js script. It reads the project's .gs and .html files as text
+// and reports problems in them; it is not part of the application. Pasted into
+// the editor it would fail on require()/__dirname, and dep.js would additionally
+// clobber Deployment_Check.gs's DEP_MAP. See tools/README.md.
+//
+// Run it from the repository root:  node tools/nofail.js
+// Or run every check at once:       ./tools/check.sh
+// ============================================================================
 /* Exact google.script.run chains that attach NO withFailureHandler. Such a
    call fails silently: the spinner it started never stops. */
 const fs=require('fs'), path=require('path');

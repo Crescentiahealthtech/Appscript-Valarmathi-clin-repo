@@ -1,3 +1,14 @@
+// ============================================================================
+// NOT APPS SCRIPT. Do not paste this file into the Apps Script editor.
+//
+// This is a Node.js script. It reads the project's .gs and .html files as text
+// and reports problems in them; it is not part of the application. Pasted into
+// the editor it would fail on require()/__dirname, and dep.js would additionally
+// clobber Deployment_Check.gs's DEP_MAP. See tools/README.md.
+//
+// Run it from the repository root:  node tools/css.js
+// Or run every check at once:       ./tools/check.sh
+// ============================================================================
 /* Classes used in markup/JS that no stylesheet in the project defines and
    Bootstrap 5 does not supply. */
 const fs=require('fs'), path=require('path');
