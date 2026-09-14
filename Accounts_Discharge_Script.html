@@ -15,7 +15,22 @@ const AccDischarge = (function () {
   const RATE = { ROOM: 1500, NURSING: 400, RMO: 300, CONSULTANT: 500, SURGEON: 0, ANESTHETIST: 0, OT: 0, PROCEDURE: 0, OTHER: 0 };
   let IP = null, TAB = null, ROWS = [], PKGS = [], INSURERS = [], INS = [], INS_ON = false, RID = 0;
 
-  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid'; t.style.zIndex = 4000; t.style.background = ok ? 'var(--success)' : 'var(--danger)'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3800); }
+  /**
+   * Delegates to the one toast in Shell_UX.html (top-centre).
+   *
+   * This module used to build its own bottom-right div. Nine modules did,
+   * each a copy of the same eight lines, all of them in the corner the
+   * eye never reaches — behind the floating action button on the pharmacy
+   * screens, and off the fold on a phone in landscape. Keeping the local
+   * name means the call sites below did not have to change.
+   */
+  function toast(m, ok) {
+    if (typeof window.showToast === 'function') {
+      window.showToast(ok ? 'Done' : 'Could not complete', m, ok ? 'success' : 'error');
+      return;
+    }
+    if (typeof crescAlert === 'function') crescAlert(m);
+  }
   const num = (id) => { const e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; };
   const amt = (r) => r.kind === 'AUTO' ? r.amount : (Number(r.count) || 0) * (Number(r.rate) || 0);
 
@@ -317,11 +332,52 @@ const AccDischarge = (function () {
  * ward's discharge panel. switchTab runs first because the accounts pages are
  * siblings of the ward screens: without it the ward list stays active
  * underneath and both render at once.
+ *
+ * WHY THIS TILE OPENED NOTHING
+ *
+ * switchTab('workspace-accounts') does not only switch; it also queues that
+ * screen's entry point, showAccounts(), on setTimeout(…, 0). So the sequence
+ * was: switch to accounts, queue showAccounts, switch to the settlement desk
+ * — and then, one tick later, showAccounts() ran and switched straight back
+ * to the hub. The click did everything it was supposed to and was undone
+ * before the next frame, which is why it looked like a dead button and left
+ * nothing in the console. The Running IP Tabs tile beside it worked only
+ * because openIpTab() never calls switchTab at all.
+ *
+ * ScriptsMV.html now stamps each queued init with a navigation generation and
+ * drops it if navigation has moved on, so the switchAccountsPage() call below
+ * cancels the hub's landing init rather than losing to it.
+ *
+ * The load is left to that same switchAccountsPage(), through the wrapper at
+ * the foot of this file: calling AccDischarge.load() here as well ran the
+ * whole three-call load twice on every open.
  */
 function openDischargeDesk(ipNumber) {
   if (typeof switchTab === 'function') switchTab('workspace-accounts');
-  if (typeof switchAccountsPage === 'function') switchAccountsPage('workspace-accounts-discharge');
-  AccDischarge.load(ipNumber);
+  if (typeof switchAccountsPage === 'function') {
+    switchAccountsPage('workspace-accounts-discharge', ipNumber);
+  } else {
+    AccDischarge.load(ipNumber);
+  }
 }
-(function () { if (window.__accDischargeWired) return; var o = window.switchAccountsPage; window.switchAccountsPage = function (p) { if (typeof o === 'function') o(p); if (p === 'workspace-accounts-discharge') { try { AccDischarge.load(); } catch (e) {} } }; window.__accDischargeWired = true; })();
+
+/**
+ * Loads the desk whenever it is navigated to, however it was reached.
+ *
+ * The second argument carries an IP number handed over by the ward, so
+ * arriving from a bed does not mean finding the same patient again in a
+ * dropdown. Arriving from the Finance Hub passes nothing and gets the
+ * dropdown, which is correct there.
+ */
+(function () {
+  if (window.__accDischargeWired) return;
+  var prev = window.switchAccountsPage;
+  window.switchAccountsPage = function (page, preselectIp) {
+    if (typeof prev === 'function') prev(page);
+    if (page === 'workspace-accounts-discharge') {
+      try { AccDischarge.load(preselectIp); } catch (e) {}
+    }
+  };
+  window.__accDischargeWired = true;
+})();
 </script>

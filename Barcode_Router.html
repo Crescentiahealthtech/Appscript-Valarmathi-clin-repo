@@ -713,7 +713,22 @@
     } catch (e) { /* sound is optional */ }
   }
 
+  /**
+   * Delegates to the one toast in Shell_UX.html (top-centre).
+   *
+   * The scanner's own #bc-toast-host was bottom-right at z-index 1090 —
+   * underneath the offcanvas panel this module opens on every successful
+   * scan, so the message explaining a REFUSED scan was covered by the
+   * panel that opened for the previous one. The host div is kept as the
+   * fallback for a bundle loaded without the shell.
+   */
   function toast(msg, kind) {
+    var TYPE = { ok: 'success', err: 'error', warn: 'warning', info: 'info' };
+    if (typeof window.showToast === 'function') {
+      window.showToast(kind === 'err' ? 'Scan refused' : 'Scanner',
+                       msg, TYPE[kind] || 'info');
+      return;
+    }
     var host = $('bc-toast-host');
     if (!host) return;
     var t = el('div', 'bc-toast bc-' + (kind || 'info'), msg);

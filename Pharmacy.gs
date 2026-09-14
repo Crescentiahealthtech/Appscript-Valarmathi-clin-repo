@@ -25,7 +25,49 @@ var PH_SHEETS = {
   IP_QUEUE:     "IP_Pharmacy_Queue",
   DS_SUMMARIES: "DS_Summaries",
   DS_SNAPSHOTS: "DS_Snapshots",
-  MASTER_LEDGER:"Pharmacy_Master"
+  MASTER_LEDGER:"Pharmacy_Master",
+  DISPOSALS:    "Pharmacy_Disposal_Log"
+};
+
+/**
+ * The disposal register. One row per write-off, never edited, never deleted.
+ *
+ * Separate from Pharmacy_Master on purpose. The master ledger records stock
+ * MOVEMENT — received, dispensed, adjusted. A write-off is not a movement, it
+ * is a LOSS, and the questions asked of it are different ones: how much did we
+ * throw away last quarter, which supplier's batches keep expiring, what did it
+ * cost. Those are answered by a register you can total, not by filtering a
+ * movement log for a category.
+ *
+ * Buy_Value is the number that matters for the loss and MRP_Value the number
+ * that matters for the insurer, so both are stored at the moment of disposal
+ * rather than recomputed later from a price that will have changed.
+ */
+var PH_DISPOSAL_HEADERS = [
+  "Disposal_ID", "Timestamp", "Brand", "Generic", "Batch", "Expiry",
+  "Qty_Discarded", "Unit", "Reason", "Note",
+  "Buy_Value", "MRP_Value", "Stock_Before", "Stock_After",
+  "Rack", "Supplier", "Manufacturer", "Discarded_By", "Witness"
+];
+
+/**
+ * Why stock left the shelf without being sold.
+ *
+ * A free-text reason cannot be counted, and "what are we losing money to" is
+ * the only question this register exists to answer. EXPIRED and DAMAGED are
+ * ordinary wastage; RECALL is the supplier's problem and may be recoverable;
+ * THEFT_LOSS is an incident, not wastage, and is deliberately separate so it
+ * never hides inside a wastage total.
+ */
+var PH_DISPOSAL_REASONS = {
+  EXPIRED:      "Expired",
+  DAMAGED:      "Damaged in storage",
+  BREAKAGE:     "Breakage / spillage",
+  CONTAMINATED: "Contaminated or cold-chain break",
+  RECALL:       "Manufacturer recall",
+  RETURN_SUPP:  "Returned to supplier",
+  THEFT_LOSS:   "Missing / unaccounted",
+  OTHER:        "Other (see note)"
 };
 
 var PH_INVOICE_HEADERS = ["Invoice_No","Timestamp","Bill_Type","Patient_ID","Patient_Name",
@@ -78,6 +120,7 @@ function savePharmacyInventory(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    crescRequire_((payload || {}).token, 'pharmacy.stock_add');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
     if (!sheet) {
@@ -104,6 +147,7 @@ function updatePharmacyStock(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    var actor = crescRequire_((payload || {}).token, 'pharmacy.stock_edit');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var stockSheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
     var masterSheet = ss.getSheetByName(PH_SHEETS.MASTER_LEDGER);
@@ -118,12 +162,262 @@ function updatePharmacyStock(payload) {
         "Manual Adjustment", String(payload.brandName || ""), String(payload.genericName || ""),
         "N/A", "N/A", parseInt(payload.stock, 10) || 0, String(payload.batch || ""),
         String(payload.expiry || ""), String(payload.rack || ""), 0, parseFloat(payload.mrp) || 0,
-        parseFloat(payload.gst) || 0, String(payload.manufacturer || ""), String(payload.supplier || ""), "Admin"]);
+        parseFloat(payload.gst) || 0, String(payload.manufacturer || ""), String(payload.supplier || ""),
+        // The actor column used to be the literal string "Admin", whoever was
+        // signed in — so the master ledger recorded every manual adjustment
+        // in this clinic's history as having been made by the same person.
+        actor.displayName || actor.username]);
     }
+    logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+              'PHARMACY_STOCK_ADJUST', 'Pharmacy_Inventory', String(payload.batch || ''),
+              { brand: String(payload.brandName || ''), stock: parseInt(payload.stock, 10) || 0 });
     return { success: true, message: "Inventory updated securely." };
   } catch (error) {
     return { success: false, message: "Failed to update: " + error.toString() };
   } finally { lock.releaseLock(); }
+}
+
+// =====================================================================
+// SECTION A2 — DISPOSAL (write-off)
+// ---------------------------------------------------------------------
+// WHY THIS EXISTS
+//
+// Live Inventory had exactly one row action: Edit. The dashboard counted
+// expired batches on its own KPI card — and then offered no way to do
+// anything about them. The only way to take expired stock off the shelf was
+// to open the edit dialog and type 0 into "Live Stock Count".
+//
+// That loses everything worth keeping:
+//
+//   - HOW MANY went. The count is overwritten, not decremented, so the
+//     quantity destroyed is gone the moment it is saved.
+//   - WHY. Expired, broken, recalled and stolen all look identical
+//     afterwards: a batch that used to have stock and now has none.
+//   - WHAT IT COST. Nothing captures buy value, so "what did we lose to
+//     expiry this quarter" cannot be answered at all.
+//   - WHO. updatePharmacyStock writes the literal string "Admin" into the
+//     master ledger's actor column, whoever was signed in.
+//
+// And the drug is still destroyed either way — this is a controlled
+// substance register in every respect except the record. Schedule H and
+// H1 stock in particular has to be accounted for on disposal.
+//
+// So: a first-class action, a reason code that can be totalled, the value at
+// the moment it went, and a named actor taken from the session rather than
+// from the client.
+// =====================================================================
+
+/** Creates the disposal register on first use. */
+function _phDisposalSheet_(ss) {
+  var sheet = ss.getSheetByName(PH_SHEETS.DISPOSALS);
+  if (!sheet) {
+    sheet = ss.insertSheet(PH_SHEETS.DISPOSALS);
+    sheet.appendRow(PH_DISPOSAL_HEADERS);
+    sheet.getRange(1, 1, 1, PH_DISPOSAL_HEADERS.length)
+         .setFontWeight("bold").setBackground("#f4cccc");
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/** FRONTEND ENTRY. The reason codes, so the dialog and the server agree. */
+function getDisposalReasons() {
+  return Object.keys(PH_DISPOSAL_REASONS).map(function (k) {
+    return { code: k, label: PH_DISPOSAL_REASONS[k] };
+  });
+}
+
+/**
+ * FRONTEND ENTRY. Writes stock off.
+ *
+ * @param {{token:string, rowId:number, batch:string, brandName:string,
+ *          qty:number, reason:string, note:string, witness:string}} payload
+ * @return {{success:boolean, message:string, disposalId?:string, remaining?:number}}
+ */
+function discardPharmacyStock(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    var p = payload || {};
+    var actor = crescRequire_(p.token, 'pharmacy.stock_discard');
+
+    var reason = String(p.reason || '').trim().toUpperCase();
+    if (!PH_DISPOSAL_REASONS[reason]) {
+      return { success: false, message: "Choose why this stock is being written off." };
+    }
+    var note = String(p.note || '').trim();
+    // OTHER with no explanation is the same as no reason at all, and
+    // THEFT_LOSS is an incident that has to say what happened.
+    if ((reason === 'OTHER' || reason === 'THEFT_LOSS') && note.length < 5) {
+      return { success: false,
+               message: reason === 'OTHER'
+                 ? "Say what the reason is — \"Other\" on its own cannot be accounted for."
+                 : "Missing stock needs a note saying what is known about it." };
+    }
+
+    var qty = parseInt(p.qty, 10);
+    if (!(qty > 0)) {
+      return { success: false, message: "Enter how many units are being written off." };
+    }
+
+    lock.waitLock(15000);
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
+    if (!sheet) return { success: false, message: "Pharmacy_Inventory sheet not found." };
+
+    var rowNum = parseInt(p.rowId, 10);
+    if (!(rowNum > 1) || rowNum > sheet.getLastRow()) {
+      return { success: false, message: "That batch is no longer in the inventory. Refresh and try again." };
+    }
+
+    // Re-read the row under the lock and CHECK IT IS STILL THE SAME BATCH.
+    //
+    // rowId is a position, not an identity. If anyone inserted or deleted a
+    // row in the sheet between the screen loading and this call, position 47
+    // is a different drug — and unlike an edit, which a person notices and
+    // corrects, a write-off destroys the count silently. updatePharmacyStock
+    // trusts the index blind; this one will not.
+    var row = sheet.getRange(rowNum, 1, 1, 14).getValues()[0];
+    var brand = String(row[1] || '');
+    var batch = String(row[6] || '');
+    var wantBrand = String(p.brandName || '').trim();
+    var wantBatch = String(p.batch || '').trim();
+
+    if ((wantBrand && wantBrand.toUpperCase() !== brand.trim().toUpperCase()) ||
+        (wantBatch && wantBatch.toUpperCase() !== batch.trim().toUpperCase())) {
+      return { success: false,
+               message: "The inventory has changed since this screen was loaded — row " + rowNum +
+                        " now holds " + (brand || "(blank)") + " batch " + (batch || "(blank)") +
+                        ". Refresh and try again. Nothing was written off." };
+    }
+
+    var before = parseInt(row[4], 10) || 0;
+    if (qty > before) {
+      return { success: false,
+               message: "Only " + before + " unit(s) of batch " + (batch || "—") +
+                        " are in stock. You cannot write off " + qty + "." };
+    }
+    var after = before - qty;
+
+    var buy = parseFloat(row[9]) || 0;
+    var mrp = parseFloat(row[10]) || 0;
+    var expiry = row[7] instanceof Date
+      ? Utilities.formatDate(row[7], Session.getScriptTimeZone(), "yyyy-MM")
+      : String(row[7] || "");
+
+    var disposalId = 'DSP-' +
+      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd') + '-' +
+      Utilities.getUuid().substring(0, 6).toUpperCase();
+    var who = actor.displayName || actor.username;
+
+    // The register FIRST, then the stock.
+    //
+    // If the second write fails, the worst case is a disposal row with no
+    // matching decrement — visible, reconcilable, and obvious on the next
+    // stock check. The other order's worst case is stock silently destroyed
+    // with no record of where it went, which is the failure this whole
+    // function exists to prevent.
+    _phDisposalSheet_(ss).appendRow([
+      disposalId, new Date(), brand, String(row[2] || ''), batch, expiry,
+      qty, String(row[5] || ''), reason, note,
+      +(buy * qty).toFixed(2), +(mrp * qty).toFixed(2), before, after,
+      String(row[8] || ''), String(row[13] || ''), String(row[12] || ''),
+      who, String(p.witness || '').trim()
+    ]);
+
+    sheet.getRange(rowNum, 5).setValue(after);
+
+    var master = ss.getSheetByName(PH_SHEETS.MASTER_LEDGER);
+    if (master) {
+      master.appendRow([new Date(), disposalId, "Disposal — " + PH_DISPOSAL_REASONS[reason],
+        brand, String(row[2] || ''), "N/A", "N/A", -qty, batch, expiry,
+        String(row[8] || ''), buy, mrp, parseFloat(row[11]) || 0,
+        String(row[12] || ''), String(row[13] || ''), who]);
+    }
+
+    logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+              'PHARMACY_STOCK_DISCARD', 'Pharmacy_Inventory', disposalId,
+              { brand: brand, batch: batch, qty: qty, reason: reason,
+                note: note, buyValue: +(buy * qty).toFixed(2),
+                stockBefore: before, stockAfter: after });
+
+    return {
+      success: true,
+      disposalId: disposalId,
+      remaining: after,
+      message: qty + " unit(s) of " + brand + " (batch " + (batch || "—") + ") written off as " +
+               PH_DISPOSAL_REASONS[reason].toLowerCase() + ". " +
+               (after > 0 ? after + " left in this batch." : "This batch is now empty.") +
+               " Recorded as " + disposalId + "."
+    };
+  } catch (error) {
+    return { success: false, message: "Could not write off: " + error.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/**
+ * FRONTEND ENTRY. The disposal register, newest first.
+ *
+ * The point of recording a reason code is being able to total it, so this
+ * returns the breakdown alongside the rows — what expiry cost this period
+ * versus what damage cost, which is the conversation a write-off register is
+ * supposed to start.
+ *
+ * @param {{token:string, days?:number, limit?:number}} opts
+ */
+function getDisposalLog(opts) {
+  try {
+    var o = opts || {};
+    crescRequire_(o.token, 'pharmacy.read');
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(PH_SHEETS.DISPOSALS);
+    if (!sheet || sheet.getLastRow() < 2) {
+      return { success: true, rows: [], totals: {}, totalValue: 0, message: '' };
+    }
+
+    var days  = Math.min(Math.max(parseInt(o.days, 10) || 90, 1), 1095);
+    var limit = Math.min(Math.max(parseInt(o.limit, 10) || 300, 1), 2000);
+    var since = new Date(Date.now() - days * 86400000);
+
+    var last = sheet.getLastRow();
+    var cols = PH_DISPOSAL_HEADERS.length;
+    // Read only the tail. The register is append-only and never pruned, so
+    // reading it whole is a timeout waiting for a busy year.
+    var from = Math.max(2, last - limit + 1);
+    var data = sheet.getRange(from, 1, last - from + 1, cols).getValues();
+
+    var rows = [], totals = {}, totalValue = 0;
+    for (var i = data.length - 1; i >= 0; i--) {
+      var r = data[i];
+      var ts = r[1] instanceof Date ? r[1] : new Date(r[1]);
+      if (!(ts instanceof Date) || isNaN(ts.getTime()) || ts < since) continue;
+
+      var reason = String(r[8] || 'OTHER');
+      var value  = parseFloat(r[10]) || 0;
+      totals[reason] = (totals[reason] || 0) + value;
+      totalValue += value;
+
+      rows.push({
+        disposalId: String(r[0] || ''),
+        at:      Utilities.formatDate(ts, Session.getScriptTimeZone(), 'dd-MMM-yyyy HH:mm'),
+        brand:   String(r[2] || ''), generic: String(r[3] || ''),
+        batch:   String(r[4] || ''), expiry:  String(r[5] || ''),
+        qty:     parseInt(r[6], 10) || 0, unit: String(r[7] || ''),
+        reason:  reason, reasonLabel: PH_DISPOSAL_REASONS[reason] || reason,
+        note:    String(r[9] || ''),
+        buyValue: value, mrpValue: parseFloat(r[11]) || 0,
+        by:      String(r[17] || ''), witness: String(r[18] || '')
+      });
+    }
+
+    return { success: true, rows: rows, totals: totals,
+             totalValue: +totalValue.toFixed(2), windowDays: days, message: '' };
+  } catch (err) {
+    return { success: false, rows: [], totals: {}, totalValue: 0, message: err.message };
+  }
 }
 
 // =====================================================================

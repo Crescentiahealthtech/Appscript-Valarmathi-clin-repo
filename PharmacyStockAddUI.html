@@ -169,6 +169,8 @@
 
     // Construct Payload
     const payload = {
+      // savePharmacyInventory now checks pharmacy.stock_add on the server.
+      token: window.sessionToken || '',
       timestamp: new Date().toISOString(),
       medicineName: document.getElementById('medicineName').value.trim(),
       genericName: document.getElementById('genericName').value.trim(),

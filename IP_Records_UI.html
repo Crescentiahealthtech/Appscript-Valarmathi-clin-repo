@@ -190,10 +190,23 @@
   function escLines(v) { return esc(v).replace(/\r\n|\r|\n/g, '<br>'); }
   function s(v) { return String(v === null || v === undefined ? '' : v).trim(); }
 
+  /**
+   * The notes module's toast when that bundle is loaded, otherwise the
+   * shared one from Shell_UX.html.
+   *
+   * The last resort used to be crescAlert() for EVERY message, so a
+   * routine "Saved" put a modal in front of the user that had to be
+   * dismissed before they could carry on. Only a genuine failure with no
+   * toast anywhere is worth interrupting for.
+   */
   function toast(msg, kind) {
     if (typeof ipnToast === 'function') { ipnToast(msg, kind); return; }
-    if (kind === 'err') { console.error(msg); } else { console.log(msg); }
-    crescAlert(msg);
+    if (typeof window.showToast === 'function') {
+      window.showToast(kind === 'err' ? 'Could not complete' : 'Records', msg,
+                       kind === 'err' ? 'error' : 'info');
+      return;
+    }
+    if (kind === 'err') { console.error(msg); crescAlert(msg); } else { console.log(msg); }
   }
 
   function setText(id, txt) {

@@ -37,7 +37,11 @@
     <div class="lx-kpi" data-k="inProcess"          onclick="LabX.setTab('BENCH');"><div class="lx-kpi-num" id="lx-k-inProcess">–</div><div class="lx-kpi-lbl">On the Bench</div></div>
     <div class="lx-kpi" data-k="awaitingVerify"     onclick="LabX.setTab('VERIFY');"><div class="lx-kpi-num" id="lx-k-awaitingVerify">–</div><div class="lx-kpi-lbl">Awaiting Verify</div></div>
     <div class="lx-kpi lx-kpi-warn" data-k="overdue" onclick="LabX.setTab('ALL');"><div class="lx-kpi-num" id="lx-k-overdue">–</div><div class="lx-kpi-lbl"><i class="fa-solid fa-stopwatch me-1"></i>Overdue</div></div>
-    <div class="lx-kpi lx-kpi-crit" data-k="criticalPending"><div class="lx-kpi-num" id="lx-k-criticalPending">–</div><div class="lx-kpi-lbl"><i class="fa-solid fa-heart-pulse me-1"></i>Critical Unack.</div></div>
+    <!-- Every other tile on this strip opens the work it counts. This one
+         counted six critical results nobody had answered for and led
+         nowhere, so the number could be read but not acted on, and nothing
+         in the application could clear it. -->
+    <div class="lx-kpi lx-kpi-crit" data-k="criticalPending" onclick="LabX.openCritical();" title="Critical results awaiting acknowledgement — click to see and clear them"><div class="lx-kpi-num" id="lx-k-criticalPending">–</div><div class="lx-kpi-lbl"><i class="fa-solid fa-heart-pulse me-1"></i>Critical Unack.</div></div>
   </div>
 
   <div class="d-flex gap-2 flex-wrap mb-3" id="lx-tabs"></div>
@@ -134,8 +138,57 @@
         <div class="lx-pulse mb-3"><i class="fa-solid fa-heart-pulse fa-3x" style="color:var(--danger-fg);"></i></div>
         <h4 class="text-white-force fw-bold">CRITICAL VALUE</h4>
         <div id="lx-crit-list" class="my-3 text-start"></div>
-        <p class="label-bright small mb-3">NABL ISO 15189: critical values must be communicated to the ordering clinician immediately. A communication log entry is created automatically on submission.</p>
-        <button class="btn btn-danger fw-semibold px-4" data-bs-dismiss="modal"><i class="fa-solid fa-check me-1"></i>Acknowledged — I will inform the clinician</button>
+        <p class="label-bright small mb-3">NABL ISO 15189: critical values must be communicated to the ordering clinician immediately. A communication log entry has been created and is now waiting to be closed.</p>
+        <!-- This button used to carry data-bs-dismiss and NOTHING ELSE. It
+             said "I will inform the clinician" and recorded no such thing;
+             the log entry it refers to stayed open for ever, because nothing
+             in the project could close one. Now it takes you to the place
+             where the call is recorded. -->
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+          <button class="btn btn-danger fw-semibold px-4" data-bs-dismiss="modal" onclick="LabX.openCritical();"><i class="fa-solid fa-phone me-1"></i>Record the call now</button>
+          <button class="btn btn-outline-light fw-semibold px-3" data-bs-dismiss="modal">Later — keep it on the dashboard</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     CRITICAL VALUES AWAITING ACKNOWLEDGEMENT
+
+     The screen behind the "Critical Unack." tile. It names the results the
+     number was counting — which it never did — shows how long each has been
+     waiting, and records who was informed.
+
+     The note is mandatory, on the server as well as here. A tick that only
+     says "acknowledged" is not a communication record and will not answer
+     the question an enquiry asks, which is who was told, and when.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="lx-ack-modal" tabindex="-1" aria-hidden="true" style="z-index:1085;">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--danger);border-radius:16px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title text-white-force fw-bold">
+          <i class="fa-solid fa-heart-pulse me-2" style="color:var(--danger-fg);"></i>
+          Critical values awaiting acknowledgement
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="lx-ack-list"></div>
+      </div>
+      <div class="modal-footer flex-column align-items-stretch gap-2" style="border-color:var(--border-color);">
+        <label class="form-label small label-bright mb-0" for="lx-ack-note">
+          Who did you inform, and how? <span class="text-danger">*</span>
+        </label>
+        <input type="text" class="form-control" id="lx-ack-note"
+               placeholder="e.g. Dr. Rekha, by phone on 98xxxxxx21 at 14:20 — repeated back and confirmed">
+        <div class="d-flex gap-2 justify-content-end">
+          <button class="btn btn-outline-light btn-sm px-3" data-bs-dismiss="modal">Close</button>
+          <button class="btn btn-danger fw-semibold px-4" id="lx-ack-btn" onclick="LabX.ackCritical();">
+            <i class="fa-solid fa-check me-1"></i>Acknowledge selected
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -320,16 +373,41 @@ var LabX = (function () {
     if(ok) setTimeout(function(){ if($('lx-msg')) $('lx-msg').innerHTML=''; }, 4500);
   }
 
-  /* run() — safe spread call, guaranteed error surfacing, never hangs silently */
+  /* run() — safe spread call, guaranteed error surfacing, never hangs silently.
+
+     It also BLOCKS THE PAGE for the duration, and refuses a second call to
+     the same function while the first is still out. The loader used to be a
+     chip in the header: on a several-second Apps Script round trip the
+     Submit button stayed live underneath it, and a technician who did not
+     notice the chip and pressed Submit again got two result sets saved
+     against one order. The centred veil from Shell_UX.html makes the wait
+     visible and the second press impossible. */
+  var _inflight = {};
   function run(fn, args, onOk, busyMsg){
+    if(_inflight[fn]){
+      if(window.showToast) window.showToast('Still working','That is already being saved — please wait.','info');
+      return;
+    }
+    _inflight[fn]=true;
     spin(busyMsg||'Working…');
-    var timer=setTimeout(function(){ stop(); flash('Server did not respond for '+fn+'(). Check connection.', false); }, 30000);
+    if(window.crescBusy) window.crescBusy(true, busyMsg||'Working…');
+    var settled=false;
+    var finish=function(){
+      if(settled) return; settled=true;
+      delete _inflight[fn];
+      stop();
+      if(window.crescBusy) window.crescBusy(false);
+    };
+    var timer=setTimeout(function(){ finish(); flash('Server did not respond for '+fn+'(). Check connection.', false); }, 30000);
     var runner=google.script.run
-      .withSuccessHandler(function(res){ clearTimeout(timer); stop(); onOk(res); })
-      .withFailureHandler(function(err){ clearTimeout(timer); stop(); flash(fn+'() failed: '+(err&&err.message||err), false); });
-    if(!runner[fn]){ clearTimeout(timer); stop(); flash('Backend function "'+fn+'" not found.', false); return; }
+      .withSuccessHandler(function(res){ clearTimeout(timer); finish(); onOk(res); })
+      .withFailureHandler(function(err){ clearTimeout(timer); finish(); flash(fn+'() failed: '+(err&&err.message||err), false); });
+    if(!runner[fn]){ clearTimeout(timer); finish(); flash('Backend function "'+fn+'" not found.', false); return; }
     runner[fn](...(args || []));
   }
+
+  /** The signed-in user's token, for the server-side permission checks. */
+  function tok(){ return window.sessionToken || ''; }
 
   function modal(id){ return _mods[id]||(_mods[id]=new bootstrap.Modal($(id))); }
 
@@ -966,6 +1044,95 @@ var LabX = (function () {
     $('lx-crit-list').innerHTML=items.join('')||'<div class="label-bright small">Critical values were flagged in the saved results.</div>';
     modal('lx-crit-modal').show();
   }
+  /* ════════ CRITICAL VALUE ACKNOWLEDGEMENT ════════ */
+
+  function openCritical(){
+    modal('lx-ack-modal').show();
+    var box=$('lx-ack-list');
+    if(box) box.innerHTML='<div class="text-center label-bright py-4"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Loading…</div>';
+    var note=$('lx-ack-note'); if(note) note.value='';
+    run('labListCriticalUnacked',[tok()],function(res){
+      if(!res||!res.success){
+        if(box) box.innerHTML='<div class="text-danger small py-3">'+esc((res&&res.message)||'Could not load.')+'</div>';
+        return;
+      }
+      _renderAckList(res.rows||[]);
+      // The tile and the list are the same number; refreshing one without
+      // the other is how a dashboard starts lying.
+      if(_stats){ _stats.criticalPending=res.count; _renderKpis(); }
+    },'Loading critical values…');
+  }
+
+  function _renderAckList(rows){
+    var box=$('lx-ack-list'); if(!box) return;
+    if(!rows.length){
+      box.innerHTML='<div class="text-center py-4"><i class="fa-solid fa-circle-check fa-2x mb-2" style="color:var(--success-fg);"></i>'+
+        '<div class="text-white-force fw-semibold">Nothing outstanding.</div>'+
+        '<div class="label-bright small">Every critical value has been acknowledged.</div></div>';
+      var b=$('lx-ack-btn'); if(b) b.disabled=true;
+      return;
+    }
+    var b2=$('lx-ack-btn'); if(b2) b2.disabled=false;
+
+    box.innerHTML =
+      '<div class="d-flex justify-content-between align-items-center mb-2">'+
+        '<span class="label-bright small">'+rows.length+' waiting · oldest first</span>'+
+        '<button class="btn btn-sm btn-outline-light py-0 px-2" onclick="LabX.ackAll(this);">Select all</button>'+
+      '</div>' +
+      rows.map(function(r){
+        // How long it has waited is the whole triage signal, and it was on no
+        // screen. Past four hours it stops being amber.
+        var age = r.ageMins==null ? 'unknown age'
+                : r.ageMins<60 ? r.ageMins+' min ago'
+                : r.ageMins<1440 ? Math.floor(r.ageMins/60)+' h '+(r.ageMins%60)+' min ago'
+                : Math.floor(r.ageMins/1440)+' day(s) ago';
+        var stale = r.ageMins!=null && r.ageMins>240;
+        return '<label class="d-flex gap-2 align-items-start px-3 py-2 rounded mb-2" '+
+          'style="background:var(--danger-bg);border:1px solid '+(stale?'var(--danger)':'transparent')+';cursor:pointer;">'+
+          '<input type="checkbox" class="form-check-input mt-1 lx-ack-cb" value="'+esc(r.commId)+'">'+
+          '<span class="flex-grow-1">'+
+            '<span class="text-white-force fw-semibold">'+esc(r.testName||'(unnamed test)')+'</span> '+
+            '<span class="lx-f-C">'+esc(r.value)+'</span>'+
+            '<div class="label-bright" style="font-size:.75rem;">'+
+              esc(r.patientId||'—')+' · order '+esc(r.orderId||'—')+' · flagged by '+esc(r.loggedBy||'system')+
+            '</div>'+
+          '</span>'+
+          '<span class="small fw-semibold '+(stale?'text-danger':'label-bright')+'" style="white-space:nowrap;">'+esc(age)+'</span>'+
+        '</label>';
+      }).join('');
+  }
+
+  function ackAll(btn){
+    var boxes=document.querySelectorAll('.lx-ack-cb');
+    // One button, both ways: once everything is ticked it becomes Clear, so
+    // a mis-tap on a list of twelve is one tap to undo rather than twelve.
+    var allOn=true;
+    boxes.forEach(function(c){ if(!c.checked) allOn=false; });
+    boxes.forEach(function(c){ c.checked=!allOn; });
+    if(btn) btn.textContent = allOn ? 'Select all' : 'Clear selection';
+  }
+
+  function ackCritical(){
+    var ids=[];
+    document.querySelectorAll('.lx-ack-cb').forEach(function(c){ if(c.checked) ids.push(c.value); });
+    if(!ids.length){ flash('Tick the values you have communicated.',false); return; }
+
+    var note=($('lx-ack-note')||{}).value||'';
+    if(note.trim().length<5){
+      flash('Record who you informed and how — the server will not accept an empty note.',false);
+      var n=$('lx-ack-note'); if(n) n.focus();
+      return;
+    }
+
+    run('labAcknowledgeCritical',[tok(),ids,note],function(res){
+      flash((res&&res.message)||'Failed.',!!(res&&res.success));
+      if(res&&res.success){
+        openCritical();   // reload the list and the tile from the server
+        load();           // and the queue behind it, so the KPI strip agrees
+      }
+    },'Recording acknowledgement…');
+  }
+
   function doVerify(){
     var name=($('lx-vf-name').value||'').trim();
     if(!name){ flash('Verifier name is required to sign.',false); return; }
@@ -1145,6 +1312,7 @@ var LabX = (function () {
     dispatchReport:dispatchReport, printRpt:printRpt, printInvoice:printInvoice,
     openWalkin:openWalkin, wiLookup:wiLookup, wiRenderTests:wiRenderTests, wiToggle:wiToggle, wiSubmit:wiSubmit,
     wiMobile:wiMobile, wiPick:wiPick,
+    openCritical:openCritical, ackCritical:ackCritical, ackAll:ackAll,
   };
 })();
 

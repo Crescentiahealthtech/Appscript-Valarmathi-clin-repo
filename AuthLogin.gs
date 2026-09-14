@@ -2,10 +2,28 @@
 // 🧠 CENTRAL AUTH + RBAC ENGINE
 // ==========================================
 
+/**
+ * Every outcome of this function is now recorded in Audit_Log, and five
+ * failures inside fifteen minutes hold the account. See Auth_Audit.gs for
+ * why, and for what deliberately is NOT recorded.
+ *
+ * One message covers "no such user" and "wrong password", on purpose. The
+ * two used to be distinguishable — "User ID not found." versus "Incorrect
+ * staff password." — which turns this function into an oracle for testing
+ * whether a patient ID is real, and patient IDs are printed on every bill
+ * and every barcode label. The audit row still records which it actually
+ * was, so support can tell the difference and an attacker cannot.
+ */
 function verifyLogin(credentials) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const usernameInput = credentials.username.toString().trim();
   const passwordInput = credentials.password.toString().trim();
+
+  // Before any comparison: an account being guessed at costs one cache read.
+  const held = crescAuthGuard_(usernameInput);
+  if (held) return held;
+
+  const GENERIC_FAIL = 'Incorrect ID or password.';
 
   // ==========================================
   // 1. HOSPITAL STAFF LOGIN
@@ -27,6 +45,8 @@ function verifyLogin(credentials) {
         
         // Check Active Status
         if (isActive && isActive.toString().toLowerCase() !== 'active') {
+          crescAuthAudit_(CRESC_AUTH_EVENTS.DISABLED, storedUsername, storedRole,
+                          { status: String(isActive) });
           return { success: false, message: "Account disabled." };
         }
 
@@ -40,6 +60,7 @@ function verifyLogin(credentials) {
             doctorId: doc ? doc.doctorId : "",
             name: doc ? doc.name : storedUsername
           });
+          crescAuthPassed_(storedUsername, role, 'password');
           return {
             success: true,
             role: role,
@@ -51,7 +72,11 @@ function verifyLogin(credentials) {
             message: "Welcome " + storedRole
           };
         } else {
-          return { success: false, message: "Incorrect staff password." };
+          const warn = crescAuthFailed_(storedUsername, storedRole, 'bad staff password');
+          // The counter's warning is worth showing; which half was wrong is not.
+          return { success: false,
+                   message: warn.indexOf('locked') !== -1 || warn.indexOf('left') !== -1
+                            ? warn : GENERIC_FAIL };
         }
       }
     }
@@ -114,6 +139,7 @@ function verifyLogin(credentials) {
           doctorId: "",
           name: rawName
         });
+        crescAuthPassed_(patientKey, 'patient', 'portal');
         return {
           success: true,
           role: 'patient',
@@ -123,7 +149,15 @@ function verifyLogin(credentials) {
           message: "Welcome Patient"
         };
       } else {
-        return { success: false, message: "Incorrect password. Format: Name(3 chars) + Birth Year." };
+        // The format hint is gone. It used to print the derivation rule
+        // outright — first three letters of the name plus the birth year —
+        // to anyone holding a patient ID, which is anyone holding a printed
+        // bill. Stating the recipe on a failed attempt made the one guess
+        // that is needed a guaranteed one.
+        const warn = crescAuthFailed_(patientID, 'patient', 'bad portal password');
+        return { success: false,
+                 message: warn.indexOf('locked') !== -1 || warn.indexOf('left') !== -1
+                          ? warn : GENERIC_FAIL };
       }
     }
   }
@@ -131,7 +165,12 @@ function verifyLogin(credentials) {
   // ==========================================
   // 3. USER NOT FOUND
   // ==========================================
-  return { success: false, message: "User ID not found." };
+  // Counted like any other failure, so walking a range of patient IDs runs
+  // into the same lock a password attack does, and answered with the same
+  // wording so the walk learns nothing from the replies.
+  crescAuthFailed_(usernameInput, '', 'no such user');
+  crescAuthAudit_(CRESC_AUTH_EVENTS.UNKNOWN_USER, usernameInput, '', {});
+  return { success: false, message: GENERIC_FAIL };
 }
 
 // ==========================================
@@ -161,6 +200,8 @@ function verifyGoogleLogin(userEmail) {
       if (storedEmail.toString().trim().toLowerCase() === userEmail.toString().trim().toLowerCase()) {
         
         if (isActive && isActive.toString().toLowerCase() !== 'active') {
+          crescAuthAudit_(CRESC_AUTH_EVENTS.DISABLED, storedUsername, storedRole,
+                          { method: 'google', email: String(userEmail), status: String(isActive) });
           return { success: false, message: "Access Denied: This staff credential context is deactivated." };
         }
 
@@ -172,6 +213,7 @@ function verifyGoogleLogin(userEmail) {
           doctorId: doc ? doc.doctorId : "",
           name: doc ? doc.name : storedUsername
         });
+        crescAuthPassed_(storedUsername, role, 'google');
         return {
           success: true,
           role: role,
@@ -185,6 +227,11 @@ function verifyGoogleLogin(userEmail) {
       }
     }
 
+    // A Google address that is not on the Users sheet is a real sign-in
+    // attempt by a real person and belongs in the record; unlike a password
+    // guess, naming the address back is safe — whoever is reading it owns it.
+    crescAuthAudit_(CRESC_AUTH_EVENTS.UNKNOWN_USER, String(userEmail), '',
+                    { method: 'google' });
     return { 
       success: false, 
       message: "Access Denied: The email " + userEmail + " is not registered in CresRx. Contact Admin." 
@@ -302,8 +349,19 @@ function verifyMFA(username, userCode) {
         return { success: false, code: 'BAD_SECRET', message: norm.message };
       }
 
-      return processTOTP(norm.secret, userCode);
+      // The second factor is the half of the sign-in an attacker has to get
+      // past once they already hold the password, so a failure here is the
+      // most interesting row in the whole audit — it means the first factor
+      // has already gone.
+      var totp = processTOTP(norm.secret, userCode);
+      crescAuthAudit_(totp && totp.success ? CRESC_AUTH_EVENTS.MFA_PASSED
+                                           : CRESC_AUTH_EVENTS.MFA_FAILED,
+                      String(stored).trim(), String(userData[i][2] || ''),
+                      { code: (totp && totp.code) || '' });
+      if (!(totp && totp.success)) crescAuthFailed_(String(stored).trim(), '', 'bad MFA code');
+      return totp;
     }
+    crescAuthAudit_(CRESC_AUTH_EVENTS.UNKNOWN_USER, want, '', { stage: 'mfa' });
     return { success: false, code: 'NO_USER', message: 'User not found for MFA verification.' };
   } catch (e) {
     return { success: false, code: 'ERROR', message: 'MFA verification failed: ' + e.message };

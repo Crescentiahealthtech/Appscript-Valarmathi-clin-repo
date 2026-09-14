@@ -106,6 +106,12 @@
        ================================================================= -->
   <?!= include('Auth'); ?>
 
+  <!-- The shared UX kit: the toast, the blocking loader and the guarded
+       server call. It sits OUTSIDE #app-screen because sign-in needs the
+       same three things the rest of the application does, and it is
+       parsed here so every lazy bundle finds them already defined. -->
+  <?!= include('Shell_UX'); ?>
+
   <div id="app-screen" class="d-none">
     <?!= include('Sidebar'); ?>
     <div class="main-content">

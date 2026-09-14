@@ -1,13 +1,25 @@
 <div id="tab-admin-pharmacy" class="page-section d-none">
   <div class="container-fluid py-3 animate-fade-in">
+    <!-- Live Inventory is entered from the Pharmacy hub and had no way back:
+         the only exit was the rail, which lands on the Dashboard rather than
+         where you came from, and on a phone has to be slid open first. -->
+    <button class="btn btn-link text-muted text-decoration-none p-0 mb-2" onclick="switchTab('workspace-pharmacy')">
+      <i class="fas fa-arrow-left me-2"></i> Back to Pharmacy
+    </button>
+
     <div class="d-flex justify-content-between align-items-center mb-4">
       <h3 class="fw-bold m-0 text-white"><i class="fa-solid fa-boxes-stacked text-success me-2"></i>Live Inventory</h3>
-      <button class="btn btn-outline-light btn-sm" onclick="loadPharmacyInventory()">
-        <i class="fa-solid fa-rotate-right"></i> Refresh
-      </button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-warning btn-sm" onclick="openDisposalLog()" title="What has been written off, and what it cost">
+          <i class="fa-solid fa-trash-can-arrow-up"></i> Write-offs
+        </button>
+        <button class="btn btn-outline-light btn-sm" onclick="loadPharmacyInventory()">
+          <i class="fa-solid fa-rotate-right"></i> Refresh
+        </button>
+      </div>
       <button class="btn btn-info rounded-circle shadow-lg position-fixed bottom-0 end-0 m-4 d-flex align-items-center justify-content-center transition-all" 
             style="width: 65px; height: 65px; z-index: 1040; border: 3px solid var(--border-color);"
-            onclick="switchTab('pharmacy-inventory-view');">
+            onclick="switchTab('pharmacy-inventory-view');" title="Receive stock">
       <i class="fa-solid fa-plus fs-3 text-dark"></i>
     </button>
     </div>
@@ -133,6 +145,91 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════
+     WRITE OFF STOCK
+
+     Deliberately not part of the edit dialog. Adjusting a count is a
+     correction — the shelf said 48, the sheet said 50. Writing stock off is
+     a destruction: the units are gone, somebody has to say why, and the
+     value is a loss the clinic has to be able to total at the end of a
+     quarter. Putting the two behind one control is how the reason stopped
+     being recorded in the first place.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="inventoryDiscardModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark" style="border:1px solid var(--danger);">
+      <div class="modal-header border-bottom border-secondary">
+        <h5 class="modal-title text-light"><i class="fa-solid fa-trash-can text-danger me-2"></i>Write off stock</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="discardRowId">
+        <input type="hidden" id="discardBrand">
+        <input type="hidden" id="discardBatch">
+
+        <div class="p-3 rounded mb-3" style="background: var(--surface-2);">
+          <h6 class="text-info fw-bold mb-1" id="discardDisplayBrand">Brand</h6>
+          <small class="text-secondary d-block" id="discardDisplayBatch">Batch: —</small>
+          <small class="text-secondary d-block" id="discardDisplayStock">In stock: —</small>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-5">
+            <label class="custom-label-dark">Units to write off <span class="text-danger">*</span></label>
+            <input type="number" min="1" step="1" class="form-control custom-input-dark text-danger fw-bold"
+                   id="discardQty" oninput="updateDiscardValue()">
+            <div class="form-text text-secondary" id="discardValueHint">&nbsp;</div>
+          </div>
+          <div class="col-md-7">
+            <label class="custom-label-dark">Reason <span class="text-danger">*</span></label>
+            <select class="form-select custom-input-dark" id="discardReason" onchange="updateDiscardNoteHint()">
+              <option value="">— choose —</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="custom-label-dark">Note <span id="discardNoteStar" class="text-danger d-none">*</span></label>
+            <input type="text" class="form-control custom-input-dark" id="discardNote"
+                   placeholder="e.g. cold chain broken during the power cut on 3 Sep">
+          </div>
+          <div class="col-12">
+            <label class="custom-label-dark">Witnessed by</label>
+            <input type="text" class="form-control custom-input-dark" id="discardWitness"
+                   placeholder="Optional — the second person present at destruction">
+            <div class="form-text text-secondary">
+              Schedule H / H1 stock should be destroyed in front of a second person.
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-danger mt-3 mb-0 py-2 small" role="alert">
+          This cannot be undone from the application. The units are removed from
+          stock and a permanent row is written to the disposal register.
+        </div>
+      </div>
+      <div class="modal-footer border-top border-secondary">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger fw-bold" id="btnConfirmDiscard" onclick="submitDiscard()">
+          <i class="fa-solid fa-trash-can me-1"></i>Write off
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- The register, so the reason codes are worth having: what left the shelf
+     without being sold, and what it cost. -->
+<div class="modal fade" id="disposalLogModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content bg-dark border-secondary">
+      <div class="modal-header border-bottom border-secondary">
+        <h5 class="modal-title text-light"><i class="fa-solid fa-trash-can-arrow-up text-warning me-2"></i>Write-off register</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="disposalLogBody"></div>
+    </div>
+  </div>
+</div>
+
 <script>
   let currentInventoryData = [];
 
@@ -220,9 +317,20 @@
           <td class="text-secondary truncate-text" style="max-width: 100px;">${item.supplier}</td>
           <td class="text-secondary truncate-text" style="max-width: 100px;">${item.manufacturer}</td>
           <td class="pe-3 text-center">
-            <button class="btn btn-sm btn-primary py-1 px-2" onclick="openInventoryEditModal(${safeItem})">
-              <i class="fa-solid fa-pen"></i>
-            </button>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-primary py-1 px-2" title="Adjust this batch" onclick="openInventoryEditModal(${safeItem})">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <!-- Expired stock used to be taken off the shelf by opening the
+                   edit dialog and typing 0 over the count. That destroys the
+                   quantity, the reason, the value and the actor in one save.
+                   This writes it off instead, into a register that can be
+                   totalled — see SECTION A2 in Pharmacy.gs. -->
+              <button class="btn btn-outline-danger py-1 px-2" title="Write off expired, damaged or missing stock"
+                      onclick="openDiscardModal(${safeItem})" ${item.stock > 0 ? '' : 'disabled'}>
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -295,6 +403,192 @@
     modal.show();
   }
 
+  /* ══════════════════ WRITE-OFF ══════════════════ */
+
+  let DISCARD_ITEM = null;
+  let DISCARD_REASONS = null;
+
+  const phEsc = (v) => window.crescEsc ? window.crescEsc(v)
+    : String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const phTok = () => window.sessionToken || '';
+
+  /** Reasons come from the server so the dialog cannot offer one it will refuse. */
+  function loadDiscardReasons(then) {
+    if (DISCARD_REASONS) { then(); return; }
+    google.script.run
+      .withSuccessHandler(function (list) {
+        DISCARD_REASONS = list || [];
+        const sel = document.getElementById('discardReason');
+        sel.innerHTML = '<option value="">— choose —</option>' +
+          DISCARD_REASONS.map(r => `<option value="${phEsc(r.code)}">${phEsc(r.label)}</option>`).join('');
+        then();
+      })
+      .withFailureHandler(function () { DISCARD_REASONS = []; then(); })
+      .getDisposalReasons();
+  }
+
+  function openDiscardModal(item) {
+    DISCARD_ITEM = item;
+    loadDiscardReasons(function () {
+      document.getElementById('discardRowId').value = item.rowId;
+      document.getElementById('discardBrand').value = item.brandName;
+      document.getElementById('discardBatch').value = item.batch;
+
+      document.getElementById('discardDisplayBrand').innerText = item.brandName;
+      document.getElementById('discardDisplayBatch').innerText = 'Batch: ' + (item.batch || '—') + '  ·  Expiry: ' + (item.expiry || '—');
+      document.getElementById('discardDisplayStock').innerText = 'In stock: ' + item.stock + ' ' + (item.unit || 'unit(s)');
+
+      const qty = document.getElementById('discardQty');
+      qty.max = item.stock;
+      // An expired batch is nearly always written off whole, so that is the
+      // default; anything else is a correction of a count, not a write-off.
+      qty.value = item.stock;
+
+      document.getElementById('discardNote').value = '';
+      document.getElementById('discardWitness').value = '';
+
+      // Preselect EXPIRED when the batch actually is expired — it is the
+      // reason nine times in ten and it is checkable, so asking is noise.
+      const sel = document.getElementById('discardReason');
+      sel.value = isExpired(item.expiry) ? 'EXPIRED' : '';
+
+      updateDiscardValue();
+      updateDiscardNoteHint();
+      new bootstrap.Modal(document.getElementById('inventoryDiscardModal')).show();
+    });
+  }
+
+  function isExpired(expiry) {
+    if (!expiry) return false;
+    const parts = String(expiry).split('-');
+    if (parts.length !== 2) return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    // Day 0 of the NEXT month is the last day of this one: stock is good to
+    // the end of its expiry month, which is what the KPI cards already assume.
+    return new Date(parts[0], parts[1], 0) < today;
+  }
+
+  /** Shows what the write-off costs, before it is made, not after. */
+  function updateDiscardValue() {
+    const hint = document.getElementById('discardValueHint');
+    if (!DISCARD_ITEM || !hint) return;
+    const q = parseInt(document.getElementById('discardQty').value, 10) || 0;
+    if (q <= 0) { hint.innerHTML = '&nbsp;'; return; }
+    if (q > DISCARD_ITEM.stock) {
+      hint.innerHTML = `<span class="text-danger">Only ${DISCARD_ITEM.stock} in stock.</span>`;
+      return;
+    }
+    const loss = q * (Number(DISCARD_ITEM.buyPrice) || 0);
+    const left = DISCARD_ITEM.stock - q;
+    hint.innerHTML = `Loss ${phEsc(inr(loss))} at cost · ${left} left`;
+  }
+
+  function updateDiscardNoteHint() {
+    const reason = document.getElementById('discardReason').value;
+    const star = document.getElementById('discardNoteStar');
+    // The server requires a note for these two; the asterisk says so before
+    // the user finds out by being refused.
+    if (star) star.classList.toggle('d-none', reason !== 'OTHER' && reason !== 'THEFT_LOSS');
+  }
+
+  function submitDiscard() {
+    const btn = document.getElementById('btnConfirmDiscard');
+    const qty = parseInt(document.getElementById('discardQty').value, 10) || 0;
+    const reason = document.getElementById('discardReason').value;
+
+    if (qty <= 0) { showToast('Nothing to write off', 'Enter how many units.', 'warning'); return; }
+    if (qty > DISCARD_ITEM.stock) {
+      showToast('More than is in stock', `Only ${DISCARD_ITEM.stock} unit(s) are on hand.`, 'warning');
+      return;
+    }
+    if (!reason) { showToast('Reason required', 'Say why this stock is being written off.', 'warning'); return; }
+
+    const payload = {
+      token:     phTok(),
+      rowId:     document.getElementById('discardRowId').value,
+      brandName: document.getElementById('discardBrand').value,
+      batch:     document.getElementById('discardBatch').value,
+      qty:       qty,
+      reason:    reason,
+      note:      document.getElementById('discardNote').value,
+      witness:   document.getElementById('discardWitness').value
+    };
+
+    // crescRun blocks the page and refuses a second call while this one is
+    // out, so an impatient second click cannot write the batch off twice.
+    crescRun({
+      fn: 'discardPharmacyStock',
+      args: [payload],
+      key: 'discardPharmacyStock',
+      busy: 'Writing off stock…',
+      button: btn,
+      success: 'Written off',
+      error: 'Could not write off',
+      onSuccess: function (res) {
+        if (!res || !res.success) return;
+        const m = bootstrap.Modal.getInstance(document.getElementById('inventoryDiscardModal'));
+        if (m) m.hide();
+        loadPharmacyInventory();
+      }
+    });
+  }
+
+  /* ══════════════════ THE REGISTER ══════════════════ */
+
+  function openDisposalLog() {
+    const body = document.getElementById('disposalLogBody');
+    body.innerHTML = '<div class="text-center text-secondary py-5"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
+    new bootstrap.Modal(document.getElementById('disposalLogModal')).show();
+
+    crescRun({
+      fn: 'getDisposalLog',
+      args: [{ token: phTok(), days: 90 }],
+      key: 'getDisposalLog',
+      busy: false,          // the modal already shows it is loading
+      error: 'Could not load the register',
+      onSuccess: function (res) {
+        if (!res || !res.success) {
+          body.innerHTML = `<div class="text-danger text-center py-5">${phEsc((res && res.message) || 'Failed.')}</div>`;
+          return;
+        }
+        const rows = res.rows || [];
+        if (!rows.length) {
+          body.innerHTML = '<div class="text-center text-secondary py-5">Nothing has been written off in the last 90 days.</div>';
+          return;
+        }
+        const totals = Object.keys(res.totals || {})
+          .sort((a, b) => res.totals[b] - res.totals[a])
+          .map(k => `<span class="badge bg-secondary bg-opacity-25 text-light fw-normal me-1">${phEsc(k)} ${phEsc(inr(res.totals[k]))}</span>`)
+          .join('');
+
+        body.innerHTML =
+          `<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+             <div>${totals}</div>
+             <div class="text-danger fw-bold">Total written off (90 days): ${phEsc(inr(res.totalValue))} at cost</div>
+           </div>
+           <div class="table-responsive" style="max-height:60vh;">
+             <table class="table table-dark table-sm align-middle mb-0">
+               <thead style="position:sticky;top:0;z-index:5;"><tr style="font-size:.72rem;text-transform:uppercase;">
+                 <th>When</th><th>Drug</th><th>Batch</th><th class="text-end">Qty</th>
+                 <th>Reason</th><th class="text-end">Cost</th><th>By</th><th>Note</th>
+               </tr></thead>
+               <tbody style="font-size:.82rem;">` +
+          rows.map(r => `<tr>
+                 <td class="text-secondary" style="white-space:nowrap;">${phEsc(r.at)}</td>
+                 <td class="text-info fw-semibold">${phEsc(r.brand)}<div class="text-secondary" style="font-size:.72rem;">${phEsc(r.generic)}</div></td>
+                 <td class="text-secondary">${phEsc(r.batch)}</td>
+                 <td class="text-end fw-bold">${r.qty}</td>
+                 <td><span class="badge bg-danger bg-opacity-25 text-danger fw-normal">${phEsc(r.reasonLabel)}</span></td>
+                 <td class="text-end">${phEsc(inr(r.buyValue))}</td>
+                 <td class="text-secondary">${phEsc(r.by)}</td>
+                 <td class="text-secondary truncate-text" style="max-width:180px;" title="${phEsc(r.note)}">${phEsc(r.note)}</td>
+               </tr>`).join('') +
+          `</tbody></table></div>`;
+      }
+    });
+  }
+
   function submitInventoryEdit() {
     const btn = document.getElementById('btnSaveInventoryEdit');
     const originalText = btn.innerText;
@@ -302,6 +596,10 @@
     btn.disabled = true;
 
     const payload = {
+      // updatePharmacyStock now checks pharmacy.stock_edit on the server, and
+      // stamps the master ledger with the signed-in user instead of the
+      // hardcoded string "Admin" it used to write for everybody.
+      token: phTok(),
       rowId: document.getElementById('editRowId').value,
       brandName: document.getElementById('editBrandName').value,
       genericName: document.getElementById('editGenericName').value,

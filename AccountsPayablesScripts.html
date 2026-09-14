@@ -15,7 +15,22 @@ const AccPay = (function () {
   const val = (id) => { const e = $(id); return e ? e.value : ''; };
   let FILTER = 'ALL';
 
-  function toast(m, ok) { const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid'; t.style.zIndex = 4000; t.style.background = ok ? 'var(--success)' : 'var(--danger)'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); }
+  /**
+   * Delegates to the one toast in Shell_UX.html (top-centre).
+   *
+   * This module used to build its own bottom-right div. Nine modules did,
+   * each a copy of the same eight lines, all of them in the corner the
+   * eye never reaches — behind the floating action button on the pharmacy
+   * screens, and off the fold on a phone in landscape. Keeping the local
+   * name means the call sites below did not have to change.
+   */
+  function toast(m, ok) {
+    if (typeof window.showToast === 'function') {
+      window.showToast(ok ? 'Done' : 'Could not complete', m, ok ? 'success' : 'error');
+      return;
+    }
+    if (typeof crescAlert === 'function') crescAlert(m);
+  }
 
   function load() {
     const root = $('acc-pay-root'); if (!root) return;

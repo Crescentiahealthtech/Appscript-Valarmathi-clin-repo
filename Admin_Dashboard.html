@@ -13,8 +13,59 @@
       <button class="btn btn-sm btn-outline-warning shadow-sm" onclick="openWorkingHours()">
         <i class="fa-solid fa-clock me-1"></i> Working Hours
       </button>
+      <!-- Visible only to a role holding admin.audit; crescPaintRBAC does not
+           know this id, so it is hidden here on the same permission. -->
+      <button id="dash-login-audit-btn" class="btn btn-sm btn-outline-info shadow-sm d-none" onclick="openLoginAudit()">
+        <i class="fa-solid fa-user-shield me-1"></i> Sign-in Audit
+      </button>
     </div>
   </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     SIGN-IN AUDIT
+
+     Who signed in, who failed, and what locked. The application recorded
+     none of this until Auth_Audit.gs: not a success, not a failure, not a
+     sign-out — so "did anyone else sign in as this doctor last Tuesday"
+     had no answer anywhere in the system.
+
+     It reads the tail of Audit_Log, not the whole sheet. Audit_Log is
+     append-only and is the fastest-growing sheet in the project.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="loginAuditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force">
+          <i class="fa-solid fa-user-shield me-2" style="color:var(--info-fg);"></i>Sign-in audit
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex gap-2 flex-wrap align-items-end mb-3">
+          <div>
+            <label class="form-label small label-bright mb-1">Period</label>
+            <select id="la-days" class="form-select form-select-sm" style="width:150px;" onchange="openLoginAudit()">
+              <option value="1">Last 24 hours</option>
+              <option value="7" selected>Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </div>
+          <div class="flex-grow-1" style="max-width:260px;">
+            <label class="form-label small label-bright mb-1">User (optional)</label>
+            <input id="la-user" class="form-control form-control-sm" placeholder="Username or patient ID"
+                   onkeydown="if(event.key==='Enter') openLoginAudit();">
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="openLoginAudit()">
+            <i class="fa-solid fa-magnifying-glass me-1"></i>Search
+          </button>
+        </div>
+        <div id="la-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
   <!-- ============ LOADING OVERLAY ============ -->
   <div id="dash-loading" class="card p-5 text-center">
@@ -896,6 +947,105 @@
       }
     });
     obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  })();
+
+  /* ══════════════════ SIGN-IN AUDIT ══════════════════ */
+
+  const laEsc = (v) => window.crescEsc ? window.crescEsc(v)
+    : String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  /** How each event should read, and how loudly. */
+  const LA_EVENT = {
+    LOGIN_SUCCESS:      ['Signed in',          'success'],
+    LOGIN_FAILED:       ['Failed attempt',     'warning'],
+    LOGIN_LOCKED:       ['LOCKED OUT',         'danger'],
+    LOGIN_BLOCKED:      ['Blocked while locked','danger'],
+    LOGIN_DISABLED:     ['Disabled account',   'danger'],
+    LOGIN_UNKNOWN_USER: ['Unknown user',       'warning'],
+    LOGIN_MFA_FAILED:   ['MFA failed',         'danger'],
+    LOGIN_MFA_PASSED:   ['MFA passed',         'success'],
+    LOGIN_UNLOCKED:     ['Unlocked by admin',  'info'],
+    LOGOUT:             ['Signed out',         'secondary']
+  };
+
+  function openLoginAudit() {
+    const box = document.getElementById('la-body');
+    const modalEl = document.getElementById('loginAuditModal');
+    if (!bootstrap.Modal.getInstance(modalEl)) new bootstrap.Modal(modalEl).show();
+    box.innerHTML = '<div class="text-center label-bright py-5"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Reading the audit log…</div>';
+
+    crescRun({
+      fn: 'crescGetLoginAudit',
+      args: [window.sessionToken || '', {
+        days: parseInt(document.getElementById('la-days').value, 10) || 7,
+        username: (document.getElementById('la-user').value || '').trim(),
+        limit: 300
+      }],
+      key: 'crescGetLoginAudit',
+      busy: false,
+      error: 'Could not read the audit',
+      onSuccess: function (res) {
+        if (!res || !res.success) {
+          box.innerHTML = `<div class="text-danger text-center py-5">${laEsc((res && res.message) || 'Failed.')}</div>`;
+          return;
+        }
+        const rows = res.rows || [];
+        if (!rows.length) {
+          box.innerHTML = `<div class="text-center label-bright py-5">
+            No sign-in events in this period.<br>
+            <span class="small">Events are recorded from the moment Auth_Audit.gs was deployed — anything before that was never written down.</span>
+          </div>`;
+          return;
+        }
+        // Failures first in the summary: the successes are the expected case
+        // and the failures are why anyone opens this screen.
+        const fails = rows.filter(r => r.event !== 'LOGIN_SUCCESS' && r.event !== 'LOGOUT' && r.event !== 'LOGIN_MFA_PASSED').length;
+        box.innerHTML =
+          `<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+             <span class="label-bright small">${rows.length} event(s) over ${res.windowDays} day(s)</span>
+             ${fails ? `<span class="badge bg-danger bg-opacity-25 text-danger">${fails} failed or blocked</span>`
+                     : '<span class="badge bg-success bg-opacity-25 text-success">No failures</span>'}
+           </div>
+           <div class="table-responsive" style="max-height:60vh;">
+             <table class="table table-sm align-middle mb-0">
+               <thead style="position:sticky;top:0;z-index:5;background:var(--bg-card);">
+                 <tr style="font-size:.72rem;text-transform:uppercase;">
+                   <th>When</th><th>User</th><th>Role</th><th>What happened</th><th>How</th><th>Detail</th>
+                 </tr>
+               </thead>
+               <tbody style="font-size:.82rem;">` +
+          rows.map(r => {
+            const def = LA_EVENT[r.event] || [r.event, 'secondary'];
+            return `<tr>
+                <td class="label-bright" style="white-space:nowrap;">${laEsc(r.at)}</td>
+                <td class="fw-semibold text-white-force">${laEsc(r.username)}</td>
+                <td class="label-bright">${laEsc(r.role)}</td>
+                <td><span class="badge bg-${def[1]} bg-opacity-25 text-${def[1]}">${laEsc(def[0])}</span></td>
+                <td class="label-bright">${laEsc(r.method || (r.googleAccount && r.googleAccount !== '(anonymous)' ? 'google' : ''))}</td>
+                <td class="label-bright">${laEsc(r.reason)}${r.failures ? ` <span class="text-danger">(attempt ${r.failures})</span>` : ''}</td>
+              </tr>`;
+          }).join('') +
+          `</tbody></table></div>
+           <div class="label-bright small mt-2">
+             The caller's IP address is not shown: Apps Script does not expose it to a web app,
+             so "signed in from where" cannot be answered from inside this deployment.
+           </div>`;
+      }
+    });
+  }
+
+  // The button appears only for a role that holds admin.audit. applyRBAC
+  // fetches the permissions asynchronously, so this waits for them rather
+  // than reading window.crescPerms before the server has answered.
+  (function () {
+    let tries = 0;
+    const t = setInterval(function () {
+      if (window.crescPerms || ++tries > 40) {
+        clearInterval(t);
+        const b = document.getElementById('dash-login-audit-btn');
+        if (b && window.crescCan && window.crescCan('admin.audit')) b.classList.remove('d-none');
+      }
+    }, 250);
   })();
 
   // ---- Self-initializer Fix (Triggers silently on tab switch) ----

@@ -93,9 +93,12 @@ window.CrescModules = (function () {
     'workspace-accounts': 'accounts', 'workspace-accounts-dashboard': 'accounts',
     'workspace-accounts-ledger': 'accounts', 'workspace-accounts-drawer': 'accounts',
     'workspace-accounts-payables': 'accounts', 'workspace-accounts-tpa': 'accounts',
-    'workspace-accounts-discharges': 'accounts', 'workspace-accounts-tax': 'accounts',
-    'workspace-accounts-iptab': 'accounts', 'workspace-accounts-discharge': 'accounts',
-    'workspace-accounts-insurance': 'accounts'
+    'workspace-accounts-tax': 'accounts', 'workspace-accounts-insurance': 'accounts',
+    // 'workspace-accounts-iptab' is the mid-stay view, '…-discharge' the final
+    // bill. '…-dischargeS', plural, used to be listed here too; it is the
+    // Receivables screen, whose markup no longer exists — see the PAGES note
+    // in Accounts_Scripts.html.
+    'workspace-accounts-iptab': 'accounts', 'workspace-accounts-discharge': 'accounts'
   };
 
   /** EMR sub-workspace id -> bundle, for openEMRWorkspace(). */

@@ -14,10 +14,21 @@ const IPTab = (function () {
   const CATS = ['ROOM', 'NURSING', 'RMO', 'SURGEON', 'OT', 'CONSUMABLE', 'OTHER'];
   let IP = null, TAB = null;
 
+  /**
+   * Delegates to the one toast in Shell_UX.html (top-centre).
+   *
+   * This module used to build its own bottom-right div. Nine modules did,
+   * each a copy of the same eight lines, all of them in the corner the
+   * eye never reaches — behind the floating action button on the pharmacy
+   * screens, and off the fold on a phone in landscape. Keeping the local
+   * name means the call sites below did not have to change.
+   */
   function toast(msg, ok) {
-    const t = document.createElement('div'); t.className = 'position-fixed bottom-0 end-0 m-4 px-4 py-3 rounded-3 shadow text-white toast-solid';
-    t.style.zIndex = 3000; t.style.background = ok ? 'var(--success)' : 'var(--danger)'; t.textContent = msg;
-    document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+    if (typeof window.showToast === 'function') {
+      window.showToast(ok ? 'Done' : 'Could not complete', msg, ok ? 'success' : 'error');
+      return;
+    }
+    if (typeof crescAlert === 'function') crescAlert(msg);
   }
   const num = (id) => { const e = $(id); return Number(e && e.value !== '' ? e.value : 0) || 0; };
   const val = (id) => { const e = $(id); return e ? e.value : ''; };

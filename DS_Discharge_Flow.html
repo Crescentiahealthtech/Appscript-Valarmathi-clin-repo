@@ -247,12 +247,24 @@
       return;
     }
     if (which === 'bill') {
-      if (typeof window.openDischargeDesk !== 'function') {
-        crescAlert('The settlement desk is not available to your account.');
-        return;
-      }
+      // The settlement desk lives in the ACCOUNTS bundle, and the ward is in
+      // emr-discharge. A nurse never prewarms accounts, so this test used to
+      // report "not available to your account" for a module that was simply
+      // not downloaded yet — a permissions message for a loading problem.
+      // Fetch it, then decide; RBAC.gs is what actually refuses the desk.
       closeDischargeFlow();
-      window.openDischargeDesk(DF.ip);
+      var openIt = function () {
+        if (typeof window.openDischargeDesk === 'function') {
+          window.openDischargeDesk(DF.ip);
+        } else {
+          crescAlert('The settlement desk could not be loaded. Reload the page and try again.');
+        }
+      };
+      if (window.CrescModules && !window.CrescModules.isReady('accounts')) {
+        window.CrescModules.load('accounts', openIt);
+      } else {
+        openIt();
+      }
       return;
     }
     if (which === 'release') releaseAdmission('');
