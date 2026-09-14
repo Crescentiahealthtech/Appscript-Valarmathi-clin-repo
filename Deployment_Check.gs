@@ -83,6 +83,9 @@ var DEP_MAP = {
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
+  "Patient_Profile_Edit.gs": [
+    "updatePatientProfile", "getPatientProfileHistory", "ppe_validate_"
+  ],
   "Lab_Cancellation.gs": [
     "labEnsureCancellationColumns", "labCancelPendingOrder", "labCancelBill",
     "labListCancelled", "labx_billFor_", "labx_orderStatus_"
