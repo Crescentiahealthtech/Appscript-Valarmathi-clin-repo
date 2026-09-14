@@ -1,0 +1,310 @@
+<!-- =====================================================================
+     🩺 VISITING CONSULTANT — who is on the shared slot today
+
+     The Doctors sheet carries one row marked Is_Visiting. It has no name and
+     no registration number of its own, because the person on it changes.
+     Whoever signs in on that login types theirs HERE, once, immediately
+     after signing in, and every note, prescription and case sheet they write
+     for the rest of the session is signed with it.
+
+     Until they do, resolveWriteDoctor_() in Doctor_Core.gs refuses every
+     write. That is deliberate — a clinical note signed "Visiting Consultant"
+     does not say who saw the patient, and a record that cannot answer that
+     is not a record.
+
+     It lives in the SHELL because the check runs at sign-in, before any
+     clinical bundle has been fetched.
+     ===================================================================== -->
+<style>
+  #cresc-visiting { position: fixed; inset: 0; z-index: 3600; display: flex;
+                    align-items: center; justify-content: center;
+                    background: var(--overlay-scrim, rgba(2,6,23,.62));
+                    backdrop-filter: blur(3px); }
+  #cresc-visiting[hidden] { display: none !important; }
+  #cresc-visiting .vc-card { background: var(--bg-card); color: var(--text-main);
+                    border: 1px solid var(--border-color); border-radius: 14px;
+                    width: 94%; max-width: 520px; max-height: 92vh;
+                    display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+  #cresc-visiting .vc-head { padding: .9rem 1.1rem; border-bottom: 1px solid var(--divider-color); }
+  #cresc-visiting .vc-body { padding: .9rem 1.1rem; overflow: auto; }
+  #cresc-visiting .vc-foot { padding: .75rem 1.1rem; border-top: 1px solid var(--divider-color);
+                    display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+  #cresc-visiting label { font-size: .74rem; font-weight: 600; color: var(--text-label);
+                    display: block; margin-bottom: .2rem; }
+  #cresc-visiting input {
+                    background: var(--bg-input); color: var(--text-main);
+                    border: 1px solid var(--border-color); border-radius: 7px;
+                    padding: .4rem .55rem; font-size: .9rem; width: 100%; }
+  #cresc-visiting .vc-err { background: var(--danger-bg); color: var(--danger-fg);
+                    border: 1px solid var(--danger); border-radius: 8px;
+                    padding: .5rem .7rem; font-size: .82rem; font-weight: 600;
+                    margin-top: .7rem; }
+  #cresc-visiting .vc-preview { background: var(--surface-3); border: 1px solid var(--border-color);
+                    border-radius: 8px; padding: .55rem .7rem; margin-top: .8rem;
+                    font-family: monospace; font-size: .84rem; word-break: break-word; }
+
+  /* The standing reminder of who the session is signing as. It is not
+     decoration: the whole risk of a shared slot is forgetting you are on
+     somebody else's login. */
+  #cresc-visiting-chip { display: none; align-items: center; gap: .45rem;
+                    background: var(--info-bg); color: var(--info-fg);
+                    border: 1px solid var(--info); border-radius: 999px;
+                    padding: .2rem .7rem; font-size: .74rem; font-weight: 700;
+                    cursor: pointer; max-width: 100%; }
+  #cresc-visiting-chip.on { display: inline-flex; }
+  #cresc-visiting-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+
+<div id="cresc-visiting" hidden>
+  <div class="vc-card">
+    <div class="vc-head">
+      <div class="fw-bold">
+        <i class="fa-solid fa-user-doctor me-2" style="color: var(--info-fg);"></i>
+        <span id="vc-title">Who is consulting today?</span>
+      </div>
+      <div class="label-bright small mt-1" id="vc-subtitle">
+        This login is a shared visiting slot. Your name and registration number
+        are printed on everything you sign here.
+      </div>
+    </div>
+
+    <div class="vc-body">
+      <div class="row g-2">
+        <div class="col-12">
+          <label for="vc-name">Full name <span style="color:var(--danger-fg);">*</span></label>
+          <input type="text" id="vc-name" autocomplete="off" placeholder="e.g. Ananya Krishnan">
+        </div>
+        <div class="col-12 col-md-7">
+          <label for="vc-reg">Medical council registration number <span style="color:var(--danger-fg);">*</span></label>
+          <input type="text" id="vc-reg" autocomplete="off" placeholder="e.g. TN 74213">
+        </div>
+        <div class="col-12 col-md-5">
+          <label for="vc-qual">Qualification</label>
+          <input type="text" id="vc-qual" autocomplete="off" placeholder="e.g. MD (Gen. Med.)">
+        </div>
+        <div class="col-12">
+          <label for="vc-spec">Speciality</label>
+          <input type="text" id="vc-spec" autocomplete="off" placeholder="e.g. Cardiology">
+        </div>
+      </div>
+
+      <div class="vc-preview" id="vc-preview">Dr. &mdash;</div>
+      <div class="label-bright" style="font-size:.72rem;margin-top:.35rem;">
+        This is how you will be signed on prescriptions and case sheets.
+      </div>
+      <div class="vc-err d-none" id="vc-err"></div>
+    </div>
+
+    <div class="vc-foot">
+      <button type="button" class="btn btn-sm btn-outline-secondary d-none"
+              id="vc-cancel" onclick="crescVisitingClose()">Cancel</button>
+      <button type="button" class="btn btn-sm btn-info fw-bold text-white ms-auto"
+              id="vc-save" onclick="crescVisitingSave()">Start consulting</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var state = { required: false, declared: false, identity: null, slotName: '' };
+
+  function el(id) { return document.getElementById(id); }
+  function val(id) { var e = el(id); return e ? String(e.value || '').trim() : ''; }
+
+  /** Mirrors dv_signature_() on the server, so the preview is the real thing. */
+  function signature(name, qual, reg) {
+    var out = String(name || '').trim();
+    if (!out) return 'Dr. —';
+    if (!/^dr\.?\s/i.test(out)) out = 'Dr. ' + out;
+    if (qual) out += ', ' + qual;
+    if (reg) out += ' (Reg. No. ' + reg + ')';
+    return out;
+  }
+
+  function paintPreview() {
+    var p = el('vc-preview');
+    if (p) p.textContent = signature(val('vc-name'), val('vc-qual'), val('vc-reg').toUpperCase());
+  }
+
+  function error(msg) {
+    var e = el('vc-err');
+    if (!e) return;
+    if (!msg) { e.classList.add('d-none'); e.textContent = ''; return; }
+    e.classList.remove('d-none');
+    e.textContent = msg;
+  }
+
+  /** The chip in the rail. Rebuilt rather than toggled, so it cannot go stale. */
+  function paintChip() {
+    var chip = el('cresc-visiting-chip');
+    if (!chip) return;
+    if (!state.required || !state.identity) { chip.classList.remove('on'); return; }
+    chip.classList.add('on');
+    chip.title = 'Signing as ' + state.identity.signature +
+                 '. Click to correct this or end the visiting session.';
+    chip.innerHTML = '<i class="fa-solid fa-user-doctor"></i><span></span>';
+    chip.querySelector('span').textContent = state.identity.name;
+  }
+
+  function openDialog(isChange) {
+    var host = el('cresc-visiting');
+    if (!host) return;
+    error('');
+
+    var id = state.identity || {};
+    if (el('vc-name')) el('vc-name').value = isChange ? (id.name || '') : '';
+    if (el('vc-reg'))  el('vc-reg').value  = isChange ? (id.regNo || '') : '';
+    if (el('vc-qual')) el('vc-qual').value = isChange ? (id.qualification || '') : '';
+    if (el('vc-spec')) el('vc-spec').value = isChange ? (id.specialty || '') : '';
+
+    if (el('vc-title')) {
+      el('vc-title').textContent = isChange ? 'Visiting consultant' : 'Who is consulting today?';
+    }
+    if (el('vc-subtitle')) {
+      el('vc-subtitle').textContent = isChange
+        ? 'Correct these details, or end the session so the next consultant is asked for theirs.'
+        : 'This login (' + (state.slotName || 'Visiting Consultant') + ') is a shared ' +
+          'visiting slot. Your name and registration number are printed on ' +
+          'everything you sign here, and nothing can be recorded until you enter them.';
+    }
+    // The first declaration is not optional: there is nothing useful to do
+    // behind this dialog until it is answered. A correction is.
+    var cancel = el('vc-cancel');
+    if (cancel) cancel.classList.toggle('d-none', !isChange);
+
+    var endBtn = el('vc-end');
+    if (endBtn) endBtn.remove();
+    if (isChange) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.id = 'vc-end';
+      b.className = 'btn btn-sm btn-outline-danger';
+      b.textContent = 'End visiting session';
+      b.onclick = window.crescVisitingEnd;
+      var foot = host.querySelector('.vc-foot');
+      if (foot) foot.insertBefore(b, el('vc-save'));
+    }
+    if (el('vc-save')) {
+      el('vc-save').textContent = isChange ? 'Update' : 'Start consulting';
+      el('vc-save').disabled = false;
+    }
+
+    paintPreview();
+    host.hidden = false;
+    setTimeout(function () { if (el('vc-name')) el('vc-name').focus(); }, 60);
+  }
+
+  // ------------------------------------------------------------------
+  // Public surface
+  // ------------------------------------------------------------------
+
+  /**
+   * Called from Auth.html after sign-in. Asks the server whether this login
+   * is a visiting slot and whether it has already said who it is.
+   *
+   * Silent for every other login — the overwhelming majority — so it costs
+   * one background round trip and nothing else.
+   */
+  window.crescVisitingCheck = function () {
+    if (!window.sessionToken || typeof google === 'undefined' || !google.script) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) return;
+        state.required = !!res.required;
+        state.declared = !!res.declared;
+        state.identity = res.identity || null;
+        state.slotName = res.slotName || '';
+        // Exposed so a clinical screen can tell whether its save is about to
+        // be refused, rather than finding out from the error.
+        window.crescVisitingIdentity = state.identity;
+        paintChip();
+        if (state.required && !state.declared) openDialog(false);
+      })
+      .withFailureHandler(function () { /* the server refuses the write anyway */ })
+      .getVisitingConsultantState(window.sessionToken);
+  };
+
+  /** Opens the dialog to correct or end an existing declaration. */
+  window.crescVisitingOpen = function () {
+    if (!state.required) return;
+    openDialog(!!state.identity);
+  };
+
+  window.crescVisitingClose = function () {
+    var host = el('cresc-visiting');
+    // The first declaration cannot be dismissed; there is nothing to go back to.
+    if (host && state.identity) host.hidden = true;
+  };
+
+  window.crescVisitingSave = function () {
+    error('');
+    var btn = el('vc-save');
+    var payload = {
+      name: val('vc-name'),
+      regNo: val('vc-reg').toUpperCase(),
+      qualification: val('vc-qual'),
+      specialty: val('vc-spec')
+    };
+    if (!payload.name) { error('Enter the consultant’s full name.'); return; }
+    if (!payload.regNo) { error('Enter the medical council registration number.'); return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (btn) { btn.disabled = false; btn.textContent = state.identity ? 'Update' : 'Start consulting'; }
+        if (!res || !res.success) {
+          error((res && res.message) || 'The server did not reply. Try again.');
+          return;
+        }
+        state.identity = res.identity;
+        state.declared = true;
+        window.crescVisitingIdentity = res.identity;
+        paintChip();
+        var host = el('cresc-visiting');
+        if (host) host.hidden = true;
+        if (window.showToast) window.showToast('Visiting consultant', res.message, 'success');
+      })
+      .withFailureHandler(function (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Start consulting'; }
+        error('Could not save: ' + ((err && err.message) || 'the server did not reply.'));
+      })
+      .declareVisitingConsultant(payload, window.sessionToken);
+  };
+
+  window.crescVisitingEnd = function () {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          error((res && res.message) || 'Could not end the session.');
+          return;
+        }
+        state.identity = null;
+        state.declared = false;
+        window.crescVisitingIdentity = null;
+        paintChip();
+        if (window.showToast) window.showToast('Visiting consultant', res.message, 'info');
+        openDialog(false);
+      })
+      .withFailureHandler(function (err) {
+        error('Could not end the session: ' + ((err && err.message) || 'no reply.'));
+      })
+      .endVisitingConsultant(window.sessionToken);
+  };
+
+  ['vc-name', 'vc-reg', 'vc-qual'].forEach(function (id) {
+    var e = el(id);
+    if (e) e.addEventListener('input', paintPreview);
+  });
+
+  // Enter anywhere in the form saves, because this dialog is four boxes and
+  // a button and nobody wants to reach for the mouse for it.
+  var card = document.querySelector('#cresc-visiting .vc-card');
+  if (card) {
+    card.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); window.crescVisitingSave(); }
+    });
+  }
+})();
+</script>

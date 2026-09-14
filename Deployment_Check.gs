@@ -83,6 +83,11 @@ var DEP_MAP = {
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
   ],
+  "Doctor_Visiting.gs": [
+    "dv_sheet_", "dv_isVisitingSlot_", "dv_identityFor_", "dv_signature_",
+    "getVisitingConsultantState", "declareVisitingConsultant",
+    "endVisitingConsultant", "listVisitingConsultants", "setupVisitingConsultant"
+  ],
   "Dose_Reference.gs": [
     "dref_sheet_", "dref_all_", "getDoseReference", "listDoseReference",
     "setupDoseReference"

@@ -427,11 +427,25 @@ function getDoctorPickerContext(sessionToken) {
       selfDoctorId: scope.selfDoctorId,
       doctors: visible.map(function (d) {
         var full = dc_getDoctorById_(d.doctorId);
+        // The shared visiting slot reads as whoever has declared themselves
+        // on it for THIS session, and says so when nobody has — picking
+        // "Visiting Consultant" from a list and then being refused at save
+        // time is a worse way to learn that than seeing it in the list.
+        var isVisiting = (typeof dv_isVisitingSlot_ === "function")
+          && dv_isVisitingSlot_(d.doctorId);
+        var declared = isVisiting ? dv_identityFor_(sessionToken) : null;
         return {
           doctorId:  d.doctorId,
-          name:      d.name,
-          specialty: d.specialty,
-          colour:    full ? full.colour : ""
+          name:      (declared && declared.name) ? declared.name : d.name,
+          specialty: (declared && declared.specialty) ? declared.specialty : d.specialty,
+          colour:    full ? full.colour : "",
+          visiting:  isVisiting,
+          // The picker greys these out: nothing can be signed under the slot
+          // until somebody says who they are.
+          unavailable: !!(isVisiting && !declared),
+          unavailableReason: (isVisiting && !declared)
+            ? "Nobody has entered their name and registration number on this slot yet."
+            : ""
         };
       })
     };
@@ -554,6 +568,38 @@ function resolveWriteDoctor_(sessionToken, targetDoctorId) {
   var d = dc_getDoctorById_(chosen);
   if (!d) return { ok: false, message: "Doctor '" + chosen + "' not found." };
   if (d.status !== "ACTIVE") return { ok: false, message: d.name + " is not an active doctor." };
+
+  // ------------------------------------------------------------------------
+  // THE VISITING SLOT SIGNS AS THE PERSON, NOT AS THE SLOT.
+  //
+  // DOC00n "Visiting Consultant" is one row shared by whoever is covering
+  // this week. Its own name and registration number are deliberately blank,
+  // because signing a prescription "Visiting Consultant" says nothing about
+  // who saw the patient. The person on it declares themselves once after
+  // signing in (Doctor_Visiting.gs) and that is what gets snapshotted here.
+  //
+  // Undeclared, the slot writes NOTHING. Failing closed is the point: a note
+  // signed by nobody is worse than a note that was not saved, and the remedy
+  // is fifteen seconds of typing.
+  // ------------------------------------------------------------------------
+  if (typeof dv_isVisitingSlot_ === "function" && dv_isVisitingSlot_(d.doctorId)) {
+    var visiting = dv_identityFor_(sessionToken);
+    if (!visiting || !visiting.name) {
+      return { ok: false, code: "VISITING_IDENTITY_REQUIRED",
+               message: "Enter the visiting consultant's name and registration " +
+                        "number before recording anything. Nothing can be signed " +
+                        "as \"" + d.name + "\"." };
+    }
+    return {
+      ok: true, sess: sess,
+      doctorId: d.doctorId,
+      name: visiting.name,
+      signature: visiting.signature,   // includes the registration number
+      visiting: true,
+      regNo: visiting.regNo,
+      message: ""
+    };
+  }
 
   return {
     ok: true, sess: sess,

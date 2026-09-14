@@ -130,6 +130,9 @@
     <?!= include('Modals'); ?>
     <?!= include('Lab_Results_Peek'); ?>
     <?!= include('Dose_Calculator'); ?>
+    <!-- The shared visiting-consultant slot asks who is on it at sign-in,
+         before any clinical bundle has loaded, so it belongs in the shell. -->
+    <?!= include('Visiting_Consultant'); ?>
   </div>
 
   <?!= include('ScriptsMV'); ?>

@@ -915,6 +915,14 @@
 
     if (typeof applyRBAC === 'function') applyRBAC(window.loggedInRole);
 
+    // The shared visiting-consultant slot has no name and no registration
+    // number of its own. Whoever is on it says who they are here, once, and
+    // every clinical write for the rest of the session is signed with it.
+    // Silent for every other login. Deferred so it never delays the paint.
+    if (typeof window.crescVisitingCheck === 'function') {
+      setTimeout(window.crescVisitingCheck, 0);
+    }
+
     // Start fetching this role's module bundles in the background, most-used
     // first, while they look at their landing screen. By the time they click
     // into a module it is normally already in the page; if they get there
