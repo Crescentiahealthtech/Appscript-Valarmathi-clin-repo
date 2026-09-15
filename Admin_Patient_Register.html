@@ -68,16 +68,13 @@
         </select>
       </div>
 
-      <div class="col-md-4">
-        <label class="form-label small text-muted mb-1">Marital Status</label>
-        <select id="reg-marital" class="form-select reg-input">
-          <option value="" disabled selected>Select...</option>
-          <option value="Single">Single</option>
-          <option value="Married">Married</option>
-          <option value="Divorced">Divorced</option>
-          <option value="Widowed">Widowed</option>
-        </select>
-      </div>
+      <!-- Marital status, occupation and educational qualification used to be
+           collected here. Nothing in the application ever read them for a
+           clinical or billing purpose, and section 6(1) of the DPDP Act
+           permits collection only for a purpose that has been specified to
+           the patient. A field that exists because the form had a box has no
+           purpose to specify, so they are no longer asked for. See
+           docs/DPDP_READINESS.md finding M1. -->
       <div class="col-md-4">
         <label class="form-label small text-muted mb-1">Blood Group</label>
         <select id="reg-blood" class="form-select reg-input">
@@ -87,10 +84,6 @@
           <option value="O+">O+</option><option value="O-">O-</option>
           <option value="AB+">AB+</option><option value="AB-">AB-</option>
         </select>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label small text-muted mb-1">Occupation</label>
-        <input type="text" id="reg-occupation" class="form-control reg-input" placeholder="e.g., Software Engineer">
       </div>
     </div>
 
@@ -109,10 +102,6 @@
       <div class="col-md-6">
         <label class="form-label small text-muted mb-1">Email Address</label>
         <input type="email" id="reg-email" class="form-control reg-input" placeholder="patient@example.com">
-      </div>
-      <div class="col-md-6">
-        <label class="form-label small text-muted mb-1">Educational Qualification</label>
-        <input type="text" id="reg-education" class="form-control reg-input" placeholder="e.g., BSc, PhD">
       </div>
       <div class="col-12">
         <label class="form-label small text-muted mb-1">Residential Address</label>
@@ -162,6 +151,53 @@
       </div>
     </div>
 
+    <!-- Section: Notice and consent (DPDP Act ss.5, 6, 9) -->
+    <hr class="reg-rule mb-4">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <h6 class="text-uppercase text-muted fw-bold m-0" style="letter-spacing: 1px; font-size: 0.8rem;">
+        Notice and consent
+      </h6>
+      <span id="reg-notice-version" class="badge" style="background:var(--bg-input); color:var(--text-muted); font-weight:600;"></span>
+    </div>
+    <p class="small mb-3" style="color: var(--text-muted);">
+      Read this to the patient <strong>before</strong> you finish the form —
+      section 5 requires the notice at or before collection, not after. Care and
+      billing are not tick boxes: the clinic processes those as legitimate uses
+      under section 7 because the patient came here to be treated. Everything
+      else is the patient's choice, each one separately, and refusing any of
+      them changes nothing about their treatment.
+    </p>
+
+    <div id="reg-consent-purposes" class="row g-2 mb-3">
+      <div class="col-12 small" style="color: var(--text-muted);">Loading the notice…</div>
+    </div>
+
+    <div id="reg-guardian-block" class="row g-3 mb-3 d-none">
+      <div class="col-12">
+        <div class="small fw-bold" style="color: var(--warning, #f59e0b);">
+          <i class="fa-solid fa-triangle-exclamation me-1"></i>
+          This patient is under 18. Section 9 requires consent from a parent or
+          lawful guardian, and requires it to be <em>verifiable</em> — record who
+          gave it and how you satisfied yourself of it.
+        </div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small text-muted mb-1">Parent / guardian name</label>
+        <input type="text" id="reg-guardian-name" class="form-control reg-input" placeholder="Who is consenting">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small text-muted mb-1">Relationship to the patient</label>
+        <select id="reg-guardian-relation" class="form-select reg-input">
+          <option value="" disabled selected>Select...</option>
+          <option value="Mother">Mother</option>
+          <option value="Father">Father</option>
+          <option value="Legal guardian">Legal guardian</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="reg-grievance-line" class="small mb-3" style="color: var(--text-muted);"></div>
+
     <!-- Status Message Area -->
     <div id="reg-status-msg" class="mb-3 small fw-bold d-none"></div>
     <!-- Card printing lives outside the status banner: that banner self-hides
@@ -176,6 +212,110 @@
 </div>
 
 <script>
+  /* ══════════════════════════════════════════════════════════════════════
+     NOTICE AND CONSENT (DPDP Act ss.5, 6, 9)
+
+     The notice is fetched rather than typed into this page, so the words the
+     patient is given and the version stamped on their consent row are the
+     same object. getDPDPNotice() is unauthenticated by design: a notice you
+     have to sign in to read is not a notice given at or before collection.
+     ══════════════════════════════════════════════════════════════════════ */
+  var REG_NOTICE = null;
+
+  function loadConsentNotice() {
+    var host = document.getElementById('reg-consent-purposes');
+    if (!host) return;
+    google.script.run
+      .withSuccessHandler(function (n) {
+        REG_NOTICE = n || null;
+        renderConsentPurposes();
+      })
+      .withFailureHandler(function () {
+        host.innerHTML = '<div class="col-12 small text-danger">' +
+          'The consent notice could not be loaded. Do not register without it — ' +
+          'reload the page.</div>';
+      })
+      .getDPDPNotice();
+  }
+
+  function renderConsentPurposes() {
+    var host = document.getElementById('reg-consent-purposes');
+    if (!host || !REG_NOTICE) return;
+    host.innerHTML = '';
+
+    var v = document.getElementById('reg-notice-version');
+    if (v) v.textContent = 'notice ' + (REG_NOTICE.version || '');
+
+    (REG_NOTICE.purposes || []).forEach(function (p) {
+      var col = document.createElement('div');
+      col.className = 'col-md-6';
+
+      var box = document.createElement('div');
+      box.className = 'p-2 rounded';
+      box.style.cssText = 'background:var(--bg-input); border:1px solid var(--border-color);';
+
+      if (p.legitimate) {
+        // Not a checkbox. Gating treatment behind a tick box is how a patient
+        // ends up unable to be treated because they hesitated over a form.
+        box.innerHTML =
+          '<div class="small fw-bold">' + esc(p.label) +
+          ' <span class="badge ms-1" style="background:var(--bg-card);color:var(--text-muted);">' +
+          'section 7 — legitimate use</span></div>' +
+          '<div class="small" style="color:var(--text-muted);">' + esc(p.detail) + '</div>';
+      } else {
+        var id = 'reg-consent-' + p.key;
+        box.innerHTML =
+          '<div class="form-check mb-0">' +
+            '<input class="form-check-input" type="checkbox" id="' + id + '">' +
+            '<label class="form-check-label small fw-bold" for="' + id + '">' + esc(p.label) + '</label>' +
+            '<div class="small" style="color:var(--text-muted);">' + esc(p.detail) + '</div>' +
+          '</div>';
+      }
+      col.appendChild(box);
+      host.appendChild(col);
+    });
+
+    var g = document.getElementById('reg-grievance-line');
+    if (g) {
+      var o = REG_NOTICE.grievanceOfficer;
+      g.innerHTML = o
+        ? 'Complaints go to <strong>' + esc(o.name) + '</strong>' +
+          (o.email ? ' · ' + esc(o.email) : '') + (o.phone ? ' · ' + esc(o.phone) : '') +
+          ', and afterwards to the Data Protection Board of India.'
+        : '<span class="text-danger">No grievance officer is named. Section 13 requires ' +
+          'the clinic to publish one — run dpdpSetGrievanceOfficer() before registering ' +
+          'anyone under this notice.</span>';
+    }
+  }
+
+  function esc(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /** The decisions as recordConsent() wants them: one key per purpose. */
+  function collectConsentDecisions() {
+    var decisions = {};
+    (REG_NOTICE && REG_NOTICE.purposes || []).forEach(function (p) {
+      if (p.legitimate) { decisions[p.key] = true; return; }   // recorded, not asked
+      var el = document.getElementById('reg-consent-' + p.key);
+      // A box nobody ticked is a REFUSAL, and it is recorded as one. Leaving
+      // it out would make "we never asked" and "they said no" the same row.
+      decisions[p.key] = !!(el && el.checked);
+    });
+    return decisions;
+  }
+
+  /** Under 18 needs a named guardian — section 9. */
+  function syncGuardianBlock() {
+    var age = parseInt(document.getElementById('reg-age').value, 10);
+    var block = document.getElementById('reg-guardian-block');
+    if (!block) return;
+    if (isFinite(age) && age > 0 && age < 18) block.classList.remove('d-none');
+    else block.classList.add('d-none');
+  }
+
   function calculateAge() {
     const dobInput = document.getElementById('reg-dob').value;
     if (dobInput) {
@@ -192,6 +332,7 @@
         age--;
       }
       document.getElementById('reg-age').value = age > 0 ? age : 0;
+      syncGuardianBlock();
     }
   }
 
@@ -226,10 +367,7 @@
       dob: document.getElementById('reg-dob').value,
       age: document.getElementById('reg-age').value,
       gender: document.getElementById('reg-gender').value,
-      maritalStatus: document.getElementById('reg-marital').value,
       bloodGroup: document.getElementById('reg-blood').value,
-      occupation: document.getElementById('reg-occupation').value.trim(),
-      education: document.getElementById('reg-education').value.trim(),
       mobile: document.getElementById('reg-mobile').value.trim(),
       whatsapp: document.getElementById('reg-whatsapp').value.trim(),
       email: document.getElementById('reg-email').value.trim(),
@@ -255,6 +393,27 @@
     btnSpinner.classList.remove('d-none');
     btn.disabled = true;
 
+    // Section 9: a child's data needs a NAMED parent or guardian, and the
+    // server refuses without one — but failing here costs the desk nothing,
+    // while failing there costs them the whole form.
+    const age = parseInt(data.age, 10);
+    const guardianName = (document.getElementById('reg-guardian-name') || {}).value || '';
+    if (isFinite(age) && age > 0 && age < 18 && !guardianName.trim()) {
+      showStatus("This patient is under 18. Record the parent or guardian who is " +
+                 "consenting — section 9 of the DPDP Act requires it.", true);
+      btnText.innerText = "Create Patient ID";
+      btnSpinner.classList.add('d-none');
+      btn.disabled = false;
+      return;
+    }
+
+    const consent = {
+      decisions: collectConsentDecisions(),
+      method: 'IN_PERSON',
+      guardianName: guardianName.trim(),
+      guardianRelation: ((document.getElementById('reg-guardian-relation') || {}).value || '').trim()
+    };
+
     // Google Apps Script Call
     google.script.run.withSuccessHandler(res => {
       // Reset Button State
@@ -263,14 +422,25 @@
       btn.disabled = false;
       
       if (res.success) { 
-        showStatus(res.message || "Patient successfully registered!");
+        showStatus("Patient " + res.patientId + " registered." +
+                   (res.consent && res.consent.success
+                      ? " Consent recorded against notice " + res.consent.noticeVersion + "."
+                      : " NOTE: no consent was recorded."),
+                   !(res.consent && res.consent.success));
         // Offer the barcode card straight away — the one moment the patient is
         // still at the desk to receive it.
         offerPatientCard(res.patientId);
+        // The portal password is random now and stored only as a digest, so
+        // THIS IS THE ONLY TIME ANYONE CAN SEE IT. It is shown in a panel the
+        // registrar has to dismiss rather than in the banner that hides itself
+        // after five seconds.
+        showOneTimePassword(res.patientId, res.portalPassword);
         // Clear all inputs
         document.querySelectorAll('#tab-admin-reg input, #tab-admin-reg textarea, #tab-admin-reg select').forEach(el => {
           if(el.type !== 'button') el.value = '';
         });
+        document.querySelectorAll('#reg-consent-purposes input[type=checkbox]').forEach(el => { el.checked = false; });
+        syncGuardianBlock();
       } else {
         showStatus(res.message || "Registration failed. Please try again.", true);
       }
@@ -279,7 +449,44 @@
       btnSpinner.classList.add('d-none');
       btn.disabled = false;
       showStatus("An error occurred connecting to the server.", true);
-    }).registerPatient(data, window.sessionToken); 
+    }).registerPatient(data, window.sessionToken, consent); 
+  }
+
+  /**
+   * The patient's portal password, shown once.
+   *
+   * It is random and stored as a salted digest, so nothing — not this screen,
+   * not the sheet, not an administrator — can retrieve it later. If it is lost
+   * before the patient has it, reception resets it. That is the trade for a
+   * password that is not derivable from the name on their prescription.
+   */
+  function showOneTimePassword(patientId, password) {
+    if (!password) return;
+    const host = document.getElementById('reg-card-actions');
+    if (!host) return;
+
+    const panel = document.createElement('div');
+    panel.className = 'p-3 rounded mb-2 mt-2';
+    panel.style.cssText = 'background:var(--bg-input); border:1px solid var(--accent-purple);';
+    panel.innerHTML =
+      '<div class="small fw-bold mb-1"><i class="fa-solid fa-key me-1"></i>' +
+      'One-time portal password for ' + esc(patientId) + '</div>' +
+      '<div class="fs-5 fw-bold" style="letter-spacing:2px; font-family:monospace;">' +
+      esc(password) + '</div>' +
+      '<div class="small mt-1" style="color:var(--text-muted);">' +
+      'Write it on the patient card and hand it over. It is shown once, it cannot ' +
+      'be looked up afterwards, and the patient must change it the first time they ' +
+      'sign in.</div>';
+
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'btn btn-sm mt-2';
+    done.style.cssText = 'border:1px solid var(--border-color);color:var(--text-main);background:transparent;';
+    done.textContent = 'I have written it down';
+    done.onclick = function () { panel.remove(); };
+    panel.appendChild(done);
+
+    host.appendChild(panel);
   }
 
   /**
@@ -337,5 +544,13 @@
         crescAlert('Could not reach the server: ' + (err && err.message ? err.message : err));
       })
       .getPatientLabelData(patientId, window.sessionToken);
+  }
+
+  // The notice has to be on screen before anything is collected, so it is
+  // fetched when this bundle loads rather than when the form is submitted.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadConsentNotice);
+  } else {
+    loadConsentNotice();
   }
 </script>

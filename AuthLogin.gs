@@ -50,9 +50,34 @@ function verifyLogin(credentials) {
           return { success: false, message: "Account disabled." };
         }
 
-        // Password Validation
-        if (storedPassword.toString().trim() === passwordInput) {
+        // Password validation — against a stored digest, never a stored
+        // password. See Auth_Credentials.gs for why a plain-text cell is
+        // refused outright rather than accepted once and hashed after.
+        const check = crescPwdVerify_(passwordInput, storedPassword);
+
+        if (check.legacy) {
+          crescAuthAudit_(CRESC_AUTH_EVENTS.LEGACY_REFUSED, storedUsername, storedRole, {});
+          return { success: false, code: 'LEGACY_CREDENTIAL',
+                   message: 'This account still has an old, unprotected password. ' +
+                            'An administrator must reset it before you can sign in ' +
+                            '— ask them to run crescMigrateCredentials().' };
+        }
+
+        if (check.ok) {
           const role = storedRole.toString().trim().toLowerCase();
+
+          // A temporary password gets you exactly one screen: the one that
+          // replaces it. Issuing a session here would mean a password handed
+          // over at a desk, or sitting in a migration log, stayed usable for
+          // as long as nobody got round to changing it.
+          if (cresc_mustChange_(userSheet, i + 1, 'Must_Change')) {
+            crescAuthAudit_(CRESC_AUTH_EVENTS.MUST_CHANGE, storedUsername, storedRole, {});
+            return { success: false, code: 'MUST_CHANGE',
+                     username: storedUsername.toString().trim(),
+                     message: 'Your password was set for you and has to be changed ' +
+                              'before you can sign in.' };
+          }
+
           const doc  = resolveDoctorByUsername_(storedUsername);
           const token = issueSession_({
             username: storedUsername,
@@ -99,35 +124,30 @@ function verifyLogin(credentials) {
     if (patientID.toString().trim().toUpperCase() === usernameInput.toUpperCase()) {
       
       let rawName = patientData[i][2] ? patientData[i][2].toString().trim() : "XXX";
-      let rawDOB = patientData[i][5];
 
-      // Format Name Part (First 3 chars)
-      let namePart = rawName.replace(/[^a-zA-Z]/g, '');
-      if (namePart.length < 3) {
-        namePart = (namePart + "XXX").substring(0, 3);
-      } else {
-        namePart = namePart.substring(0, 3);
+      // THE DERIVATION IS GONE. This block used to rebuild the password from
+      // the first three letters of the name and the birth year and compare
+      // it. Both inputs are printed on the patient's own documents and the
+      // patient ID is the barcode on the same page, so the portal was open to
+      // anyone who had ever held a prescription. Portal passwords are now
+      // random, stored as a digest, and changed at first sign-in.
+      const pcheck = crescPwdVerify_(passwordInput, patientData[i][1]);
+
+      if (pcheck.legacy) {
+        crescAuthAudit_(CRESC_AUTH_EVENTS.LEGACY_REFUSED, patientID, 'patient', {});
+        return { success: false, code: 'LEGACY_CREDENTIAL',
+                 message: 'Your portal password has to be reset at the clinic before ' +
+                          'you can sign in. Please ask at reception.' };
       }
-      namePart = namePart.charAt(0).toUpperCase() + namePart.substring(1).toLowerCase();
 
-      // Format Year Part (4 Digits)
-      let yearPart = "0000";
-      if (rawDOB instanceof Date) {
-        yearPart = rawDOB.getFullYear().toString();
-      } else if (rawDOB) {
-        let dobStr = rawDOB.toString().trim();
-        let yearMatch = dobStr.match(/\b(19|20)\d{2}\b/);
-        if (yearMatch) {
-          yearPart = yearMatch[0];
-        } else {
-          yearPart = dobStr.length >= 4 ? dobStr.slice(-4) : "0000";
+      if (pcheck.ok) {
+        if (cresc_mustChange_(patientSheet, i + 1, 'Portal_Must_Change')) {
+          crescAuthAudit_(CRESC_AUTH_EVENTS.MUST_CHANGE, patientID, 'patient', {});
+          return { success: false, code: 'MUST_CHANGE',
+                   username: patientID.toString().trim().toUpperCase(),
+                   message: 'The password you were given at the clinic has to be ' +
+                            'changed before you can sign in.' };
         }
-      }
-
-      const expectedPassword = namePart + yearPart;
-
-      // Validate Password
-      if (passwordInput.trim().toLowerCase() === expectedPassword.toLowerCase()) {
         // Patients get a real session token too. Without one the portal had no
         // way to prove who it was, so getUserProfile() could not be session-
         // checked. The session username IS the patient ID, which is what
@@ -149,11 +169,10 @@ function verifyLogin(credentials) {
           message: "Welcome Patient"
         };
       } else {
-        // The format hint is gone. It used to print the derivation rule
-        // outright — first three letters of the name plus the birth year —
-        // to anyone holding a patient ID, which is anyone holding a printed
-        // bill. Stating the recipe on a failed attempt made the one guess
-        // that is needed a guaranteed one.
+        // The format hint went when the format did. It used to print the
+        // derivation rule outright — first three letters of the name plus the
+        // birth year — to anyone holding a patient ID, which is anyone holding
+        // a printed bill.
         const warn = crescAuthFailed_(patientID, 'patient', 'bad portal password');
         return { success: false,
                  message: warn.indexOf('locked') !== -1 || warn.indexOf('left') !== -1

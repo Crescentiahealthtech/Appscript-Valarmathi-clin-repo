@@ -49,7 +49,16 @@ var CRESC_AUTH_EVENTS = {
   UNKNOWN_USER: 'LOGIN_UNKNOWN_USER',
   MFA_FAILED:   'LOGIN_MFA_FAILED',
   MFA_PASSED:   'LOGIN_MFA_PASSED',
-  SIGNOUT:      'LOGOUT'
+  SIGNOUT:      'LOGOUT',
+
+  // Credential lifecycle (Auth_Credentials.gs). A password that changes is a
+  // fact an incident review needs: "when did this account's password last
+  // change" is the second question asked after "who signed in".
+  PASSWORD_CHANGED:   'PASSWORD_CHANGED',
+  PASSWORD_RESET:     'PASSWORD_RESET',
+  PASSWORD_MIGRATION: 'PASSWORD_MIGRATION',
+  LEGACY_REFUSED:     'LOGIN_LEGACY_CREDENTIAL',   // plain-text cell, refused
+  MUST_CHANGE:        'LOGIN_MUST_CHANGE'          // correct password, expired by policy
 };
 
 

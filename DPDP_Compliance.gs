@@ -927,14 +927,20 @@ function dpdpReadinessCheck() {
   }
 
   // --- deployment ---------------------------------------------------------
-  // The single highest-risk setting in the project, and it is not in code.
-  add('CRITICAL', 'Deployment',
-      'appsscript.json declares access ANYONE_ANONYMOUS with executeAs ' +
-      'USER_DEPLOYING. Every google.script.run endpoint therefore runs with ' +
-      'the owner’s full spreadsheet access for any caller who has the URL, ' +
-      'signed in or not.',
-      'Redeploy with access "ANYONE" (Google sign-in required) or "DOMAIN", ' +
-      'and keep crescRequire_() on every endpoint regardless.');
+  // The single highest-risk setting in the project, and it is not in code —
+  // which is why this cannot be checked, only reminded about. appsscript.json
+  // in the repository now says access "ANYONE" (Google sign-in required), but
+  // the manifest only takes effect on a NEW DEPLOYMENT: an /exec URL that was
+  // published before the change keeps its old setting until it is redeployed.
+  add('HIGH', 'Deployment',
+      'The manifest asks for access "ANYONE" and executeAs USER_DEPLOYING, so ' +
+      'every google.script.run endpoint still runs with the owner’s full ' +
+      'spreadsheet access — now for signed-in callers only, and only if this ' +
+      'deployment was published AFTER the manifest changed.',
+      'Deploy > Manage deployments > edit > New version. Then open the /exec ' +
+      'URL in a private window: if it answers without asking you to sign in, ' +
+      'the old ANYONE_ANONYMOUS deployment is still live. Treat any period it ' +
+      'was anonymous as potentially breached (s.8(6)).');
 
   // --- registers ----------------------------------------------------------
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -978,33 +984,32 @@ function dpdpReadinessCheck() {
   } catch (e) { /* the check itself must not fail the report */ }
 
   // --- password storage ---------------------------------------------------
+  // Counted rather than sampled: one hashed row at the top of the sheet says
+  // nothing about the two hundred below it, and it was a sampled check that
+  // made this look fixed the first time.
   try {
-    var users = ss.getSheetByName('Users');
-    if (users && users.getLastRow() > 1) {
-      var pw = users.getRange(2, 2).getDisplayValue();
-      // A bcrypt/PBKDF2 digest is long and structured; a plaintext password
-      // is short and looks like a word.
-      if (pw && pw.length < 40 && !/^\$|^[a-f0-9]{64}$/i.test(pw)) {
-        add('CRITICAL', 'Section 8(5)',
-            'Staff passwords appear to be stored in plain text on the Users ' +
-            'sheet and compared with ===. Anyone who can open the spreadsheet ' +
-            'can read every staff password, and people reuse passwords.',
-            'Store a salted hash (Utilities.computeDigest with SHA-256 and a ' +
-            'per-user salt, or better a slow KDF) and compare digests. Force a ' +
-            'reset of every existing password when you do.');
+    [['Users', 'staff logins', 'CRITICAL'],
+     ['Patients', 'patient portal logins', 'HIGH']].forEach(function (t) {
+      var sh = ss.getSheetByName(t[0]);
+      if (!sh || sh.getLastRow() < 2) return;
+      var col = sh.getRange(2, 2, sh.getLastRow() - 1, 1).getDisplayValues();
+      var plain = 0;
+      col.forEach(function (r) {
+        var v = dpdp_str_(r[0]);
+        if (v && !(typeof crescPwdIsHashed_ === 'function' && crescPwdIsHashed_(v))) plain++;
+      });
+      if (plain) {
+        add(t[2], 'Section 8(5)',
+            plain + ' of ' + col.length + ' ' + t[1] + ' are still stored in ' +
+            'PLAIN TEXT on the ' + t[0] + ' sheet. Everyone who can open the ' +
+            'spreadsheet can read them, and people reuse passwords. Sign-in ' +
+            'refuses them, so those accounts cannot be used at all until they ' +
+            'are reset.',
+            'Run crescMigrateCredentials() from the script editor: it issues a ' +
+            'fresh random password per account, stores only the digest, prints ' +
+            'the list once, and forces a change at first sign-in.');
       }
-    }
-    var patients = ss.getSheetByName('Patients');
-    if (patients && patients.getLastRow() > 1) {
-      add('HIGH', 'Section 8(5)',
-          'Patient portal passwords are generated as the first three letters ' +
-          'of the name plus the birth year and stored in column B in plain ' +
-          'text. Both inputs are on the registration form and on any document ' +
-          'the patient carries, so the password is derivable by anyone who has ' +
-          'seen their prescription.',
-          'Generate a random password, store only a hash, and force a change ' +
-          'at first sign-in.');
-    }
+    });
   } catch (e) { /* ditto */ }
 
   // --- shared links -------------------------------------------------------
