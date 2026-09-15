@@ -264,7 +264,10 @@ function runMultiDoctorMigration() {
 
     // --- C3. Append-only columns on existing clinical sheets ----------------
     var additions = [
-      { sheet: "Appointments",     cols: ["Doctor_ID", "Doctor_Name_Snapshot", "Booked_By", "Attribution_Source"] },
+      // Referral_ID: an appointment created BY a referral, so the day list can
+      // show why the patient is there and the referral can be followed to its
+      // slot. See op_bookReferralAppointment_ (OP_Doctor_Engine.gs).
+      { sheet: "Appointments",     cols: ["Doctor_ID", "Doctor_Name_Snapshot", "Booked_By", "Attribution_Source", "Referral_ID"] },
       { sheet: "OP_Encounters",    cols: ["Doctor_ID", "Doctor_Signature_Snapshot"] },
       { sheet: "IP_Admissions",    cols: ["Primary_Doctor_ID"] },
       { sheet: "IP_CaseSheets_DB", cols: ["Doctor_ID", "Author_Signature_Snapshot"] },

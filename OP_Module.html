@@ -2473,7 +2473,20 @@ function sendReferral() {
                 return;
             }
             bootstrap.Modal.getInstance(document.getElementById('opReferModal'))?.hide();
-            opToast(r.message, 'warn');
+
+            // An internal referral now books a slot in the receiving doctor's
+            // clinic, and the reply names the day and time. That is something
+            // the referring doctor has to READ OUT to the patient before they
+            // leave the room, so it goes in a dialog they dismiss rather than
+            // a toast that fades after four seconds while they are typing.
+            if (r.referralType === 'INTERNAL') {
+                var attention = (!r.apptId || r.apptOffSchedule);
+                op_alert(r.message, attention ? 'warn' : 'info',
+                         attention ? 'Referred — no slot yet' : 'Referred');
+            } else {
+                opToast(r.message, 'ok');
+            }
+
             // An external referral is only useful as a letter in the
             // patient's hand, so it is offered immediately rather than
             // waiting to be found again in a list.
