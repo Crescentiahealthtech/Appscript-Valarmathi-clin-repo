@@ -294,6 +294,117 @@
     });
   };
 
+  // ------------------------------------------------------------------
+  // THE PHARMACY INVOICE, IN THE SHELL
+  //
+  // This used to live in Pharmacy_Billing_UI.html, and the Pharmacy
+  // Dashboard's reprint button called it by name across the partial
+  // boundary — guarded by a typeof check whose failure message,
+  // "Invoice print template not loaded on this page.", was the whole of
+  // what a pharmacist unable to reprint a bill had to go on.
+  //
+  // Bundling both partials together is not the same as guaranteeing one
+  // can see the other's scope, and every distinct way that could fail
+  // produced the same sentence. In the shell there is nothing to fail:
+  // Index.html parses this before any bundle loads, so both the billing
+  // desk and the dashboard find it already defined.
+  //
+  // It maps the pharmacy bill's own shape onto crescInvoiceHtml above, so
+  // the invoice is the same document wherever it is printed from.
+  // ------------------------------------------------------------------
+  window.crescPharmacyInvoiceHtml = function (d, done) {
+    if (!d) { if (done) done(""); return ""; }
+    const E = window.crescInvEsc || (v => String(v == null ? '' : v));
+
+    // GST slabs, for the summary block beside the totals.
+    const slabs = {};
+    d.items.forEach(it => {
+      if (!slabs[it.gst]) slabs[it.gst] = { taxable: 0, gst: 0 };
+      slabs[it.gst].taxable += it.taxable;
+      slabs[it.gst].gst += it.gstAmt;
+    });
+
+    const rows = d.items.map((it, i) => ([
+      String(i + 1),
+      '<strong>' + E(it.drug) + '</strong>' +
+        (it.generic ? '<br><span style="font-size:10px;color:#9ca3af;">' + E(it.generic) + '</span>' : ''),
+      E(it.batch) + '<br><span style="font-size:10px;color:#9ca3af;">Exp: ' + E(it.expiry) + '</span>',
+      String(it.qty),
+      '₹' + it.mrp.toFixed(2),
+      it.gst + '%',
+      '<strong>₹' + it.lineTotal.toFixed(2) + '</strong>'
+    ]));
+
+    const slabKeys = Object.keys(slabs);
+    const gstBlock = slabKeys.length ? {
+      title: 'GST summary',
+      html:
+        '<table style="width:100%;border-collapse:collapse;font-size:11px;color:#6b7280;">' +
+          '<thead><tr style="background:#f3f4f6;">' +
+            ['Slab', 'Taxable', 'CGST', 'SGST', 'Total GST'].map((h, i) =>
+              '<th style="padding:4px 10px;text-align:' + (i ? 'right' : 'left') +
+              ';font-weight:700;">' + h + '</th>').join('') +
+          '</tr></thead><tbody>' +
+          slabKeys.map(k => {
+            const half = slabs[k].gst / 2;
+            return '<tr>' +
+              '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;">' + E(k) + '%</td>' +
+              ['₹' + slabs[k].taxable.toFixed(2), '₹' + half.toFixed(2),
+               '₹' + half.toFixed(2), '₹' + slabs[k].gst.toFixed(2)]
+                .map(v => '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">' + v + '</td>')
+                .join('') +
+            '</tr>';
+          }).join('') +
+        '</tbody></table>'
+    } : null;
+
+    const isIp = (d.billType === 'IPD' || d.billType === 'IP_ACCOUNT');
+
+    const totals = [
+      { label: 'Gross amount', value: '₹' + d.gross.toFixed(2) },
+      { label: 'of which GST', value: '₹' + d.totalGst.toFixed(2) }
+    ];
+    if (d.discount > 0) {
+      totals.push({ label: 'Discount', value: '- ₹' + d.discount.toFixed(2), tone: 'ok' });
+    }
+    totals.push({ label: 'Net payable', value: '₹' + d.net.toFixed(2), strong: true });
+
+    const demo = [];
+    if (d.age) demo.push(d.age + 'y');
+    if (d.sex) demo.push(d.sex);
+
+    return crescInvoiceHtml({
+      kind: 'PHARMACY INVOICE',
+      invoiceNo: d.invoiceNo,
+      date: d.date,
+      patient: {
+        name: d.patientName || 'Walk-in Patient',
+        id: (d.patientId && d.patientId !== 'WALK-IN') ? d.patientId : '',
+        ageSex: demo.join(' / '),
+        mobile: d.mobile,
+        address: d.address
+      },
+      meta: [['Doctor', d.doctor]],
+      columns: [
+        { label: '#', align: 'left', width: '32px' },
+        { label: 'Medicine', align: 'left' },
+        { label: 'Batch / Exp', align: 'left', width: '130px' },
+        { label: 'Qty', align: 'right', width: '50px' },
+        { label: 'MRP', align: 'right', width: '80px' },
+        { label: 'GST', align: 'right', width: '56px' },
+        { label: 'Amount', align: 'right', width: '96px' }
+      ],
+      rows: rows,
+      totals: totals,
+      blocks: gstBlock ? [gstBlock] : [],
+      footNote: isIp
+        ? '<strong style="color:#0369a1;">Posted to IP account &bull; settled at discharge</strong>'
+        : 'Payment: <strong>' + E(d.payMode) + '</strong> &bull; Status: <strong style="color:' +
+          (d.payStatus === 'PAID' ? '#047857' : '#b91c1c') + ';">' + E(d.payStatus) + '</strong>' +
+          '<br><span style="font-size:10px;color:#9ca3af;">Medicines once sold are not returnable except as per policy.</span>'
+    }, done);
+  };
+
   function openPrintWindow(html, title) {
     (function () {
       var w = window.open('', '_blank', 'width=900,height=820,top=40,left=40');

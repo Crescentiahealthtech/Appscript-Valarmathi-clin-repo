@@ -2,8 +2,10 @@
   CRESCENTIA — PHARMACY DASHBOARD + BILL SEARCH  (operational)
   Add alongside the other workspace sections. Reach it from the Pharmacy
   Workspace with:  <button onclick="openPharmacyDashboard()">Pharmacy Dashboard</button>
-  Depends on the global buildPrintInvoiceRaw() from the billing partial
-  (used to reprint past invoices). Both live on the same single page.
+  Reprints past invoices through window.crescPharmacyInvoiceHtml, which is
+  in the shell (Invoice_Template.html) and therefore always present — it
+  used to be reached across the partial boundary into Pharmacy_Billing_UI,
+  which is what produced "Invoice print template not loaded on this page."
 ==================================================================== -->
 <div id="pharmacy-dashboard-workspace" class="page-section">
 
@@ -138,6 +140,11 @@
 // ===================================================================
 
   function openPharmacyDashboard() {
+    // The letterhead is one server round trip, and the reprint button needs
+    // it. Paid for here, when the screen opens, rather than under a print
+    // dialog the pharmacist is already waiting on.
+    if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
+
     // 1. Always default to the 'Dash' tab when opening
    pdashShowTab('dash');
 
@@ -271,15 +278,40 @@
   }
 
   // ---------- Reprint any past invoice ----------
+  //
+  // TWO BUGS LIVED IN FOUR LINES HERE, and between them they made this
+  // button unable to print an invoice at all.
+  //
+  //   1. It guarded on `typeof buildPrintInvoiceRaw !== 'function'` — a
+  //      function belonging to Pharmacy_Billing_UI.html, a different partial
+  //      — and when the guard tripped it said "Invoice print template not
+  //      loaded on this page." That named a thing the pharmacist cannot see,
+  //      offered nothing to do, and was the single answer to every way the
+  //      cross-partial reference could fail. The renderer is in the shell now
+  //      (crescPharmacyInvoiceHtml, Invoice_Template.html), where it cannot
+  //      be missing, so there is nothing left to guard.
+  //
+  //   2. It used the renderer's RETURN VALUE. That is only populated once the
+  //      clinic letterhead has been fetched and cached; on the first print of
+  //      a session it returns '' and the callback is the only way to get the
+  //      markup. So even past the guard, the first reprint after sign-in set
+  //      innerHTML to an empty string and printed a blank page. The callback
+  //      form is used here, exactly as the billing desk's own print does.
   function phReprintInvoice(invoiceNo) {
-    if (typeof buildPrintInvoiceRaw !== 'function') { crescAlert("Invoice print template not loaded on this page."); return; }
     pdashOverlay(true, "Preparing invoice…");
     google.script.run
       .withSuccessHandler(res => {
-        pdashOverlay(false);
-        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Could not load invoice.")); return; }
-        document.getElementById('phs-print').innerHTML = buildPrintInvoiceRaw(res.print);
-        phsDoPrint();
+        if (!res || !res.success) {
+          pdashOverlay(false);
+          crescAlert("⚠️ " + ((res && res.message) || "Could not load invoice."));
+          return;
+        }
+        window.crescPharmacyInvoiceHtml(res.print, function (rawHtml) {
+          pdashOverlay(false);
+          if (!rawHtml) { crescAlert("⚠️ The invoice could not be laid out. Please retry."); return; }
+          document.getElementById('phs-print').innerHTML = rawHtml;
+          phsDoPrint();
+        });
       })
       .withFailureHandler(() => { pdashOverlay(false); crescAlert("❌ Network error."); })
       .getInvoiceForPrint(invoiceNo, window.sessionToken);

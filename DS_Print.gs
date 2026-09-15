@@ -228,7 +228,12 @@ function dsx_printSection_(key, sec, empty) {
       var pairs = Object.keys(sec.content)
         .filter(function (f) { return dsx_str_(sec.content[f]); })
         .map(function (f) {
-          return [dsx_humanise_(f), ipp_escMultiline_(sec.content[f])];
+          // A date field now stores an ISO date, because the editor picks it
+          // from a calendar. "2026-10-15" is the right thing to STORE and the
+          // wrong thing to hand a patient, so it prints as 15-Oct-2026 with
+          // the weekday — the two pieces of a follow-up date somebody
+          // actually uses to turn up on the right day.
+          return [dsx_humanise_(f), dsx_printFieldValue_(f, sec.content[f])];
         });
       return ipp_sec_(title, ipp_kv_(pairs));
 
@@ -236,6 +241,31 @@ function dsx_printSection_(key, sec, empty) {
       return ipp_sec_(title,
         '<div style="font-size:10pt;">' + ipp_escMultiline_(sec.content) + '</div>');
   }
+}
+
+/** Field names the editor stores as an ISO date. Mirrors DS_DATE_FIELDS. */
+var DSX_PRINT_DATE_FIELDS = ['date', 'followUpDate', 'nextReviewDate',
+                             'reviewDate', 'dateOfDeath', 'transferDate'];
+
+/**
+ * One FIELDS value, ready for the page.
+ *
+ * Only an ISO date is reformatted, and only when it really is one. A value
+ * the editor could not parse is still the clinician's own words and prints
+ * exactly as written rather than being guessed at.
+ */
+function dsx_printFieldValue_(field, value) {
+  var raw = dsx_str_(value);
+  if (DSX_PRINT_DATE_FIELDS.indexOf(field) > -1 && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    // Built from the three numbers rather than new Date(raw): the string form
+    // is parsed as UTC midnight, which in Asia/Kolkata prints as the DAY
+    // BEFORE — the one failure mode a follow-up date must not have.
+    var parts = raw.split('-');
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    var out = dsx_fmt_(d, 'EEEE, dd-MMM-yyyy');
+    if (out) return ipp_esc_(out);
+  }
+  return ipp_escMultiline_(raw);
 }
 
 /**

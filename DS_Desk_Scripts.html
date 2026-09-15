@@ -134,6 +134,47 @@ var DS_PAIR_SEP = ' \u2014 ';
 var DS_VITAL_FIELDS = ['bpMmHg', 'pulsePerMin', 'spo2Percent', 'temperature',
                        'respRatePerMin', 'weightKg', 'heightCm', 'otherVitals'];
 
+/* Fields that hold a DATE and must be picked from a calendar, not typed.
+   A follow-up date is the one instruction on a discharge summary the patient
+   acts on by themselves, and a free-text box collected "next friday", "after
+   1 week", "15/10" and "10/15" — none of which a reminder can read, and two
+   of which are the same day or a month apart depending on who is reading.
+   dsFieldIsDate() renders these as <input type="date">, so what is stored is
+   always an ISO date and the OS supplies the calendar. */
+var DS_DATE_FIELDS = ['date', 'followUpDate', 'nextReviewDate', 'reviewDate',
+                      'dateOfDeath', 'transferDate'];
+
+function dsFieldIsDate(sectionKey, field) {
+  if (DS_DATE_FIELDS.indexOf(field) === -1) return false;
+  // 'date' is generic enough to appear on a section where it is NOT a
+  // calendar date, so it only counts where the assembler puts one.
+  if (field !== 'date') return true;
+  return ['FOLLOW_UP', 'DEATH_DETAILS', 'REFERRAL_DETAILS',
+          'LAMA_DETAILS', 'ABSCOND_DETAILS'].indexOf(sectionKey) > -1;
+}
+
+/* An ISO date for the box, whatever shape the stored value is in: a summary
+   written before this change holds free text, and a half-parsed value must
+   not silently become a wrong date. Anything unrecognised comes back '' and
+   is offered beside the picker instead. */
+function dsToISODate(v) {
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  var m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(s);
+  if (m) {
+    // dd/mm/yyyy — the format every other date in this application uses.
+    return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  }
+  m = /^(\d{1,2})[\s\-]([A-Za-z]{3,})[\s\-](\d{4})$/.exec(s);
+  if (m) {
+    var mons = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    var mi = mons.indexOf(m[2].slice(0, 3).toLowerCase());
+    if (mi > -1) return m[3] + '-' + ('0' + (mi + 1)).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+  }
+  return '';
+}
+
 /* Which phrase list feeds which section or field. */
 var DS_PHRASE_SOURCE = {
   'PRESENTING_COMPLAINTS': 'cc',
@@ -1122,6 +1163,24 @@ function dsRenderFields(key, sec, readOnly) {
       return '<div class="' + col + '"><div class="ds-muted">' + dsEsc(label) + '</div>' +
              '<div>' + dsEscML(val) + '</div></div>';
     }
+    // A date comes from the OS calendar, not from a text box. The stored
+    // value stays a plain string, so print, validation and the diff are
+    // untouched — it is simply always a parseable one from here on.
+    if (dsFieldIsDate(key, f)) {
+      var iso = dsToISODate(val);
+      var strayNote = (!iso && String(val || '').trim())
+        // A pre-existing free-text value ("after 1 week") is NOT thrown away
+        // and NOT guessed at: it is shown under the picker so the clinician
+        // can see what was meant and set the actual day.
+        ? '<div class="ds-muted mt-1" style="font-size:.72rem">' +
+          'Was: <em>' + dsEsc(val) + '</em> — pick the day this means.</div>'
+        : '';
+      return '<div class="' + col + '">' +
+             '<label class="ds-muted d-block mb-1">' + dsEsc(label) + '</label>' +
+             '<input type="date" data-ds-field="' + dsEsc(key) + '|' + dsEsc(f) + '"' +
+             ' value="' + dsEsc(iso) + '">' + strayNote + '</div>';
+    }
+
     // Advice fields draw on the clinic's advice phrase library, the same one
     // the OP and IP consults prescribe advice from.
     var pickAttr = phraseSource ? ' data-ds-pick="' + dsEsc(phraseSource) + '"' : '';
@@ -1291,11 +1350,16 @@ function dsWireSectionInputs(wrap) {
   });
 
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-field]'), function (el) {
-    el.addEventListener('input', function () {
+    var write = function () {
       var parts = el.getAttribute('data-ds-field').split('|');
       DSState.payload.sections[parts[0]].content[parts[1]] = el.value;
       mark(parts[0]);
-    });
+    };
+    el.addEventListener('input', write);
+    // A date input picked from the calendar widget does not reliably fire
+    // `input` on every browser — some only fire `change` when the picker
+    // closes. Both are bound; write() is idempotent.
+    if (el.type === 'date') el.addEventListener('change', write);
   });
 
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-listitem]'), function (el) {

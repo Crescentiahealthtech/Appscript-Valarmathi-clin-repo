@@ -533,9 +533,29 @@ function dsx_sigCell_(dose, freq) {
  * @param {Object} d    one entry from dsx_replayMedications_
  * @param {Date}   dod  the discharge date, or null while the patient is in
  */
+/**
+ * How long a drug ran, AS A NUMBER OF DAYS.
+ *
+ * It used to read "12-Sep to discharge (4 days)", or "10-Sep to 12-Sep —
+ * stopped". Two problems with that on a discharge summary.
+ *
+ * The column is headed Duration, and a pair of calendar dates is not a
+ * duration — the reader has to subtract them, and "to discharge" cannot be
+ * subtracted at all without knowing what day the patient went home. Every
+ * other Duration/Days column in this application (the OP consult, the IP case
+ * sheet, the discharge script beside this very table) holds a plain number of
+ * days, so this one table asked its reader to switch units halfway down the
+ * page.
+ *
+ * And the dates are already on the document, in Course in hospital and in
+ * Admission details. Repeating them here spent the narrowest column on the
+ * page restating them.
+ *
+ * So: a count of days, and the drug's state when it is not simply "ran to
+ * discharge" — because "3 days" and "3 days, then stopped" are different
+ * instructions and the difference is the whole reason a reader looks.
+ */
 function dsx_stayDuration_(d, dod) {
-  var start = d.startedAt ? dsx_fmt_(d.startedAt, 'dd-MMM') : '';
-  var stop  = d.stoppedAt ? dsx_fmt_(d.stoppedAt, 'dd-MMM') : '';
   var state = dsx_upper_(d.state);
 
   var days = null;
@@ -545,18 +565,15 @@ function dsx_stayDuration_(d, dod) {
   }
   var dayText = (days === null) ? '' : (days + ' day' + (days === 1 ? '' : 's'));
 
-  if (!start) {
-    // Continued from the admission casesheet and never re-ordered on a note.
+  if (!d.startedAt) {
+    // Continued from the admission casesheet and never re-ordered on a note,
+    // so there is no start date to count from. Said plainly rather than
+    // guessed at from the admission date, which would invent a number.
     return d.continuedFromAdmission ? 'From admission' : (dayText || '');
   }
-  if (state === 'STOPPED') {
-    return start + ' to ' + (stop || '?') + (dayText ? ' (' + dayText + ')' : '') + ' — stopped';
-  }
-  if (state === 'HELD') {
-    return start + ' onwards' + (dayText ? ' (' + dayText + ')' : '') + ' — on hold';
-  }
-  var to = dod ? dsx_fmt_(dod, 'dd-MMM') : 'discharge';
-  return start + ' to ' + to + (dayText ? ' (' + dayText + ')' : '');
+  if (state === 'STOPPED') return (dayText || '—') + ', then stopped';
+  if (state === 'HELD')    return (dayText || '—') + ', on hold';
+  return dayText;
 }
 
 function dsx_isInjectable_(route, brand) {
