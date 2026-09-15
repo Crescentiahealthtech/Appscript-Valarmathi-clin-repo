@@ -27,67 +27,40 @@ function doGet(e) {
     return HtmlService.createHtmlOutput('Verification is not available on this deployment.');
   }
 
-  // 1. WhatsApp / Patient Mobile Interceptor
-  if (e && e.parameter && e.parameter.viewReport) {
-    const orderId = e.parameter.viewReport;
-    const reportData = getLabReportHtml(orderId);
-    
-    if (reportData.success) {
-       // Convert HTML to PDF, then to Base64 String for mobile downloading
-       const htmlBlob = Utilities.newBlob(reportData.html, 'text/html', 'report.html');
-       const pdfBlob = htmlBlob.getAs('application/pdf');
-       const base64Data = Utilities.base64Encode(pdfBlob.getBytes());
-       const fileName = "Valarmathi_Report_" + orderId + ".pdf";
-
-       // Ultra-lightweight Mobile Download Page (Will NOT crash on phones)
-       const mobileDownloadHtml = `
-         <!DOCTYPE html>
-         <html>
-         <head>
-           <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-           <title>Download Report</title>
-           <style>
-             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; padding: 40px 20px; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-             .card { background: white; padding: 40px 25px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; max-width: 350px; width: 100%; border: 1px solid #e5e7eb; }
-             .icon { font-size: 50px; margin-bottom: 15px; }
-             .btn { background: #10b981; color: white; border: none; padding: 18px 20px; border-radius: 12px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 25px; display: block; box-sizing: border-box; box-shadow: 0 4px 6px rgba(16,185,129,0.2); }
-             .btn:active { transform: scale(0.96); background: #059669; }
-           </style>
-         </head>
-         <body>
-           <div class="card">
-             <div class="icon">📄</div>
-             <h2 style="color:#0f172a; margin: 0 0 10px 0;">Report Ready</h2>
-             <p style="color:#64748b; font-size: 14px; margin: 0 0 10px 0;">Order ID: <strong>${orderId}</strong></p>
-             <p style="color:#94a3b8; font-size: 12px; margin: 0 0 20px 0;">Valarmathi Clinic & Diagnostics</p>
-             <button id="dlBtn" class="btn">📥 Download PDF Report</button>
-           </div>
-           
-           <script>
-             document.getElementById('dlBtn').addEventListener('click', function() {
-                this.innerText = 'Downloading...';
-                // Trigger native file download on the mobile device
-                const link = document.createElement('a');
-                link.href = "data:application/pdf;base64,${base64Data}";
-                link.download = "${fileName}";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                setTimeout(() => { this.innerText = '✅ Download Complete'; }, 2500);
-             });
-           </script>
-         </body>
-         </html>
-       `;
-       
-       return HtmlService.createHtmlOutput(mobileDownloadHtml)
-         .setTitle('Secure Lab Report')
-         .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
-         
-    } else {
-       return HtmlService.createHtmlOutput("<h2 style='text-align:center; font-family:Arial; margin-top:50px; color:#ef4444;'>Report Not Found or Invalid Link</h2>");
+  // 1. A document shared with a patient: ?doc=<grant>&k=<key>
+  //    The file itself stays private in Drive. This route holds the expiry,
+  //    the open counter and the audit row. See DPDP_Documents.gs.
+  if (e && e.parameter && e.parameter.doc) {
+    if (typeof dpdpServeDocument_ === 'function') {
+      return dpdpServeDocument_(e.parameter.doc, e.parameter.k);
     }
+    return HtmlService.createHtmlOutput('Document delivery is not available on this deployment.');
+  }
+
+  // 1b. The old WhatsApp report link: ?viewReport=<orderId>
+  //
+  //     WITHDRAWN, and deliberately not made to work again. It took an order
+  //     id — sequential, printed on the patient's own paperwork — and
+  //     returned that order's COMPLETE LAB REPORT as a PDF to anyone who
+  //     asked, with no key, no session and no expiry. Walking the ids
+  //     returned the lab's whole output.
+  //
+  //     Anyone still holding one of those messages gets this instead, and the
+  //     clinic re-sends the document as an expiring, revocable link.
+  if (e && e.parameter && e.parameter.viewReport) {
+    return HtmlService.createHtmlOutput(
+      '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>This link has been withdrawn</title></head>' +
+      '<body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;' +
+      'background:#f8fafc;margin:0;padding:40px 20px;text-align:center;color:#334155;">' +
+      '<div style="max-width:380px;margin:0 auto;background:#fff;padding:36px 24px;' +
+      'border:1px solid #e5e7eb;border-radius:16px;">' +
+      '<h2 style="font-size:1.15rem;color:#0f172a;margin:0 0 10px;">This link has been withdrawn</h2>' +
+      '<p style="font-size:.9rem;line-height:1.55;color:#64748b;margin:0;">' +
+      'Report links of this kind never expired, so we have stopped honouring them. ' +
+      'Please contact the clinic and we will send your report again as a private ' +
+      'link that only works for a short time.</p></div></body></html>')
+      .setTitle('This link has been withdrawn');
   }
 
   // 2. Normal App Load for Staff

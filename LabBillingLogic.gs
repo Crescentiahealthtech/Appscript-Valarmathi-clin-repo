@@ -402,17 +402,22 @@ function generateAndStoreLabInvoicePDF(billId, sessionToken) {
     if (monthFolders.hasNext()) monthFolder = monthFolders.next();
     else monthFolder = yearFolder.createFolder(monthStr);
 
-    // 4. Save File & Set Permissions
+    // 4. Save the file
     const file = monthFolder.createFile(pdfBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Registered so it can be un-shared. A link that nothing lists is a
-    // link nobody can revoke, and this file carries the patient's name and
-    // their results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
-    try { dpdpRegisterSharedFile(file, 'LAB_INVOICE', billId, Session.getActiveUser().getEmail()); } catch (e) {}
+    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
+    // their ID and their clinical detail; a Drive link that never expires,
+    // sent over WhatsApp, is forwarded, backed up and restored on devices
+    // nobody here will ever see. The file stays PRIVATE and the patient gets
+    // a link back into this web app with a one-off key that expires, counts
+    // its opens and can be withdrawn. See DPDP_Documents.gs, finding H1.
+    var grant = dpdpIssueDocumentLink_(file, 'LAB_INVOICE', billId,
+                                       (crescActor_(sessionToken) || {}).username || '');
+    if (!grant.success) return { success: false, message: grant.message };
 
-    // 5. Return Link
-    return { success: true, link: file.getUrl() };
+    // 5. Return the private, expiring link
+    return { success: true, link: grant.url, expiresAt: grant.expiresAt,
+             grantId: grant.grantId, message: grant.message };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
