@@ -19,9 +19,17 @@
     </div>
     <div class="d-flex gap-2">
       <button class="btn btn-sm btn-outline-secondary" onclick="LabBill.load();" title="Refresh"><i class="fa-solid fa-rotate-right"></i></button>
+      <!-- The lab's own till, counted at the lab. See Cash_Drawer.html. -->
+      <button class="btn btn-sm btn-outline-success" id="lb-drawer-btn"
+              onclick="CrescDrawer.toggle('lb-drawer-host', 'Lab', 'lb-drawer-btn')"
+              title="Open or close the lab counter's cash shift">
+        <i class="fa-solid fa-cash-register"></i> Cash Drawer
+      </button>
       <button class="btn btn-sm" style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabBill.generateAndPrintDayReport();"><i class="fa-solid fa-print me-1"></i>Print Day Report</button>
     </div>
   </div>
+
+  <div id="lb-drawer-host" class="d-none mb-4"></div>
 
   <div id="lbFlash"></div>
 
@@ -137,6 +145,9 @@ var LabBill=(function(){
 
   /* ─── LOAD ─── */
   function load(){
+    // Re-read the lab till if it was left showing; see
+    // CrescDrawer.onScreenOpen in Cash_Drawer.html.
+    if (window.CrescDrawer) CrescDrawer.onScreenOpen('lb-drawer-host', 'Lab');
     run('getLabBillingWorkspace',[],function(res){
       if(!res||!res.success){flash((res&&res.message)||'Load failed.',false);return;}
       _bills=res.bills||[];

@@ -5,6 +5,14 @@
       <i class="fa-solid fa-arrow-left"></i> Back to Workspace
     </button>
     <div class="d-flex gap-2">
+      <!-- The pharmacy till is counted at this counter by the person standing
+           at it. Reconciling it used to mean finding an accountant or being
+           given the whole Finance Hub — see Cash_Drawer.html. -->
+      <button class="btn btn-outline-success btn-sm" id="ph-drawer-btn"
+              onclick="CrescDrawer.toggle('ph-drawer-host', 'Pharmacy', 'ph-drawer-btn')"
+              title="Open or close this counter's cash shift">
+        <i class="fa-solid fa-cash-register"></i> Cash Drawer
+      </button>
       <button class="btn btn-outline-danger btn-sm" onclick="clearPharmacyBill()"
               title="Empty this bill and start a fresh one">
         <i class="fa-solid fa-eraser"></i> Clear Bill
@@ -14,6 +22,8 @@
       </button>
     </div>
   </div>
+
+  <div id="ph-drawer-host" class="d-none mb-4"></div>
 
   <style>
     /* ========================================================= */
@@ -1062,6 +1072,8 @@
   function openPharmacyBilling() {
     // Fetch the letterhead now, not while a print dialog is opening.
     if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
+    // Re-read the till if it was left showing; see CrescDrawer.onScreenOpen.
+    if (window.CrescDrawer) CrescDrawer.onScreenOpen('ph-drawer-host', 'Pharmacy');
     fetchLivePharmacyStock();
     const tbody = document.getElementById('phBillingBody');
     if (tbody && tbody.children.length === 0) addPharmacyRow();
