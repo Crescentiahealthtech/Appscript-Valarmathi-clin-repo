@@ -101,6 +101,10 @@ var DEP_MAP = {
     "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
   ],
   "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
+  "Deployment_Probe.gs": [
+    "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
+    "RUN_deploymentEvidence"
+  ],
   "Patient_Portal.gs": [
     "portalHome", "portalBookableDoctors", "portalDoctorSlots",
     "portalBookAppointment", "portalCancelAppointment", "portalLabResults",

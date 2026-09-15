@@ -1604,20 +1604,34 @@ function dpdpReadinessCheck() {
   }
 
   // --- deployment ---------------------------------------------------------
-  // The single highest-risk setting in the project, and it is not in code —
-  // which is why this cannot be checked, only reminded about. appsscript.json
-  // in the repository now says access "ANYONE" (Google sign-in required), but
-  // the manifest only takes effect on a NEW DEPLOYMENT: an /exec URL that was
-  // published before the change keeps its old setting until it is redeployed.
-  add('HIGH', 'Deployment',
-      'The manifest asks for access "ANYONE" and executeAs USER_DEPLOYING, so ' +
-      'every google.script.run endpoint still runs with the owner’s full ' +
-      'spreadsheet access — now for signed-in callers only, and only if this ' +
-      'deployment was published AFTER the manifest changed.',
-      'Deploy > Manage deployments > edit > New version. Then open the /exec ' +
-      'URL in a private window: if it answers without asking you to sign in, ' +
-      'the old ANYONE_ANONYMOUS deployment is still live. Treat any period it ' +
-      'was anonymous as potentially breached (s.8(6)).');
+  // The single highest-risk setting in the project, and it is not in code.
+  //
+  // This USED to be an unconditional HIGH built by reading appsscript.json —
+  // which describes what the NEXT version would be published with, not what
+  // the live /exec URL does. So it stayed HIGH on a clinic that had fixed it
+  // months ago, and its fix was "go and look in a private window", which
+  // nobody does twice. A finding that cannot go away is a finding that stops
+  // being read.
+  //
+  // depDeploymentFinding() answers it from EVIDENCE instead: whether the page
+  // loads actually arriving at this application carry an identified Google
+  // user, which is a direct consequence of the live access mode. See
+  // Deployment_Probe.gs.
+  try {
+    var dep = depDeploymentFinding();
+    add(dep.severity, 'Deployment', dep.text, dep.fix);
+  } catch (e) {
+    add('HIGH', 'Deployment',
+        'The manifest asks for access "ANYONE" and executeAs USER_DEPLOYING, so ' +
+        'every google.script.run endpoint runs with the owner’s full ' +
+        'spreadsheet access — and the deployment probe could not be read (' +
+        e.message + '), so whether the LIVE deployment requires a sign-in is ' +
+        'not known.',
+        'Deploy > Manage deployments > edit > New version. Then open the /exec ' +
+        'URL in a private window: if it answers without asking you to sign in, ' +
+        'the old ANYONE_ANONYMOUS deployment is still live. Treat any period it ' +
+        'was anonymous as potentially breached (s.8(6)).');
+  }
 
   // --- registers ----------------------------------------------------------
   var ss = SpreadsheetApp.getActiveSpreadsheet();
