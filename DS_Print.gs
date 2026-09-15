@@ -343,14 +343,26 @@ function dsx_verifyBlock_(header, snapshotNo) {
     '</td></tr></table>';
 }
 
+/**
+ * The base of the verification link printed on a signed summary.
+ *
+ * The clinic's own host wins when CRESC_PUBLIC_BASE_URL is set: this link is
+ * read by patients, by insurers and by other hospitals, and it should name
+ * the clinic. See cresc_publicLinkBase_() in Clinic_Profile.gs — the property
+ * has to forward to /exec with the query string intact, and the QR code beside
+ * the printed text is built from the same string, so an unconfigured host
+ * breaks both together rather than one silently.
+ */
 function dsx_webAppUrl_() {
-  try {
-    var u = ScriptApp.getService().getUrl();
-    if (u) return u;
-  } catch (e) {}
-  try {
-    return dsx_str_(PropertiesService.getScriptProperties().getProperty('DS_WEBAPP_URL'));
-  } catch (e) { return ''; }
+  var u = '';
+  try { u = ScriptApp.getService().getUrl() || ''; } catch (e) { u = ''; }
+  if (!u) {
+    try {
+      u = dsx_str_(PropertiesService.getScriptProperties().getProperty('DS_WEBAPP_URL'));
+    } catch (e) { u = ''; }
+  }
+  if (typeof cresc_publicLinkBase_ === 'function') return cresc_publicLinkBase_(u);
+  return u;
 }
 
 function dsx_consultantNameFor_(header) {

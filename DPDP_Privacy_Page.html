@@ -164,10 +164,17 @@
           'data protection questions. You may also complain to the Data Protection Board ' +
           'of India.</p>';
 
+      // The footer is the s.5(1) identification of the Data Fiduciary, so it
+      // carries the clinic's own web address. A patient who puts this page
+      // down has to be able to find us again, and the URL this page happens
+      // to be served from is a deployment id they cannot retype.
       var c = NOTICE.contact || {};
+      var site = c.website ? String(c.website).replace(/^https?:\/\//i, '') : '';
       document.getElementById('footer').innerHTML =
         esc(NOTICE.fiduciary || '') + (c.address ? '<br>' + esc(c.address) : '') +
         (c.phone ? '<br>' + esc(c.phone) : '') + (c.email ? ' · ' + esc(c.email) : '') +
+        (site ? '<br><a href="https://' + esc(site) + '" style="color:#0369a1;' +
+                'text-decoration:none;">' + esc(site) + '</a>' : '') +
         '<br><br>Notice version ' + esc(NOTICE.version || '') + '.';
     })
     .withFailureHandler(function () {

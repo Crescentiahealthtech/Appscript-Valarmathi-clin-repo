@@ -965,7 +965,12 @@
         if (res && res.success) {
           const msg = encodeURIComponent(`Hello! Here is your pharmacy invoice (${invNo}) from Crescentia HealthTech. View/Download it here: ${res.link}`);
           window.open(`https://wa.me/91${targetWa.replace(/\D/g, '')}?text=${msg}`, '_blank');
-        } else crescAlert("❌ Error generating PDF: " + (res.message || "Unknown error."));
+        } else if (window.crescConsentGate &&
+                   window.crescConsentGate(res, function () {
+                     sendPharmaWhatsAppGo(invNo, targetWa);
+                   })) {
+          // The notice is on screen; the send retries itself if they agree.
+        } else crescAlert("❌ Error generating PDF: " + ((res && res.message) || "Unknown error."));
       })
       .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
       .generateAndStorePharmacyInvoicePDF(invNo, currentDispatchHtml, window.sessionToken);

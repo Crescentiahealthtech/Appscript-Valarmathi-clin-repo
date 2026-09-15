@@ -261,14 +261,20 @@ function dpdp_noticeVersion_() {
  */
 function getDPDPNotice() {
   var clinic = (typeof cresc_clinic_ === 'function')
-    ? cresc_clinic_() : { name: 'this clinic', address: '', phone: '', email: '' };
+    ? cresc_clinic_() : { name: 'this clinic', address: '', phone: '', email: '',
+                          website: '' };
   var officer = dpdp_officer_();
 
   return {
     success: true,
     version: dpdp_noticeVersion_(),
     fiduciary: clinic.name,
-    contact: { address: clinic.address, phone: clinic.phone, email: clinic.email },
+    // s.5(1) requires the notice to identify the Data Fiduciary. A patient
+    // who has put the paper down has to be able to find the clinic again,
+    // so the notice carries the clinic's own web address — not the
+    // deployment URL this page happens to be served from.
+    contact: { address: clinic.address, phone: clinic.phone, email: clinic.email,
+               website: clinic.website || '' },
     purposes: DPDP_PURPOSES,
     rights: [
       { key: 'ACCESS',     label: 'A copy of what is held about you',

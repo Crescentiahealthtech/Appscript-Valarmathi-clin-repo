@@ -1997,7 +1997,15 @@ function _labVerifyBlock_(orderId, attestationHash, verifierName, verifiedAt) {
     '</div></div>';
 }
 
-/** This deployment's own verify link for one report. */
+/**
+ * The verify link printed on one report.
+ *
+ * Built on the clinic's own host when CRESC_PUBLIC_BASE_URL is set, so a
+ * report handed to a patient or another hospital carries an address that
+ * names the clinic rather than a script.google.com deployment id. Unset, it
+ * falls back to the /exec URL — see cresc_publicLinkBase_() in
+ * Clinic_Profile.gs for what that property has to forward to.
+ */
 function _labVerifyUrl_(orderId, attestationHash) {
   var base = '';
   try { base = ScriptApp.getService().getUrl() || ''; } catch (e) { base = ''; }
@@ -2006,6 +2014,7 @@ function _labVerifyUrl_(orderId, attestationHash) {
       base = String(PropertiesService.getScriptProperties().getProperty('CRESC_WEBAPP_URL') || '');
     } catch (e) { base = ''; }
   }
+  if (typeof cresc_publicLinkBase_ === 'function') base = cresc_publicLinkBase_(base);
   return base + '?verifyLab=' + encodeURIComponent(String(orderId || '')) +
          '&c=' + encodeURIComponent(String(attestationHash || '').substring(0, 12));
 }

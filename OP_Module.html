@@ -3578,7 +3578,16 @@ function sendOPWhatsAppTo(mobileNumber, btn, originalHtml) {
 
     google.script.run.withSuccessHandler(function (res) {
         btn.innerHTML = originalHtml; btn.disabled = false;
-        if (!res || !res.success) { opToast("Could not generate the link: " + (res ? res.message : 'Unknown error'), 'err'); return; }
+        if (!res || !res.success) {
+            // "Never asked about WhatsApp" is a question for the patient, not
+            // an error for the doctor: the notice goes on screen, the answer
+            // is recorded, and this send retries itself on a yes.
+            if (window.crescConsentGate && window.crescConsentGate(res, function () {
+                    sendOPWhatsAppTo(mobileNumber, btn, originalHtml);
+                })) return;
+            opToast("Could not generate the link: " + (res ? res.message : 'Unknown error'), 'err');
+            return;
+        }
         const patientName = document.getElementById('hd-pat-name').innerText || 'Patient';
         const msg = "Hello " + patientName + ",\n\nHere is your digital prescription from *Valarmathi Clinic*.\n\n" +
                     "View & download your secure PDF here:\n" + res.link + "\n\nWishing you a speedy recovery!";

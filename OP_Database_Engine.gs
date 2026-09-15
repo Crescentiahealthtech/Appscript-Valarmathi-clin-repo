@@ -699,6 +699,18 @@ function generateAndStoreOPPrescriptionPDF(encounterId, sessionToken) {
   try {
     // 1. Generate HTML using your existing OP engine
     crescRequire_(sessionToken, 'emr.read');
+
+    // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
+    // The register has carried this purpose since it was built and nothing
+    // read it. This dispatch now refuses unless the patient has agreed to be
+    // sent documents this way, and the refusal says how to ask them. See
+    // DPDP_Dispatch.gs.
+    var __pid = dpdp_resolvePatientFor_('OP_ENCOUNTER', encounterId);
+    var __gate = dpdpRequireDispatchConsent_(__pid, 'WHATSAPP',
+                   crescActor_(sessionToken), 'OP_PRESCRIPTION');
+    if (!__gate.ok) return { success: false, code: 'CONSENT_REQUIRED',
+                             consentState: __gate.state, patientId: __pid,
+                             notice: __gate.notice, message: __gate.message };
     const reportResponse = getOPPrescriptionHtml(encounterId); 
     if (!reportResponse.success) {
       return { success: false, message: "Could not generate HTML: " + reportResponse.message };
@@ -743,15 +755,14 @@ function generateAndStoreOPPrescriptionPDF(encounterId, sessionToken) {
     // 4. Save the file
     const file = monthFolder.createFile(pdfBlob);
 
-    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
-    // their ID and their clinical detail; a Drive link that never expires,
-    // sent over WhatsApp, is forwarded, backed up and restored on devices
-    // nobody here will ever see. The file stays PRIVATE and the patient gets
-    // a link back into this web app with a one-off key that expires, counts
-    // its opens and can be withdrawn. See DPDP_Documents.gs, finding H1.
-    var pdfPatientId = '';
-    try { pdfPatientId = String(getEncounterForPrint(encounterId).data.patientId || ''); } catch (e2) {}
-    var grant = dpdpIssueDocumentLink_(file, 'OP_PRESCRIPTION', pdfPatientId,
+    // Registered, not just shared. dpdpIssueDocumentLink_ publishes the
+    // file to Drive so the patient gets a link WhatsApp can preview and
+    // their phone can open, and writes it into Document_Grants with an
+    // expiry — after which the daily sweep makes the file private again
+    // and every forwarded copy of the link stops working. A bare
+    // setSharing(ANYONE_WITH_LINK) here would publish this prescription
+    // for ever with nothing able to take it back. See DPDP_Documents.gs.
+    var grant = dpdpIssueDocumentLink_(file, 'OP_PRESCRIPTION', __pid,
                                        (crescActor_(sessionToken) || {}).username || '');
     if (!grant.success) return { success: false, message: grant.message };
 
@@ -770,6 +781,18 @@ function generateAndStoreOPPrescriptionPDF(encounterId, sessionToken) {
 function emailOPPrescriptionPDF(encounterId, patientEmail, sessionToken) {
   try {
     crescRequire_(sessionToken, 'emr.read');
+
+    // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
+    // The register has carried this purpose since it was built and nothing
+    // read it. This dispatch now refuses unless the patient has agreed to be
+    // sent documents this way, and the refusal says how to ask them. See
+    // DPDP_Dispatch.gs.
+    var __pid = dpdp_resolvePatientFor_('OP_ENCOUNTER', encounterId);
+    var __gate = dpdpRequireDispatchConsent_(__pid, 'EMAIL',
+                   crescActor_(sessionToken), 'OP_PRESCRIPTION');
+    if (!__gate.ok) return { success: false, code: 'CONSENT_REQUIRED',
+                             consentState: __gate.state, patientId: __pid,
+                             notice: __gate.notice, message: __gate.message };
     const reportResponse = getOPPrescriptionHtml(encounterId); 
     
     if (!reportResponse.success) {

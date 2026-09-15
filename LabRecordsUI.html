@@ -285,7 +285,13 @@ var LabRecordsApp = (function () {
       btn.innerHTML = originalHtml;
       btn.disabled = false;
 
-      if(!res.success) {
+      // A refusal because the patient has never been asked about WhatsApp is
+      // a question, not an error: crescConsentGate puts the notice on screen,
+      // records the answer, and calls this back if they agree.
+      if (!res.success) {
+        if (window.crescConsentGate && window.crescConsentGate(res, function () {
+              sendReportWhatsApp(orderId, patientName, mobileNumber, btn);
+            })) return;
         crescAlert("❌ Failed to generate secure link: " + res.message);
         return;
       }
@@ -347,7 +353,13 @@ var LabRecordsApp = (function () {
     
     google.script.run.withSuccessHandler(function(res) {
       btn.innerHTML = ogHtml;
-      if (!res || !res.success) { crescAlert(res.message); return; }
+      if (!res || !res.success) {
+        if (window.crescConsentGate && window.crescConsentGate(res, function () {
+              sendArchiveInvoiceWhatsApp(orderId, mobileNumber, btn);
+            })) return;
+        crescAlert(res.message);
+        return;
+      }
       var text = "Hello,%0A%0APlease find your laboratory tax invoice attached below:%0A" + encodeURIComponent(res.link) + "%0A%0A- Crescentia Clinic";
       window.open("https://wa.me/" + cleanNum + "?text=" + text, '_blank');
     }).withFailureHandler(function(err){

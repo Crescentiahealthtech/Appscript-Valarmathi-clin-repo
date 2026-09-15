@@ -273,7 +273,13 @@ var LabBill=(function(){
 
   function waInvoiceGo(billId, patientName, mobile) {
     run('generateAndStoreLabInvoicePDF', [billId], function(res) {
-      if (!res || !res.success) { flash((res && res.message) || 'Failed to generate PDF.', false); return; }
+      if (!res || !res.success) {
+        if (window.crescConsentGate && window.crescConsentGate(res, function () {
+              waInvoiceGo(billId, patientName, mobile);
+            })) return;
+        flash((res && res.message) || 'Failed to generate PDF.', false);
+        return;
+      }
       
       var text = "Hello " + patientName + ",%0A%0AThank you for visiting Crescentia Clinic. Your laboratory payment receipt is ready.%0A%0AYou can securely view and download your invoice here:%0A" + encodeURIComponent(res.link) + "%0A%0AWe wish you the best of health!%0A- Crescentia Billing Desk";
       

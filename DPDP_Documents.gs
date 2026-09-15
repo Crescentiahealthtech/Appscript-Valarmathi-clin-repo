@@ -28,27 +28,61 @@
 //
 // WHAT THIS FILE DOES INSTEAD
 //
-// The file stays PRIVATE in Drive. What the patient gets is a link back into
-// this web app carrying a one-off random key:
+// Every document the clinic hands a patient is REGISTERED before it is sent.
+// The register knows its patient, its expiry, who sent it and how, and it can
+// be closed in one call — which is the part the bare setSharing() line could
+// not do at all.
 //
-//     .../exec?doc=DOC-260915-093012-A1B2&k=<32 random characters>
+// WHY THE LINK IS A DRIVE LINK
 //
-// The register stores only a DIGEST of that key, so the spreadsheet — which
-// far more people can open than should be able to read a report — does not
-// itself contain the capability. Each grant knows its patient, its expiry,
-// how many times it has been opened and by whom, and can be revoked in one
-// call. Every open is written to the audit log, which is also finding M2:
-// until now, reading a clinical document left no trace at all.
+// The first version of this file kept the file private and sent the patient a
+// link back into this web app:
 //
-// WHAT IT DOES NOT DO
+//     https://script.google.com/macros/s/AKfycb…/exec?doc=DOC-…&k=…
 //
-// It does not authenticate the patient. A key in a link is a capability, not
-// an identity: whoever holds it can open the document. That is the same
-// promise the Drive link made, with four differences that matter — it
-// expires, it is counted, it is revocable, and it is one document rather than
-// a permanent window into a Drive folder. Authenticating the patient properly
-// means the portal, and the portal is where a patient with a password should
-// be sent.
+// That is the strongest link technically and the weakest link in practice. A
+// patient receiving it on WhatsApp sees a script.google.com URL with a
+// 32-character key on the end, arriving from a clinic, asking them to open
+// their medical report. It looks exactly like the thing they are told every
+// week not to click, it renders in WhatsApp with no preview and no file name,
+// and on a phone that has never signed into the deploying Google account it
+// could not be opened at all. A report a patient will not open is not a
+// report delivered.
+//
+// So the document is published to Drive and the patient gets the link Drive
+// itself generates:
+//
+//     https://drive.google.com/file/d/<id>/view
+//
+// which WhatsApp previews as a PDF, which opens in the Drive viewer the
+// patient already has, and which downloads without an account.
+//
+// WHAT KEEPS THAT SAFE
+//
+// The four problems in the original setSharing() line were: the link never
+// expired, nothing recorded that it existed, nothing could revoke it, and it
+// was a permanent window rather than one document. Publishing to Drive
+// re-opens only the first of those, and only until the sweep runs:
+//
+//   * Every published file is a row in Document_Grants with an expiry.
+//   * dpdpExpireDocumentGrants() runs daily off dpdpInstallTriggers() and
+//     sets every expired file back to PRIVATE. The link then stops working
+//     for everyone who ever received it, forwarded copies included.
+//   * dpdpRevokeDocumentLink() does the same immediately, on demand.
+//   * The grant is one file. There is no folder link, and the folders
+//     themselves are never shared.
+//
+// The honest trade this makes, written down rather than glossed: between
+// sending and expiry, anyone holding the link can open that one document,
+// and Drive does not tell us who did. The portal route below counted opens;
+// Drive cannot. A patient who signs in to the portal gets an authenticated
+// view instead, and that is still where a patient with a password should be
+// sent. What a WhatsApp message gets is a document that expires.
+//
+// If link sharing is refused — a Workspace policy, a shared drive — the
+// grant falls back to the portal-served route automatically rather than
+// failing, and says so in the row. dpdpServeDocument_() below is that route,
+// and it also keeps every link issued before this change working.
 // ============================================================================
 
 var DPDP_DOC_CFG = {
@@ -61,17 +95,26 @@ var DPDP_DOC_CFG = {
 
   /** A document opened more often than this is not being read by one patient.
    *  The grant closes itself and the count is left in the register, because
-   *  the number is evidence. */
+   *  the number is evidence. Portal-served grants only: Drive does not report
+   *  opens back to us, which is the one thing that route gives up. */
   MAX_OPENS: 25,
 
-  KEY_LENGTH: 32
+  KEY_LENGTH: 32,
+
+  /** DRIVE hands out the link Drive generates; PORTAL keeps the file private
+   *  and serves it through ?doc=&k= below. DRIVE is what a patient can
+   *  actually open from a WhatsApp message. */
+  DELIVERY_DEFAULT: 'DRIVE'
 };
 
 function dpdp_grantSheet_() {
   return dc_ensureSheet_(SpreadsheetApp.getActiveSpreadsheet(), DPDP_DOC_CFG.SHEET, [
     'Grant_ID', 'Key_Digest', 'File_ID', 'File_Name', 'Doc_Type', 'Patient_ID',
     'Issued_At', 'Issued_By', 'Expires_At', 'Status', 'Opens', 'Last_Opened_At',
-    'Revoked_At', 'Revoked_By'
+    'Revoked_At', 'Revoked_By',
+    // Appended, so rows written before this change keep their meaning: a
+    // blank Delivery is a PORTAL grant, which is what they all were.
+    'Delivery', 'Link'
   ]);
 }
 
@@ -96,11 +139,11 @@ function dpdp_webAppUrl_() {
 }
 
 /**
- * Issues a private, expiring link to a file, and keeps the file private.
+ * Registers a file against a patient and returns the link to send them.
  *
- * Call this INSTEAD of setSharing(ANYONE_WITH_LINK). It also removes any
- * public sharing the file already carries, so re-sending an old document
- * closes the old hole rather than adding a second one.
+ * Call this INSTEAD of a bare setSharing(ANYONE_WITH_LINK). The difference
+ * is not the sharing — it is that the file is now in a register that knows
+ * when it expires and can close it.
  *
  * @param {DriveApp.File} file
  * @param {string} docType      LAB_REPORT, OP_PRESCRIPTION, …
@@ -108,24 +151,11 @@ function dpdp_webAppUrl_() {
  * @param {string} issuedBy     username of the person sending it
  * @param {number} [days]       lifetime; defaults to DPDP_DOC_CFG.DEFAULT_DAYS
  * @return {{success:boolean, url:string, grantId:string, expiresAt:string,
- *           message:string}}
+ *           delivery:string, message:string}}
  */
 function dpdpIssueDocumentLink_(file, docType, patientId, issuedBy, days) {
   try {
     if (!file) return { success: false, url: '', message: 'No file to share.' };
-
-    // Whatever this file's sharing was, it is private from here on. A document
-    // re-sent to a patient must not leave its previous public link alive.
-    try {
-      file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
-    } catch (e) { /* a file in a shared drive may refuse; the grant still binds */ }
-
-    var base = dpdp_webAppUrl_();
-    if (!base) {
-      return { success: false, url: '',
-               message: 'This script has no published web app URL, so a private ' +
-                        'document link cannot be built. Deploy the web app first.' };
-    }
 
     var now = new Date();
     var life = (days && days > 0) ? days : DPDP_DOC_CFG.DEFAULT_DAYS;
@@ -134,30 +164,98 @@ function dpdpIssueDocumentLink_(file, docType, patientId, issuedBy, days) {
     var id = 'DOC-' + Utilities.formatDate(now, DPDP_CFG.TZ, 'yyMMdd-HHmmss') + '-' +
              Utilities.getUuid().substring(0, 4).toUpperCase();
 
-    dpdp_grantSheet_().appendRow([
-      id, dpdp_keyDigest_(key), file.getId(), file.getName(),
-      dpdp_str_(docType), dpdp_str_(patientId).toUpperCase(),
-      now, dpdp_str_(issuedBy) || 'SYSTEM', expires, 'ACTIVE', 0, '', '', ''
-    ]);
+    // ---- publish to Drive, which is the link the patient can open --------
+    var delivery = '', url = '';
+    if (DPDP_DOC_CFG.DELIVERY_DEFAULT === 'DRIVE') {
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        delivery = 'DRIVE';
+        // Built rather than read from getUrl(): getUrl() returns the /edit or
+        // /view form Drive happens to choose for the type, and a PDF handed to
+        // a patient should always open in the viewer.
+        url = 'https://drive.google.com/file/d/' + file.getId() + '/view?usp=sharing';
+      } catch (e) {
+        // A Workspace policy or a shared drive can refuse link sharing. That
+        // is a reason to fall back, not to fail: the patient still needs the
+        // document, and the portal route below still works.
+        delivery = '';
+      }
+    }
+
+    // ---- fall back to the portal-served route ----------------------------
+    if (!delivery) {
+      try {
+        file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+      } catch (e) { /* the grant still binds */ }
+      var base = dpdp_webAppUrl_();
+      if (!base) {
+        return { success: false, url: '',
+                 message: 'Drive would not publish this file and the script has ' +
+                          'no deployed web app URL to serve it from either, so ' +
+                          'there is no link to send. Deploy the web app, or check ' +
+                          'whether link sharing is blocked for this account.' };
+      }
+      delivery = 'PORTAL';
+      url = base + '?doc=' + encodeURIComponent(id) + '&k=' + encodeURIComponent(key);
+    }
+
+    var sh = dpdp_grantSheet_();
+    var m = dc_headerMap_(sh);
+    var row = new Array(sh.getLastColumn()).fill('');
+    row[m['Grant_ID']]      = id;
+    row[m['Key_Digest']]    = dpdp_keyDigest_(key);
+    row[m['File_ID']]       = file.getId();
+    row[m['File_Name']]     = file.getName();
+    row[m['Doc_Type']]      = dpdp_str_(docType);
+    row[m['Patient_ID']]    = dpdp_str_(patientId).toUpperCase();
+    row[m['Issued_At']]     = now;
+    row[m['Issued_By']]     = dpdp_str_(issuedBy) || 'SYSTEM';
+    row[m['Expires_At']]    = expires;
+    row[m['Status']]        = 'ACTIVE';
+    row[m['Opens']]         = 0;
+    row[m['Delivery']]      = delivery;
+    // The link is stored so the register can answer "what was this patient
+    // sent" (s.11(1)(b)) without rebuilding it. The KEY is not stored — only
+    // its digest — so a PORTAL row in the register is not itself usable.
+    row[m['Link']]          = (delivery === 'DRIVE') ? url : '';
+    sh.appendRow(row);
     dc_invalidate_(DPDP_DOC_CFG.SHEET);
     SpreadsheetApp.flush();
-
-    var url = base + '?doc=' + encodeURIComponent(id) + '&k=' + encodeURIComponent(key);
 
     try {
       logAudit_({ username: dpdp_str_(issuedBy) || 'SYSTEM', role: '' },
                 'DOCUMENT_LINK_ISSUED', 'Document', id,
                 { docType: dpdp_str_(docType), patientId: dpdp_str_(patientId),
-                  expiresAt: dpdp_fmt_(expires) });
+                  delivery: delivery, expiresAt: dpdp_fmt_(expires) });
     } catch (e) {}
 
-    return { success: true, url: url, grantId: id,
+    return { success: true, url: url, grantId: id, delivery: delivery,
              expiresAt: dpdp_fmt_(expires),
              message: 'Link valid until ' +
                       Utilities.formatDate(expires, DPDP_CFG.TZ, 'dd-MMM-yyyy') + '.' };
   } catch (err) {
     return { success: false, url: '', message: 'Could not issue a document link: ' +
              err.message };
+  }
+}
+
+/**
+ * Takes a published file back to private. Used by the expiry sweep and by a
+ * revocation, which want the identical effect: the link stops working for
+ * everyone who ever received it.
+ *
+ * @return {string} '' on success, or why it could not be done
+ */
+function dpdp_unpublish_(fileId) {
+  if (!dpdp_str_(fileId)) return 'no file id on the grant';
+  try {
+    DriveApp.getFileById(dpdp_str_(fileId))
+            .setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+    return '';
+  } catch (e) {
+    // A file the clinic has since deleted is the same outcome as a file made
+    // private, so it is reported rather than treated as a failure.
+    return e.message;
   }
 }
 
@@ -338,16 +436,37 @@ function dpdpRevokeDocumentLink(grantId, sessionToken) {
 
     for (var i = 1; i < (data ? data.length : 0); i++) {
       if (dpdp_str_(data[i][m['Grant_ID']]).toUpperCase() !== want) continue;
-      sh.getRange(i + 1, m['Status'] + 1).setValue('REVOKED');
+
+      // A DRIVE grant is only withdrawn when the FILE stops being readable.
+      // Marking the row REVOKED and leaving the file published would be a
+      // register that lies, which is worse than no register.
+      var delivery = dpdp_str_(data[i][m['Delivery']]).toUpperCase() || 'PORTAL';
+      var problem = '';
+      if (delivery === 'DRIVE') {
+        problem = dpdp_unpublish_(dpdp_str_(data[i][m['File_ID']]));
+      }
+
+      sh.getRange(i + 1, m['Status'] + 1).setValue(problem ? 'REVOKE_FAILED' : 'REVOKED');
       sh.getRange(i + 1, m['Revoked_At'] + 1).setValue(new Date());
       sh.getRange(i + 1, m['Revoked_By'] + 1).setValue(actor.username);
       dc_invalidate_(DPDP_DOC_CFG.SHEET);
       SpreadsheetApp.flush();
       try {
         logAudit_({ username: actor.username, role: actor.role },
-                  'DOCUMENT_LINK_REVOKED', 'Document', want, {});
+                  'DOCUMENT_LINK_REVOKED', 'Document', want,
+                  { delivery: delivery, problem: problem });
       } catch (e) {}
-      return { success: true, message: 'Link ' + want + ' withdrawn.' };
+
+      if (problem) {
+        return { success: false,
+                 message: 'The register row for ' + want + ' is marked, but the ' +
+                          'file itself could NOT be made private (' + problem +
+                          '). Anyone holding the link can still open it — ' +
+                          'un-share or delete the file in Drive.' };
+      }
+      return { success: true,
+               message: 'Link ' + want + ' withdrawn. The file is private again, ' +
+                        'so forwarded copies of the link no longer open it.' };
     }
     return { success: false, message: 'No document link with the id ' + grantId + '.' };
   } catch (err) {
@@ -378,7 +497,13 @@ function dpdpListDocumentLinks(patientId, sessionToken) {
         issuedBy: dpdp_str_(data[i][m['Issued_By']]),
         expiresAt: dpdp_str_(data[i][m['Expires_At']]),
         status: dpdp_str_(data[i][m['Status']]),
+        delivery: dpdp_str_(data[i][m['Delivery']]) || 'PORTAL',
+        link: dpdp_str_(data[i][m['Link']]),
+        // Only a PORTAL grant has a meaningful open count. Drive does not
+        // report reads back to us, so 0 here means "not counted", not "not
+        // opened", and the screen says so rather than implying nobody looked.
         opens: parseInt(data[i][m['Opens']], 10) || 0,
+        opensCounted: (dpdp_str_(data[i][m['Delivery']]).toUpperCase() !== 'DRIVE'),
         lastOpened: dpdp_str_(data[i][m['Last_Opened_At']])
       });
     }
@@ -394,8 +519,15 @@ function dpdpListDocumentLinks(patientId, sessionToken) {
  * Closes every grant past its expiry. Attach to the daily trigger installed by
  * dpdpInstallTriggers(); it costs nothing when there is nothing to close.
  *
- * Unlike the Drive sweep this one cannot fail: there is no file permission to
- * change, only a row to mark. The file was never public in the first place.
+ * THIS IS THE JOB THAT MAKES A DRIVE LINK SAFE TO SEND. Until it runs, an
+ * expired grant's file is still published; after it runs, the link is dead
+ * for every copy of the message it was ever sent in. If it is not installed,
+ * the clinic is back to permanent Drive links — dpdpReadinessCheck() reports
+ * a missing trigger for exactly this reason.
+ *
+ * A file that cannot be made private is counted and NAMED. It is the one
+ * outcome here that leaves a patient's document readable, so it must not
+ * disappear into a success message.
  */
 function dpdpExpireDocumentGrants() {
   var sh = dpdp_grantSheet_();
@@ -403,17 +535,36 @@ function dpdpExpireDocumentGrants() {
   var data = dc_sheetValues_(sh);
   if (!data || data.length < 2) return 'No document grants.';
 
-  var now = Date.now(), closed = 0, live = 0;
+  var now = Date.now(), closed = 0, live = 0, unpublished = 0, stuck = [];
   for (var i = 1; i < data.length; i++) {
     if (dpdp_str_(data[i][m['Status']]).toUpperCase() !== 'ACTIVE') continue;
     var exp = (typeof cresc_parseDate_ === 'function')
       ? cresc_parseDate_(data[i][m['Expires_At']]) : new Date(data[i][m['Expires_At']]);
     if (exp && !isNaN(exp.getTime()) && exp.getTime() >= now) { live++; continue; }
-    sh.getRange(i + 1, m['Status'] + 1).setValue('EXPIRED');
-    closed++;
+
+    var delivery = dpdp_str_(data[i][m['Delivery']]).toUpperCase() || 'PORTAL';
+    var problem = '';
+    if (delivery === 'DRIVE') {
+      problem = dpdp_unpublish_(dpdp_str_(data[i][m['File_ID']]));
+      if (!problem) unpublished++;
+    }
+
+    if (problem) {
+      sh.getRange(i + 1, m['Status'] + 1).setValue('EXPIRY_FAILED');
+      stuck.push(dpdp_str_(data[i][m['Grant_ID']]) + ' (' +
+                 dpdp_str_(data[i][m['File_Name']]) + '): ' + problem);
+    } else {
+      sh.getRange(i + 1, m['Status'] + 1).setValue('EXPIRED');
+      closed++;
+    }
   }
   dc_invalidate_(DPDP_DOC_CFG.SHEET);
-  var msg = closed + ' document link(s) expired, ' + live + ' still live.';
+  var msg = closed + ' document link(s) expired (' + unpublished +
+            ' Drive file(s) made private again), ' + live + ' still live.' +
+            (stuck.length
+              ? '\n\nSTILL READABLE — un-share or delete these in Drive by hand:\n' +
+                stuck.join('\n')
+              : '');
   Logger.log(msg);
   return msg;
 }
