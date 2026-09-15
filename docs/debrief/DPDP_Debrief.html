@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DPDP Remediation Debrief — Crescentia HealthTech</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 16mm 16mm; }
+  @page :first { margin: 0; }
+
+  :root {
+    --ink:#16202b; --body:#2c3a46; --muted:#6b7a88; --line:#dde4ea;
+    --accent:#0d6b63; --accent-soft:#f0f7f6; --red:#9b2c2c; --red-soft:#fdf2f2;
+    --amber:#8a5a00; --amber-soft:#fffaf0;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; color:var(--body); background:#fff;
+    font-family:"Charter","Bitstream Charter","Georgia","Times New Roman",serif;
+    font-size:9.6pt; line-height:1.55; -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  h1,h2,h3,h4,.sans { font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; }
+
+  /* ---------- cover ---------- */
+  .cover { height:297mm; padding:30mm 22mm 20mm; display:flex; flex-direction:column;
+           border-top:12mm solid var(--accent); page-break-after:always; }
+  .cover .eyebrow { font-size:8.5pt; letter-spacing:.18em; text-transform:uppercase;
+                    color:var(--accent); font-weight:700; }
+  .cover h1 { font-size:30pt; line-height:1.12; margin:12mm 0 4mm; color:var(--ink); font-weight:700;
+              letter-spacing:-.015em; }
+  .cover .sub { font-size:13pt; color:var(--muted); line-height:1.45; max-width:130mm; }
+  .cover .meta { margin-top:auto; border-top:1px solid var(--line); padding-top:6mm;
+                 display:grid; grid-template-columns:1fr 1fr; gap:4mm 10mm; font-size:9pt; }
+  .cover .meta dt { font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; font-size:7.6pt;
+                    letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  .cover .meta dd { margin:1mm 0 0; color:var(--ink); }
+  .readers { margin-top:10mm; border-left:3px solid var(--accent); padding:3mm 0 3mm 6mm;
+             background:var(--accent-soft); }
+  .readers p { margin:0 0 2mm; font-size:9.2pt; }
+  .readers p:last-child { margin-bottom:0; }
+
+  /* ---------- structure ---------- */
+  section { page-break-before:always; }
+  section.cont { page-break-before:auto; }
+  h2 { font-size:15pt; color:var(--ink); margin:0 0 1mm; letter-spacing:-.01em; }
+  h2 .num { color:var(--accent); font-weight:700; margin-right:2.5mm; }
+  .lede { color:var(--muted); font-size:9.4pt; margin:0 0 5mm; padding-bottom:3mm;
+          border-bottom:1px solid var(--line); }
+  h3 { font-size:10.6pt; color:var(--ink); margin:6mm 0 1.5mm; }
+  h4 { font-size:9.4pt; color:var(--ink); margin:4mm 0 1mm; }
+  p { margin:0 0 2.6mm; }
+  ul,ol { margin:0 0 3mm; padding-left:5mm; }
+  li { margin-bottom:1.4mm; }
+  strong { color:var(--ink); }
+  code, .mono { font-family:"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+                font-size:8.4pt; background:#f4f6f8; padding:.4mm 1mm; border-radius:2px;
+                color:#1f3a38; }
+  pre { background:#f7f9fa; border:1px solid var(--line); border-left:3px solid var(--accent);
+        padding:3mm 4mm; font-family:"SF Mono",Menlo,Consolas,monospace; font-size:8pt;
+        line-height:1.5; overflow:hidden; white-space:pre-wrap; margin:0 0 3mm; color:#23333f; }
+
+  table { width:100%; border-collapse:collapse; margin:0 0 4mm; font-size:8.5pt; }
+  th { font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; font-size:7.4pt;
+       text-transform:uppercase; letter-spacing:.07em; color:var(--muted); text-align:left;
+       border-bottom:1.2px solid var(--ink); padding:1.6mm 2mm; }
+  td { border-bottom:1px solid var(--line); padding:1.6mm 2mm; vertical-align:top; }
+  tr { page-break-inside:avoid; }
+  td.mono, th.mono { font-family:"SF Mono",Menlo,Consolas,monospace; font-size:8pt; }
+
+  .pill { display:inline-block; font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+          font-size:6.8pt; font-weight:700; letter-spacing:.05em; padding:.5mm 1.6mm;
+          border-radius:2px; white-space:nowrap; }
+  .p-closed { background:var(--accent-soft); color:var(--accent); border:1px solid #bfe0dc; }
+  .p-open   { background:var(--red-soft); color:var(--red); border:1px solid #f0c9c9; }
+  .p-action { background:var(--amber-soft); color:var(--amber); border:1px solid #f0dcb4; }
+
+  .box { border:1px solid var(--line); border-radius:3px; padding:3.5mm 4mm; margin:0 0 4mm;
+         page-break-inside:avoid; }
+  .box.warn { border-color:#e8bcbc; background:var(--red-soft); }
+  .box.note { border-color:#bfe0dc; background:var(--accent-soft); }
+  .box.amber { border-color:#eedcb4; background:var(--amber-soft); }
+  .box h4 { margin-top:0; }
+  .box h4.warn { color:var(--red); }
+  .box p:last-child, .box ul:last-child, .box ol:last-child { margin-bottom:0; }
+
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:0 8mm; }
+  .kicker { font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; font-size:7.4pt;
+            letter-spacing:.09em; text-transform:uppercase; color:var(--accent); font-weight:700;
+            margin:0 0 1mm; }
+  .footnote { font-size:8.2pt; color:var(--muted); }
+  .rule { border:0; border-top:1px solid var(--line); margin:5mm 0; }
+  .toc td { border:0; padding:1.1mm 0; }
+  .toc td.n { width:8mm; color:var(--accent); font-weight:700;
+              font-family:"Helvetica Neue",Helvetica,Arial,sans-serif; }
+  .toc td.d { color:var(--muted); font-size:8.6pt; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════ COVER ══════════════════════════ -->
+<div class="cover">
+  <div class="eyebrow">Digital Personal Data Protection Act, 2023 · Engineering remediation</div>
+  <h1>What was wrong, what changed,<br>and what is still yours to do</h1>
+  <p class="sub">A debrief on the DPDP remediation of the Valarmathi Clinic
+  practice-management system, with the deployment runbook and the questions
+  that need a lawyer.</p>
+
+  <div class="readers">
+    <p><strong>If you are the clinic owner:</strong> read §1, then work §7 in order. §5 is the map
+    of where every function lives.</p>
+    <p><strong>If you are the lawyer:</strong> §1, §2 and §9. Two facts are established rather than
+    assumed, and both carry legal consequences.</p>
+    <p><strong>If you are a later AI session on this repository:</strong> §2, §3 and §10 are the
+    state of play; the repository's <span class="mono">docs/</span> folder is authoritative.</p>
+  </div>
+
+  <dl class="meta">
+    <div><dt>Prepared for</dt><dd>Crescentia HealthTech · Valarmathi Clinic &amp; Diagnostics</dd></div>
+    <div><dt>Date</dt><dd>15 September 2026</dd></div>
+    <div><dt>Repository</dt><dd>Appscript-Valarmathi-clin-repo</dd></div>
+    <div><dt>Branch / commit</dt><dd class="mono">claude/nifty-planck-nam059 · ef070e0</dd></div>
+    <div><dt>Scope</dt><dd>11 commits · 90 files · 13 new files</dd></div>
+    <div><dt>Status</dt><dd>Code findings closed · deployment pending</dd></div>
+  </dl>
+
+  <p class="footnote" style="margin-top:6mm">This is an engineering assessment. It describes what the
+  software does and does not do. It is not legal advice, and it does not decide whether the clinic is a
+  Significant Data Fiduciary under section 10 — that is for a lawyer.</p>
+</div>
+
+<!-- ══════════════════════════ 1. EXECUTIVE SUMMARY ══════════════════════════ -->
+<section class="cont">
+  <h2><span class="num">1</span>Executive summary</h2>
+  <p class="lede">Three critical failures, all of them now closed in code. Two facts were established
+  during the work that need a decision from someone other than an engineer.</p>
+
+  <h3>What the system is</h3>
+  <p>The clinic runs on Google Apps Script: a web application whose database is a Google
+  spreadsheet, whose documents are PDFs in Google Drive, and whose server code runs under one
+  Google account. Under the Act the clinic is a <strong>Data Fiduciary</strong> and each patient is a
+  <strong>Data Principal</strong>.</p>
+
+  <h3>What was wrong</h3>
+  <ol>
+    <li><strong>The application answered anybody, as the owner.</strong> It was published so that no
+    sign-in was required, and every server function ran with the owner's full access to the
+    spreadsheet. 136 of those functions asked no question at all about who was calling — including
+    the ward board with every inpatient's diagnosis, complete ward notes, full lab reports with
+    results, live inpatient bills, insurance claim settlement, the cash drawers, and writes to
+    clinical records. Patient IDs are sequential and printed as a barcode on every patient card, so
+    the identifier needed to walk the register was public.</li>
+    <li><strong>Passwords were readable.</strong> Staff passwords sat in the spreadsheet in plain
+    text. Patient portal passwords were worse: they were <em>calculated</em> — the first three
+    letters of the name plus the year of birth — from information printed on the patient's own
+    prescription, beside the barcode of the ID needed to use them.</li>
+    <li><strong>Patient documents were published to the open web.</strong> Lab reports and
+    prescriptions were uploaded to Drive as "anyone with the link", and the link was sent over
+    WhatsApp. Those links never expired, worked from every forwarded copy, and nothing listed them,
+    so nothing could withdraw them.</li>
+  </ol>
+  <p>Alongside those: no consent was ever recorded, there was no way to answer a patient's statutory
+  request, no retention policy, no breach procedure, no record of who had read a file, and no
+  processor agreements.</p>
+
+  <h3>What changed</h3>
+  <p>Every endpoint the browser can reach now establishes who is calling and what they are allowed to
+  do. Passwords are stored as salted digests and a plain-text one is refused outright. Documents are
+  private and reached through expiring, countable, revocable links. Consent is captured per purpose
+  against a versioned notice and can be withdrawn by the patient themselves. Statutory requests have
+  a register, a clock and a mandatory identity check. Breaches have a register that records the ones
+  judged <em>not</em> notifiable, with reasons. Reads of clinical documents are audited, and an
+  automated weekly review reads that audit for the patterns that precede a disclosure.</p>
+
+  <div class="box warn">
+    <h4 class="warn">Two things are true today that were not known before this work</h4>
+    <p><strong>1. The records are held in a personal Gmail account.</strong> The spreadsheet is owned by
+    <span class="mono">crescentiahealthtech@gmail.com</span>. A personal Google account carries no Data
+    Processing Addendum, so <strong>section 8(2) is met for none of the clinic's patient data.</strong>
+    It also has no administrative console: if that account is lost, recovered by someone else, or
+    belongs to a person who leaves, the clinic's entire medical record goes with it.</p>
+    <p><strong>2. The application was reachable without a sign-in for its whole life to date.</strong>
+    Whether that period must be notified to the Data Protection Board and to every affected patient
+    under section 8(6) is a legal judgement, not an engineering one. It needs to be made, and recorded
+    either way.</p>
+  </div>
+
+  <h3>What is left</h3>
+  <p>Nothing in the remediation is finished until the web app is <strong>redeployed</strong>: the
+  manifest change that requires a sign-in takes effect only on a new version. After that, four
+  documents need adopting, two clinic decisions need making, and the move off the personal Google
+  account needs starting.</p>
+</section>
+
+<!-- ══════════════════════════ 2. FINDINGS ══════════════════════════ -->
+<section>
+  <h2><span class="num">2</span>Status of every finding</h2>
+  <p class="lede">The fourteen findings from the September assessment, plus one found during the work.
+  "Closed in code" means the software no longer permits it; it does not mean the clinic is compliant,
+  which also requires the documents and decisions in §9.</p>
+
+  <table>
+    <thead><tr><th style="width:9%">Ref</th><th style="width:38%">Finding</th><th style="width:11%">Severity</th>
+    <th style="width:14%">Status</th><th>Where it now lives</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">C1</td><td>Web app answered anonymously, as the owner</td><td>Critical</td>
+        <td><span class="pill p-action">Needs redeploy</span></td><td class="mono">appsscript.json</td></tr>
+      <tr><td class="mono">C2</td><td>136 endpoints with no permission check</td><td>Critical</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">RBAC.gs + 30 files</td></tr>
+      <tr><td class="mono">C3</td><td>Passwords in plain text; portal passwords derivable</td><td>Critical</td>
+        <td><span class="pill p-action">Needs migration</span></td><td class="mono">Auth_Credentials.gs</td></tr>
+      <tr><td class="mono">H1</td><td>Documents published publicly and never revoked</td><td>High</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">DPDP_Documents.gs</td></tr>
+      <tr><td class="mono">H2</td><td>No consent captured, ever</td><td>High</td>
+        <td><span class="pill p-closed">Closed in code</span></td><td class="mono">DPDP_Compliance.gs · docs/CONSENT_NOTICE.md</td></tr>
+      <tr><td class="mono">H3</td><td>No way to answer a data principal's request</td><td>High</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">DPDP_Compliance.gs · Admin_DPDP_Console.html</td></tr>
+      <tr><td class="mono">H4</td><td>No retention policy</td><td>High</td>
+        <td><span class="pill p-closed">Closed in code</span></td><td class="mono">docs/RETENTION_SCHEDULE.md</td></tr>
+      <tr><td class="mono">H5</td><td>No breach detection or procedure</td><td>High</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">DPDP_Breach.gs · docs/BREACH_PROCEDURE.md</td></tr>
+      <tr><td class="mono">H6</td><td>No processor agreements</td><td>High</td>
+        <td><span class="pill p-open">Open — legal</span></td><td class="mono">docs/PROCESSORS.md</td></tr>
+      <tr><td class="mono">M1</td><td>Data collected that nothing ever read</td><td>Medium</td>
+        <td><span class="pill p-closed">Closed</span></td><td>Registration, profile editor, search</td></tr>
+      <tr><td class="mono">M2</td><td>Audit log did not record reads</td><td>Medium</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">dpdpLogRead_ · 9 call sites</td></tr>
+      <tr><td class="mono">M3</td><td>Dictation sends audio to a third party</td><td>Medium</td>
+        <td><span class="pill p-action">Needs a decision</span></td><td class="mono">dpdpSetVoicePolicy</td></tr>
+      <tr><td class="mono">M4</td><td>No nomination mechanism (s.14)</td><td>Medium</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">Nomination_Register</td></tr>
+      <tr><td class="mono">M5</td><td>No verification that a requester is who they say</td><td>Medium</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">DPDP_Requests</td></tr>
+      <tr><td class="mono">N1</td><td><strong>New:</strong> the compliance scanner undercounted by 74 endpoints</td><td>High</td>
+        <td><span class="pill p-closed">Closed</span></td><td class="mono">tools/rbac.js</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box amber">
+    <h4>N1 — why a new finding matters more than it sounds</h4>
+    <p>The original assessment reported 62 unguarded endpoints. The true number was <strong>136</strong>.
+    The scanner read only the first 700 characters after each server call and took the last function
+    name in that window, so any endpoint written after a long success handler was invisible — including
+    <span class="mono">registerPatient</span>, an unauthenticated <em>write</em> to the patient master. It
+    also stopped reading at the first code comment inside a call chain, which is how the function that
+    rebuilds the lab database stayed hidden.</p>
+    <p>A compliance number you cannot trust is worse than no number, because it retires the problem in
+    your head. The scanner was rewritten, and two further checks were added that did not exist:
+    one that verifies the browser actually passes a session token in the right argument position
+    (213 call sites), and one that exercises the password code against Node's own cryptography
+    (31 assertions).</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 3. THE WHY ══════════════════════════ -->
+<section>
+  <h2><span class="num">3</span>How each change meets the Act</h2>
+  <p class="lede">Six obligations in the Act cannot be met by writing a policy — the software has to do
+  them. This is the mapping, with the reasoning behind the choices that were not obvious.</p>
+
+  <h3>s.8(5) — reasonable security safeguards</h3>
+  <p><strong>Every endpoint now asks who is calling.</strong> One line at the top of each:
+  <span class="mono">crescRequire_(sessionToken, 'ward.read')</span>. The permission vocabulary and
+  the role matrix already existed in <span class="mono">RBAC.gs</span>; nothing new had to be
+  designed, only applied — to 109 functions and 213 call sites.</p>
+
+  <p>Three problems had to be solved that a one-line guard does not describe:</p>
+  <ul>
+    <li><strong>Server functions call each other.</strong> The case sheet raises a lab order; the
+    discharge settlement settles the credit bill. The inner call has no token to pass, so guarding it
+    would refuse the clinic's own code — but leaving it open is no good either, because the browser
+    can reach it too. A successful guard now remembers the caller for the length of <em>one
+    execution</em>, and the inner guard checks its own permission against that same person. A nurse
+    whose ward note raises a lab order still has to be allowed to order labs; she simply does not have
+    to prove who she is twice. This is safe because Apps Script gives every call a fresh script
+    context, so it cannot leak between users.</li>
+    <li><strong>The lab status machine was split in two.</strong> Six internal callers drive it, each
+    already guarded by what its own user is doing. Had they inherited the endpoint's permission, the
+    accountant raising a lab bill would have been refused for not being a phlebotomist.</li>
+    <li><strong>Eight endpoints answer without a session, and say why in the source.</strong> The
+    sign-in steps, the password change, the clinic letterhead, the interface markup, the privacy
+    notice and the public request form. An allowlist forces "this one is fine" to be defended once in
+    writing rather than re-argued by whoever reads the file next.</li>
+  </ul>
+
+  <p><strong>Passwords.</strong> Stored as a salted, iterated SHA-256 digest and compared in constant
+  time. Two deliberate refusals, both of which will look like inconvenience and are the point:</p>
+  <ul>
+    <li>A plain-text password is <strong>refused at sign-in, not silently hashed</strong>. Hashing a
+    password that has already been readable by everyone with the spreadsheet preserves the compromise
+    instead of ending it.</li>
+    <li>Its owner cannot use it to change it either — that would hand the account to whoever copied
+    it rather than to the owner. Only an administrator resets it.</li>
+  </ul>
+  <p class="footnote">This is not bcrypt, and the code says so rather than implying otherwise. Apps
+  Script exposes no slow key-derivation function and cannot load one; iterated HMAC-SHA-256 is what
+  the platform permits. The remaining defences are the account lockout, two-factor authentication,
+  and the fact that a digest is useless to somebody reading the sheet.</p>
+
+  <h3>s.8(5) and s.8(7) — documents</h3>
+  <p>The file now stays <strong>private</strong>. The patient receives a link into the clinic's own
+  application carrying a single-use key: it expires in fourteen days, counts how many times it is
+  opened, closes itself after twenty-five, can be withdrawn in one click, and writes an audit row
+  every time it is opened. The register stores only a <em>digest</em> of the key, so the spreadsheet —
+  which far more people can open than should ever read a report — does not itself contain the means
+  of access.</p>
+  <p>The old WhatsApp report link was <strong>withdrawn rather than repaired</strong>. It returned any
+  order's complete lab report to anyone who asked, with no key and no session, and order numbers are
+  sequential and printed on the patient's own paperwork. Anyone still holding such a message now gets
+  a page saying the clinic will send it again.</p>
+
+  <h3>ss.5, 6 and 9 — notice, consent, children</h3>
+  <p>Registration now captures consent <strong>per purpose</strong>, against the version of the notice
+  in force, in the same action that creates the patient. Three decisions worth understanding:</p>
+  <ul>
+    <li><strong>Care and billing are not tick boxes.</strong> They are recorded as legitimate uses
+    under section 7, because a consent dialog must never be able to stop somebody being treated.</li>
+    <li><strong>An unticked box is recorded as a refusal.</strong> "We never asked" and "they said no"
+    are different facts and only one of them needs asking again. A system that stores only agreement
+    cannot tell them apart.</li>
+    <li><strong>Under-18 registration asks who consented and how they are related</strong> (s.9).</li>
+  </ul>
+
+  <h3>s.6(6) — withdrawal as easy as giving</h3>
+  <p>This is the clause most systems fail. Consent is given at a desk in seconds; if taking it back
+  means telephoning during working hours and persuading somebody, the section is not met. The
+  patient's own portal page now carries their consent switches, their nominee and a request form.</p>
+
+  <h3>ss.11–14 — rights, with a clock and an identity check</h3>
+  <p>Every request carries a due date and the queue sorts overdue first. One function assembles
+  everything held about a patient across eleven sheets, including the list of who it has been
+  disclosed to, which is s.11(1)(b). Two additions matter more than they look:</p>
+  <ul>
+    <li><strong>A form the patient can reach</strong> — <span class="mono">?privacy</span> on the web
+    app, with no staff login. A form only staff can reach is a way of receiving fewer requests, not of
+    answering them.</li>
+    <li><strong>Verification is mandatory before a request can be closed.</strong> Answering an access
+    request to the wrong person is a disclosure dressed as compliance, and the statutory right is
+    precisely what an impostor would use to ask for it. A call back to the number already on the
+    record is the cheapest check the clinic has and the one thing an impostor cannot arrange.</li>
+  </ul>
+  <p><strong>Nomination (s.14)</strong> is a separate append-only register, deliberately <em>not</em>
+  the emergency contact already held: that was collected so somebody could be reached in a hurry, and
+  was never given for this purpose. It is append-only because "who was nominated on the day they
+  died" has one correct answer, and it is not "whoever the row says now".</p>
+
+  <h3>s.8(6) — breach</h3>
+  <p>An automated weekly review reads the audit log for the four patterns that actually precede a
+  disclosure here: repeated failures against one account; failures spread across many identifiers,
+  which is what walking the sequential patient IDs looks like; one person reading an unusual number of
+  records in a day; and one shared document opened six times or more, which is what a forwarded
+  message looks like.</p>
+  <p>The register <strong>holds the incidents judged <em>not</em> notifiable</strong>, with the reason
+  and the named person who decided. In an inquiry that is the only thing that shows the clinic was
+  looking. The software refuses to record a decision without a reason, because "not notifiable" is the
+  one that will have to be justified.</p>
+
+  <h3>s.8(7) — retention</h3>
+  <p>The retention report <strong>deletes nothing</strong>, on purpose: a medico-legal case or an
+  insurance dispute can require a record years after its ordinary period, and a sweep that deletes on
+  its own is how a clinic loses the file it is about to be asked for. What is deleted automatically is
+  only what nobody could ever need — expired links, dead sessions.</p>
+  <p>The single exception erases education, occupation and marital status. Nothing in the codebase
+  ever read them, so under s.6(1) there is no purpose to state and <strong>no upside to weigh against
+  erasing them</strong>. They have also been removed from the registration form, the profile editor
+  and the patient search.</p>
+
+  <h3>s.8(2) — processors</h3>
+  <p>Documented in full, including the finding that the records sit on a personal Google account with
+  no Data Processing Addendum. WhatsApp's consumer terms are not a processor agreement either; the
+  clinic either moves to the business API with a contract, or relies on the patient's specific consent
+  and says in the notice that the message goes through Meta.</p>
+</section>
+
+<!-- ══════════════════════════ 4. HOW TO RUN ══════════════════════════ -->
+<section>
+  <h2><span class="num">4</span>How to run anything in the Apps Script editor</h2>
+  <p class="lede">The single most common reason a runbook stalls. Two behaviours of the editor are not
+  obvious, and one of them is dangerous.</p>
+
+  <h3>Where the files are</h3>
+  <ol>
+    <li>Open the spreadsheet → <strong>Extensions</strong> → <strong>Apps Script</strong>.</li>
+    <li>The left-hand panel lists every file. <span class="mono">.gs</span> files hold the server code;
+    <span class="mono">.html</span> files hold the screens.</li>
+    <li>Click a file to open it. The editor searches only the open file —
+    <strong>Ctrl/Cmd+Shift+F searches all of them</strong>, which is how to find a function whose file
+    you do not know.</li>
+  </ol>
+
+  <h3>The two things nobody tells you</h3>
+  <div class="box warn">
+    <h4 class="warn">1. The Run dropdown only lists functions in the file that is open</h4>
+    <p>The dropdown beside <strong>Run</strong> and <strong>Debug</strong> is not a search of the whole
+    project. If you cannot find a function there, you have the wrong file open. §5 gives the file for
+    every function by name.</p>
+  </div>
+  <div class="box warn">
+    <h4 class="warn">2. The Run dropdown cannot pass arguments — and here that is a live hazard</h4>
+    <p>Whatever you select is called with <em>no</em> arguments. For two functions in this system that
+    is the difference between a rehearsal and an irreversible change:</p>
+    <pre>crescMigrateCredentials(true)   ← the DRY RUN: reports who would be reset
+crescMigrateCredentials()       ← RESETS EVERY PASSWORD IN THE CLINIC</pre>
+    <p>The dropdown can only ever perform the second. <strong>This is why
+    <span class="mono">RUN_Setup.gs</span> exists</strong> — see below. Do not run the underlying
+    functions directly unless you have read this paragraph and meant it.</p>
+  </div>
+
+  <h3>The runbook file: <span class="mono">RUN_Setup.gs</span></h3>
+  <p>Rather than hunting through six files, open <span class="mono">RUN_Setup.gs</span> once. It
+  contains the entire deployment sequence as numbered, argument-free functions, so the Run dropdown
+  reads as a list of instructions in order. Destructive steps are split into a
+  <span class="mono">_DRYRUN_</span> and a <span class="mono">_FOR_REAL_</span> so neither can be
+  reached by accident.</p>
+  <p class="footnote">Every name in that file ends in an underscore. In Apps Script that makes a
+  function unreachable from the browser while the editor lists it normally. Without it, the file would
+  have published "reset every password" and "mint an administrator session" as endpoints anyone with
+  the web app URL could call by name — which the project's own scanner caught the moment the file was
+  added.</p>
+
+  <h3>Running one, and reading the answer</h3>
+  <ol>
+    <li>Open <span class="mono">RUN_Setup.gs</span>.</li>
+    <li>Choose the step from the dropdown at the top.</li>
+    <li>Press <strong>Run</strong>. The first time, Google asks for authorisation — approve it as the
+    account that owns the spreadsheet.</li>
+    <li>The answer appears in the <strong>Execution log</strong> panel underneath. If you close it too
+    soon, it is still there: left panel → <strong>Executions</strong> (the ⏱ icon) → click the run.</li>
+  </ol>
+  <div class="box note">
+    <p><strong>Copy the log from step 7b before you close it.</strong> That one prints the temporary
+    passwords, and it is the only copy that will ever exist. Nothing — not the script, not the
+    spreadsheet, not Google — can show them again.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 5. FUNCTION LOCATOR ══════════════════════════ -->
+<section>
+  <h2><span class="num">5</span>Where every function lives</h2>
+  <p class="lede">Line numbers are from commit <span class="mono">ef070e0</span> and will drift as the
+  code changes; the file name will not. Search with Ctrl/Cmd+Shift+F if a line number no longer
+  matches.</p>
+
+  <h3>The deployment sequence — all in <span class="mono">RUN_Setup.gs</span></h3>
+  <p>Open that one file and work down the dropdown. Each row below names the underlying function it
+  calls, and where <em>that</em> lives, so you can read what it actually does.</p>
+  <table>
+    <thead><tr><th style="width:4%">#</th><th style="width:34%" class="mono">RUN_Setup.gs function</th>
+      <th style="width:30%">Calls</th><th>Which lives in</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td class="mono">RUN_01_checkFilesArrived_</td><td class="mono">verifyDeployment()</td><td class="mono">Deployment_Check.gs:188</td></tr>
+      <tr><td>2</td><td class="mono">RUN_02_checkRoleMatrix_</td><td class="mono">crescRbacSelfTest()</td><td class="mono">RBAC.gs:482</td></tr>
+      <tr><td>3</td><td class="mono">RUN_03_checkPasswordStorage_</td><td class="mono">crescCredentialStatus()</td><td class="mono">Auth_Credentials.gs:534</td></tr>
+      <tr><td>4</td><td class="mono">RUN_04_timePasswordHashing_</td><td class="mono">crescPwdBenchmark()</td><td class="mono">Auth_Credentials.gs:251</td></tr>
+      <tr><td>4b</td><td class="mono">RUN_04b_makeSignInFaster_</td><td>sets a script property</td><td class="mono">RUN_Setup.gs</td></tr>
+      <tr><td>5</td><td class="mono">RUN_05_createRegisters_</td><td class="mono">dpdpSetup()</td><td class="mono">DPDP_Compliance.gs:201</td></tr>
+      <tr><td>6</td><td class="mono">RUN_06_nameGrievanceOfficer_</td><td class="mono">dpdpSetGrievanceOfficer(…)</td><td class="mono">DPDP_Compliance.gs:228</td></tr>
+      <tr><td>7a</td><td class="mono">RUN_07a_migrateCredentials_DRYRUN_</td><td class="mono">crescMigrateCredentials(true)</td><td class="mono">Auth_Credentials.gs:581</td></tr>
+      <tr><td>7b</td><td class="mono">RUN_07b_migrateCredentials_FOR_REAL_</td><td class="mono">crescMigrateCredentials()</td><td class="mono">Auth_Credentials.gs:581</td></tr>
+      <tr><td>8</td><td class="mono">RUN_08_installScheduledJobs_</td><td class="mono">dpdpInstallTriggers()</td><td class="mono">DPDP_Triggers.gs:41</td></tr>
+      <tr><td>9</td><td class="mono">RUN_09_checkScheduledJobs_</td><td class="mono">dpdpTriggerStatus()</td><td class="mono">DPDP_Triggers.gs:86</td></tr>
+      <tr><td>10a</td><td class="mono">RUN_10a_revokeOldPublicLinks_DRYRUN_</td><td class="mono">dpdpExpireSharedLinks(true)</td><td class="mono">DPDP_Compliance.gs:1258</td></tr>
+      <tr><td>10b</td><td class="mono">RUN_10b_revokeOldPublicLinks_FOR_REAL_</td><td class="mono">dpdpExpireSharedLinks(false)</td><td class="mono">DPDP_Compliance.gs:1258</td></tr>
+      <tr><td>11a</td><td class="mono">RUN_11a_eraseUnusedFields_DRYRUN_</td><td class="mono">dpdpEraseUnusedFields(false)</td><td class="mono">DPDP_Compliance.gs:1314</td></tr>
+      <tr><td>11b</td><td class="mono">RUN_11b_eraseUnusedFields_FOR_REAL_</td><td class="mono">dpdpEraseUnusedFields(true)</td><td class="mono">DPDP_Compliance.gs:1314</td></tr>
+      <tr><td>12</td><td class="mono">RUN_12_readinessCheck_</td><td class="mono">dpdpReadinessCheck()</td><td class="mono">DPDP_Compliance.gs:1594</td></tr>
+      <tr><td>13</td><td class="mono">RUN_13_retentionReport_</td><td class="mono">dpdpRetentionReport()</td><td class="mono">DPDP_Compliance.gs:1366</td></tr>
+      <tr><td>14</td><td class="mono">RUN_14_auditReviewThisWeek_</td><td class="mono">dpdp_anomalyScan_(7)</td><td class="mono">DPDP_Breach.gs:87</td></tr>
+      <tr><td>90</td><td class="mono">RUN_90_resetOnePassword_</td><td class="mono">crescAdminResetPassword(…)</td><td class="mono">Auth_Credentials.gs:478</td></tr>
+      <tr><td>91</td><td class="mono">RUN_91_setVoicePolicy_</td><td class="mono">dpdpSetVoicePolicy(…)</td><td class="mono">DPDP_Compliance.gs:1547</td></tr>
+      <tr><td>99</td><td class="mono">RUN_99_removeScheduledJobs_</td><td class="mono">dpdpRemoveTriggers()</td><td class="mono">DPDP_Triggers.gs:75</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box amber">
+    <h4>Steps 90 and 91 look odd on purpose</h4>
+    <p>Those two call ordinary guarded endpoints, which ask who is calling because from the
+    application they must. The editor has no session to offer, so each mints one for the person who
+    already owns the script and the spreadsheet, uses it, and revokes it immediately. That grants
+    nothing they do not already have — it satisfies the same door everybody else comes through rather
+    than going round it. <strong>Both can also be done from the application</strong>
+    (Privacy → Posture), which is the better route when you are able to sign in.</p>
+  </div>
+
+  <h3>The other files, and what each is for</h3>
+  <table>
+    <thead><tr><th style="width:28%">File</th><th style="width:10%">Status</th><th>What it holds</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">RUN_Setup.gs</td><td>new</td><td>The deployment runbook as runnable steps. Start here.</td></tr>
+      <tr><td class="mono">RBAC.gs</td><td>changed</td><td>The permission vocabulary, the role matrix, and the guard every endpoint calls. The allowlist of endpoints that answer without a session is here too.</td></tr>
+      <tr><td class="mono">Auth_Credentials.gs</td><td>new</td><td>Password hashing, verification, policy, the administrator reset and the migration.</td></tr>
+      <tr><td class="mono">AuthLogin.gs</td><td>changed</td><td>Sign-in. Now verifies a digest, refuses a plain-text credential, and diverts a temporary password to the change-password screen.</td></tr>
+      <tr><td class="mono">DPDP_Compliance.gs</td><td>changed</td><td>The registers: consent, requests, nomination. The notice, the export, retention, the readiness check, the privacy console's endpoints.</td></tr>
+      <tr><td class="mono">DPDP_Documents.gs</td><td>new</td><td>Private expiring document links: issuing, serving, revoking, expiring.</td></tr>
+      <tr><td class="mono">DPDP_Breach.gs</td><td>new</td><td>The breach register, the audit-log anomaly scan, and the two s.8(6) notification drafts.</td></tr>
+      <tr><td class="mono">DPDP_Triggers.gs</td><td>new</td><td>The three scheduled jobs and their installer.</td></tr>
+      <tr><td class="mono">Admin_DPDP_Console.html</td><td>new</td><td>The Privacy screen on the staff rail: requests, per-patient consent and documents, the breach register, posture.</td></tr>
+      <tr><td class="mono">DPDP_Privacy_Page.html</td><td>new</td><td>The public notice and request form served at <span class="mono">?privacy</span>.</td></tr>
+      <tr><td class="mono">CodeMV.gs</td><td>changed</td><td>Registration, the whole-register read, and the web app's front door including the document and privacy routes.</td></tr>
+      <tr><td class="mono">PatientApp.html</td><td>changed</td><td>The patient portal, including their own consent switches and nominee.</td></tr>
+      <tr><td class="mono">docs/*.md</td><td>new</td><td>Consent notice, retention schedule, breach procedure, processor register. The clinic's compliance file.</td></tr>
+      <tr><td class="mono">tools/*.js</td><td>changed</td><td>Ten checks that run on a laptop with no Google account. <span class="mono">./tools/check.sh</span> runs them all.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════════════════ 6. BEFORE YOU START ══════════════════════════ -->
+<section>
+  <h2><span class="num">6</span>Before you start: the three things that can hurt</h2>
+  <p class="lede">None of these is a defect. All three are consequences of doing the remediation
+  properly, and all three are much cheaper to know about in advance.</p>
+
+  <div class="box warn">
+    <h4 class="warn">1. Between pasting the code and running step 7b, nobody can sign in</h4>
+    <p>A plain-text password is refused from the moment the new sign-in code is in place. That is what
+    a forced reset means — it is the mechanism, not a side effect. The gap lasts only as long as you
+    take to run step 7b, and <strong>the Apps Script editor does not need the web app login</strong>,
+    so you cannot lock yourself out of fixing it.</p>
+    <p><strong>Do not deploy at the start of a clinic session.</strong> Evening or a closed day.</p>
+  </div>
+
+  <div class="box warn">
+    <h4 class="warn">2. Take a spreadsheet snapshot before step 7b, or rollback becomes painful</h4>
+    <p>If you later revert the code but the passwords have already been hashed, the old sign-in
+    compares plain text against digests and nobody can get in. Passwords cannot be recovered — that is
+    the point of hashing them.</p>
+    <p>So, before step 7b: open the spreadsheet → <strong>File → Version history → Name current
+    version</strong> → call it <span class="mono">Before DPDP migration</span>. Restoring that version
+    restores the old column B.</p>
+  </div>
+
+  <div class="box amber">
+    <h4>3. Patients will need a Google account to open a document link</h4>
+    <p>Requiring a sign-in is what closes finding C1, and it applies to the whole web app including the
+    page that serves a report. Most patients on a smartphone have a Google account and will not notice;
+    some will telephone. Worth briefing reception before the first report goes out, and worth weighing
+    against the alternative, which is the report being readable by anyone the message was forwarded
+    to, for ever.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 7. RUNBOOK ══════════════════════════ -->
+<section>
+  <h2><span class="num">7</span>The deployment runbook</h2>
+  <p class="lede">In order. Roughly an hour, most of it reading output.</p>
+
+  <h3>Stage A — get the code in</h3>
+  <p>With <span class="mono">clasp</span>, from the repository root:</p>
+  <pre>git pull origin claude/nifty-planck-nam059
+clasp push</pre>
+  <p>By hand: create each new file in the editor (the list is in §5) and paste its contents, then
+  update the changed ones. Then Project Settings → tick <em>Show appsscript.json</em> and confirm that
+  <span class="mono">"access"</span> reads <span class="mono">"ANYONE"</span>.</p>
+
+  <h3>Stage B — in the editor, from <span class="mono">RUN_Setup.gs</span></h3>
+  <table>
+    <thead><tr><th style="width:5%">#</th><th style="width:36%">Step</th><th>What you should see</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Check files arrived</td><td>No missing files. If any are listed, paste them and re-run.</td></tr>
+      <tr><td>2</td><td>Check role matrix</td><td>"all consistent". Anything else is a typo in a role name on the Users sheet.</td></tr>
+      <tr><td>3</td><td>Check password storage</td><td>A count of plain-text credentials. Note the number — it should be 0 after step 7b.</td></tr>
+      <tr><td>4</td><td>Time password hashing</td><td>Four timings. If 10,000 iterations exceeds ~1.5 s, run 4b.</td></tr>
+      <tr><td>5</td><td>Create registers</td><td>Six register names, then the four things to do next.</td></tr>
+      <tr><td>6</td><td>Name grievance officer</td><td><strong>Edit the three values in the function first.</strong> Expect "Grievance officer set: …".</td></tr>
+      <tr><td>7a</td><td>Migrate credentials — dry run</td><td>Who <em>would</em> be reset. Nothing changes.</td></tr>
+      <tr><td>7b</td><td>Migrate credentials — real</td><td>The password list. <strong>Copy it now.</strong> Distribute by a route that is not the one people sign in through.</td></tr>
+      <tr><td>8</td><td>Install scheduled jobs</td><td>Three jobs, with their times and the account they run as.</td></tr>
+      <tr><td>9</td><td>Check scheduled jobs</td><td>"All three are in place."</td></tr>
+      <tr><td>10a / 10b</td><td>Revoke old public links</td><td>Dry run first. Then the real sweep over the backlog of publicly-shared reports.</td></tr>
+      <tr><td>11a / 11b</td><td>Erase unused fields</td><td>Dry run first. Then the three columns are cleared.</td></tr>
+      <tr><td>12</td><td>Readiness check</td><td>The live finding list. Expect the deployment item until Stage C is done.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Stage C — redeploy. This is the step that closes C1.</h3>
+  <ol>
+    <li><strong>Deploy</strong> → <strong>Manage deployments</strong> → the pencil icon on the active
+    deployment.</li>
+    <li>Version: <strong>New version</strong>. Leave the description or write the date.</li>
+    <li><strong>Deploy</strong>.</li>
+    <li><strong>Verify.</strong> Open the <span class="mono">/exec</span> URL in a private window. It
+    must ask you to sign in to Google. If it opens straight to the application, the old anonymous
+    deployment is still live and nothing about C1 has changed.</li>
+  </ol>
+  <p class="footnote">Keep the URL the same if you can — it is printed on documents. Editing the
+  existing deployment preserves it; creating a new deployment does not.</p>
+
+  <h3>Stage D — smoke tests</h3>
+  <table>
+    <thead><tr><th style="width:42%">Do this</th><th>Expect</th></tr></thead>
+    <tbody>
+      <tr><td>Sign in with a temporary password</td><td>The <em>Set your password</em> screen, not the application. Change it; sign in again.</td></tr>
+      <tr><td>Sign in as an administrator</td><td>A <strong>Privacy</strong> item on the rail. Other roles must not see it.</td></tr>
+      <tr><td>Privacy → Posture</td><td>Officer saves. Triggers listed. The public <span class="mono">?privacy</span> URL shown. <strong>Decide the voice policy here.</strong></td></tr>
+      <tr><td>Register a test patient</td><td>The consent block renders with a notice version. Untick <em>Health camps</em>. After saving, a one-time password panel appears — the only time it exists.</td></tr>
+      <tr><td>Register one with a date of birth under 18</td><td>The guardian block appears; saving without a guardian name is refused.</td></tr>
+      <tr><td>Run a lab order end to end</td><td>Order → collect → result → verify → dispatch, all working. If any step says the session expired, run <span class="mono">node tools/token.js</span> and send me the output.</td></tr>
+      <tr><td>Send a lab report to a patient</td><td>The link is your own <span class="mono">/exec?doc=…&amp;k=…</span>, <strong>not</strong> a <span class="mono">drive.google.com</span> address.</td></tr>
+      <tr><td>Open that link, then withdraw it in Privacy → A patient</td><td>It downloads; after withdrawal it says the link has been withdrawn.</td></tr>
+      <tr><td>Patient portal → My Profile</td><td>Consent switches, nominee, request form. Turning one off writes a WITHDRAWN row.</td></tr>
+      <tr><td>Open <span class="mono">?privacy</span> in a private window</td><td>Notice and form, no staff login. Submitting emails the officer and creates an UNVERIFIED request.</td></tr>
+      <tr><td>Try to close that request without verifying</td><td>Refused, with the reason.</td></tr>
+      <tr><td>In the browser console, call <span class="mono">google.script.run.getAllPatients()</span> with no token</td><td>An empty list, and a row in the audit log. This is C2, demonstrated.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════════════════ 8. ONGOING ══════════════════════════ -->
+<section>
+  <h2><span class="num">8</span>Living with it afterwards</h2>
+  <p class="lede">Compliance is not a deployment. Four routines, three of which arrive by email.</p>
+
+  <table>
+    <thead><tr><th style="width:16%">When</th><th style="width:26%">What happens</th><th>Who does what</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Nightly, 02:00</strong></td><td>Document links past their date are closed; any legacy public share is revoked; dead sessions purged.</td><td>Nobody. It runs itself. If links stop expiring, the readiness check says so.</td></tr>
+      <tr><td><strong>Mondays, 07:00</strong></td><td>The audit review is emailed to the grievance officer.</td><td><strong>Read it.</strong> It is the only part of breach detection that runs on its own. Each finding says what to do.</td></tr>
+      <tr><td><strong>1st of the month</strong></td><td>The retention report is emailed.</td><td>Work it with the doctor (clinical) and the accountant (financial). Delete by hand, record what was deleted and who agreed. If nothing is deleted, write that down too.</td></tr>
+      <tr><td><strong>Whenever a request arrives</strong></td><td>It appears in Privacy → Requests with a due date.</td><td>Verify who is asking, record how, answer, close with what was actually done.</td></tr>
+      <tr><td><strong>Whenever something goes wrong</strong></td><td>—</td><td>Contain within the hour, record the same day, decide within 24 hours with a reason. <span class="mono">docs/BREACH_PROCEDURE.md</span> is one page; print it.</td></tr>
+      <tr><td><strong>Quarterly</strong></td><td>—</td><td>Run step 12 (readiness) and step 2 (role matrix). Review who has access to the spreadsheet and remove anyone who has left.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box note">
+    <h4>The offboarding gap worth closing now</h4>
+    <p>When somebody leaves, disabling their login is not enough on its own. Their access to the
+    <em>spreadsheet</em> and to the Drive folders is separate, and on a personal Google account there
+    is no console that lists it. Write a checklist: login disabled, spreadsheet share removed, Drive
+    folder shares removed, any forwarded copy accounted for.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 9. DECISIONS ══════════════════════════ -->
+<section>
+  <h2><span class="num">9</span>Decisions and questions for the lawyer</h2>
+  <p class="lede">Software cannot decide any of these. Each one changes what the clinic tells patients.</p>
+
+  <h3>Three decisions for the clinic</h3>
+  <table>
+    <thead><tr><th style="width:24%">Decision</th><th style="width:38%">What turns on it</th><th>Where it is recorded</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Voice typing</strong></td>
+        <td>Dictation sends the audio of a clinician describing a patient to Google's or Microsoft's
+        speech service. Allowed clinic-wide, or forbidden.</td>
+        <td>Privacy → Posture, or step 91. Then the matching paragraph in the consent notice — both are
+        drafted.</td></tr>
+      <tr><td><strong>WhatsApp</strong></td>
+        <td>Either a business-API contract, or reliance on each patient's specific consent plus telling
+        them in the notice that the message goes through Meta.</td>
+        <td><span class="mono">docs/PROCESSORS.md</span> and the consent notice.</td></tr>
+      <tr><td><strong>Google Workspace</strong></td>
+        <td>Whether section 8(2) is met at all, and whether the clinic or one individual controls the
+        records.</td>
+        <td><span class="mono">docs/PROCESSORS.md</span> has the migration steps.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Four questions for the lawyer</h3>
+  <ol>
+    <li><strong>Is the period of anonymous deployment a reportable breach under s.8(6)?</strong> The
+    application was published so that no sign-in was required, and 136 endpoints answered anyone with
+    the URL, including ones returning diagnoses and full lab reports. Whether that requires notifying
+    the Board and every affected patient depends on how widely the URL was distributed, which is a
+    question of fact the clinic can answer. Whatever is decided must be recorded in the breach
+    register with its reasons — including a decision that it is <em>not</em> notifiable.</li>
+    <li><strong>Is the clinic a Significant Data Fiduciary under s.10?</strong> If so it needs a Data
+    Protection Officer, an independent audit and a data protection impact assessment. The assessment
+    itself should be in writing either way.</li>
+    <li><strong>What is the correct inpatient and medico-legal retention period</strong> under the
+    applicable state Clinical Establishments rules? The schedule uses three years for outpatient
+    records, per the NMC Ethics Regulations, and marks inpatient and medico-legal as
+    <em>take advice</em>.</li>
+    <li><strong>Does the consent notice say enough, and in the right languages?</strong> It is drafted
+    in English and must be given in Tamil as well — s.5(3) gives the Data Principal the right to the
+    notice in any language in the Eighth Schedule. A notice in English only is not a notice given to a
+    patient who does not read English.</li>
+  </ol>
+
+  <div class="box note">
+    <h4>What the software can and cannot assert</h4>
+    <p>It can prove: what consent was recorded, against which version of which notice, when and by
+    whom; who read which document and when; what was shared with a patient and how often it was
+    opened; when a statutory request arrived, how the requester was identified and what was done. That
+    is the evidence base s.6(10) and s.8(6) require.</p>
+    <p>It cannot prove: that the notice was actually read aloud, that the person at the desk was who
+    they said, that a deleted record was deleted everywhere including Google's backups, or that a
+    document already downloaded has not been forwarded. Those are procedural, and the four documents
+    in <span class="mono">docs/</span> are where the clinic commits to them.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ 10. LIMITS ══════════════════════════ -->
+<section>
+  <h2><span class="num">10</span>Limits of this work</h2>
+  <p class="lede">Stated plainly, because a remediation report that reads as complete is the most
+  dangerous document in a compliance file.</p>
+
+  <ul>
+    <li><strong>Nothing was executed.</strong> There is no way to run Apps Script outside Google, so
+    behaviour was not observed. What stands in for it: ten static checks, an audit that every one of
+    213 call sites passes a session token in the correct argument position, and 31 assertions against
+    the password code using Node's own cryptography. Do the smoke tests in §7 before a clinic session,
+    not during one.</li>
+    <li><strong>140 functions still carry no permission check.</strong> None of them is called by any
+    screen in this project, but Apps Script exposes every server function to anyone who knows its
+    name, so they are a smaller hole rather than none. <span class="mono">node tools/rbac.js</span>
+    lists them; work them down when those files are next touched.</li>
+    <li><strong>The password hashing is weaker than bcrypt</strong> because Apps Script provides no
+    alternative. The lockout, two-factor authentication and the digest itself carry the rest.</li>
+    <li><strong>A document link is a capability, not an identity.</strong> Whoever holds the link can
+    open the document, exactly as before — but now it expires, is counted, is revocable and is one
+    document rather than a permanent window. Authenticating the patient properly means the portal.</li>
+    <li><strong>There is no SMS gateway</strong>, so a one-time code to the registered mobile is not
+    possible yet. It is the right answer both for the portal credential and for verifying who is
+    making a statutory request.</li>
+    <li><strong>Erasure cannot reach Google's backups</strong>, nor a PDF a patient has already
+    downloaded, nor a WhatsApp message already forwarded. Answers to patients should say so rather
+    than promise an erasure the clinic cannot perform.</li>
+  </ul>
+
+  <hr class="rule">
+
+  <h3>Where the authoritative detail lives</h3>
+  <table>
+    <thead><tr><th style="width:34%">Document</th><th>What it is for</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">docs/DPDP_READINESS.md</td><td>The full technical assessment, finding by finding, kept current with the code.</td></tr>
+      <tr><td class="mono">docs/CONSENT_NOTICE.md</td><td>The notice given to patients. Has blanks and two marked decisions. Needs translating.</td></tr>
+      <tr><td class="mono">docs/RETENTION_SCHEDULE.md</td><td>Each record type, its period, its legal basis and who decides to delete.</td></tr>
+      <tr><td class="mono">docs/BREACH_PROCEDURE.md</td><td>One page: who decides, who notifies, by when. Names to fill in.</td></tr>
+      <tr><td class="mono">docs/PROCESSORS.md</td><td>Everyone who touches the data, the record of processing, cross-border transfer.</td></tr>
+    </tbody>
+  </table>
+  <p class="footnote">Those five files plus this debrief are the clinic's compliance file. They live in
+  the repository so that they change when the code changes; a compliance document that drifts from the
+  system it describes is worse than none, because it is believed.</p>
+</section>
+
+</body>
+</html>
