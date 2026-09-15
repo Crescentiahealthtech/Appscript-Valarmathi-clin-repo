@@ -112,7 +112,7 @@ var DEP_MAP = {
   "Auth_Credentials.gs": [
     "crescPwdEncode_", "crescPwdVerify_", "crescPwdIsHashed_", "crescPwdEquals_",
     "crescRandomPassword_", "crescChangePassword", "crescAdminResetPassword",
-    "crescCredentialStatus", "crescMigrateCredentials"
+    "crescCredentialStatus", "crescMigrateCredentials", "crescPwdBenchmark"
   ],
   "Clinic_Profile.gs": [
     "cresc_clinic_", "getClinicProfile", "setClinicProfile"

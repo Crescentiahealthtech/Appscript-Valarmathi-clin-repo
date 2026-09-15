@@ -169,7 +169,21 @@ function submitNewAppointment(apptObj, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, ['appointment.write', 'portal.self']);
+    const actor = crescRequire_(sessionToken, ['appointment.write', 'portal.self']);
+
+    // 'portal.self' says "the portal", not "any patient in it". The patient id
+    // here comes from the browser, so without this a signed-in patient could
+    // book — or see the confirmation for — somebody else's appointment by
+    // changing one field. Their session username IS their patient id.
+    if (actor.role === 'patient') {
+      const mine = String(actor.username || '').trim().toUpperCase();
+      const asked = String((apptObj && apptObj.patientId) || '').trim().toUpperCase();
+      if (!asked || asked !== mine) {
+        return { success: false,
+                 message: 'You can only book an appointment for yourself.' };
+      }
+    }
+
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
     const data = sheet.getDataRange().getValues();
 

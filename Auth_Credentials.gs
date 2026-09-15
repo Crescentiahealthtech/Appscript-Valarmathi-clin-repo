@@ -53,10 +53,11 @@ var CRESC_PWD_PREFIX = 'pbkdf2$sha256$';
 /**
  * Iterations of HMAC-SHA-256. Every one is a call across the Apps Script
  * bridge, so this is a straight trade of sign-in latency for the cost of
- * guessing offline. 10,000 is the default and costs well under a second on
- * the Apps Script runtime; if sign-in feels slow on your deployment, set the
- * CRESC_PWD_ITERATIONS script property lower — but never below 1,000, which
- * this function enforces.
+ * guessing offline, and how that trade lands depends on the runtime you are
+ * actually on. DO NOT GUESS: run crescPwdBenchmark() in the editor, which
+ * times it and tells you what to set. 10,000 is the default; the
+ * CRESC_PWD_ITERATIONS script property overrides it, and this function
+ * refuses anything below 1,000 however the property is set.
  */
 var CRESC_PWD_ITERATIONS_DEFAULT = 10000;
 
@@ -231,6 +232,53 @@ function crescPwdPolicy_(plain, username, patientName) {
     return { ok: false, message: 'One repeated character is not a password.' };
   }
   return { ok: true, message: '' };
+}
+
+/**
+ * ADMIN, from the script editor. How long a sign-in actually costs here.
+ *
+ * The iteration count is the only security parameter in this file that has a
+ * user-visible price, and the price is different on every Apps Script runtime
+ * and every day. So it is measured rather than asserted: run this, read the
+ * milliseconds, and set CRESC_PWD_ITERATIONS to whatever gives you a hashing
+ * cost you are willing to pay on every sign-in.
+ *
+ * Roughly: under 400ms is unnoticeable next to the sheet reads a sign-in
+ * already does. Over 1500ms and people will say the system is slow, and a
+ * system people say is slow is one they leave signed in on a shared machine —
+ * which is a worse security outcome than a lower iteration count.
+ */
+function crescPwdBenchmark() {
+  var salt = cresc_newSalt_();
+  var sizes = [1000, 5000, 10000, 20000];
+  var lines = ['Password hashing cost on this runtime', ''];
+
+  sizes.forEach(function (n) {
+    var t = Date.now();
+    cresc_pwdDigest_('a representative password', salt, n);
+    var ms = Date.now() - t;
+    lines.push('  ' + String(n).padStart(6) + ' iterations   ' +
+               String(ms).padStart(5) + ' ms' +
+               (ms < 400 ? '   comfortable'
+                : ms < 1500 ? '   noticeable but fine'
+                : '   too slow — people will complain'));
+  });
+
+  var current = cresc_pwdIterations_();
+  lines.push('');
+  lines.push('In use now: ' + current + ' iterations.');
+  lines.push('');
+  lines.push('To change it:');
+  lines.push('  PropertiesService.getScriptProperties()');
+  lines.push('    .setProperty("CRESC_PWD_ITERATIONS", "8000");');
+  lines.push('');
+  lines.push('Passwords already stored keep their own iteration count — it is');
+  lines.push('written into each stored value — so changing this does not lock');
+  lines.push('anybody out. New and changed passwords use the new number.');
+
+  var report = lines.join('\n');
+  Logger.log(report);
+  return report;
 }
 
 // ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 # Static checks for this Apps Script project.
 #
 # There is no build step here and no test runner - the code is pasted into an
-# Apps Script editor, where a typo is discovered by a user. These nine checks
+# Apps Script editor, where a typo is discovered by a user. These ten checks
 # are what can be verified without a Google account, and they each exist
 # because the thing they look for was actually found in this codebase.
 #
@@ -40,7 +40,10 @@ node tools/rbac.js | head -n 4
 hr "8. Calls that do not pass the session token their endpoint asks for"
 node tools/token.js
 
-hr "9. CSS classes used but never defined"
+hr "9. The password code, exercised against Node's own HMAC"
+node tools/credtest.js || FAILED=1
+
+hr "10. CSS classes used but never defined"
 echo "   (review by hand — template literals produce false positives)"
 node tools/css.js | tail -n 20
 
@@ -53,6 +56,7 @@ cat <<'NOTE'
   crescRbacCoverage()      RBAC.gs              the same count as check 7
   crescRbacSelfTest()      RBAC.gs              the role matrix against itself
   crescCredentialStatus()  Auth_Credentials.gs  hashed vs plain-text passwords
+  crescPwdBenchmark()      Auth_Credentials.gs  what hashing costs on this runtime
   dpdpTriggerStatus()      DPDP_Triggers.gs     whether the scheduled jobs exist
 NOTE
 
