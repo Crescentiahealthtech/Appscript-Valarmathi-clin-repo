@@ -42,6 +42,10 @@ function getPatientLabResults(patientId, sessionToken, opts) {
     }
     var role = String(sess.role || '').toLowerCase();
     if (role === 'patient') {
+      // A patient reaches their own results through the portal
+      // (portalGetLabResults, Patient_Portal.gs), which checks that the record
+      // asked for is theirs. This endpoint takes any patient id from the
+      // browser, so it must never answer a patient session.
       return { success: false, patientId: '', orders: [], message: 'Not authorised.' };
     }
 
@@ -50,8 +54,31 @@ function getPatientLabResults(patientId, sessionToken, opts) {
       return { success: false, patientId: '', orders: [],
                message: 'A patient ID is required.' };
     }
+    return lpv_resultsFor_(pid, (opts && opts.limit) ? Number(opts.limit) : 40);
 
-    var limit = (opts && opts.limit) ? Number(opts.limit) : 40;
+  } catch (err) {
+    return { success: false, patientId: '', orders: [],
+             message: 'getPatientLabResults failed: ' + err.message };
+  }
+}
+
+/**
+ * The reader itself, WITH NO AUTHORISATION OF ITS OWN.
+ *
+ * Split out of getPatientLabResults so the patient portal can serve a patient
+ * their own results without either duplicating this logic or being allowed
+ * through a check that says "not a patient". Every caller is responsible for
+ * having established that the caller may read THIS patient — the clinician
+ * endpoint above by permission, the portal by crescRequireOwnRecord_.
+ *
+ * Underscore-suffixed, so google.script.run cannot reach it.
+ *
+ * @param {string} pid    canonical, upper-case patient id
+ * @param {number} limit  most recent N orders
+ */
+function lpv_resultsFor_(pid, limit) {
+  try {
+    limit = limit || 40;
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
     var oSheet = ss.getSheetByName(LAB.ORDERS);
@@ -134,7 +161,7 @@ function getPatientLabResults(patientId, sessionToken, opts) {
     return { success: true, patientId: pid, orders: orders, message: '' };
 
   } catch (err) {
-    return { success: false, patientId: '', orders: [],
-             message: 'getPatientLabResults failed: ' + err.message };
+    return { success: false, patientId: pid, orders: [],
+             message: 'The lab results could not be read: ' + err.message };
   }
 }

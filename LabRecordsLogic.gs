@@ -146,6 +146,18 @@ function searchLabRecords(query, sessionToken) {
 function emailLabReportPDF(orderId, patientEmail, sessionToken) {
   try {
     crescRequire_(sessionToken, 'lab.read');
+
+    // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
+    // The register has carried this purpose since it was built and nothing
+    // read it. This dispatch now refuses unless the patient has agreed to be
+    // sent documents this way, and the refusal says how to ask them. See
+    // DPDP_Dispatch.gs.
+    var __pid = dpdp_resolvePatientFor_('LAB_ORDER', orderId);
+    var __gate = dpdpRequireDispatchConsent_(__pid, 'EMAIL',
+                   crescActor_(sessionToken), 'LAB_REPORT');
+    if (!__gate.ok) return { success: false, code: 'CONSENT_REQUIRED',
+                             consentState: __gate.state, patientId: __pid,
+                             notice: __gate.notice, message: __gate.message };
     const reportResponse = getLabReportHtml(orderId); 
     
     if (!reportResponse.success) {
@@ -203,6 +215,18 @@ function emailLabReportPDF(orderId, patientEmail, sessionToken) {
 function generateAndStoreLabReportPDF(orderId, sessionToken) {
   try {
     crescRequire_(sessionToken, 'lab.read');
+
+    // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
+    // The register has carried this purpose since it was built and nothing
+    // read it. This dispatch now refuses unless the patient has agreed to be
+    // sent documents this way, and the refusal says how to ask them. See
+    // DPDP_Dispatch.gs.
+    var __pid = dpdp_resolvePatientFor_('LAB_ORDER', orderId);
+    var __gate = dpdpRequireDispatchConsent_(__pid, 'WHATSAPP',
+                   crescActor_(sessionToken), 'LAB_REPORT');
+    if (!__gate.ok) return { success: false, code: 'CONSENT_REQUIRED',
+                             consentState: __gate.state, patientId: __pid,
+                             notice: __gate.notice, message: __gate.message };
     console.log("1. Starting PDF generation for Order: " + orderId);
 
     // 1. Generate HTML using your existing engine
@@ -258,14 +282,17 @@ function generateAndStoreLabReportPDF(orderId, sessionToken) {
     // 4. Save the file
     const file = monthFolder.createFile(pdfBlob);
 
-    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
-    // their ID and their results; a Drive link that never expires, sent over
-    // WhatsApp, is forwarded, backed up and restored on devices nobody here
-    // will ever see. The file stays PRIVATE and the patient gets a link back
-    // into this web app with a one-off key that expires, counts its opens and
-    // can be withdrawn. See DPDP_Documents.gs, finding H1.
-    var grant = dpdpIssueDocumentLink_(file, 'LAB_REPORT',
-                                       (typeof patientId !== 'undefined' ? patientId : ''),
+    // Registered, not just shared. dpdpIssueDocumentLink_ publishes the
+    // file to Drive so the patient gets a link WhatsApp can preview and
+    // their phone can open, and writes it into Document_Grants with an
+    // expiry — after which the daily sweep makes the file private again
+    // and every forwarded copy of the link stops working. A bare
+    // setSharing(ANYONE_WITH_LINK) here would publish this document
+    // for ever with nothing able to take it back. See DPDP_Documents.gs.
+    // __pid from the order, not a `patientId` variable that was never in
+    // scope in this function — the register was recording every lab report
+    // against a blank patient.
+    var grant = dpdpIssueDocumentLink_(file, 'LAB_REPORT', __pid,
                                        (crescActor_(sessionToken) || {}).username || '');
     if (!grant.success) return { success: false, message: grant.message };
 
@@ -298,6 +325,18 @@ function getArchiveInvoiceLink(orderId, sessionToken) {
   try {
     // 1. Get the HTML Invoice (Uses the existing function that handles IP logic)
     crescRequire_(sessionToken, 'billing.read');
+
+    // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
+    // The register has carried this purpose since it was built and nothing
+    // read it. This dispatch now refuses unless the patient has agreed to be
+    // sent documents this way, and the refusal says how to ask them. See
+    // DPDP_Dispatch.gs.
+    var __pid = dpdp_resolvePatientFor_('LAB_INVOICE', orderId);
+    var __gate = dpdpRequireDispatchConsent_(__pid, 'WHATSAPP',
+                   crescActor_(sessionToken), 'LAB_ARCHIVE_INVOICE');
+    if (!__gate.ok) return { success: false, code: 'CONSENT_REQUIRED',
+                             consentState: __gate.state, patientId: __pid,
+                             notice: __gate.notice, message: __gate.message };
     const reportResponse = getLabBillHtml(orderId); 
     if (!reportResponse.success) throw new Error("Invoice HTML Generation Failed");
 
@@ -319,14 +358,14 @@ function getArchiveInvoiceLink(orderId, sessionToken) {
 
     const file = monthFolder.createFile(pdfBlob);
 
-    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
-    // their ID and their results; a Drive link that never expires, sent over
-    // WhatsApp, is forwarded, backed up and restored on devices nobody here
-    // will ever see. The file stays PRIVATE and the patient gets a link back
-    // into this web app with a one-off key that expires, counts its opens and
-    // can be withdrawn. See DPDP_Documents.gs, finding H1.
-    var grant = dpdpIssueDocumentLink_(file, 'LAB_ARCHIVE_INVOICE',
-                                       (typeof patientId !== 'undefined' ? patientId : ''),
+    // Registered, not just shared. dpdpIssueDocumentLink_ publishes the
+    // file to Drive so the patient gets a link WhatsApp can preview and
+    // their phone can open, and writes it into Document_Grants with an
+    // expiry — after which the daily sweep makes the file private again
+    // and every forwarded copy of the link stops working. A bare
+    // setSharing(ANYONE_WITH_LINK) here would publish this document
+    // for ever with nothing able to take it back. See DPDP_Documents.gs.
+    var grant = dpdpIssueDocumentLink_(file, 'LAB_ARCHIVE_INVOICE', __pid,
                                        (crescActor_(sessionToken) || {}).username || '');
     if (!grant.success) return { success: false, message: grant.message };
 
@@ -340,6 +379,18 @@ function getArchiveInvoiceLink(orderId, sessionToken) {
 function emailArchiveInvoice(orderId, patientEmail, sessionToken) {
   try {
     crescRequire_(sessionToken, 'billing.read');
+
+    // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
+    // The register has carried this purpose since it was built and nothing
+    // read it. This dispatch now refuses unless the patient has agreed to be
+    // sent documents this way, and the refusal says how to ask them. See
+    // DPDP_Dispatch.gs.
+    var __pid = dpdp_resolvePatientFor_('LAB_INVOICE', orderId);
+    var __gate = dpdpRequireDispatchConsent_(__pid, 'EMAIL',
+                   crescActor_(sessionToken), 'LAB_ARCHIVE_INVOICE');
+    if (!__gate.ok) return { success: false, code: 'CONSENT_REQUIRED',
+                             consentState: __gate.state, patientId: __pid,
+                             notice: __gate.notice, message: __gate.message };
     const reportResponse = getLabBillHtml(orderId); 
     if (!reportResponse.success) throw new Error("Invoice HTML Generation Failed");
 

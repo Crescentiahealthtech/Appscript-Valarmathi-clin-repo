@@ -77,6 +77,16 @@ function doGet(e) {
   }
 
   // 2. Normal App Load for Staff
+  //
+  // The probe goes HERE and not at the top of doGet, deliberately. The four
+  // routes above are anonymous BY DESIGN — a printed verification QR, the
+  // public privacy notice, a patient's document link — so an unidentified
+  // caller on any of them says nothing about the deployment's access mode.
+  // This route is the application itself, and whether its callers arrive
+  // identified is the one measurable fact about the live deployment's access
+  // setting. See Deployment_Probe.gs.
+  try { if (typeof depProbeRecord_ === 'function') depProbeRecord_(); } catch (e) {}
+
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('Valarmathi Clinic Enterprise')

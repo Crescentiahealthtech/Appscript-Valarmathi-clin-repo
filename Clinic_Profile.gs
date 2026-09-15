@@ -27,8 +27,62 @@ var CRESC_CLINIC_KEYS = {
   CLINIC_EMAIL:    { field: 'email',      fallback: '' },
   CLINIC_GST:      { field: 'gstin',      fallback: '' },
   CLINIC_REG_NO:   { field: 'regNo',      fallback: '' },
-  CLINIC_FOOTER:   { field: 'footer',     fallback: 'This is a computer-generated document.' }
+  CLINIC_FOOTER:   { field: 'footer',     fallback: 'This is a computer-generated document.' },
+
+  // The clinic's own web address, for the privacy notice and the letterhead.
+  //
+  // A patient reading a privacy notice has to be able to find the clinic
+  // again without the notice in front of them, and the DPDP notice is the
+  // one document where "who is holding my data" must resolve to something a
+  // person can type. A script.google.com/macros/… deployment URL does not.
+  CLINIC_WEBSITE:  { field: 'website',
+                     fallback: 'valarmathiclinic.crescentiahealthtech.com' }
 };
+
+/**
+ * The host a printed document tells a reader to visit, WITHOUT a scheme.
+ *
+ * Kept separate from CRESC_PUBLIC_BASE_URL below: this one is text on paper
+ * and always safe to show, while that one has to actually resolve.
+ */
+function cresc_clinicWebsite_() { return cresc_clinic_().website || ''; }
+
+/**
+ * The base URL a PUBLIC, CLICKABLE link should be built on — the verification
+ * links printed on a discharge summary and a lab report, and anything else a
+ * person outside the clinic is asked to open.
+ *
+ * OPT-IN, and deliberately empty by default. Set the Script Property
+ * CRESC_PUBLIC_BASE_URL to something like
+ *
+ *     https://valarmathiclinic.crescentiahealthtech.com/verify
+ *
+ * ONLY once that host actually forwards to the web app's /exec URL WITH THE
+ * QUERY STRING INTACT (a Google Sites redirect, a Cloudflare rule, a
+ * hosting-provider 302 — any of them will do). Printed links and the QR codes
+ * beside them are built from the same string, so if it is set and does not
+ * forward, the QR on every document printed afterwards leads nowhere. Left
+ * empty, printed links use the deployment URL, which is ugly but works.
+ *
+ * @return {string} '' when unset, otherwise the base with no trailing slash
+ */
+function cresc_publicBaseUrl_() {
+  try {
+    var v = String(PropertiesService.getScriptProperties()
+                     .getProperty('CRESC_PUBLIC_BASE_URL') || '').trim();
+    return v.replace(/\/+$/, '');
+  } catch (e) { return ''; }
+}
+
+/**
+ * The base for a public link: the clinic's own host when one is configured
+ * and resolvable, otherwise this deployment's /exec URL.
+ *
+ * @param {string} execUrl  what the caller would otherwise have used
+ */
+function cresc_publicLinkBase_(execUrl) {
+  return cresc_publicBaseUrl_() || String(execUrl || '');
+}
 
 /**
  * The clinic's own details. Never throws — a letterhead that cannot be read

@@ -1,0 +1,444 @@
+<!-- =====================================================================
+     ANTENATAL CARD AND IMMUNISATION CARD
+
+     The patient portal is asked to show a pregnant patient her gestation,
+     her next checkup and the baby's growth, and to show a parent how far
+     through the immunisation schedule their child is. None of that can be
+     shown unless somebody records it, and before Maternal_Child.gs there was
+     nowhere to record it: antenatal visits were written as free-text progress
+     notes and vaccinations went on the card the parent carries.
+
+     This is where the clinic enters both. It is IN THE SHELL rather than in
+     the OP bundle because the same two cards are wanted from the OP consult,
+     from the ward and from the patient screens — three separate lazy bundles
+     — and a partial reaching across a bundle boundary for a function is what
+     produced "Invoice print template not loaded on this page."
+
+         CrescMC.open('LMTVS0007', 'Kavitha R', 'anc');
+         CrescMC.open('LMTVS0031', 'Baby of Kavitha', 'imm');
+
+     WHAT IT DOES NOT DO
+
+     It does not decide anything. It does not flag a pregnancy high-risk, and
+     it does not say whether a vaccine may be given today. It records what the
+     clinician writes, and the dates it shows are arithmetic on dates.
+     ===================================================================== -->
+<style>
+  #cresc-mc { position: fixed; inset: 0; z-index: 3100; display: none;
+              align-items: flex-start; justify-content: center;
+              background: var(--overlay-scrim, rgba(2,6,23,.6)); overflow: auto;
+              padding: 24px 12px; }
+  #cresc-mc.on { display: flex; }
+  #cresc-mc .mc-sheet { background: var(--bg-card); border: 1px solid var(--border-color);
+                        border-radius: 14px; width: 100%; max-width: 780px;
+                        box-shadow: var(--shadow-lg); }
+  #cresc-mc .mc-head { padding: 14px 18px; border-bottom: 1px solid var(--border-color);
+                       display: flex; align-items: center; gap: 10px; }
+  #cresc-mc .mc-body { padding: 16px 18px; }
+  #cresc-mc label { font-size: .68rem; text-transform: uppercase; letter-spacing: .4px;
+                    color: var(--text-muted); font-weight: 600; margin-bottom: 2px;
+                    display: block; }
+  #cresc-mc input, #cresc-mc select, #cresc-mc textarea {
+    background: var(--bg-input) !important; color: var(--text-main) !important;
+    border: 1px solid var(--border-color) !important; border-radius: 6px;
+    box-shadow: none !important; font-size: .85rem; padding: 6px 8px; width: 100%; }
+  #cresc-mc .mc-note { font-size: .74rem; color: var(--text-muted); line-height: 1.5; }
+  #cresc-mc .mc-row { display: flex; justify-content: space-between; align-items: center;
+                      gap: 10px; padding: 6px 0;
+                      border-bottom: 1px solid var(--border-color); }
+  #cresc-mc .mc-row:last-child { border-bottom: 0; }
+  #cresc-mc .mc-pill { font-size: .66rem; font-weight: 700; padding: 2px 8px;
+                       border-radius: 999px; text-transform: uppercase;
+                       letter-spacing: .4px; white-space: nowrap; }
+  #cresc-mc .mc-ok   { background: var(--success-bg); color: var(--success-fg); }
+  #cresc-mc .mc-due  { background: var(--warning-bg); color: var(--warning-fg); }
+  #cresc-mc .mc-late { background: var(--danger-bg);  color: var(--danger-fg); }
+  #cresc-mc .mc-soon { background: var(--info-bg);    color: var(--info-fg); }
+  #cresc-mc .mc-tile { border: 1px solid var(--border-color); border-radius: 8px;
+                       padding: 8px 10px; background: var(--bg-elevated); }
+</style>
+
+<div id="cresc-mc" role="dialog" aria-modal="true" aria-labelledby="mc-title">
+  <div class="mc-sheet">
+    <div class="mc-head">
+      <i class="fa-solid fa-notes-medical" style="color: var(--accent-fg);"></i>
+      <strong id="mc-title" style="color: var(--text-main); font-size: .95rem;">Card</strong>
+      <span class="mc-note ms-2" id="mc-who"></span>
+      <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="CrescMC.close()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="mc-body" id="mc-body"></div>
+  </div>
+</div>
+
+<script>
+window.CrescMC = (function () {
+  'use strict';
+
+  var S = { pid: '', name: '', mode: 'anc', anc: null, imm: null, busy: false };
+
+  function el(id) { return document.getElementById(id); }
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function val(id) { var e = el(id); return e ? e.value.trim() : ''; }
+  function say(msg, ok) {
+    if (typeof window.showToast === 'function') {
+      window.showToast(ok ? 'Done' : 'Could not complete', msg, ok ? 'success' : 'error');
+    } else if (typeof window.crescAlert === 'function') {
+      window.crescAlert(msg);
+    }
+  }
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) +
+           '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function body(html) { var e = el('mc-body'); if (e) e.innerHTML = html; }
+  function spin(what) {
+    body('<div class="mc-note"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>' +
+         esc(what) + '</div>');
+  }
+
+  /** One place that calls the server, so every call has a failure path. */
+  function call(fn, args, onOk) {
+    var runner = google.script.run
+      .withSuccessHandler(function (res) {
+        S.busy = false;
+        onOk(res);
+      })
+      .withFailureHandler(function (err) {
+        S.busy = false;
+        say('Could not reach the server: ' + ((err && err.message) || err), false);
+      });
+    if (typeof runner[fn] !== 'function') {
+      S.busy = false;
+      say('This build has no server function called ' + fn + '().', false);
+      return;
+    }
+    S.busy = true;
+    runner[fn].apply(runner, args);
+  }
+
+  // ------------------------------------------------------------------
+  // ANTENATAL
+  // ------------------------------------------------------------------
+
+  function loadAnc() {
+    spin('Reading the antenatal card…');
+    call('mcGetAntenatal', [S.pid, window.sessionToken], function (res) {
+      if (!res) { body('<div class="mc-note">The server gave no answer.</div>'); return; }
+      if (!res.success) { body('<div class="mc-note">' + esc(res.message) + '</div>'); return; }
+      S.anc = res.antenatal;
+      renderAnc(res.message);
+    });
+  }
+
+  function renderAnc(msg) {
+    var a = S.anc;
+    if (!a) { body(ancOpenForm(msg)); return; }
+
+    var last = a.lastVisit || {};
+    body(
+      '<div class="row g-2 mb-3">' +
+        tile('Gestation', a.gestationText || '—') +
+        tile('EDD', a.eddText || '—') +
+        tile('Visits', String(a.visitCount)) +
+        tile('Next checkup', a.nextVisitText || 'not set',
+             a.nextVisitOverdue ? 'mc-late' : (a.nextVisitText ? 'mc-ok' : 'mc-due')) +
+      '</div>' +
+
+      (a.riskNotes
+        ? '<div class="mc-note mb-3"><strong style="color:var(--warning-fg);">Noted at booking:</strong> ' +
+          esc(a.riskNotes) + '</div>'
+        : '') +
+
+      '<div style="font-weight:700; font-size:.85rem; color:var(--text-main); margin-bottom:8px;">' +
+        'Record today\'s visit</div>' +
+
+      '<div class="row g-2">' +
+        field('mc-v-date', 'Visit date', 'date', today()) +
+        field('mc-v-wt', 'Weight (kg)', 'number', last.weightKg || '') +
+        field('mc-v-sys', 'BP systolic', 'number', '') +
+        field('mc-v-dia', 'BP diastolic', 'number', '') +
+        field('mc-v-hb', 'Haemoglobin (g/dL)', 'number', last.haemoglobin || '') +
+        field('mc-v-fh', 'Fundal height (cm)', 'number', '') +
+        field('mc-v-fhr', 'Fetal heart rate (/min)', 'number', '') +
+        '<div class="col-6 col-md-3"><label>Presentation</label>' +
+          '<select id="mc-v-pres">' +
+            ['', 'Cephalic', 'Breech', 'Transverse', 'Not yet determined'].map(function (o) {
+              return '<option' + (o === (last.presentation || '') ? ' selected' : '') +
+                     '>' + esc(o) + '</option>';
+            }).join('') +
+          '</select></div>' +
+        '<div class="col-6 col-md-3"><label>Urine albumin</label>' +
+          '<select id="mc-v-alb">' + ['', 'Nil', 'Trace', '+', '++', '+++']
+            .map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') +
+          '</select></div>' +
+        '<div class="col-6 col-md-3"><label>Urine sugar</label>' +
+          '<select id="mc-v-sug">' + ['', 'Nil', 'Trace', '+', '++', '+++']
+            .map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') +
+          '</select></div>' +
+        '<div class="col-6 col-md-3"><label>Oedema</label>' +
+          '<select id="mc-v-oed">' + ['', 'Nil', 'Pedal', 'Generalised']
+            .map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') +
+          '</select></div>' +
+        '<div class="col-6 col-md-3"><label>Fetal movements</label>' +
+          '<select id="mc-v-mov">' + ['', 'Felt well', 'Reduced', 'Not yet felt']
+            .map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') +
+          '</select></div>' +
+        '<div class="col-12 col-md-6"><label>Complaints</label>' +
+          '<input type="text" id="mc-v-cc"></div>' +
+        '<div class="col-12 col-md-6"><label>Advice</label>' +
+          '<input type="text" id="mc-v-adv"></div>' +
+        // The single most useful field on the card, and the one the patient
+        // sees in the portal. Last, so it is the thing in front of the
+        // clinician when they finish.
+        '<div class="col-12 col-md-4"><label style="color:var(--warning-fg);">Next visit date</label>' +
+          '<input type="date" id="mc-v-next"></div>' +
+      '</div>' +
+
+      '<div class="d-flex gap-2 mt-3 flex-wrap">' +
+        '<button class="btn btn-sm text-white fw-bold on-accent" ' +
+          'style="background-color:var(--accent-purple)" onclick="CrescMC.saveVisit()">' +
+          'Save visit</button>' +
+        '<button class="btn btn-sm btn-outline-secondary" onclick="CrescMC.loadAnc()">' +
+          'Reload</button>' +
+        '<button class="btn btn-sm btn-outline-danger ms-auto" onclick="CrescMC.closeAnc()">' +
+          'Pregnancy ended…</button>' +
+      '</div>' +
+
+      (a.trend && a.trend.length
+        ? '<div class="mt-4"><div style="font-weight:700; font-size:.82rem; color:var(--text-main); margin-bottom:6px;">' +
+          'Visits so far</div>' + a.trend.slice().reverse().map(function (v) {
+            var bits = [];
+            if (v.weightKg) bits.push(v.weightKg + ' kg');
+            if (v.sysBp && v.diaBp) bits.push('BP ' + v.sysBp + '/' + v.diaBp);
+            if (v.haemoglobin) bits.push('Hb ' + v.haemoglobin);
+            if (v.fundalHeightCm) bits.push('FH ' + v.fundalHeightCm + ' cm');
+            if (v.fetalHeartRate) bits.push('FHR ' + v.fetalHeartRate);
+            return '<div class="mc-row"><span class="mc-note">' + esc(v.dateText) +
+              (v.weeks !== null ? ' · ' + v.weeks + 'w' : '') + '</span>' +
+              '<span class="mc-note">' + esc(bits.join(' · ') || 'nothing recorded') +
+              '</span></div>';
+          }).join('') + '</div>'
+        : '')
+    );
+  }
+
+  function ancOpenForm(msg) {
+    return '<div class="mc-note mb-3">' + esc(msg || 'No antenatal record is open ' +
+      'for this patient.') + '</div>' +
+      '<div style="font-weight:700; font-size:.85rem; color:var(--text-main); margin-bottom:8px;">' +
+        'Open an antenatal record</div>' +
+      '<div class="row g-2">' +
+        field('mc-a-lmp', 'Last menstrual period', 'date', '') +
+        field('mc-a-edd', 'EDD from a scan (optional)', 'date', '') +
+        field('mc-a-g', 'Gravida', 'number', '') +
+        field('mc-a-p', 'Para', 'number', '') +
+        field('mc-a-l', 'Living', 'number', '') +
+        field('mc-a-ab', 'Abortions', 'number', '') +
+        field('mc-a-ht', 'Height (cm)', 'number', '') +
+        field('mc-a-wt', 'Booking weight (kg)', 'number', '') +
+        '<div class="col-6 col-md-3"><label>Blood group</label>' +
+          '<select id="mc-a-bg">' +
+            ['', 'O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']
+              .map(function (o) { return '<option>' + esc(o) + '</option>'; }).join('') +
+          '</select></div>' +
+        '<div class="col-12"><label>Anything to watch for</label>' +
+          '<input type="text" id="mc-a-risk" placeholder="previous LSCS, anaemia, GDM in last pregnancy…"></div>' +
+      '</div>' +
+      '<div class="mc-note mt-2">The EDD is worked out from the LMP unless you ' +
+        'give a scan date, which wins — a scan EDD legitimately differs from ' +
+        'the menstrual one.</div>' +
+      '<button class="btn btn-sm text-white fw-bold on-accent mt-3" ' +
+        'style="background-color:var(--accent-purple)" onclick="CrescMC.openAnc()">' +
+        'Open the record</button>';
+  }
+
+  function field(id, label, type, value) {
+    return '<div class="col-6 col-md-3"><label>' + esc(label) + '</label>' +
+      '<input type="' + type + '" id="' + id + '" value="' + esc(value) + '"></div>';
+  }
+  function tile(label, value, pill) {
+    return '<div class="col-6 col-md-3"><div class="mc-tile">' +
+      '<label>' + esc(label) + '</label>' +
+      (pill
+        ? '<span class="mc-pill ' + pill + '">' + esc(value) + '</span>'
+        : '<span style="font-weight:700; color:var(--text-main); font-size:.9rem;">' +
+          esc(value) + '</span>') +
+      '</div></div>';
+  }
+
+  // ------------------------------------------------------------------
+  // IMMUNISATION
+  // ------------------------------------------------------------------
+
+  function loadImm() {
+    spin('Reading the immunisation card…');
+    call('mcGetImmunisation', [S.pid, window.sessionToken], function (res) {
+      if (!res) { body('<div class="mc-note">The server gave no answer.</div>'); return; }
+      if (!res.success) { body('<div class="mc-note">' + esc(res.message) + '</div>'); return; }
+      S.imm = res.immunisation;
+      renderImm(res.message);
+    });
+  }
+
+  function renderImm(msg) {
+    var im = S.imm;
+    if (!im) { body('<div class="mc-note">' + esc(msg) + '</div>'); return; }
+
+    var pill = { GIVEN: 'mc-ok', DUE: 'mc-due', OVERDUE: 'mc-late', UPCOMING: 'mc-soon' };
+    var word = { GIVEN: 'given', DUE: 'due now', OVERDUE: 'overdue', UPCOMING: 'later' };
+
+    body(
+      '<div class="row g-2 mb-3">' +
+        tile('Age', im.ageText) +
+        tile('Date of birth', im.dobText) +
+        tile('Up to date', im.completedOfDue + ' of ' + im.totalDue) +
+        tile('Overdue', String(im.overdue.length),
+             im.overdue.length ? 'mc-late' : 'mc-ok') +
+      '</div>' +
+      '<div class="mc-note mb-3">Due dates are the national immunisation ' +
+        'schedule counted from the date of birth. Recording a dose is what ' +
+        'makes it show as given, here and in the parent\'s app.</div>' +
+
+      im.doses.map(function (d) {
+        return '<div class="mc-row">' +
+          '<div><div style="font-size:.84rem; font-weight:600; color:var(--text-main);">' +
+            esc(d.label) + (d.offSchedule ? ' <span class="mc-note">(not in the schedule)</span>' : '') +
+            '</div><div class="mc-note">' +
+            (d.state === 'GIVEN'
+              ? 'given ' + esc(d.givenOnText) + (d.givenBy ? ' · ' + esc(d.givenBy) : '')
+              : 'due ' + esc(d.dueText) + (d.at ? ' · ' + esc(d.at) : '')) +
+            '</div></div>' +
+          '<div class="d-flex align-items-center gap-2">' +
+            '<span class="mc-pill ' + pill[d.state] + '">' + word[d.state] + '</span>' +
+            (d.state === 'GIVEN' ? '' :
+              '<button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.7rem;" ' +
+              'onclick="CrescMC.giveDose(\'' + esc(d.code) + '\',\'' + esc(d.label) + '\')">' +
+              'Record</button>') +
+          '</div></div>';
+      }).join('')
+    );
+  }
+
+  // ------------------------------------------------------------------
+  // WRITES
+  // ------------------------------------------------------------------
+
+  return {
+    /**
+     * @param {string} patientId
+     * @param {string} patientName
+     * @param {string} mode  'anc' | 'imm'
+     */
+    open: function (patientId, patientName, mode) {
+      S.pid = String(patientId || '').trim().toUpperCase();
+      S.name = String(patientName || '');
+      S.mode = (mode === 'imm') ? 'imm' : 'anc';
+      S.anc = null; S.imm = null;
+      if (!S.pid) { say('Open a patient first.', false); return; }
+
+      el('mc-title').textContent = (S.mode === 'imm')
+        ? 'Immunisation card' : 'Antenatal card';
+      el('mc-who').textContent = S.name ? (S.name + ' · ' + S.pid) : S.pid;
+      el('cresc-mc').classList.add('on');
+      if (S.mode === 'imm') loadImm(); else loadAnc();
+    },
+
+    close: function () { el('cresc-mc').classList.remove('on'); },
+
+    loadAnc: loadAnc,
+    loadImm: loadImm,
+
+    openAnc: function () {
+      if (S.busy) return;
+      if (!val('mc-a-lmp') && !val('mc-a-edd')) {
+        return say('Give the last menstrual period, or an EDD from a scan.', false);
+      }
+      call('mcOpenAntenatal', [{
+        patientId: S.pid,
+        lmp: val('mc-a-lmp'), edd: val('mc-a-edd'),
+        gravida: val('mc-a-g'), para: val('mc-a-p'),
+        living: val('mc-a-l'), abortions: val('mc-a-ab'),
+        heightCm: val('mc-a-ht'), bookingWeightKg: val('mc-a-wt'),
+        bloodGroup: val('mc-a-bg'), riskNotes: val('mc-a-risk')
+      }, window.sessionToken], function (res) {
+        say((res && res.message) || 'Could not open the record.', !!(res && res.success));
+        if (res && res.success) loadAnc();
+      });
+    },
+
+    saveVisit: function () {
+      if (S.busy) return;
+      // Nothing recorded at all is a visit row that says the patient came and
+      // nothing was measured, which is worse than no row.
+      var any = ['mc-v-wt', 'mc-v-sys', 'mc-v-dia', 'mc-v-hb', 'mc-v-fh',
+                 'mc-v-fhr', 'mc-v-cc', 'mc-v-adv'].some(function (id) { return val(id); });
+      if (!any) return say('Record at least one measurement or note for this visit.', false);
+
+      call('mcRecordAntenatalVisit', [{
+        patientId: S.pid,
+        ancId: S.anc ? S.anc.ancId : '',
+        visitDate: val('mc-v-date') || today(),
+        weightKg: val('mc-v-wt'),
+        sysBp: val('mc-v-sys'), diaBp: val('mc-v-dia'),
+        haemoglobin: val('mc-v-hb'),
+        urineAlbumin: val('mc-v-alb'), urineSugar: val('mc-v-sug'),
+        fundalHeightCm: val('mc-v-fh'), fetalHeartRate: val('mc-v-fhr'),
+        presentation: val('mc-v-pres'), fetalMovements: val('mc-v-mov'),
+        oedema: val('mc-v-oed'),
+        complaints: val('mc-v-cc'), advice: val('mc-v-adv'),
+        nextVisitDate: val('mc-v-next')
+      }, window.sessionToken], function (res) {
+        say((res && res.message) || 'Could not save the visit.', !!(res && res.success));
+        if (res && res.success) loadAnc();
+      });
+    },
+
+    closeAnc: function () {
+      if (!S.anc) return;
+      var ask = (typeof window.crescPrompt === 'function')
+        ? window.crescPrompt(
+            'How did the pregnancy end?\n\nType one of: LIVE_BIRTH, STILLBIRTH, ' +
+            'ABORTION, REFERRED_OUT, LOST_TO_FOLLOW_UP',
+            'LIVE_BIRTH', { title: 'Close the antenatal record', okLabel: 'Close it' })
+        : Promise.resolve('LIVE_BIRTH');
+      ask.then(function (outcome) {
+        if (!outcome) return;
+        call('mcCloseAntenatal', [{
+          ancId: S.anc.ancId, outcome: outcome, outcomeDate: today()
+        }, window.sessionToken], function (res) {
+          say((res && res.message) || 'Could not close the record.', !!(res && res.success));
+          if (res && res.success) loadAnc();
+        });
+      });
+    },
+
+    giveDose: function (code, label) {
+      if (S.busy) return;
+      var ask = (typeof window.crescPrompt === 'function')
+        ? window.crescPrompt('Batch number for ' + label + ' (leave blank if not to hand):',
+                             '', { title: 'Record ' + label, okLabel: 'Record' })
+        : Promise.resolve('');
+      ask.then(function (batch) {
+        // crescPrompt resolves null when cancelled and '' when the box was
+        // left empty and OK was pressed, so the two must not be conflated —
+        // a cancelled dialog must not record a dose.
+        if (batch === null) return;
+        call('mcRecordImmunisation', [{
+          patientId: S.pid, vaccineCode: code, doseLabel: label,
+          givenOn: today(), batchNo: batch
+        }, window.sessionToken], function (res) {
+          say((res && res.message) || 'Could not record the dose.', !!(res && res.success));
+          if (res && res.success) loadImm();
+        });
+      });
+    }
+  };
+})();
+</script>

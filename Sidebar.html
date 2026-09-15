@@ -98,11 +98,18 @@
   
   <div id="nav-patient" class="nav flex-column mt-2 d-none">
     <div class="px-3 mb-2 small fw-bold label-bright" style="letter-spacing: 1px;">MY HEALTH</div>
+    <!-- The order here IS the order ppGo() indexes into (PatientApp.html), so
+         the rail highlight follows a button press inside a card. Changing one
+         without the other leaves the wrong link lit. -->
     <a class="nav-link active" onclick="switchTab('tab-pat-home', this)"><i class="fa-solid fa-house"></i> <span class="sidebar-text">Home</span></a>
-    <a class="nav-link" onclick="switchTab('tab-pat-profile', this)"><i class="fa-solid fa-user"></i> <span class="sidebar-text">My Profile</span></a>
-    <a class="nav-link" onclick="switchTab('tab-pat-records', this)"><i class="fa-solid fa-file-medical"></i> <span class="sidebar-text">Records & Labs</span></a>
+    <a class="nav-link" onclick="switchTab('tab-pat-records', this)"><i class="fa-solid fa-file-medical"></i> <span class="sidebar-text">My Records</span></a>
+    <!-- "Order Medications" is what this link used to say, for a screen that
+         read "Pharmacy tracking mapped here." — the clinic does not take
+         orders through the portal, and offering to would be a promise nothing
+         behind it keeps. It shows released lab reports instead. -->
+    <a class="nav-link" onclick="switchTab('tab-pat-meds', this)"><i class="fa-solid fa-flask-vial"></i> <span class="sidebar-text">My Reports</span></a>
     <a class="nav-link" onclick="switchTab('tab-pat-appt', this)"><i class="fa-solid fa-calendar-check"></i> <span class="sidebar-text">Book Appointment</span></a>
-    <a class="nav-link" onclick="switchTab('tab-pat-meds', this)"><i class="fa-solid fa-pills"></i> <span class="sidebar-text">Order Medications</span></a>
+    <a class="nav-link" onclick="switchTab('tab-pat-profile', this)"><i class="fa-solid fa-user"></i> <span class="sidebar-text">My Profile &amp; Privacy</span></a>
   </div>
 
   <div id="nav-doctor" class="nav flex-column mt-2 d-none">

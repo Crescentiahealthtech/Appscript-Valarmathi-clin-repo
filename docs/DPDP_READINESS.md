@@ -46,6 +46,23 @@ not a substitute for the clinic adopting them.
    redeployed. Deploy → Manage deployments → edit → **New version**. Then open
    the URL in a private window: if it answers without asking you to sign in,
    the old deployment is still live. *(C1)*
+
+   You no longer have to keep checking that by hand. `Deployment_Probe.gs`
+   records, on every page load of the application itself, whether the caller
+   arrived as an identified Google user — which is a direct consequence of the
+   live access mode, and the only part of this that a script can observe. After
+   a few days of use, `dpdpReadinessCheck()` reports the evidence rather than
+   the manifest:
+
+   * **CRITICAL** — "*12 of the last 340 page loads reached this application
+     with no identified user, most recently 14-Sep*". The old deployment is
+     still live; treat the period as a breach under s.8(6).
+   * **LOW** — "*all 340 loads over 21 days were from an identified account*".
+     The redeployment worked.
+
+   `RUN_deploymentEvidence()` prints the same answer on demand. The probe
+   stores a count per day and nothing else — no email, no IP, no query string
+   (which carries document grant keys).
 2. **Hash the passwords.** `crescCredentialStatus()` to see where you are, then
    `crescMigrateCredentials()`. It issues a fresh random password per account,
    prints them **once**, and forces a change at first sign-in. Nobody can sign
@@ -61,6 +78,23 @@ not a substitute for the clinic adopting them.
    account, so there is no Data Processing Addendum and s.8(2) is met for none
    of the clinic's data — and there is no admin console to recover the records
    from if that account is ever lost. `docs/PROCESSORS.md` has the steps. *(H6)*
+
+---
+
+## Added since the 15 September revision
+
+These close gaps the first assessment named and left open, and two that it did
+not reach.
+
+| | |
+|---|---|
+| **Consent is now read, not just recorded** | `DPDP_PURPOSES` has carried a `COMMUNICATION` purpose since the register was built, and **nothing consulted it**. Ten dispatch endpoints — pharmacy invoice, lab invoice, lab report, archived lab invoice, OP prescription, each by WhatsApp and by email — generated a PDF and sent it without looking. A patient who had refused reports by WhatsApp, or withdrawn that consent an hour earlier, got the message anyway. All ten now check it (`DPDP_Dispatch.gs`), and the notice they check against **names Meta**, because that is what happens to the data and s.5(1) wants the notice to describe what happens. A refusal at the counter becomes the question itself: the notice appears in the patient's words, either answer is written to the append-only register, and the send retries on a yes. |
+| **Document links are Drive links with an expiry** | The private `?doc=&k=` route was the strongest link technically and the weakest in practice — a `script.google.com` URL with a 32-character key, arriving on WhatsApp with no preview, asking a patient to open their medical report. Files are published to Drive now and the patient gets the link Drive generates. The three protections that mattered are kept, because they were never the sharing mode: every file is a row in `Document_Grants` with an expiry, the daily sweep sets expired files back to `PRIVATE` so forwarded copies of the link die with them, and a revocation does it immediately. What is given up is the open counter, which Drive cannot report; the register says so rather than showing a `0` that reads as "nobody looked". **The daily trigger is what makes this safe** — without `dpdpInstallTriggers()` the clinic is back to permanent Drive links. |
+| **The grant register can answer s.11(1)(b)** | Three of the five callers were passing an **invoice number** or a **bill id** into the `patientId` argument of `dpdpIssueDocumentLink_`, and a fourth passed a variable that was not in scope. So `Document_Grants` could not answer the one question s.11(1)(b) gives a patient the right to ask: what have you sent about me, and to whom. One resolver now finds the real patient for all of them. |
+| **Consent for the existing patients** | `dpdpBackfillConsent()` in two modes. `LEGITIMATE` writes the two s.7 legitimate uses — care and billing — for every patient with no row, which is the accountability record the register was missing. It **refuses to invent** the four real consents: a row saying a patient agreed to something nobody asked them is a false record, and worse than the gap. `RECORD` writes consent the clinic actually holds on paper, but only with a stated source, which rides on every row. The Section 6 finding is now **two** findings, because "no record at all" is closeable by the clinic and "has not been asked" can only be closed by asking — the latter comes with a worklist (`dpdpConsentQueue()`, Privacy → Consent). |
+| **Self-service password reset** | `crescRequestPasswordReset()` (`Auth_Reset.gs`) emails a temporary password to the address already on the record — never one supplied in the request. It gives **every outcome the same answer**, because patient ids are sequential and printed on every barcode label, so an endpoint that distinguishes "no such account" from "check your email" is a directory of who is a patient here. The difference is recorded in the audit log (`PASSWORD_RESET_REFUSED`). Rate-limited per account and per deployment: uncapped, it is a button that mails a working credential and invalidates the real one. |
+| **The clinic's own web address on the notice** | `valarmathiclinic.crescentiahealthtech.com`, from `CLINIC_WEBSITE` in `Clinic_Profile.gs`, on the privacy page footer — s.5(1) identification a patient can retype. Printed verification links can use the same host once `CRESC_PUBLIC_BASE_URL` is set; it is **opt-in** because the QR beside the printed text is built from the same string, so an unconfigured host would break both. |
+| **Reads by the patient are logged** | Every portal endpoint writes a `dpdpLogRead_` row against the patient, marked `self`. Finding M2 was about clinical reads leaving no trace; a patient reading their own record is still a read of it. |
 
 ---
 

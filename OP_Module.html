@@ -516,6 +516,23 @@
                <div class="col-md-4">
                    <label class="hd-label m-0 text-uppercase mb-2 text-warning">Next Review Date</label>
                    <input type="date" class="hd-input text-warning fw-bold" style="padding: 0.5rem;" id="clin-review-date">
+                   <!-- The two cards that had nowhere to be written. An ANC
+                        visit was going in as a free-text progress note and a
+                        vaccination was going on the parent's paper card, so
+                        neither could be trended, reminded from, or shown to
+                        the patient. See Maternal_Child.gs. -->
+                   <div class="d-flex gap-2 mt-3">
+                     <button class="btn btn-sm btn-outline-info flex-fill" type="button"
+                             onclick="opOpenCard('anc')"
+                             title="Antenatal card — LMP, EDD, this visit, next visit">
+                       <i class="fa-solid fa-baby-carriage me-1"></i>Antenatal
+                     </button>
+                     <button class="btn btn-sm btn-outline-success flex-fill" type="button"
+                             onclick="opOpenCard('imm')"
+                             title="Immunisation card — the national schedule and what is given">
+                       <i class="fa-solid fa-syringe me-1"></i>Vaccines
+                     </button>
+                   </div>
                </div>
            </div>
       </div>
@@ -2342,6 +2359,25 @@ function applyAssistAdvice() {
     }
 }
 
+/**
+ * Opens the antenatal or immunisation card for the patient on screen.
+ *
+ * CrescMC lives in the shell (Maternal_Child_UI.html) rather than in this
+ * bundle, because the ward and the patient screens want the same two cards
+ * and they are separate bundles.
+ */
+function opOpenCard(mode) {
+  var pid = opCurrentPatientId();
+  if (!pid) { opToast('Open a patient first.', 'warn'); return; }
+  var nameEl = document.getElementById('hd-pat-name');
+  if (!window.CrescMC) {
+    opToast('The card could not be opened — reload the page and try again.', 'err');
+    return;
+  }
+  window.CrescMC.open(pid, nameEl ? nameEl.innerText : '', mode);
+}
+window.opOpenCard = opOpenCard;
+
 // ============================================================================
 // INTERNAL REFERRAL
 // ============================================================================
@@ -2473,7 +2509,20 @@ function sendReferral() {
                 return;
             }
             bootstrap.Modal.getInstance(document.getElementById('opReferModal'))?.hide();
-            opToast(r.message, 'warn');
+
+            // An internal referral now books a slot in the receiving doctor's
+            // clinic, and the reply names the day and time. That is something
+            // the referring doctor has to READ OUT to the patient before they
+            // leave the room, so it goes in a dialog they dismiss rather than
+            // a toast that fades after four seconds while they are typing.
+            if (r.referralType === 'INTERNAL') {
+                var attention = (!r.apptId || r.apptOffSchedule);
+                op_alert(r.message, attention ? 'warn' : 'info',
+                         attention ? 'Referred — no slot yet' : 'Referred');
+            } else {
+                opToast(r.message, 'ok');
+            }
+
             // An external referral is only useful as a letter in the
             // patient's hand, so it is offered immediately rather than
             // waiting to be found again in a list.
@@ -3578,7 +3627,16 @@ function sendOPWhatsAppTo(mobileNumber, btn, originalHtml) {
 
     google.script.run.withSuccessHandler(function (res) {
         btn.innerHTML = originalHtml; btn.disabled = false;
-        if (!res || !res.success) { opToast("Could not generate the link: " + (res ? res.message : 'Unknown error'), 'err'); return; }
+        if (!res || !res.success) {
+            // "Never asked about WhatsApp" is a question for the patient, not
+            // an error for the doctor: the notice goes on screen, the answer
+            // is recorded, and this send retries itself on a yes.
+            if (window.crescConsentGate && window.crescConsentGate(res, function () {
+                    sendOPWhatsAppTo(mobileNumber, btn, originalHtml);
+                })) return;
+            opToast("Could not generate the link: " + (res ? res.message : 'Unknown error'), 'err');
+            return;
+        }
         const patientName = document.getElementById('hd-pat-name').innerText || 'Patient';
         const msg = "Hello " + patientName + ",\n\nHere is your digital prescription from *Valarmathi Clinic*.\n\n" +
                     "View & download your secure PDF here:\n" + res.link + "\n\nWishing you a speedy recovery!";

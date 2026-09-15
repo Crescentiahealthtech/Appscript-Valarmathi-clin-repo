@@ -5,6 +5,14 @@
       <i class="fa-solid fa-arrow-left"></i> Back to Workspace
     </button>
     <div class="d-flex gap-2">
+      <!-- The pharmacy till is counted at this counter by the person standing
+           at it. Reconciling it used to mean finding an accountant or being
+           given the whole Finance Hub — see Cash_Drawer.html. -->
+      <button class="btn btn-outline-success btn-sm" id="ph-drawer-btn"
+              onclick="CrescDrawer.toggle('ph-drawer-host', 'Pharmacy', 'ph-drawer-btn')"
+              title="Open or close this counter's cash shift">
+        <i class="fa-solid fa-cash-register"></i> Cash Drawer
+      </button>
       <button class="btn btn-outline-danger btn-sm" onclick="clearPharmacyBill()"
               title="Empty this bill and start a fresh one">
         <i class="fa-solid fa-eraser"></i> Clear Bill
@@ -14,6 +22,8 @@
       </button>
     </div>
   </div>
+
+  <div id="ph-drawer-host" class="d-none mb-4"></div>
 
   <style>
     /* ========================================================= */
@@ -836,114 +846,31 @@
   }
 
   /**
-   * Builds the pharmacy invoice through the SHARED renderer.
+   * The pharmacy invoice renderer MOVED TO THE SHELL (Invoice_Template.html)
+   * as window.crescPharmacyInvoiceHtml.
    *
-   * What was here was the same layout as the lab receipt, drawn entirely in
-   * CSS VARIABLES — var(--text-main), var(--bg-card), var(--border-color).
-   * Those resolve inside this tab and resolve to NOTHING everywhere this
-   * invoice actually goes: the PDF blob generated for WhatsApp, the body of
-   * the dispatch email, and a print stylesheet that does not carry the
-   * application's theme. A themed invoice is not an invoice; it is a
-   * screenshot of one, and off this page it came out unstyled or unreadable.
+   * It lived here, and the Pharmacy Dashboard's reprint button called it
+   * across the partial boundary behind
    *
-   * crescInvoiceHtml (Invoice_Template.html, in the shell) renders the same
-   * design in absolute colours, from the letterhead in Clinic_Profile.gs —
-   * which is also where the clinic name, address and phone number now live,
-   * instead of being typed into this file as string literals that no longer
-   * matched the lab receipt's.
+   *     if (typeof buildPrintInvoiceRaw !== 'function')
+   *         crescAlert("Invoice print template not loaded on this page.");
+   *
+   * which is the dead end a pharmacist actually hit: a message that names a
+   * template, offers nothing to do about it, and is produced by any of half a
+   * dozen unrelated conditions — the bundle half-injected, this partial's
+   * script block failing to run for any reason, the dashboard reached before
+   * the billing screen. Two partials in one bundle is not a guarantee that one
+   * can see the other's function, and the guard turned every way that could
+   * go wrong into the same unactionable sentence.
+   *
+   * The shell is parsed before any bundle and cannot be half-loaded, so in
+   * the shell the function cannot be absent. The alias below keeps this
+   * file's own call sites — and anything else that learned the old name —
+   * working unchanged.
    */
-  function buildPrintInvoiceRaw(d, done) {
-    if (!d) { if (done) done(""); return ""; }
-    const E = window.crescInvEsc || (v => String(v == null ? '' : v));
-
-    // GST slabs, for the summary block beside the totals.
-    const slabs = {};
-    d.items.forEach(it => {
-      if (!slabs[it.gst]) slabs[it.gst] = { taxable: 0, gst: 0 };
-      slabs[it.gst].taxable += it.taxable;
-      slabs[it.gst].gst += it.gstAmt;
-    });
-
-    const rows = d.items.map((it, i) => ([
-      String(i + 1),
-      '<strong>' + E(it.drug) + '</strong>' +
-        (it.generic ? '<br><span style="font-size:10px;color:#9ca3af;">' + E(it.generic) + '</span>' : ''),
-      E(it.batch) + '<br><span style="font-size:10px;color:#9ca3af;">Exp: ' + E(it.expiry) + '</span>',
-      String(it.qty),
-      '₹' + it.mrp.toFixed(2),
-      it.gst + '%',
-      '<strong>₹' + it.lineTotal.toFixed(2) + '</strong>'
-    ]));
-
-    const slabKeys = Object.keys(slabs);
-    const gstBlock = slabKeys.length ? {
-      title: 'GST summary',
-      html:
-        '<table style="width:100%;border-collapse:collapse;font-size:11px;color:#6b7280;">' +
-          '<thead><tr style="background:#f3f4f6;">' +
-            ['Slab', 'Taxable', 'CGST', 'SGST', 'Total GST'].map((h, i) =>
-              '<th style="padding:4px 10px;text-align:' + (i ? 'right' : 'left') +
-              ';font-weight:700;">' + h + '</th>').join('') +
-          '</tr></thead><tbody>' +
-          slabKeys.map(k => {
-            const half = slabs[k].gst / 2;
-            return '<tr>' +
-              '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;">' + E(k) + '%</td>' +
-              ['₹' + slabs[k].taxable.toFixed(2), '₹' + half.toFixed(2),
-               '₹' + half.toFixed(2), '₹' + slabs[k].gst.toFixed(2)]
-                .map(v => '<td style="padding:4px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">' + v + '</td>')
-                .join('') +
-            '</tr>';
-          }).join('') +
-        '</tbody></table>'
-    } : null;
-
-    const isIp = (d.billType === 'IPD' || d.billType === 'IP_ACCOUNT');
-
-    const totals = [
-      { label: 'Gross amount', value: '₹' + d.gross.toFixed(2) },
-      { label: 'of which GST', value: '₹' + d.totalGst.toFixed(2) }
-    ];
-    if (d.discount > 0) {
-      totals.push({ label: 'Discount', value: '- ₹' + d.discount.toFixed(2), tone: 'ok' });
-    }
-    totals.push({ label: 'Net payable', value: '₹' + d.net.toFixed(2), strong: true });
-
-    const demo = [];
-    if (d.age) demo.push(d.age + 'y');
-    if (d.sex) demo.push(d.sex);
-
-    return crescInvoiceHtml({
-      kind: 'PHARMACY INVOICE',
-      invoiceNo: d.invoiceNo,
-      date: d.date,
-      patient: {
-        name: d.patientName || 'Walk-in Patient',
-        id: (d.patientId && d.patientId !== 'WALK-IN') ? d.patientId : '',
-        ageSex: demo.join(' / '),
-        mobile: d.mobile,
-        address: d.address
-      },
-      meta: [['Doctor', d.doctor]],
-      columns: [
-        { label: '#', align: 'left', width: '32px' },
-        { label: 'Medicine', align: 'left' },
-        { label: 'Batch / Exp', align: 'left', width: '130px' },
-        { label: 'Qty', align: 'right', width: '50px' },
-        { label: 'MRP', align: 'right', width: '80px' },
-        { label: 'GST', align: 'right', width: '56px' },
-        { label: 'Amount', align: 'right', width: '96px' }
-      ],
-      rows: rows,
-      totals: totals,
-      blocks: gstBlock ? [gstBlock] : [],
-      footNote: isIp
-        ? '<strong style="color:#0369a1;">Posted to IP account &bull; settled at discharge</strong>'
-        : 'Payment: <strong>' + E(d.payMode) + '</strong> &bull; Status: <strong style="color:' +
-          (d.payStatus === 'PAID' ? '#047857' : '#b91c1c') + ';">' + E(d.payStatus) + '</strong>' +
-          '<br><span style="font-size:10px;color:#9ca3af;">Medicines once sold are not returnable except as per policy.</span>'
-    }, done);
-  }
+  const buildPrintInvoiceRaw = function (d, done) {
+    return window.crescPharmacyInvoiceHtml(d, done);
+  };
 
   // ===================================================================
   // 4. DISPATCH HUB CONTROLLERS
@@ -965,7 +892,12 @@
         if (res && res.success) {
           const msg = encodeURIComponent(`Hello! Here is your pharmacy invoice (${invNo}) from Crescentia HealthTech. View/Download it here: ${res.link}`);
           window.open(`https://wa.me/91${targetWa.replace(/\D/g, '')}?text=${msg}`, '_blank');
-        } else crescAlert("❌ Error generating PDF: " + (res.message || "Unknown error."));
+        } else if (window.crescConsentGate &&
+                   window.crescConsentGate(res, function () {
+                     sendPharmaWhatsAppGo(invNo, targetWa);
+                   })) {
+          // The notice is on screen; the send retries itself if they agree.
+        } else crescAlert("❌ Error generating PDF: " + ((res && res.message) || "Unknown error."));
       })
       .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
       .generateAndStorePharmacyInvoicePDF(invNo, currentDispatchHtml, window.sessionToken);
@@ -1140,6 +1072,8 @@
   function openPharmacyBilling() {
     // Fetch the letterhead now, not while a print dialog is opening.
     if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
+    // Re-read the till if it was left showing; see CrescDrawer.onScreenOpen.
+    if (window.CrescDrawer) CrescDrawer.onScreenOpen('ph-drawer-host', 'Pharmacy');
     fetchLivePharmacyStock();
     const tbody = document.getElementById('phBillingBody');
     if (tbody && tbody.children.length === 0) addPharmacyRow();

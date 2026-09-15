@@ -98,7 +98,38 @@ var DEP_MAP = {
   ],
   "DPDP_Documents.gs": [
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
-    "dpdpListDocumentLinks", "dpdpExpireDocumentGrants"
+    "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
+  ],
+  "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
+  "Deployment_Probe.gs": [
+    "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
+    "RUN_deploymentEvidence"
+  ],
+  "Patient_Portal.gs": [
+    "portalHome", "portalBookableDoctors", "portalDoctorSlots",
+    "portalBookAppointment", "portalCancelAppointment", "portalLabResults",
+    "portalRecords", "pp_me_", "pp_freeSlots_"
+  ],
+  "Maternal_Child.gs": [
+    "mcSetup", "mcGetSchedule", "mcOpenAntenatal", "mcRecordAntenatalVisit",
+    "mcCloseAntenatal", "mcRecordImmunisation", "mcGetAntenatal",
+    "mcGetImmunisation", "mcListOpenAntenatal",
+    "mc_antenatalView_", "mc_immunisationView_"
+  ],
+  "DS_Record_Bridge.gs": [
+    "dsx_writeSummaryToTimeline_", "dsxBackfillSummaryNotes",
+    "getDischargeSummaryFull", "mtPrintOPEncounter",
+    "dsb_orderedSections_", "dsb_sectionText_"
+  ],
+  "DPDP_Consent_Backfill.gs": [
+    "dpdpBackfillConsent", "dpdpConsentQueue", "dpdp_consentMatrix_",
+    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN",
+    "RUN_consentBackfill_FOR_REAL", "RUN_consentQueue"
+  ],
+  "DPDP_Dispatch.gs": [
+    "dpdpRequireDispatchConsent_", "dpdp_resolvePatientFor_", "dpdp_consentState_",
+    "getDispatchChannelNotice", "dpdpDispatchChannels", "getDispatchConsent",
+    "recordDispatchConsent", "dpdpDispatchReadiness"
   ],
   "DPDP_Breach.gs": [
     "dpdp_anomalyScan_", "dpdpAnomalyScan", "dpdpRaiseBreach",
@@ -125,8 +156,13 @@ var DEP_MAP = {
     "crescRandomPassword_", "crescChangePassword", "crescAdminResetPassword",
     "crescCredentialStatus", "crescMigrateCredentials", "crescPwdBenchmark"
   ],
+  "Auth_Reset.gs": [
+    "crescRequestPasswordReset", "cresc_sendResetEmail_", "cresc_resetThrottle_",
+    "crescResetReadiness"
+  ],
   "Clinic_Profile.gs": [
-    "cresc_clinic_", "getClinicProfile", "setClinicProfile"
+    "cresc_clinic_", "getClinicProfile", "setClinicProfile",
+    "cresc_clinicWebsite_", "cresc_publicBaseUrl_", "cresc_publicLinkBase_"
   ],
   "Patient_Profile_Edit.gs": [
     "updatePatientProfile", "getPatientProfileHistory", "ppe_validate_"

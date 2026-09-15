@@ -91,7 +91,13 @@ function RUN_04b_makeSignInFaster_() {
 
 /** 5. Creates every DPDP register. Safe to re-run; it never overwrites. */
 function RUN_05_createRegisters_() {
-  return dpdpSetup();
+  var out = [dpdpSetup()];
+  // The antenatal and immunisation registers. Idempotent, and the patient
+  // portal's pregnancy and vaccination panels stay hidden until these exist
+  // and somebody records something in them — see Maternal_Child.gs.
+  try { out.push(mcSetup()); }
+  catch (e) { out.push('Maternal_Child.gs is not in this project: ' + e.message); }
+  return out.join('\n\n');
 }
 
 /**

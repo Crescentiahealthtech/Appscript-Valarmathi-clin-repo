@@ -261,14 +261,20 @@ function dpdp_noticeVersion_() {
  */
 function getDPDPNotice() {
   var clinic = (typeof cresc_clinic_ === 'function')
-    ? cresc_clinic_() : { name: 'this clinic', address: '', phone: '', email: '' };
+    ? cresc_clinic_() : { name: 'this clinic', address: '', phone: '', email: '',
+                          website: '' };
   var officer = dpdp_officer_();
 
   return {
     success: true,
     version: dpdp_noticeVersion_(),
     fiduciary: clinic.name,
-    contact: { address: clinic.address, phone: clinic.phone, email: clinic.email },
+    // s.5(1) requires the notice to identify the Data Fiduciary. A patient
+    // who has put the paper down has to be able to find the clinic again,
+    // so the notice carries the clinic's own web address — not the
+    // deployment URL this page happens to be served from.
+    contact: { address: clinic.address, phone: clinic.phone, email: clinic.email,
+               website: clinic.website || '' },
     purposes: DPDP_PURPOSES,
     rights: [
       { key: 'ACCESS',     label: 'A copy of what is held about you',
@@ -1598,20 +1604,34 @@ function dpdpReadinessCheck() {
   }
 
   // --- deployment ---------------------------------------------------------
-  // The single highest-risk setting in the project, and it is not in code —
-  // which is why this cannot be checked, only reminded about. appsscript.json
-  // in the repository now says access "ANYONE" (Google sign-in required), but
-  // the manifest only takes effect on a NEW DEPLOYMENT: an /exec URL that was
-  // published before the change keeps its old setting until it is redeployed.
-  add('HIGH', 'Deployment',
-      'The manifest asks for access "ANYONE" and executeAs USER_DEPLOYING, so ' +
-      'every google.script.run endpoint still runs with the owner’s full ' +
-      'spreadsheet access — now for signed-in callers only, and only if this ' +
-      'deployment was published AFTER the manifest changed.',
-      'Deploy > Manage deployments > edit > New version. Then open the /exec ' +
-      'URL in a private window: if it answers without asking you to sign in, ' +
-      'the old ANYONE_ANONYMOUS deployment is still live. Treat any period it ' +
-      'was anonymous as potentially breached (s.8(6)).');
+  // The single highest-risk setting in the project, and it is not in code.
+  //
+  // This USED to be an unconditional HIGH built by reading appsscript.json —
+  // which describes what the NEXT version would be published with, not what
+  // the live /exec URL does. So it stayed HIGH on a clinic that had fixed it
+  // months ago, and its fix was "go and look in a private window", which
+  // nobody does twice. A finding that cannot go away is a finding that stops
+  // being read.
+  //
+  // depDeploymentFinding() answers it from EVIDENCE instead: whether the page
+  // loads actually arriving at this application carry an identified Google
+  // user, which is a direct consequence of the live access mode. See
+  // Deployment_Probe.gs.
+  try {
+    var dep = depDeploymentFinding();
+    add(dep.severity, 'Deployment', dep.text, dep.fix);
+  } catch (e) {
+    add('HIGH', 'Deployment',
+        'The manifest asks for access "ANYONE" and executeAs USER_DEPLOYING, so ' +
+        'every google.script.run endpoint runs with the owner’s full ' +
+        'spreadsheet access — and the deployment probe could not be read (' +
+        e.message + '), so whether the LIVE deployment requires a sign-in is ' +
+        'not known.',
+        'Deploy > Manage deployments > edit > New version. Then open the /exec ' +
+        'URL in a private window: if it answers without asking you to sign in, ' +
+        'the old ANYONE_ANONYMOUS deployment is still live. Treat any period it ' +
+        'was anonymous as potentially breached (s.8(6)).');
+  }
 
   // --- registers ----------------------------------------------------------
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1630,26 +1650,73 @@ function dpdpReadinessCheck() {
   }
 
   // --- consent coverage ---------------------------------------------------
+  //
+  // TWO SEPARATE FACTS, reported separately, because the remedies are not the
+  // same and the old single count conflated them.
+  //
+  //   "no record at all" is an accountability gap: nothing says the basis for
+  //   processing this patient was ever considered. It is closeable by the
+  //   clinic on its own — dpdpBackfillConsent() writes the two s.7 legitimate
+  //   uses, which is a record of a decision the clinic did make.
+  //
+  //   "the optional purposes have not been put to them" is a gap only the
+  //   PATIENT can close, by being asked. No function can close it and no
+  //   report should imply one could; what it needs is a worklist, which is
+  //   dpdpConsentQueue().
+  //
+  // Reporting them as one number invited exactly the fix that must not
+  // happen: a batch write of GIVEN against everything, which would clear the
+  // finding by putting a false consent on the record.
   try {
     var pts = ss.getSheetByName('Patients');
-    var consented = {};
+    var anyRow = {}, optionalDone = {};
+    var OPTIONAL = ['INSURANCE', 'COMMUNICATION', 'MARKETING', 'RESEARCH'];
     var cs = ss.getSheetByName(DPDP_CFG.CONSENT);
     if (cs) {
       var cv = dc_sheetValues_(cs);
       var cm = dc_headerMap_(cs);
       for (var i = 1; i < (cv ? cv.length : 0); i++) {
-        consented[dpdp_str_(cv[i][cm['Patient_ID']]).toUpperCase()] = true;
+        var pid = dpdp_str_(cv[i][cm['Patient_ID']]).toUpperCase();
+        if (!pid) continue;
+        anyRow[pid] = true;
+        var pk = dpdp_str_(cv[i][cm['Purpose']]).toUpperCase();
+        if (OPTIONAL.indexOf(pk) === -1) continue;
+        if (!optionalDone[pid]) optionalDone[pid] = {};
+        optionalDone[pid][pk] = true;
       }
     }
     if (pts) {
       var total = Math.max(0, pts.getLastRow() - 1);
-      var have = Object.keys(consented).length;
+      var have = Object.keys(anyRow).length;
+
       if (have < total) {
         add(have === 0 ? 'HIGH' : 'MEDIUM', 'Section 6',
-            (total - have) + ' of ' + total + ' patients have no consent record ' +
-            'at all.',
-            'Capture consent at registration and backfill at the next visit. ' +
-            'recordConsent() is the endpoint.');
+            (total - have) + ' of ' + total + ' patients have no consent ' +
+            'record at all — nothing says the basis for processing them was ' +
+            'ever considered.',
+            'Run dpdpBackfillConsent({mode:"LEGITIMATE"}) — or Privacy > ' +
+            'Consent > "Record the s.7 basis for every patient". It writes ' +
+            'care and billing as the legitimate uses they are, and ' +
+            'deliberately does NOT invent the four optional consents.');
+      }
+
+      // How many have been asked about ALL FOUR optional purposes.
+      var asked = 0;
+      Object.keys(optionalDone).forEach(function (pid) {
+        var n = 0;
+        OPTIONAL.forEach(function (k) { if (optionalDone[pid][k]) n++; });
+        if (n === OPTIONAL.length) asked++;
+      });
+      if (asked < total) {
+        add('MEDIUM', 'Section 6',
+            (total - asked) + ' of ' + total + ' patients have not been asked ' +
+            'about insurance, reports by WhatsApp or email, health camps or ' +
+            'research. Documents cannot be sent to them until they are — the ' +
+            'dispatch gate refuses.',
+            'This one cannot be fixed by a function: the patient has to be ' +
+            'asked. dpdpConsentQueue() is the worklist, Privacy > Consent ' +
+            'shows it, and the WhatsApp button now puts the question at the ' +
+            'counter and records the answer.');
       }
     }
   } catch (e) { /* the check itself must not fail the report */ }

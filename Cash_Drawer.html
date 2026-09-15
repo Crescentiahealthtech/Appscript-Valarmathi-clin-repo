@@ -1,0 +1,485 @@
+<!-- =====================================================================
+     💰 THE CASH DRAWER, AT THE COUNTER THAT HOLDS IT
+
+     The drawer screen lived in one place: Accounts → Cash Drawer, behind
+     `accounts.read`. So the three people who actually hold cash could not
+     reach it.
+
+     A pharmacist finishing at six o'clock counts the pharmacy till. To
+     reconcile it she had to find an accountant, or be given the Finance Hub,
+     which is every expense, every payable and every tax screen in the clinic.
+     The same for the lab technician and the front desk. In practice the tills
+     were counted on paper and typed in the next morning by somebody who had
+     not counted them, which is the one arrangement guaranteed to make a
+     variance meaningless.
+
+     The BACKEND was already right. Shift_Registers has always had a
+     Counter_Name column, acc_cashSince_() is scoped per counter, and
+     getShiftState / openShift / closeShift all accept `billing.read` and
+     `billing.write` — which receptionist, pharmacist and lab already hold.
+     Only the screen was in the wrong building.
+
+     WHAT THIS IS
+
+     One panel, mounted wherever a counter takes money:
+
+         CrescDrawer.mount('ph-drawer-host', 'Pharmacy');
+         CrescDrawer.mount('lab-drawer-host', 'Lab');
+         CrescDrawer.mount('hb-drawer-host', 'Reception');
+
+     It is IN THE SHELL, not in any bundle, because those three screens are
+     three separate lazy bundles and a partial reaching across a bundle
+     boundary for a function is exactly what produced "Invoice print template
+     not loaded on this page." (see Invoice_Template.html).
+
+     WHAT IT DELIBERATELY DOES NOT SHOW
+
+     The other two drawers, or the clinic's total cash position. Those need
+     `accounts.read` and they are Accounts' business. A pharmacist reconciling
+     her own till against her own pharmacy invoices is the whole job here; the
+     roll-up across all three stays on the Finance Hub, where somebody whose
+     job is the clinic's money can see it.
+     ===================================================================== -->
+<style>
+  .cdrawer { border: 1px solid var(--border-color); border-radius: 12px;
+             background: var(--bg-card); padding: 16px 18px; }
+  .cdrawer h6 { font-size: .95rem; font-weight: 700; color: var(--text-main); margin: 0; }
+  .cdrawer .cd-lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .5px;
+                     color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px; }
+  .cdrawer .cd-val { font-size: 1.05rem; font-weight: 700; color: var(--text-main); }
+  .cdrawer input { background: var(--bg-input) !important; color: var(--text-main) !important;
+                   border: 1px solid var(--border-color) !important; border-radius: 6px;
+                   box-shadow: none !important; font-size: .85rem; padding: 6px 8px; width: 100%; }
+  .cdrawer .cd-tile { border: 1px solid var(--border-color); border-radius: 8px;
+                      padding: 8px 10px; background: var(--bg-elevated); }
+  .cdrawer .cd-pill { font-size: .68rem; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+                      text-transform: uppercase; letter-spacing: .4px; }
+  .cdrawer .cd-open   { background: var(--success-bg); color: var(--success-fg); }
+  .cdrawer .cd-shut   { background: var(--warning-bg); color: var(--warning-fg); }
+  .cdrawer .cd-bad    { background: var(--danger-bg);  color: var(--danger-fg); }
+  .cdrawer .cd-note   { font-size: .72rem; color: var(--text-muted); line-height: 1.45; }
+  .cdrawer table { width: 100%; font-size: .74rem; border-collapse: collapse; }
+  .cdrawer table th { color: var(--text-muted); font-weight: 600; text-align: left;
+                      padding: 4px 6px; border-bottom: 1px solid var(--border-color); }
+  .cdrawer table td { padding: 4px 6px; border-bottom: 1px solid var(--border-color);
+                      color: var(--text-main); }
+</style>
+
+<script>
+window.CrescDrawer = (function () {
+  'use strict';
+
+  /**
+   * What each till actually takes money for.
+   *
+   * Named on screen for the same reason Accounts names it: the
+   * auto-calculated figure used to be the WHOLE clinic's cash in all three
+   * drawers (see acc_cashSince_ in Accounts_Shifts.gs), and the only way the
+   * person counting can tell whether the number in front of them is
+   * plausible is to know which bills fed it.
+   */
+  var SOURCES = {
+    'Reception': 'OP consultations and hospital bills',
+    'Pharmacy':  'pharmacy invoices',
+    'Lab':       'lab bills'
+  };
+
+  /** hostId -> { counter, state } for every mounted panel. */
+  var mounted = {};
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function inr(n) {
+    return '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  }
+  function num(id) {
+    var el = document.getElementById(id);
+    return Number(el && el.value !== '' ? el.value : 0) || 0;
+  }
+  function who() {
+    return window.currentUser || window.loggedInUser || window.userName || 'STAFF';
+  }
+  function say(msg, ok) {
+    if (typeof window.showToast === 'function') {
+      window.showToast(ok ? 'Done' : 'Could not complete', msg, ok ? 'success' : 'error');
+    } else if (typeof window.crescAlert === 'function') {
+      window.crescAlert(msg);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // RENDER
+  // ------------------------------------------------------------------
+
+  function render(hostId) {
+    var m = mounted[hostId];
+    var host = document.getElementById(hostId);
+    if (!m || !host) return;
+
+    var s = m.state;
+    if (!s) {
+      host.innerHTML = '<div class="cdrawer cd-note">' +
+        '<i class="fa-solid fa-circle-notch fa-spin me-2"></i>Loading the ' +
+        esc(m.counter) + ' drawer…</div>';
+      return;
+    }
+    if (s.error) {
+      host.innerHTML = '<div class="cdrawer">' + head(m, null) +
+        '<div class="cd-note mt-2 text-danger">' + esc(s.error) + '</div>' +
+        '<button class="btn btn-sm btn-outline-secondary mt-2" ' +
+        'onclick="CrescDrawer.reload(\'' + hostId + '\')">Try again</button></div>';
+      return;
+    }
+
+    host.innerHTML = '<div class="cdrawer">' + head(m, s.open) +
+      (s.open ? openBody(hostId, m, s) : shutBody(hostId, m)) +
+      history(m, s) + '</div>';
+  }
+
+  function head(m, open) {
+    var pill = open
+      ? '<span class="cd-pill cd-open">shift open</span>'
+      : '<span class="cd-pill cd-shut">no shift open</span>';
+    return '<div class="d-flex justify-content-between align-items-center mb-1">' +
+        '<h6><i class="fa-solid fa-cash-register me-2" style="color:var(--accent-fg)"></i>' +
+        esc(m.counter) + ' cash drawer</h6>' + pill + '</div>' +
+      '<div class="cd-note mb-3">This till holds the cash taken for ' +
+        esc(SOURCES[m.counter] || 'this counter') + '.</div>';
+  }
+
+  /** No shift open: the only thing to do is start one. */
+  function shutBody(hostId, m) {
+    return '<div class="row g-2 align-items-end">' +
+        '<div class="col-7 col-sm-5">' +
+          '<label class="cd-lbl">Opening float in the drawer</label>' +
+          '<input type="number" step="0.01" min="0" id="' + hostId + '-open-float" value="0">' +
+        '</div>' +
+        '<div class="col-5 col-sm-4">' +
+          '<button class="btn btn-sm w-100 text-white fw-bold on-accent" ' +
+            'style="background-color:var(--accent-purple)" ' +
+            'onclick="CrescDrawer.open(\'' + hostId + '\')">Open shift</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cd-note mt-2">Count what is in the drawer before you start ' +
+        'taking money. Everything after this is measured against it.</div>';
+  }
+
+  /**
+   * A shift is open. The figures the server worked out are shown as
+   * READ-ONLY facts, and the only thing typed in is what was physically
+   * counted — because that is the only number the person at the counter
+   * actually knows, and inviting them to edit the takings is inviting the
+   * variance to be papered over.
+   */
+  function openBody(hostId, m, s) {
+    var o = s.open;
+    var sug = s.suggestion || { cashIn: 0, cashOut: 0 };
+    var expected = (Number(o.opening) || 0) + (Number(sug.cashIn) || 0) -
+                   (Number(sug.cashOut) || 0) - num(hostId + '-refunds');
+
+    return '<div class="row g-2 mb-3">' +
+        tile('Opening float', inr(o.opening)) +
+        tile('Cash taken since', inr(sug.cashIn)) +
+        tile('Cash paid out', inr(sug.cashOut)) +
+        tile('Opened', esc(o.openTime || '') + ' by ' + esc(o.user || '—')) +
+      '</div>' +
+
+      '<div class="row g-2 align-items-end">' +
+        '<div class="col-6 col-md-3">' +
+          '<label class="cd-lbl">Refunds given</label>' +
+          '<input type="number" step="0.01" min="0" id="' + hostId + '-refunds" value="0" ' +
+            'oninput="CrescDrawer.recalc(\'' + hostId + '\')">' +
+        '</div>' +
+        '<div class="col-6 col-md-3">' +
+          '<label class="cd-lbl">Cash counted now</label>' +
+          '<input type="number" step="0.01" min="0" id="' + hostId + '-actual" value="" ' +
+            'oninput="CrescDrawer.recalc(\'' + hostId + '\')">' +
+        '</div>' +
+        '<div class="col-6 col-md-3">' +
+          '<label class="cd-lbl">Should be</label>' +
+          '<div class="cd-val" id="' + hostId + '-expected">' + inr(expected) + '</div>' +
+        '</div>' +
+        '<div class="col-6 col-md-3">' +
+          '<label class="cd-lbl">Difference</label>' +
+          '<div class="cd-val" id="' + hostId + '-variance">—</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div id="' + hostId + '-reason-wrap" class="mt-2 d-none">' +
+        '<label class="cd-lbl">Why the difference (required)</label>' +
+        '<input type="text" id="' + hostId + '-reason" ' +
+          'placeholder="e.g. ₹200 given as change from petty cash, receipt in the drawer">' +
+        '<label class="cd-note d-block mt-2">' +
+          '<input type="checkbox" id="' + hostId + '-post" checked style="width:auto;margin-right:6px">' +
+          'Post the difference to the ledger as CASH_SHORT / CASH_OVER, so the ' +
+          'clinic\'s books and this drawer agree.</label>' +
+      '</div>' +
+
+      '<div class="d-flex gap-2 mt-3">' +
+        '<button class="btn btn-sm text-white fw-bold on-accent" ' +
+          'style="background-color:var(--accent-purple)" ' +
+          'onclick="CrescDrawer.close(\'' + hostId + '\')">Close shift</button>' +
+        '<button class="btn btn-sm btn-outline-secondary" ' +
+          'onclick="CrescDrawer.reload(\'' + hostId + '\')">Refresh figures</button>' +
+      '</div>';
+  }
+
+  function tile(label, value) {
+    return '<div class="col-6 col-md-3"><div class="cd-tile">' +
+      '<span class="cd-lbl">' + label + '</span>' +
+      '<span class="cd-val" style="font-size:.9rem">' + value + '</span></div></div>';
+  }
+
+  /**
+   * The last few shifts AT THIS COUNTER.
+   *
+   * getShiftState returns the whole clinic's shift history whatever counter it
+   * was asked about, so it is filtered here. Another counter's variance is
+   * not this person's to reconcile and putting it in front of them invites
+   * exactly the confusion the per-counter scoping was meant to end.
+   */
+  function history(m, s) {
+    var rows = (s.history || []).filter(function (h) {
+      return String(h.counter || '') === m.counter;
+    }).slice(0, 5);
+    if (!rows.length) {
+      return '<div class="cd-note mt-3">No earlier shift recorded at this counter.</div>';
+    }
+    return '<div class="mt-3"><table><thead><tr>' +
+        '<th>Date</th><th>Who</th><th style="text-align:right">Expected</th>' +
+        '<th style="text-align:right">Counted</th><th style="text-align:right">Diff</th>' +
+        '<th>Status</th></tr></thead><tbody>' +
+      rows.map(function (h) {
+        var v = Number(h.variance) || 0;
+        var cls = (h.status === 'MISMATCH') ? 'cd-pill cd-bad'
+                : (h.status === 'RECONCILED') ? 'cd-pill cd-open' : 'cd-pill cd-shut';
+        return '<tr><td>' + esc(h.date) + '</td><td>' + esc(h.user) + '</td>' +
+          '<td style="text-align:right">' + inr(h.expected) + '</td>' +
+          '<td style="text-align:right">' + inr(h.actual) + '</td>' +
+          '<td style="text-align:right">' + (v ? inr(v) : '—') + '</td>' +
+          '<td><span class="' + cls + '">' + esc(h.status || '') + '</span></td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // ------------------------------------------------------------------
+  // BEHAVIOUR
+  // ------------------------------------------------------------------
+
+  function load(hostId) {
+    var m = mounted[hostId];
+    if (!m) return;
+    m.state = null;
+    render(hostId);
+    google.script.run
+      .withSuccessHandler(function (res) {
+        // google.script.run hands the SUCCESS handler null when the reply
+        // could not be carried back, so null is a failure, not an answer.
+        if (!res) { m.state = { error: 'The server gave no answer.' }; }
+        else if (!res.success) { m.state = { error: res.message || 'Could not read the drawer.' }; }
+        else { m.state = res; }
+        render(hostId);
+        if (m.state && m.state.open) recalc(hostId);
+      })
+      .withFailureHandler(function (err) {
+        m.state = { error: 'Could not reach the server: ' +
+                           ((err && err.message) || err) };
+        render(hostId);
+      })
+      .getShiftState(m.counter, window.sessionToken);
+  }
+
+  /**
+   * Recomputes what should be in the drawer, and shows the difference.
+   *
+   * The reason box and the ledger adjustment appear only once there IS a
+   * difference — a mandatory reason on a drawer that balances is a box people
+   * learn to type "ok" into, and then the reasons stop meaning anything on
+   * the day one matters.
+   */
+  function recalc(hostId) {
+    var m = mounted[hostId];
+    if (!m || !m.state || !m.state.open) return;
+    var o = m.state.open;
+    var sug = m.state.suggestion || { cashIn: 0, cashOut: 0 };
+
+    var expected = (Number(o.opening) || 0) + (Number(sug.cashIn) || 0) -
+                   (Number(sug.cashOut) || 0) - num(hostId + '-refunds');
+    var actualEl = document.getElementById(hostId + '-actual');
+    var counted = (actualEl && actualEl.value !== '');
+
+    var expEl = document.getElementById(hostId + '-expected');
+    if (expEl) expEl.textContent = inr(expected);
+
+    var variance = counted ? (num(hostId + '-actual') - expected) : null;
+    var vEl = document.getElementById(hostId + '-variance');
+    if (vEl) {
+      if (variance === null) {
+        vEl.textContent = '—';
+        vEl.style.color = 'var(--text-muted)';
+      } else {
+        vEl.textContent = (variance > 0 ? '+' : '') + inr(variance);
+        vEl.style.color = Math.abs(variance) < 0.005 ? 'var(--success-fg)'
+                        : 'var(--danger-fg)';
+      }
+    }
+    var wrap = document.getElementById(hostId + '-reason-wrap');
+    if (wrap) wrap.classList.toggle('d-none', !(variance !== null && Math.abs(variance) >= 0.005));
+  }
+
+  function openShiftNow(hostId) {
+    var m = mounted[hostId];
+    if (!m) return;
+    var float0 = num(hostId + '-open-float');
+    if (float0 < 0) return say('The opening float cannot be negative.', false);
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        say((res && res.message) || 'Could not open the shift.', !!(res && res.success));
+        if (res && res.success) load(hostId);
+      })
+      .withFailureHandler(function (err) {
+        say('Could not reach the server: ' + ((err && err.message) || err), false);
+      })
+      .openShift({ counterName: m.counter, openingCash: float0, user: who() },
+                 window.sessionToken);
+  }
+
+  function closeShiftNow(hostId) {
+    var m = mounted[hostId];
+    if (!m || !m.state || !m.state.open) return;
+    var o = m.state.open;
+    var sug = m.state.suggestion || { cashIn: 0, cashOut: 0 };
+
+    var actualEl = document.getElementById(hostId + '-actual');
+    if (!actualEl || actualEl.value === '') {
+      return say('Count the cash in the drawer and enter the figure first.', false);
+    }
+    var actual = num(hostId + '-actual');
+    var refunds = num(hostId + '-refunds');
+    var expected = (Number(o.opening) || 0) + (Number(sug.cashIn) || 0) -
+                   (Number(sug.cashOut) || 0) - refunds;
+    var variance = actual - expected;
+    var reasonEl = document.getElementById(hostId + '-reason');
+    var reason = reasonEl ? reasonEl.value.trim() : '';
+
+    if (Math.abs(variance) >= 0.005 && reason.length < 4) {
+      return say('The drawer is out by ' + inr(variance) +
+                 '. Say why before closing — that sentence is the only record ' +
+                 'of what happened to the money.', false);
+    }
+
+    var postEl = document.getElementById(hostId + '-post');
+    var send = function () {
+      google.script.run
+        .withSuccessHandler(function (res) {
+          say((res && res.message) || 'Could not close the shift.', !!(res && res.success));
+          if (res && res.success) load(hostId);
+        })
+        .withFailureHandler(function (err) {
+          say('Could not reach the server: ' + ((err && err.message) || err), false);
+        })
+        .closeShift({
+          shiftId: o.shiftId,
+          // The server recomputes expected and variance from these; they are
+          // not sent as conclusions.
+          cashCollected: Number(sug.cashIn) || 0,
+          pettyExpenses: Number(sug.cashOut) || 0,
+          refunds: refunds,
+          actualCash: actual,
+          reason: reason,
+          postAdjustment: !!(postEl && postEl.checked),
+          user: who()
+        }, window.sessionToken);
+    };
+
+    // Closing is the irreversible half: the shift cannot be reopened, so the
+    // figure is confirmed before it is written rather than after.
+    if (typeof window.crescConfirm === 'function') {
+      window.crescConfirm(
+        'Close the ' + m.counter + ' drawer with ' + inr(actual) + ' counted?' +
+        (Math.abs(variance) >= 0.005
+          ? '\n\nThat is ' + (variance > 0 ? 'over' : 'short') + ' by ' +
+            inr(Math.abs(variance)) + '.'
+          : '\n\nIt balances.'),
+        { title: 'Close shift', okLabel: 'Close it' }
+      ).then(function (ok) { if (ok) send(); });
+    } else {
+      send();
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // PUBLIC
+  // ------------------------------------------------------------------
+
+  return {
+    /**
+     * Puts a drawer panel into `hostId`, for `counter`.
+     *
+     * Safe to call every time the screen opens: a second mount for the same
+     * host just reloads the figures, which is what a cashier returning to the
+     * screen wants anyway.
+     *
+     * @param {string} hostId   id of an empty div on the page
+     * @param {string} counter  'Reception' | 'Pharmacy' | 'Lab'
+     */
+    mount: function (hostId, counter) {
+      if (!document.getElementById(hostId)) return;
+      mounted[hostId] = { counter: String(counter || 'Reception'),
+                          state: (mounted[hostId] || {}).state || null };
+      load(hostId);
+    },
+    /**
+     * Shows or hides the panel, mounting it the first time.
+     *
+     * The three billing desks reach the drawer through a button rather than
+     * showing it always: the screen's job is raising a bill, and the till is
+     * counted twice a day. Lazy-mounting also means a desk that never opens
+     * it never pays for the round trip.
+     *
+     * @param {string} hostId
+     * @param {string} counter
+     * @param {string|Element} [btn]  the button, so its label can follow
+     */
+    toggle: function (hostId, counter, btn) {
+      var host = document.getElementById(hostId);
+      if (!host) return;
+      var showing = host.classList.contains('d-none');
+      host.classList.toggle('d-none', !showing);
+      if (showing) {
+        // Mounted or re-loaded on every open: a cashier coming back to this
+        // screen wants the figures as they are now, not as they were when
+        // the page loaded.
+        window.CrescDrawer.mount(hostId, counter);
+      }
+      var b = (typeof btn === 'string') ? document.getElementById(btn) : btn;
+      if (b) {
+        b.innerHTML = showing
+          ? '<i class="fa-solid fa-cash-register"></i> Hide drawer'
+          : '<i class="fa-solid fa-cash-register"></i> Cash Drawer';
+      }
+    },
+    /**
+     * Called when a billing screen opens.
+     *
+     * If the cashier left the panel showing and navigated away, the figures
+     * on it are now as old as the last time they looked — and a drawer
+     * reconciled against stale takings is the failure this whole change
+     * exists to fix. So a VISIBLE panel is re-read; a hidden one is left
+     * alone and costs nothing.
+     */
+    onScreenOpen: function (hostId, counter) {
+      var host = document.getElementById(hostId);
+      if (!host || host.classList.contains('d-none')) return;
+      window.CrescDrawer.mount(hostId, counter);
+    },
+    reload:  function (hostId) { load(hostId); },
+    recalc:  function (hostId) { recalc(hostId); },
+    open:    function (hostId) { openShiftNow(hostId); },
+    close:   function (hostId) { closeShiftNow(hostId); }
+  };
+})();
+</script>

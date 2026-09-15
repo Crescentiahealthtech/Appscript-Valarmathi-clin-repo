@@ -133,6 +133,15 @@
     <!-- One invoice layout for pharmacy, lab and hospital billing. Both
          billing desks are lazy bundles, so it belongs in the shell. -->
     <?!= include('Invoice_Template'); ?>
+    <!-- The cash drawer, mountable at any counter that takes money —
+         reception, pharmacy and the lab are three separate lazy bundles, so
+         the one panel all three mount belongs here rather than in any of
+         them. -->
+    <?!= include('Cash_Drawer'); ?>
+    <!-- The antenatal and immunisation cards. Wanted from the OP consult,
+         the ward and the patient screens — three separate lazy bundles — so
+         the one dialog all three open belongs here. -->
+    <?!= include('Maternal_Child_UI'); ?>
     <!-- Dictation. One floating control that follows the focused field, so
          every free-text box in every lazily loaded clinical module is
          dictatable without any of them registering anything. -->

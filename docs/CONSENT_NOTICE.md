@@ -80,10 +80,14 @@ third-party administrator so that a claim can be settled.
 
 **Reports and reminders by WhatsApp or email.** Sending your prescription, lab
 report or invoice to your mobile number or email address. If you say yes: those
-messages travel through WhatsApp, which is run by Meta, and a link we send you
-opens a document about you. We send links that stop working after a short time
-for that reason. If you would rather collect your documents at the clinic, say
-so and we will do that instead.
+messages travel through WhatsApp, which is run by Meta — a company outside this
+clinic and outside India — and a link we send you opens a document about you.
+Anyone who gets hold of that message can open it, so please do not forward it.
+We send links that stop working after a short time for that reason. Email is
+not encrypted end to end: your email provider, and anyone with access to your
+inbox, can read what we send. **If you say no, or take it back later, nothing
+is sent** — the system refuses it, and you collect your documents at the
+clinic instead.
 
 **Health camps and offers.** Telling you about camps, screenings and services.
 Say no and nothing about your treatment changes.
@@ -186,6 +190,16 @@ after the day they registered is a notice given once and then withdrawn.
 **Two open decisions.** The dictation paragraph above, and whether the clinic
 uses WhatsApp for documents at all. Both change what this notice says and both
 are business decisions, not engineering ones.
+
+**This consent is now enforced, not just recorded.** Every route that sends a
+patient a document — the pharmacy invoice, the lab invoice, the lab report, the
+archived invoice and the OP prescription, each by WhatsApp and by email — checks
+this purpose on the server before it sends, and refuses without it
+(`DPDP_Dispatch.gs`). Until this change the purpose was asked at the desk,
+recorded, withdrawable in the portal, and read by nothing. If the clinic edits
+the paragraph above, the words at the counter change with it: the text the desk
+reads out before asking is `DPDP_DISPATCH.CHANNELS[…].notice`, and it has to
+say the same thing as this notice.
 
 **What makes the consent provable.** `Consent_Register` is append-only and each
 row carries the notice version it was given against. That is what answers
