@@ -9,8 +9,9 @@
 
 function tax_month_(v) { var d = acc_toDate_(v); return d ? Utilities.formatDate(d, ACC_CFG.TZ, 'yyyy-MM') : ''; }
 
-function getTaxSummary(monthKey) {
+function getTaxSummary(monthKey, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'accounts.tax');
     var month = acc_str_(monthKey) || Utilities.formatDate(new Date(), ACC_CFG.TZ, 'yyyy-MM');
 
     // OUTPUT GST — pharmacy sales actually realized (Pay_Status PAID), active bills
@@ -42,8 +43,9 @@ function getTaxSummary(monthKey) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-function getAuditLog(payload) {
+function getAuditLog(payload, sessionToken) {
   try {
+    crescRequire_(sessionToken, ['accounts.tax', 'admin.audit']);
     payload = payload || {};
     var limit = Math.min(Math.max(parseInt(payload.limit, 10) || 60, 1), 200);
     var mod = acc_str_(payload.module).toUpperCase();
@@ -67,8 +69,9 @@ function getAuditLog(payload) {
 }
 
 // distinct modules for the audit filter dropdown
-function getAuditModules() {
+function getAuditModules(sessionToken) {
   try {
+    crescRequire_(sessionToken, ['accounts.tax', 'admin.audit']);
     var seen = {}, rows = acc_readObjects_(ACC_CFG.AUDIT || 'Audit_Event_Ledger');
     rows.forEach(function (r) { var m = acc_str_(r['Module']); if (m) seen[m] = true; });
     return { success: true, modules: Object.keys(seen).sort() };

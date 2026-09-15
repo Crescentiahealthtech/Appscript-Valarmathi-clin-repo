@@ -301,8 +301,9 @@ function fetchPharmacyInventoryForOP() {
 // ─────────────────────────────────────────────────────────────
 // 5. UNIVERSAL DRUG MASTER  (Brand[0] Generic[1] Type[2]) — external fallback
 // ─────────────────────────────────────────────────────────────
-function fetchUniversalDrugs() {
+function fetchUniversalDrugs(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Drug_Master_Universal");
     if (!sheet) return [];
     const data = sheet.getDataRange().getDisplayValues();
@@ -411,8 +412,9 @@ function learnTemplates(items) {
 //            G RefDose(mg/kg/day, optional) | H AdultDose(optional) | I Reorder(optional)
 //  F stays "Unit" to match your working fetchPharmacyMasterForIP().
 // ============================================================
-function fetchOPDrugMaster() {
+function fetchOPDrugMaster(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];
     const data = sheet.getDataRange().getValues();
@@ -447,9 +449,13 @@ function fetchOPDrugMaster() {
 // 🖨️ OP PRESCRIPTION - BACKEND HTML GENERATOR
 // =========================================================================
 
-function getOPPrescriptionHtml(encounterId) {
+function getOPPrescriptionHtml(encounterId, sessionToken) {
   try {
     // 1. Fetch the data using your existing fetcher
+    crescRequire_(sessionToken, 'emr.read');
+    // Finding M2: a complete prescription, assembled for printing or sending.
+    dpdpLogRead_(crescActor_(sessionToken), 'Prescription', String(encounterId || ''),
+                 { endpoint: 'getOPPrescriptionHtml' });
     const fetchRes = getEncounterForPrint(encounterId);
     if (!fetchRes.success) return { success: false, message: fetchRes.message };
     
@@ -689,9 +695,10 @@ function getOPPrescriptionHtml(encounterId) {
 /**
  * Generates OP Prescription PDF, saves to Drive, and returns public link for WhatsApp.
  */
-function generateAndStoreOPPrescriptionPDF(encounterId) {
+function generateAndStoreOPPrescriptionPDF(encounterId, sessionToken) {
   try {
     // 1. Generate HTML using your existing OP engine
+    crescRequire_(sessionToken, 'emr.read');
     const reportResponse = getOPPrescriptionHtml(encounterId); 
     if (!reportResponse.success) {
       return { success: false, message: "Could not generate HTML: " + reportResponse.message };
@@ -733,22 +740,24 @@ function generateAndStoreOPPrescriptionPDF(encounterId) {
       monthFolder = yearFolder.createFolder(monthStr);
     }
 
-    // 4. Save File & Set Permissions
+    // 4. Save the file
     const file = monthFolder.createFile(pdfBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Registered so it can be un-shared. A link that nothing lists is a
-    // link nobody can revoke, and this file carries the patient's name and
-    // their results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
-    try {
-      var pdfPatientId = '';
-      try { pdfPatientId = String(getEncounterForPrint(encounterId).data.patientId || ''); } catch (e2) {}
-      dpdpRegisterSharedFile(file, 'OP_PRESCRIPTION', pdfPatientId,
-                             Session.getActiveUser().getEmail());
-    } catch (e) {}
+    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
+    // their ID and their clinical detail; a Drive link that never expires,
+    // sent over WhatsApp, is forwarded, backed up and restored on devices
+    // nobody here will ever see. The file stays PRIVATE and the patient gets
+    // a link back into this web app with a one-off key that expires, counts
+    // its opens and can be withdrawn. See DPDP_Documents.gs, finding H1.
+    var pdfPatientId = '';
+    try { pdfPatientId = String(getEncounterForPrint(encounterId).data.patientId || ''); } catch (e2) {}
+    var grant = dpdpIssueDocumentLink_(file, 'OP_PRESCRIPTION', pdfPatientId,
+                                       (crescActor_(sessionToken) || {}).username || '');
+    if (!grant.success) return { success: false, message: grant.message };
 
-    // 5. Return the Secure Drive Link to Frontend
-    return { success: true, link: file.getUrl() };
+    // 5. Return the private, expiring link to the frontend
+    return { success: true, link: grant.url, expiresAt: grant.expiresAt,
+             grantId: grant.grantId, message: grant.message };
 
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -758,8 +767,9 @@ function generateAndStoreOPPrescriptionPDF(encounterId) {
 /**
  * Generates OP Prescription PDF and emails it directly via GMAIL API.
  */
-function emailOPPrescriptionPDF(encounterId, patientEmail) {
+function emailOPPrescriptionPDF(encounterId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'emr.read');
     const reportResponse = getOPPrescriptionHtml(encounterId); 
     
     if (!reportResponse.success) {

@@ -61,7 +61,11 @@ var CRESC_BUNDLES = {
                     'Accounts_Discharge_Script', 'AccountsPayablesScripts',
                     'AccountsTaxAuditsScripts', 'AccountsInsuranceScripts',
                     'AccountsIPChargesUI'],
-  'barcode':       ['Barcode_QR_Lib', 'Barcode_Labels', 'Barcode_Router']
+  'barcode':       ['Barcode_QR_Lib', 'Barcode_Labels', 'Barcode_Router'],
+
+  // The privacy console. Its own bundle because it is opened by one or
+  // two people in the clinic and nobody else should pay for its markup.
+  'privacy':       ['Admin_DPDP_Console']
 };
 
 /**

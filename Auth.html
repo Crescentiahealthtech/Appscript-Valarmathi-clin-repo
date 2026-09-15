@@ -76,6 +76,27 @@
   <button class="btn btn-link text-muted w-100 mt-2 small" onclick="cancelMFA()">Cancel</button>
 </div>
 
+<div id="pwd-screen" class="d-none text-center mx-auto mt-5" style="max-width: 380px; padding: 40px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 16px;">
+  <i class="fa-solid fa-key text-info mb-3" style="font-size: 2rem;"></i>
+  <h4 class="fw-bold text-white mb-2">Set your password</h4>
+  <p class="small text-muted mb-4" id="pwd-reason">
+    The password you were given was set for you. Choose your own before you sign in.
+  </p>
+
+  <input type="text" id="pwd-username" class="form-control mb-3 py-2 text-white-force" placeholder="User ID" autocomplete="username">
+  <input type="password" id="pwd-current" class="form-control mb-3 py-2 text-white-force" placeholder="Current password" autocomplete="current-password">
+  <input type="password" id="pwd-new" class="form-control mb-2 py-2 text-white-force" placeholder="New password" autocomplete="new-password">
+  <input type="password" id="pwd-new2" class="form-control mb-3 py-2 text-white-force" placeholder="New password again" autocomplete="new-password">
+
+  <p class="small text-muted mb-3">
+    At least 10 characters. A phrase you can remember beats a short one with
+    symbols in it — and it must not be your user ID, or your name and year of birth.
+  </p>
+
+  <button id="btn-pwd-save" class="btn btn-info w-100 fw-bold" onclick="submitPasswordChange()">Save and continue</button>
+  <button class="btn btn-link text-muted w-100 mt-2 small" onclick="cancelPasswordChange()">Back to sign in</button>
+</div>
+
 <script>
   // ==========================================
   // 0. SESSION TIMEOUT CONFIGURATION
@@ -787,8 +808,22 @@
       .withSuccessHandler(function (res) {
         btn.innerHTML = originalHtml;
         btn.disabled = false;
-        if (res.success) triggerMFAOrRoute(res, usernameInput);
-        else crescAlert(res.message);
+        if (res.success) { triggerMFAOrRoute(res, usernameInput); return; }
+
+        // A correct password that policy will not let through yet. The server
+        // issues no session for these, so there is nothing to protect here
+        // beyond showing the right screen.
+        if (res.code === 'MUST_CHANGE') {
+          showPasswordChange(res.username || usernameInput, res.message);
+          return;
+        }
+        // A credential still stored in plain text. Nobody can sign in with one
+        // and nobody can change one themselves — see Auth_Credentials.gs.
+        if (res.code === 'LEGACY_CREDENTIAL') {
+          crescAlert(res.message);
+          return;
+        }
+        crescAlert(res.message);
       })
       .withFailureHandler(function (err) {
         btn.innerHTML = originalHtml;
@@ -796,6 +831,82 @@
         crescAlert("Network Error: " + err.message);
       })
       .verifyLogin({ username: usernameInput, password: passwordInput });
+  }
+
+  // ==========================================
+  // 4b. SETTING A PASSWORD
+  // ------------------------------------------
+  // Reached when the server refuses a sign-in with code MUST_CHANGE: the
+  // password was correct, and was one the clinic issued rather than one the
+  // user chose. A temporary password that never expires is a permanent one
+  // that several people have seen.
+  // ==========================================
+  function showPasswordChange(username, reason) {
+    document.getElementById('auth-screen').classList.add('d-none');
+    document.getElementById('mfa-screen').classList.add('d-none');
+    document.getElementById('pwd-screen').classList.remove('d-none');
+
+    const u = document.getElementById('pwd-username');
+    if (u) u.value = username || '';
+    const why = document.getElementById('pwd-reason');
+    if (why && reason) why.textContent = reason;
+
+    const cur = document.getElementById('pwd-current');
+    if (cur) { cur.value = document.getElementById('in-password').value || ''; }
+    const el = document.getElementById('pwd-new');
+    if (el) el.focus();
+  }
+
+  function cancelPasswordChange() {
+    ['pwd-username', 'pwd-current', 'pwd-new', 'pwd-new2'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('pwd-screen').classList.add('d-none');
+    document.getElementById('auth-screen').classList.remove('d-none');
+  }
+
+  function submitPasswordChange() {
+    const btn = document.getElementById('btn-pwd-save');
+    const username = document.getElementById('pwd-username').value.trim();
+    const current  = document.getElementById('pwd-current').value;
+    const next     = document.getElementById('pwd-new').value;
+    const again    = document.getElementById('pwd-new2').value;
+
+    if (!username || !current || !next) {
+      return crescAlert('Fill in your user ID, your current password and the new one.');
+    }
+    if (next !== again) {
+      return crescAlert('The two new passwords are not the same.');
+    }
+    if (next.length < 10) {
+      return crescAlert('Use at least 10 characters.');
+    }
+
+    const label = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+    btn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.innerHTML = label;
+        btn.disabled = false;
+        if (res && res.success) {
+          cancelPasswordChange();
+          document.getElementById('in-username').value = username;
+          document.getElementById('in-password').value = '';
+          document.getElementById('in-password').focus();
+          crescAlert('Password changed. Sign in with the new one.');
+        } else {
+          crescAlert((res && res.message) || 'The password could not be changed.');
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.innerHTML = label;
+        btn.disabled = false;
+        crescAlert('Network Error: ' + (err && err.message ? err.message : err));
+      })
+      .crescChangePassword({ username: username, currentPassword: current, newPassword: next });
   }
 
   // ==========================================
@@ -1024,12 +1135,15 @@
 
     const appScreen  = document.getElementById('app-screen');
     const mfaScreen  = document.getElementById('mfa-screen');
+    const pwdScreen  = document.getElementById('pwd-screen');
     const authScreen = document.getElementById('auth-screen');
     if (appScreen)  appScreen.classList.add('d-none');
     if (mfaScreen)  mfaScreen.classList.add('d-none');
+    if (pwdScreen)  pwdScreen.classList.add('d-none');
     if (authScreen) authScreen.classList.remove('d-none');
 
-    ['in-username', 'in-password', 'in-mfa-code'].forEach(function (id) {
+    ['in-username', 'in-password', 'in-mfa-code',
+     'pwd-username', 'pwd-current', 'pwd-new', 'pwd-new2'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });

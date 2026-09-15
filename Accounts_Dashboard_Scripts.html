@@ -80,7 +80,7 @@ const AccDash = (function () {
         renderShifts(res.openShifts || []);
       })
       .withFailureHandler(function (err) { if (grid) grid.innerHTML = '<div class="col-12 text-danger text-center py-5">' + esc(err.message || 'Server error.') + '</div>'; })
-      .getFinanceDashboard(SCOPE, PERIOD || null);
+      .getFinanceDashboard(SCOPE, PERIOD || null, window.sessionToken);
   }
 
   function renderKPIs(kpis) {
@@ -166,7 +166,7 @@ const AccDash = (function () {
     google.script.run
       .withSuccessHandler(function (res) { busy(false); toast(res.message, !!res.success); if (res.success) { bootstrap.Modal.getInstance($('acc-transfer-modal')).hide(); load(); } })
       .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
-      .recordBankTransfer(payload);
+      .recordBankTransfer(payload, window.sessionToken);
   }
 
   function init() { SCOPE = 'OVERALL'; PERIOD = ''; renderTabs(); renderPicker(); load(); }

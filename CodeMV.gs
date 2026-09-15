@@ -27,67 +27,53 @@ function doGet(e) {
     return HtmlService.createHtmlOutput('Verification is not available on this deployment.');
   }
 
-  // 1. WhatsApp / Patient Mobile Interceptor
-  if (e && e.parameter && e.parameter.viewReport) {
-    const orderId = e.parameter.viewReport;
-    const reportData = getLabReportHtml(orderId);
-    
-    if (reportData.success) {
-       // Convert HTML to PDF, then to Base64 String for mobile downloading
-       const htmlBlob = Utilities.newBlob(reportData.html, 'text/html', 'report.html');
-       const pdfBlob = htmlBlob.getAs('application/pdf');
-       const base64Data = Utilities.base64Encode(pdfBlob.getBytes());
-       const fileName = "Valarmathi_Report_" + orderId + ".pdf";
+  // 0c. The privacy notice and the request form: ?privacy
+  //     Section 5 requires the notice AT OR BEFORE collection, and ss.11-13
+  //     give the rights to a person, not to a person with a staff login. A
+  //     form only reachable from inside the application is a way of receiving
+  //     fewer requests, not of answering them. Print this URL on the
+  //     registration slip and the invoice footer.
+  if (e && e.parameter && (e.parameter.privacy !== undefined ||
+                           e.parameter.rights !== undefined)) {
+    return HtmlService.createHtmlOutputFromFile('DPDP_Privacy_Page')
+      .setTitle('Your information and your rights')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
 
-       // Ultra-lightweight Mobile Download Page (Will NOT crash on phones)
-       const mobileDownloadHtml = `
-         <!DOCTYPE html>
-         <html>
-         <head>
-           <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-           <title>Download Report</title>
-           <style>
-             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; padding: 40px 20px; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-             .card { background: white; padding: 40px 25px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; max-width: 350px; width: 100%; border: 1px solid #e5e7eb; }
-             .icon { font-size: 50px; margin-bottom: 15px; }
-             .btn { background: #10b981; color: white; border: none; padding: 18px 20px; border-radius: 12px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 25px; display: block; box-sizing: border-box; box-shadow: 0 4px 6px rgba(16,185,129,0.2); }
-             .btn:active { transform: scale(0.96); background: #059669; }
-           </style>
-         </head>
-         <body>
-           <div class="card">
-             <div class="icon">📄</div>
-             <h2 style="color:#0f172a; margin: 0 0 10px 0;">Report Ready</h2>
-             <p style="color:#64748b; font-size: 14px; margin: 0 0 10px 0;">Order ID: <strong>${orderId}</strong></p>
-             <p style="color:#94a3b8; font-size: 12px; margin: 0 0 20px 0;">Valarmathi Clinic & Diagnostics</p>
-             <button id="dlBtn" class="btn">📥 Download PDF Report</button>
-           </div>
-           
-           <script>
-             document.getElementById('dlBtn').addEventListener('click', function() {
-                this.innerText = 'Downloading...';
-                // Trigger native file download on the mobile device
-                const link = document.createElement('a');
-                link.href = "data:application/pdf;base64,${base64Data}";
-                link.download = "${fileName}";
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                setTimeout(() => { this.innerText = '✅ Download Complete'; }, 2500);
-             });
-           </script>
-         </body>
-         </html>
-       `;
-       
-       return HtmlService.createHtmlOutput(mobileDownloadHtml)
-         .setTitle('Secure Lab Report')
-         .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
-         
-    } else {
-       return HtmlService.createHtmlOutput("<h2 style='text-align:center; font-family:Arial; margin-top:50px; color:#ef4444;'>Report Not Found or Invalid Link</h2>");
+  // 1. A document shared with a patient: ?doc=<grant>&k=<key>
+  //    The file itself stays private in Drive. This route holds the expiry,
+  //    the open counter and the audit row. See DPDP_Documents.gs.
+  if (e && e.parameter && e.parameter.doc) {
+    if (typeof dpdpServeDocument_ === 'function') {
+      return dpdpServeDocument_(e.parameter.doc, e.parameter.k);
     }
+    return HtmlService.createHtmlOutput('Document delivery is not available on this deployment.');
+  }
+
+  // 1b. The old WhatsApp report link: ?viewReport=<orderId>
+  //
+  //     WITHDRAWN, and deliberately not made to work again. It took an order
+  //     id — sequential, printed on the patient's own paperwork — and
+  //     returned that order's COMPLETE LAB REPORT as a PDF to anyone who
+  //     asked, with no key, no session and no expiry. Walking the ids
+  //     returned the lab's whole output.
+  //
+  //     Anyone still holding one of those messages gets this instead, and the
+  //     clinic re-sends the document as an expiring, revocable link.
+  if (e && e.parameter && e.parameter.viewReport) {
+    return HtmlService.createHtmlOutput(
+      '<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>This link has been withdrawn</title></head>' +
+      '<body style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;' +
+      'background:#f8fafc;margin:0;padding:40px 20px;text-align:center;color:#334155;">' +
+      '<div style="max-width:380px;margin:0 auto;background:#fff;padding:36px 24px;' +
+      'border:1px solid #e5e7eb;border-radius:16px;">' +
+      '<h2 style="font-size:1.15rem;color:#0f172a;margin:0 0 10px;">This link has been withdrawn</h2>' +
+      '<p style="font-size:.9rem;line-height:1.55;color:#64748b;margin:0;">' +
+      'Report links of this kind never expired, so we have stopped honouring them. ' +
+      'Please contact the clinic and we will send your report again as a private ' +
+      'link that only works for a short time.</p></div></body></html>')
+      .setTitle('This link has been withdrawn');
   }
 
   // 2. Normal App Load for Staff
@@ -102,35 +88,61 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent(); 
 }
 
-function registerPatient(data) {
+/**
+ * FRONTEND ENTRY. Registers a patient, gives them a portal credential, and
+ * records what they were asked and what they answered.
+ *
+ * THREE THINGS CHANGED HERE, ALL OF THEM DPDP FINDINGS.
+ *
+ * C1/C2 — it took no session token and checked nothing. On a web app
+ * deployed as ANYONE_ANONYMOUS that is an unauthenticated write to the
+ * patient master by anyone holding the URL.
+ *
+ * C3 — the portal password was `Mei2001`: the first three letters of the name
+ * and the birth year, stored in clear in column B and printed on the
+ * registration slip. Both inputs are on documents the patient carries, so it
+ * was not a secret. It is now random, stored only as a digest, shown to the
+ * desk ONCE to hand over, and has to be changed at first sign-in.
+ *
+ * H2/M1 — nothing recorded that consent had ever been asked for, and three of
+ * the twenty-two fields collected (education, occupation, marital status) were
+ * read by nothing in the application. Section 6(1) permits collection for a
+ * SPECIFIED purpose; a field that exists because the form had a box has no
+ * purpose to specify. They are no longer collected. Consent decisions taken at
+ * the desk are written to the Consent_Register in the same call, so the notice
+ * version they were given against is the one on the row.
+ *
+ * @param {Object} data              the registration form
+ * @param {string} sessionToken      the desk's session
+ * @param {Object} [consent]         { decisions:{PURPOSE:bool}, guardianName,
+ *                                     guardianRelation, method }
+ */
+function registerPatient(data, sessionToken, consent) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    const actor = crescRequire_(sessionToken, 'patient.register');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('Patients');
-    
+
     // 1. Generate Patient ID — Barcode_Engine.gs
     // Never reuses an ID after row deletion (the old getLastRow() scheme did,
     // which would make a printed patient barcode open the wrong record).
     const newId = bc_nextPatientId_(sheet);
-    
-    // 2. BACKEND PASSWORD GENERATOR (Name 3 char + YYYY)
-    let namePart = data.name ? data.name.toString().trim().replace(/[^a-zA-Z]/g, '') : "UNK";
-    if (namePart.length < 3) namePart = (namePart + "XXX").substring(0, 3);
-    else namePart = namePart.substring(0, 3);
-    namePart = namePart.charAt(0).toUpperCase() + namePart.substring(1).toLowerCase();
-    
-    let yearPart = "0000";
-    if (data.dob) yearPart = data.dob.toString().substring(0, 4);
-    let generatedPassword = namePart + yearPart;
+
+    // 2. A random portal password, stored as a salted digest and never again
+    //    readable from the sheet. Returned once, below, for the desk to hand
+    //    over — and flagged so the patient must replace it at first sign-in.
+    const portalPassword = crescRandomPassword_(10);
 
     // 3. Current Timestamp for Registration Date
     const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
 
     // 4. APPEND ROW - STRICTLY MAPPED TO PRESERVE COLUMNS A THROUGH J, NEW FIELDS K TO V
+    //    M, O and P are written empty on purpose: see the note above.
     sheet.appendRow([
       newId,                      // A: ID
-      generatedPassword,          // B: Password
+      crescPwdEncode_(portalPassword), // B: Password — a digest, not a password
       data.name || "",            // C: Name
       data.age || "",             // D: Age
       data.gender || "",          // E: Gender
@@ -139,31 +151,73 @@ function registerPatient(data) {
       data.whatsapp || "",        // H: WhatsApp
       data.address || "",         // I: Address
       data.comorb || "Nil",       // J: Conditions
-      regDate,                    // K: Registration_Date (NEW)
-      data.salutation || "",      // L: Salutation (NEW)
-      data.maritalStatus || "",   // M: Marital_Status (NEW)
-      data.bloodGroup || "",      // N: Blood_Group (NEW)
-      data.occupation || "",      // O: Occupation (NEW)
-      data.education || "",       // P: Education (NEW)
-      data.email || "",           // Q: Email (NEW)
-      data.relationType || "",    // R: Relation_Type (NEW)
-      data.relationName || "",    // S: Relation_Name (NEW)
-      data.emergencyName || "",   // T: Emergency_Contact_Name (NEW)
-      data.emergencyNumber || "", // U: Emergency_Number (NEW)
-      data.referredBy || ""       // V: Referred_By (NEW)
+      regDate,                    // K: Registration_Date
+      data.salutation || "",      // L: Salutation
+      "",                         // M: Marital_Status — no longer collected (DPDP M1)
+      data.bloodGroup || "",      // N: Blood_Group
+      "",                         // O: Occupation — no longer collected (DPDP M1)
+      "",                         // P: Education — no longer collected (DPDP M1)
+      data.email || "",           // Q: Email
+      data.relationType || "",    // R: Relation_Type
+      data.relationName || "",    // S: Relation_Name
+      data.emergencyName || "",   // T: Emergency_Contact_Name
+      data.emergencyNumber || "", // U: Emergency_Number
+      data.referredBy || ""       // V: Referred_By
     ]);
-    
-    SpreadsheetApp.flush(); 
-    return { 
-      success: true, 
+
+    // The digest column must be text, or Sheets reformats a value that starts
+    // with a recognisable pattern and the stored credential stops matching.
+    const newRow = sheet.getLastRow();
+    sheet.getRange(newRow, 2).setNumberFormat('@');
+    try {
+      const psheet = cresc_patientsSheet_();       // adds the two flag columns
+      const flagCol = cresc_colOf_(psheet, 'Portal_Must_Change');
+      if (flagCol !== -1) psheet.getRange(newRow, flagCol).setValue('YES');
+      const stampCol = cresc_colOf_(psheet, 'Portal_Password_Updated_At');
+      if (stampCol !== -1) psheet.getRange(newRow, stampCol).setValue(new Date());
+    } catch (e) { /* the credential is already stored; the flag is best effort */ }
+
+    SpreadsheetApp.flush();
+
+    // 5. Consent, against the notice version in force right now. Section
+    //    6(10) puts the burden of proving consent on the clinic, and a
+    //    consent nobody wrote down cannot be proved.
+    let consentResult = null;
+    if (consent && consent.decisions) {
+      try {
+        consentResult = recordConsent({
+          patientId: newId,
+          decisions: consent.decisions,
+          method: consent.method || 'IN_PERSON',
+          guardianName: consent.guardianName,
+          guardianRelation: consent.guardianRelation,
+          notes: 'Captured at registration'
+        }, sessionToken);
+      } catch (e) {
+        consentResult = { success: false, message: e.message };
+      }
+    }
+
+    try {
+      logAudit_({ username: actor.username, role: actor.role },
+                'PATIENT_REGISTERED', 'Patient', newId,
+                { consentRecorded: !!(consentResult && consentResult.success) });
+    } catch (e) { /* best effort */ }
+
+    return {
+      success: true,
       patientId: newId,          // so the registration screen can print the card
-      message: `Patient Registered Successfully!\nID: ${newId}\nPassword: ${generatedPassword}` 
+      portalPassword: portalPassword,
+      consent: consentResult,
+      message: 'Patient registered. ID: ' + newId +
+               '\nOne-time portal password: ' + portalPassword +
+               '\nIt is shown once and must be changed at first sign-in.'
     };
-    
-  } catch(e) { 
-    return { success: false, message: "Error: " + e.message }; 
-  } finally { 
-    lock.releaseLock(); 
+
+  } catch(e) {
+    return { success: false, message: String(e.message || e).replace('FORBIDDEN: ', '') };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -192,6 +246,10 @@ function registerPatient(data) {
 function getAllPatients(sessionToken) {
   try {
     crescRequire_(sessionToken, 'patient.read');
+    // Finding M2: a read of the ENTIRE register is the one read that must
+    // never be silent. Who pulled the directory, and when.
+    dpdpLogRead_(crescActor_(sessionToken), 'PatientRegister', 'ALL',
+                 { endpoint: 'getAllPatients' });
   } catch (e) {
     // The directory screen renders whatever array it gets, so an empty one
     // with a message is the shape it can already handle.

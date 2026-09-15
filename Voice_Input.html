@@ -255,7 +255,47 @@
   // the answer is remembered per browser. A clinic that does not want it
   // simply never says yes.
   // ------------------------------------------------------------------
+  /**
+   * The clinic's decision, fetched once and remembered for the page.
+   *
+   * The per-browser dialog below asks the PERSON. This asks the CLINIC, and
+   * it is deliberately the outer of the two: one clinician clicking Enable on
+   * one laptop is not the clinic deciding that recorded clinical speech may
+   * be sent to a third party. A clinic that has said FORBIDDEN never gets the
+   * dialog at all. See dpdpVoicePolicy() and finding M3.
+   */
+  var policy = null;          // null = not asked yet
+  function withPolicy(then) {
+    if (policy) { then(policy); return; }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        policy = res || { allowed: false, message: 'Voice typing is unavailable.' };
+        then(policy);
+      })
+      .withFailureHandler(function () {
+        // Fail closed, and say why rather than looking broken.
+        policy = { allowed: false,
+                   message: 'Voice typing could not confirm the clinic policy, so it ' +
+                            'is off. Check your connection and try again.' };
+        then(policy);
+      })
+      .dpdpVoicePolicy(window.sessionToken);
+  }
+
   function withConsent(then) {
+    withPolicy(function (p) {
+      if (!p.allowed) {
+        if (window.showToast) {
+          window.showToast('Voice typing is off', p.message ||
+            'This clinic does not allow dictated audio to leave the building.', 'warning');
+        }
+        return;
+      }
+      askThisBrowser(then);
+    });
+  }
+
+  function askThisBrowser(then) {
     if (store(CONSENT_KEY) === 'yes') { then(); return; }
     var message =
       'Voice typing uses your browser’s speech recognition. In Chrome and Edge ' +

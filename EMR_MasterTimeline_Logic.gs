@@ -1,7 +1,11 @@
 /**
  * Fetches the high-level patient directory for the Ledger view.
  */
-function getMasterPatientDirectory() {
+function getMasterPatientDirectory(sessionToken) {
+  crescRequire_(sessionToken, 'patient.read');
+  // Finding M2: a read of the whole directory is never silent.
+  dpdpLogRead_(crescActor_(sessionToken), 'PatientRegister', 'ALL',
+               { endpoint: 'getMasterPatientDirectory' });
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("Patients");
   if (!sheet) return JSON.stringify([]);
@@ -26,7 +30,10 @@ function getMasterPatientDirectory() {
 /**
  * The Aggregator: Pulls OP and IP records, merges them, and sorts chronologically.
  */
-function buildLongitudinalTimeline(patientId) {
+function buildLongitudinalTimeline(patientId, sessionToken) {
+  crescRequire_(sessionToken, 'emr.read');
+  dpdpLogRead_(crescActor_(sessionToken), 'Patient', String(patientId || ''),
+               { endpoint: 'buildLongitudinalTimeline' });
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const pIdUpper = patientId.trim().toUpperCase();
   

@@ -15,8 +15,9 @@
  * @param {boolean} bust - true to bypass cache (manual refresh)
  * @return {{success:boolean, data:Object, message:string}}
  */
-function getDashboardData(role, bust) {
+function getDashboardData(role, bust, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'dashboard.read');
     role = (role || "").toString().trim().toLowerCase();
 
     // Only these roles may ever receive revenue figures (server-side gate).

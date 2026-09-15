@@ -40,7 +40,8 @@ function formatTimeSafely(timeVal) {
 }
 
 // 1. DOCTOR AVAILABILITY ENGINE
-function getAvailableTimeSlots(dateStr) {
+function getAvailableTimeSlots(dateStr, sessionToken) {
+  crescRequire_(sessionToken, ['appointment.read', 'portal.self']);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
   if(!sheet) return [];
   const data = sheet.getDataRange().getValues();
@@ -98,7 +99,8 @@ function getAppointmentsByDate(dateStr) {
 }
 
 // 2. PATIENT AUTO-FETCH DEMOGRAPHICS
-function getPatientDemographics(patientId) {
+function getPatientDemographics(patientId, sessionToken) {
+  crescRequire_(sessionToken, 'patient.read');
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
   if (!sheet || !patientId) return null;
   const data = sheet.getDataRange().getValues();
@@ -163,10 +165,25 @@ function fetchDailyLedger(dateStr) {
 }
 
 // 4. BOOK APPOINTMENT WRITER (With Security Overrides)
-function submitNewAppointment(apptObj) {
+function submitNewAppointment(apptObj, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    const actor = crescRequire_(sessionToken, ['appointment.write', 'portal.self']);
+
+    // 'portal.self' says "the portal", not "any patient in it". The patient id
+    // here comes from the browser, so without this a signed-in patient could
+    // book — or see the confirmation for — somebody else's appointment by
+    // changing one field. Their session username IS their patient id.
+    if (actor.role === 'patient') {
+      const mine = String(actor.username || '').trim().toUpperCase();
+      const asked = String((apptObj && apptObj.patientId) || '').trim().toUpperCase();
+      if (!asked || asked !== mine) {
+        return { success: false,
+                 message: 'You can only book an appointment for yourself.' };
+      }
+    }
+
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
     const data = sheet.getDataRange().getValues();
 

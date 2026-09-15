@@ -67,9 +67,9 @@ const AccDischarge = (function () {
             }
           })
           .withFailureHandler(function (e) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc(e.message || 'Server error.') + '</div>'; })
-          .getOpenAdmissions();
-      }).withFailureHandler(function () { INSURERS = []; }).getInsurers();
-    }).withFailureHandler(function () { PKGS = []; }).getPackages();
+          .getOpenAdmissions(window.sessionToken);
+      }).withFailureHandler(function () { INSURERS = []; }).getInsurers(window.sessionToken);
+    }).withFailureHandler(function () { PKGS = []; }).getPackages(window.sessionToken);
   }
 
   function open() {
@@ -78,7 +78,7 @@ const AccDischarge = (function () {
     google.script.run
       .withSuccessHandler(function (res) { if (!res || !res.success) { if (b) b.innerHTML = '<div class="text-danger py-3">' + esc((res && res.message) || 'Failed.') + '</div>'; return; } TAB = res; initState(); render(); })
       .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="text-danger py-3">' + esc(e.message || 'Server error.') + '</div>'; })
-      .getRunningTab(IP);
+      .getRunningTab(IP, window.sessionToken);
   }
 
   function initState() {
@@ -252,13 +252,13 @@ const AccDischarge = (function () {
       if (!v.length) { el.innerHTML = '<div class="text-body-secondary small py-3 text-center">No visits recorded yet.</div>'; return; }
       el.innerHTML = '<table class="table table-sm mb-0"><thead><tr><th class="small text-body-secondary">Date</th><th class="small text-body-secondary">Doctor</th><th class="small text-body-secondary">Type</th><th class="text-center small text-body-secondary">Qty</th><th class="small text-body-secondary">Remark</th></tr></thead><tbody>' +
         v.map(x => '<tr><td class="small">' + esc(x.date) + '</td><td class="small">' + esc(x.doctor) + '</td><td class="small">' + esc(x.type) + '</td><td class="text-center small">' + x.count + '</td><td class="small text-body-secondary">' + esc(x.remark) + '</td></tr>').join('') + '</tbody></table>';
-    }).withFailureHandler(function () { const el = $('acc-vis-list'); if (el) el.innerHTML = '<div class="text-danger small py-2">Could not load.</div>'; }).getIpVisits(IP);
+    }).withFailureHandler(function () { const el = $('acc-vis-list'); if (el) el.innerHTML = '<div class="text-danger small py-2">Could not load.</div>'; }).getIpVisits(IP, window.sessionToken);
   }
   function addVisit() {
     const doc = ($('acc-vis-doc') || {}).value || ''; if (!doc.trim()) { toast('Enter doctor name.', false); return; }
     google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { ($('acc-vis-doc') || {}).value = ''; ($('acc-vis-note') || {}).value = ''; loadVisits(); } })
       .withFailureHandler(e => toast(e.message || 'Error', false))
-      .addIpVisit({ ipNumber: IP, doctor: doc, type: ($('acc-vis-type') || {}).value, count: num('acc-vis-cnt'), remark: ($('acc-vis-note') || {}).value || '', user: who() });
+      .addIpVisit({ ipNumber: IP, doctor: doc, type: ($('acc-vis-type') || {}).value, count: num('acc-vis-cnt'), remark: ($('acc-vis-note') || {}).value || '', user: who() }, window.sessionToken);
   }
 
   function wardPayload() { return ROWS.filter(r => r.kind === 'MANUAL' && amt(r) > 0).map(r => ({ category: r.category, multiplier: Number(r.count) || 0, rate: Number(r.rate) || 0, remark: r.remark, exclude: r.exclude })); }
@@ -266,7 +266,7 @@ const AccDischarge = (function () {
 
   function saveDraft() {
     google.script.run.withSuccessHandler(r => toast(r.message, !!r.success)).withFailureHandler(e => toast(e.message || 'Error', false))
-      .saveDischargeDraft({ ipNumber: IP, packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), ward: wardPayload(), remarks: ($('acc-dis-remarks') || {}).value || '', user: who() });
+      .saveDischargeDraft({ ipNumber: IP, packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), ward: wardPayload(), remarks: ($('acc-dis-remarks') || {}).value || '', user: who() }, window.sessionToken);
   }
 
   function finalize(dsOverrideReason) {
@@ -298,7 +298,7 @@ const AccDischarge = (function () {
         if (res.success) { AccDischarge.print(true, res.summary); load(); }
       })
       .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
-      .settleDischarge({ ipNumber: IP, wardCharges: wardPayload(), packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), patientPayMode: ($('acc-dis-mode') || {}).value || 'Cash', reason: ($('acc-dis-remarks') || {}).value || '', user: who(), dsOverrideReason: dsOverrideReason || '' });
+      .settleDischarge({ ipNumber: IP, wardCharges: wardPayload(), packageCode: ($('acc-dis-pkg') || {}).value || '', discountPercent: num('acc-dis-disc'), packageCap: num('acc-dis-cap'), insurers: insPayload(), patientPayMode: ($('acc-dis-mode') || {}).value || 'Cash', reason: ($('acc-dis-remarks') || {}).value || '', user: who(), dsOverrideReason: dsOverrideReason || '' }, window.sessionToken);
   }
 
   function print(isFinal, settled) {

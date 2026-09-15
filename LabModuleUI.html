@@ -403,7 +403,18 @@ var LabX = (function () {
       .withSuccessHandler(function(res){ clearTimeout(timer); finish(); onOk(res); })
       .withFailureHandler(function(err){ clearTimeout(timer); finish(); flash(fn+'() failed: '+(err&&err.message||err), false); });
     if(!runner[fn]){ clearTimeout(timer); finish(); flash('Backend function "'+fn+'" not found.', false); return; }
-    runner[fn](...(args || []));
+
+    /* The session token goes on the END of every call, always.
+
+       Every lab endpoint now ends in a sessionToken parameter and refuses a
+       caller it cannot identify (RBAC.gs, DPDP Act s.8(5)). Appending it here
+       rather than at each of the twenty-odd call sites means a new endpoint
+       cannot be added without one, and a call that already carries the token
+       in an earlier argument is not given a second one. */
+    var argv = (args || []).slice();
+    var carries = argv.some(function(a){ return typeof a === 'string' && a && a === window.sessionToken; });
+    if(!carries) argv.push(tok());
+    runner[fn](...argv);
   }
 
   /** The signed-in user's token, for the server-side permission checks. */

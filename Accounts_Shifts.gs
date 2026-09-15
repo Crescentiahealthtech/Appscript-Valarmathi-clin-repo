@@ -119,8 +119,9 @@ function acc_cashSince_(fromDate, counterName) {
            counter: acc_str_(counterName), scoped: !!key };
 }
 
-function getShiftState(counterName) {
+function getShiftState(counterName, sessionToken) {
   try {
+    crescRequire_(sessionToken, ['billing.read', 'accounts.read']);
     var rows = acc_readObjects_(ACC_CFG.SHIFTS);
     var open = null, history = [];
     
@@ -165,10 +166,11 @@ function getShiftState(counterName) {
   } catch (e) { return { success: false, message: e.message }; }
 }
 
-function openShift(payload) {
+function openShift(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
     var counter = acc_str_(payload.counterName).trim();
     if (!counter) return { success: false, message: "Counter name required." };
     var opening = acc_money_(payload.openingCash);
@@ -195,10 +197,11 @@ function openShift(payload) {
   finally { lock.releaseLock(); }
 }
 
-function closeShift(payload) {
+function closeShift(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
     var target = acc_str_(payload.shiftId).trim();
     if (!target) return { success: false, message: "Missing shift reference." };
 

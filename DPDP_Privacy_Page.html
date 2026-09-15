@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your information and your rights</title>
+  <style>
+    :root {
+      --ink: #0f172a; --muted: #64748b; --line: #e2e8f0;
+      --accent: #0d9488; --bg: #f8fafc; --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink);
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           line-height: 1.55; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 60px; }
+    header { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 22px; }
+    h1 { font-size: 1.45rem; margin: 0 0 6px; }
+    h2 { font-size: 1.05rem; margin: 28px 0 8px; }
+    p, li { font-size: .95rem; }
+    .muted { color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+            padding: 18px; margin-bottom: 16px; }
+    .purpose { border-bottom: 1px solid var(--line); padding: 10px 0; }
+    .purpose:last-child { border-bottom: 0; }
+    .tag { display: inline-block; font-size: .68rem; font-weight: 700; letter-spacing: .3px;
+           background: #ecfdf5; color: #065f46; border-radius: 999px; padding: 2px 8px;
+           margin-left: 6px; }
+    label { display: block; font-size: .8rem; font-weight: 600; margin: 12px 0 4px; }
+    input, select, textarea {
+      width: 100%; padding: 10px 12px; font-size: .95rem; border: 1px solid var(--line);
+      border-radius: 10px; font-family: inherit; background: #fff; color: var(--ink);
+    }
+    button { background: var(--accent); color: #fff; border: 0; border-radius: 10px;
+             padding: 14px 18px; font-size: 1rem; font-weight: 700; width: 100%;
+             margin-top: 18px; cursor: pointer; }
+    button[disabled] { opacity: .6; cursor: default; }
+    .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: .9rem; display: none; }
+    .ok { background: #ecfdf5; color: #065f46; }
+    .bad { background: #fef2f2; color: #991b1b; }
+    footer { margin-top: 30px; font-size: .8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1 id="clinic">Your information and your rights</h1>
+    <p class="muted" id="strap">
+      Under the Digital Personal Data Protection Act, 2023, we have to tell you what
+      we collect about you, why, and what you can ask us to do about it. This page is
+      that, and the form at the bottom is how you ask.
+    </p>
+  </header>
+
+  <div class="card">
+    <h2 style="margin-top:0">What we hold, and why</h2>
+    <div id="purposes" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">What you can ask for</h2>
+    <div id="rights" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Who to contact</h2>
+    <div id="officer" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Make a request</h2>
+    <p class="muted" style="margin-top:0">
+      We will reply within the period shown against each right. Before we send you
+      anything we will contact you on the number or email already on your record, to
+      check that it is really you asking — that check is there to protect you, because
+      a right to your records is also the most convenient way for someone else to ask
+      for them.
+    </p>
+
+    <form id="form" onsubmit="return false;">
+      <label for="type">What would you like?</label>
+      <select id="type">
+        <option value="ACCESS">A copy of the information you hold about me</option>
+        <option value="CORRECTION">Correct something that is wrong</option>
+        <option value="ERASURE">Erase my information</option>
+        <option value="GRIEVANCE">Make a complaint</option>
+      </select>
+
+      <label for="name">Your name</label>
+      <input id="name" autocomplete="name" placeholder="As it appears on your records">
+
+      <label for="pid">Your patient ID, if you have it</label>
+      <input id="pid" placeholder="On your card or any bill — optional">
+
+      <label for="contact">Phone number or email we can reply to</label>
+      <input id="contact" autocomplete="tel" placeholder="The one we already have for you, if possible">
+
+      <label for="details">What would you like us to do?</label>
+      <textarea id="details" rows="4" placeholder="In your own words."></textarea>
+
+      <button id="send" onclick="submitRequest()">Send</button>
+      <div id="msg" class="msg"></div>
+    </form>
+  </div>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+  // One id per visit, so the rate limit on the server counts this browser
+  // rather than counting everybody together.
+  var FORM_ID = String(Date.now()) + Math.random().toString(36).slice(2);
+  var NOTICE = null;
+
+  function esc(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function show(msg, bad) {
+    var el = document.getElementById('msg');
+    el.className = 'msg ' + (bad ? 'bad' : 'ok');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  google.script.run
+    .withSuccessHandler(function (n) {
+      NOTICE = n || {};
+
+      if (NOTICE.fiduciary) {
+        document.getElementById('clinic').textContent =
+          NOTICE.fiduciary + ' — your information and your rights';
+      }
+
+      document.getElementById('purposes').innerHTML =
+        (NOTICE.purposes || []).map(function (p) {
+          return '<div class="purpose"><strong>' + esc(p.label) + '</strong>' +
+            (p.legitimate
+              ? '<span class="tag">part of treating you</span>'
+              : '<span class="tag" style="background:#eff6ff;color:#1e40af;">you choose</span>') +
+            '<div class="muted">' + esc(p.detail) + '</div></div>';
+        }).join('') || 'Not available.';
+
+      var days = NOTICE.responseDays || {};
+      document.getElementById('rights').innerHTML =
+        (NOTICE.rights || []).map(function (r) {
+          var d = days[r.key];
+          return '<div class="purpose"><strong>' + esc(r.label) + '</strong>' +
+            (d ? '<span class="tag" style="background:#fffbeb;color:#92400e;">within ' + d + ' days</span>' : '') +
+            '<div class="muted">' + esc(r.detail) + '</div></div>';
+        }).join('') || 'Not available.';
+
+      var o = NOTICE.grievanceOfficer;
+      document.getElementById('officer').innerHTML = o
+        ? '<p style="margin:0"><strong>' + esc(o.name) + '</strong><br>' +
+          (o.email ? esc(o.email) + '<br>' : '') + (o.phone ? esc(o.phone) : '') +
+          '</p><p class="muted">If you are not satisfied with our answer, you may complain ' +
+          'to the Data Protection Board of India.</p>'
+        : '<p class="muted">Please ask at the clinic reception for the person who handles ' +
+          'data protection questions. You may also complain to the Data Protection Board ' +
+          'of India.</p>';
+
+      var c = NOTICE.contact || {};
+      document.getElementById('footer').innerHTML =
+        esc(NOTICE.fiduciary || '') + (c.address ? '<br>' + esc(c.address) : '') +
+        (c.phone ? '<br>' + esc(c.phone) : '') + (c.email ? ' · ' + esc(c.email) : '') +
+        '<br><br>Notice version ' + esc(NOTICE.version || '') + '.';
+    })
+    .withFailureHandler(function () {
+      document.getElementById('purposes').textContent =
+        'This page could not load. Please telephone the clinic.';
+    })
+    .getDPDPNotice();
+
+  function submitRequest() {
+    var btn = document.getElementById('send');
+    var payload = {
+      formId: FORM_ID,
+      type: document.getElementById('type').value,
+      name: document.getElementById('name').value.trim(),
+      patientId: document.getElementById('pid').value.trim(),
+      contact: document.getElementById('contact').value.trim(),
+      details: document.getElementById('details').value.trim()
+    };
+    if (!payload.name || !payload.contact || payload.details.length < 10) {
+      show('Please give your name, a way to reach you, and a sentence about what you would like.', true);
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.disabled = false;
+        btn.textContent = 'Send';
+        if (res && res.success) {
+          show(res.message, false);
+          document.getElementById('details').value = '';
+        } else {
+          show((res && res.message) || 'It could not be sent. Please telephone the clinic.', true);
+        }
+      })
+      .withFailureHandler(function () {
+        btn.disabled = false;
+        btn.textContent = 'Send';
+        show('It could not be sent. Please telephone the clinic.', true);
+      })
+      .dpdpSubmitPublicRequest(payload);
+  }
+</script>
+</body>
+</html>

@@ -118,6 +118,12 @@
     <a class="nav-link" id="nav-tab-pharmacy" onclick="switchTab('workspace-pharmacy', this)"><i class="fa-solid fa-pills"></i> <span class="sidebar-text">Pharmacy</span></a>
     <a class="nav-link" id="nav-tab-lab" onclick="switchTab('workspace-lab', this)"><i class="fa-solid fa-flask-vial"></i> <span class="sidebar-text">Labs</span></a>
     <a class="nav-link" id="nav-tab-accounts" onclick="switchTab('workspace-accounts', this)"><i class="fa-solid fa-file-invoice-dollar"></i> <span class="sidebar-text">Accounts</span></a>
+    <!-- Data protection is on the rail rather than buried in a settings page
+         because the two things it shows — a request with a statutory deadline
+         on it, and an incident nobody has assessed — are the two things that
+         become a breach of the Act by being left. It is hidden from anyone
+         without dpdp.manage by CRESC_UI_PERMS in ScriptsMV.html. -->
+    <a class="nav-link" id="nav-tab-privacy" onclick="switchTab('tab-admin-dpdp', this)"><i class="fa-solid fa-shield-halved"></i> <span class="sidebar-text">Privacy</span></a>
   </div>
 
   <div class="mt-auto sidebar-footer">

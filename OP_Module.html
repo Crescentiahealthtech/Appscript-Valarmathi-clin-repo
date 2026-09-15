@@ -2852,7 +2852,7 @@ function offerPaediatricDose(inputEl) {
                              '<i class="fa-solid fa-child"></i> Suggested: ' + opEsc(res.sig) + ' &mdash; click to insert</span>';
         })
         .withFailureHandler(function () {})
-        .suggestPaediatricDose(inputEl.value, wt, age, 2);
+        .suggestPaediatricDose(inputEl.value, wt, age, 2, window.sessionToken);
 }
 
 function applyPedsSig(el) {
@@ -3161,7 +3161,7 @@ function recalcTaper() {
             sm.innerText = res.summary + (res.warning ? '  \u2014 ' + res.warning : '');
         })
         .withFailureHandler(function () {})
-        .buildTaperPlan(spec);
+        .buildTaperPlan(spec, window.sessionToken);
 }
 
 function applyTaperToRow() {
@@ -3192,7 +3192,7 @@ function loadOPLabCatalog() {
             renderOPLabModal();
         })
         .withFailureHandler(function () { renderOPLabModal(); })
-        .getOPDOrderableTests();
+        .getOPDOrderableTests(window.sessionToken);
 }
 
 function renderOPLabModal() {
@@ -3264,9 +3264,9 @@ function opLoadIntegrationData() {
             google.script.run
                 .withSuccessHandler(function (l2) { opCachedDrugsRich = normalizeOPDrugs(l2); })
                 .withFailureHandler(function () {})
-                .fetchPharmacyMasterForIP();
+                .fetchPharmacyMasterForIP(window.sessionToken);
         })
-        .fetchOPDrugMaster();
+        .fetchOPDrugMaster(window.sessionToken);
 
     if (!opCachedUniversalDrugs.length) {
         google.script.run
@@ -3281,7 +3281,7 @@ function opLoadIntegrationData() {
                         'Only the pharmacy\'s own stock is offered. Names can still be typed.', 'warning');
                 }
             })
-            .fetchUniversalDrugs();
+            .fetchUniversalDrugs(window.sessionToken);
     }
     loadOPLabCatalog();
     ensureOPLabsDatalist();
@@ -3532,7 +3532,7 @@ function printOPPrescription() {
       if (printBtn) { printBtn.innerHTML = originalHtml; printBtn.disabled = false; }
       opToast("Server Error: " + e.message, 'err');
     })
-    .getOPPrescriptionHtml(activeOpEncounterId);
+    .getOPPrescriptionHtml(activeOpEncounterId, window.sessionToken);
 }
 
 function dispatchOPWhatsApp() {
@@ -3586,7 +3586,7 @@ function sendOPWhatsAppTo(mobileNumber, btn, originalHtml) {
     }).withFailureHandler(function (e) {
         btn.innerHTML = originalHtml; btn.disabled = false;
         opToast("Server Error: " + e.message, 'err');
-    }).generateAndStoreOPPrescriptionPDF(activeOpEncounterId);
+    }).generateAndStoreOPPrescriptionPDF(activeOpEncounterId, window.sessionToken);
 }
 
 function dispatchOPEmail() {
@@ -3634,7 +3634,7 @@ function sendOPEmailTo(patientEmail, btn, originalHtml) {
     }).withFailureHandler(function (err) {
         btn.innerHTML = originalHtml; btn.disabled = false;
         opToast("Network Error: " + err.message, 'err');
-    }).emailOPPrescriptionPDF(activeOpEncounterId, patientEmail.trim());
+    }).emailOPPrescriptionPDF(activeOpEncounterId, patientEmail.trim(), window.sessionToken);
 }
 
 // Close open dropdowns on outside click

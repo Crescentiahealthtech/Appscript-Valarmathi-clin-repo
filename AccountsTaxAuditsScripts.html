@@ -52,7 +52,7 @@ const AccTax = (function () {
         'Hand this to your accountant for filing — figures derive live from PAID pharmacy invoices and vendor GST-In.' +
         '</div></div>';
     }).withFailureHandler(function (e) { out.innerHTML = '<div class="text-danger small py-2">' + esc(e.message || 'Server error — TaxAudit.js deployed?') + '</div>'; })
-      .getTaxSummary(val('acc-tax-month'));
+      .getTaxSummary(val('acc-tax-month'), window.sessionToken);
   }
   function card(label, value, cls, sub) {
     return '<div class="col-md-4"><div class="card border bg-body-tertiary h-100"><div class="card-body py-2"><div class="small text-uppercase text-body-secondary">' + label + '</div><h4 class="fw-bold mb-0 ' + cls + '">' + value + '</h4><div class="small text-body-secondary">' + sub + '</div></div></div></div>';
@@ -66,7 +66,7 @@ const AccTax = (function () {
       '<div id="acc-aud-out"><div class="text-body-secondary small py-2"><i class="fas fa-circle-notch fa-spin me-1"></i>Loading…</div></div>';
     google.script.run.withSuccessHandler(function (r) {
       const sel = $('acc-aud-mod'); if (sel && r && r.modules) r.modules.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; sel.appendChild(o); });
-    }).withFailureHandler(function () {}).getAuditModules();
+    }).withFailureHandler(function () {}).getAuditModules(window.sessionToken);
     runAudit();
   }
   let _t = null;
@@ -82,7 +82,7 @@ const AccTax = (function () {
         e.map(x => '<tr><td class="small px-2">' + esc(x.ts) + '</td><td class="small">' + esc(x.user) + '</td><td class="small"><span class="badge text-bg-secondary">' + esc(x.action) + '</span></td><td class="small">' + esc(x.module) + '</td><td class="small text-body-secondary">' + esc(x.ref) + '</td><td class="small text-body-secondary">' + esc([x.oldVal, x.newVal, x.reason].filter(Boolean).join(' · ')) + '</td></tr>').join('') +
         '</tbody></table></div></div></div>';
     }).withFailureHandler(function (e) { out.innerHTML = '<div class="text-danger small py-2">' + esc(e.message || 'Server error.') + '</div>'; })
-      .getAuditLog({ limit: 80, module: val('acc-aud-mod'), query: val('acc-aud-q') });
+      .getAuditLog({ limit: 80, module: val('acc-aud-mod'), query: val('acc-aud-q') }, window.sessionToken);
   }
 
   return { load, tab, runTax, renderTaxShell, runAudit, debounce };

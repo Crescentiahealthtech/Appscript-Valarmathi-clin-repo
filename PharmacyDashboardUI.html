@@ -213,7 +213,7 @@
           `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:18px;">No bills in this range.</td></tr>`;
       })
       .withFailureHandler(() => { pdashOverlay(false); crescAlert("❌ Network error."); })
-      .getPharmacyDashboard(from, to);
+      .getPharmacyDashboard(from, to, window.sessionToken);
   }
 
   function pdashRefundCell(b) {
@@ -267,7 +267,7 @@
         }).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:18px;">No matching bills.</td></tr>`;
       })
       .withFailureHandler(() => { pdashOverlay(false); crescAlert("❌ Network error."); })
-      .searchPharmacyInvoices(q);
+      .searchPharmacyInvoices(q, window.sessionToken);
   }
 
   // ---------- Reprint any past invoice ----------
@@ -282,7 +282,7 @@
         phsDoPrint();
       })
       .withFailureHandler(() => { pdashOverlay(false); crescAlert("❌ Network error."); })
-      .getInvoiceForPrint(invoiceNo);
+      .getInvoiceForPrint(invoiceNo, window.sessionToken);
   }
 
   // ---------- Print the day/range bill list (with summary) ----------

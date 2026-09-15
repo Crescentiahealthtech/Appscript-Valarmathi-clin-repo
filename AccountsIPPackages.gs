@@ -43,8 +43,9 @@ function setupPackages() {
   return { success: true, message: P.length + " packages seeded." };
 }
 
-function getPackages() {
+function getPackages(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var sh = ipk_ss_().getSheetByName('Package_Master');
     if (!sh) return { success: true, packages: [], message: "Run setupPackages() first." };
     var d = sh.getDataRange().getValues(), out = [];
@@ -57,8 +58,9 @@ function getPackages() {
 }
 
 // Insurers/TPAs. Reads Insurers_Master if present, else returns a default list.
-function getInsurers() {
+function getInsurers(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var sh = ipk_ss_().getSheetByName('Insurers_Master'), out = [];
     if (sh) { var d = sh.getDataRange().getValues(); for (var i = 1; i < d.length; i++) if (String(d[i][0]).trim()) out.push(String(d[i][0])); }
     if (!out.length) out = ['Star Health', 'Care Health', 'Niva Bupa', 'HDFC ERGO', 'ICICI Lombard', 'Bajaj Allianz', 'Tata AIG', 'New India Assurance', 'United India', 'Oriental Insurance', 'National Insurance', 'SBI General', 'Aditya Birla Health', 'ManipalCigna', 'Medi Assist (TPA)', 'Paramount (TPA)', 'MDIndia (TPA)', 'Govt — PMJAY/CMCHIS', 'Other'];

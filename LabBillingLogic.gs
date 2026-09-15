@@ -2,8 +2,9 @@
 // 💰 LAB BILLING DESK BACKEND ENGINE
 // ==========================================
 
-function getLabBillingWorkspace() {
+function getLabBillingWorkspace(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const billingSheet = ss.getSheetByName("LAB_BILLING");
     const ordersSheet = ss.getSheetByName("LAB_ORDERS");
@@ -168,8 +169,9 @@ function parseTestsForUI(jsonStr) {
   }
 }
 
-function getLabDailyCollection() {
+function getLabDailyCollection(sessionToken) {
   try {
+    crescRequire_(sessionToken, ['billing.read', 'accounts.read']);
     const ws = getLabBillingWorkspace();
     if (!ws.success) throw new Error(ws.message);
 
@@ -193,8 +195,9 @@ function getLabDailyCollection() {
  * Generates the physical HTML for the Lab Receipt Pop-up
  * Matches the premium UI/UX of the Lab Integration Engine
  */
-function getLabReceiptHtml(billId) {
+function getLabReceiptHtml(billId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("LAB_BILLING");
     if (!sheet) throw new Error("LAB_BILLING sheet not found.");
@@ -363,9 +366,10 @@ function _esc(s) {
 /**
  * Server-Side function: Generates Invoice PDF, saves to Drive, and returns public link for WhatsApp.
  */
-function generateAndStoreLabInvoicePDF(billId) {
+function generateAndStoreLabInvoicePDF(billId, sessionToken) {
   try {
     // 1. Generate HTML using existing engine
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabReceiptHtml(billId); 
     if (!reportResponse.success) throw new Error("HTML Generation Failed: " + reportResponse.message);
 
@@ -398,17 +402,22 @@ function generateAndStoreLabInvoicePDF(billId) {
     if (monthFolders.hasNext()) monthFolder = monthFolders.next();
     else monthFolder = yearFolder.createFolder(monthStr);
 
-    // 4. Save File & Set Permissions
+    // 4. Save the file
     const file = monthFolder.createFile(pdfBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Registered so it can be un-shared. A link that nothing lists is a
-    // link nobody can revoke, and this file carries the patient's name and
-    // their results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
-    try { dpdpRegisterSharedFile(file, 'LAB_INVOICE', billId, Session.getActiveUser().getEmail()); } catch (e) {}
+    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
+    // their ID and their clinical detail; a Drive link that never expires,
+    // sent over WhatsApp, is forwarded, backed up and restored on devices
+    // nobody here will ever see. The file stays PRIVATE and the patient gets
+    // a link back into this web app with a one-off key that expires, counts
+    // its opens and can be withdrawn. See DPDP_Documents.gs, finding H1.
+    var grant = dpdpIssueDocumentLink_(file, 'LAB_INVOICE', billId,
+                                       (crescActor_(sessionToken) || {}).username || '');
+    if (!grant.success) return { success: false, message: grant.message };
 
-    // 5. Return Link
-    return { success: true, link: file.getUrl() };
+    // 5. Return the private, expiring link
+    return { success: true, link: grant.url, expiresAt: grant.expiresAt,
+             grantId: grant.grantId, message: grant.message };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
@@ -417,8 +426,9 @@ function generateAndStoreLabInvoicePDF(billId) {
 /**
  * Server-Side function: Generates Invoice PDF and emails it directly via GMAIL API.
  */
-function emailLabInvoicePDF(billId, patientEmail) {
+function emailLabInvoicePDF(billId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabReceiptHtml(billId); 
     if (!reportResponse.success) throw new Error("HTML Generation Failed");
 

@@ -154,8 +154,9 @@ function dref_all_() {
  * @param {string} drugName  whatever is in the prescription's name box
  * @return {{success:boolean, found:boolean, reference:Object, message:string}}
  */
-function getDoseReference(drugName) {
+function getDoseReference(drugName, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     var key = dref_key_(drugName);
     if (!key) {
       return { success: true, found: false, reference: null,

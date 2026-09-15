@@ -256,7 +256,7 @@
       .withFailureHandler((err) => {
         tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger py-4">Connection Failed.</td></tr>`;
       })
-      .fetchPharmacyInventory();
+      .fetchPharmacyInventory(window.sessionToken);
   }
 
   function renderInventoryTable(data) {
@@ -425,7 +425,7 @@
         then();
       })
       .withFailureHandler(function () { DISCARD_REASONS = []; then(); })
-      .getDisposalReasons();
+      .getDisposalReasons(window.sessionToken);
   }
 
   function openDiscardModal(item) {

@@ -618,7 +618,7 @@ var LabCatalog = (function () {
     google.script.run
       .withSuccessHandler(function () { load(); })
       .withFailureHandler(function ()  { load(); }) // If already exists, still load
-      .setupLabDatabase();
+      .setupLabDatabase(window.sessionToken);
   }
 
   /* ── public: load ── */
@@ -635,7 +635,7 @@ var LabCatalog = (function () {
         _stop();
         _flash('Load error: ' + err.message, false);
       })
-      .getLabCatalog();
+      .getLabCatalog(window.sessionToken);
   }
 
   /* ── public: setView ── */
@@ -985,7 +985,7 @@ var LabCatalog = (function () {
         else _flash((res && res.message) || 'Save failed.', false);
       })
       .withFailureHandler(function (err) { _stop(); _flash('Error: ' + err.message, false); })
-      .savePanelWithParameters(payload);
+      .savePanelWithParameters(payload, window.sessionToken);
   }
 
   /* ─── Individual test modal ─── */
@@ -1053,7 +1053,7 @@ var LabCatalog = (function () {
         else _flash((res && res.message) || 'Save failed.', false);
       })
       .withFailureHandler(function (err) { _stop(); _flash('Error: ' + err.message, false); })
-      .saveCatalogEntry(payload);
+      .saveCatalogEntry(payload, window.sessionToken);
   }
 
   /* ─── Package modal ─── */
@@ -1175,7 +1175,7 @@ var LabCatalog = (function () {
         else _flash((res && res.message) || 'Save failed.', false);
       })
       .withFailureHandler(function (err) { _stop(); _flash('Error: ' + err.message, false); })
-      .saveCatalogEntry(payload);
+      .saveCatalogEntry(payload, window.sessionToken);
   }
 
   /* ─── Add / edit param directly from catalog view (outside modal) ─── */
@@ -1199,7 +1199,7 @@ var LabCatalog = (function () {
         if (res&&res.success) load();
       })
       .withFailureHandler(function (err) { _stop(); _flash('Error: '+err.message, false); })
-      .setCatalogActive(testId, makeActive);
+      .setCatalogActive(testId, makeActive, window.sessionToken);
   }
 
   /* ─── helpers ─── */

@@ -50,10 +50,13 @@ var PPE_FIELDS = {
   address:         { col: 8,  label: "Address" },
   comorb:          { col: 9,  label: "Co-morbidities" },
   salutation:      { col: 11, label: "Salutation" },
-  maritalStatus:   { col: 12, label: "Marital status" },
+  // Columns 12, 14 and 15 — marital status, occupation, education — are
+  // deliberately absent. Nothing in this application ever read them for a
+  // clinical or billing purpose, so under s.6(1) there is no purpose to
+  // specify for collecting them, and they are no longer collected or edited.
+  // The columns stay so that what was already collected can be shown to the
+  // patient who asks for it and erased by dpdpEraseUnusedFields().
   bloodGroup:      { col: 13, label: "Blood group" },
-  occupation:      { col: 14, label: "Occupation" },
-  education:       { col: 15, label: "Education" },
   email:           { col: 16, label: "Email" },
   relationType:    { col: 17, label: "Relation type" },
   relationName:    { col: 18, label: "Relative / guardian" },

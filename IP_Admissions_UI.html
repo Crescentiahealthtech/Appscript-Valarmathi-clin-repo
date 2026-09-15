@@ -303,7 +303,7 @@
         message('&#9888; Server Error: ' + esc(err && err.message) +
           '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPLedger()">Retry</button>', 'error');
       })
-      .getActiveIPWard(ipwQuery);
+      .getActiveIPWard(ipwQuery, window.sessionToken);
   }
 
   function renderWard(p) {
@@ -461,7 +461,7 @@
           if ($(id)) $(id).innerHTML = '<option value="">Error loading wards</option>';
         });
       })
-      .getWardList();
+      .getWardList(window.sessionToken);
   }
 
   function loadAvailableBeds(wardSelectId, bedSelectId) {
@@ -490,7 +490,7 @@
         if (isAdmit) bedHint('Bed lookup failed: ' + err.message, 'danger');
         else crescAlert('Bed lookup failed: ' + err.message);
       })
-      .getAvailableBedsByWard(wardEl.value);
+      .getAvailableBedsByWard(wardEl.value, window.sessionToken);
   }
 
   /** No beds free — say WHY, so the user isn't staring at a dead dropdown. */
@@ -507,7 +507,7 @@
           : 'No beds configured for ward ' + ward + '.', 'warning');
       })
       .withFailureHandler(function () { bedHint('No beds available in this ward.', 'warning'); })
-      .getWardBedBoard(ward);
+      .getWardBedBoard(ward, window.sessionToken);
   }
 
   // ---- admit --------------------------------------------------------------
@@ -566,7 +566,7 @@
         }
       })
       .withFailureHandler(function (err) { admAlert('Lookup failed: ' + err.message, 'danger'); })
-      .fetchPatientForAdmit(idEl.value.trim());
+      .fetchPatientForAdmit(idEl.value.trim(), window.sessionToken);
   }
 
   function submitAdmission() {
@@ -612,7 +612,7 @@
         loadIPLedger();
       })
       .withFailureHandler(function (err) { reset(); admAlert('Error saving admission: ' + err.message, 'danger'); })
-      .saveNewAdmissionLedger(payload);
+      .saveNewAdmissionLedger(payload, window.sessionToken);
   }
 
   // ---- transfer -----------------------------------------------------------
@@ -646,7 +646,7 @@
       })
       .withFailureHandler(function (err) { reset(); crescAlert('Transfer failed: ' + err.message); })
       .processBedTransfer(val('transfer-ip-no'), val('transfer-old-bed'),
-                          val('transfer-ward'), val('transfer-bed'));
+                          val('transfer-ward'), val('transfer-bed'), window.sessionToken);
   }
 
   // ---- discharge ----------------------------------------------------------
@@ -742,7 +742,7 @@
         sel.innerHTML = '<option value="">Error loading consultants</option>';
         admDoctorHint('The consultant list could not be loaded.', 'danger');
       })
-      .getConsultantList();
+      .getConsultantList(window.sessionToken);
   }
 
 

@@ -1,4 +1,5 @@
-function getBedStatuses() {
+function getBedStatuses(sessionToken) {
+  crescRequire_(sessionToken, 'ward.read');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = initializeBedsIfEmpty(ss); // Auto-heals if empty
   
@@ -37,7 +38,8 @@ function mockBedDataGenerater() {
   return JSON.stringify(beds);
 }
 
-function updateBedStatusInDB(bedId, newStatus) {
+function updateBedStatusInDB(bedId, newStatus, sessionToken) {
+  crescRequire_(sessionToken, 'ward.admit');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName("Master_Beds");
   if(!sheet) return false;

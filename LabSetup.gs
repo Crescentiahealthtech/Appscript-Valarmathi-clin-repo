@@ -157,10 +157,15 @@ var LAB_TEST_STATUS_OK = {
 };
 
 /** Creates all 13 LAB_* sheets. Idempotent — safe to re-run. */
-function setupLabDatabase() {
+function setupLabDatabase(sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    // The lab workspace calls this on every load to self-heal a missing
+    // sheet, so it is lab.catalog rather than admin.config — but it creates
+    // sheets in the clinic's spreadsheet, which is not something an
+    // anonymous caller gets to do.
+    crescRequire_(sessionToken, 'lab.catalog');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var created = [], existing = [];
     Object.keys(LAB_SCHEMA).forEach(function(name) {

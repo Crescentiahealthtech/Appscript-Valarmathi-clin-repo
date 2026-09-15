@@ -226,7 +226,7 @@ function phdShowTab(name) {
         phrRender();
       })
       .withFailureHandler(() => { phdOverlay(false); crescAlert("❌ Network error."); })
-      .getInvoiceForReturn(q);
+      .getInvoiceForReturn(q, window.sessionToken);
   }
 
   function phrRender() {
@@ -362,7 +362,7 @@ function phdShowTab(name) {
         } else crescAlert("❌ " + ((res && res.message) || "Return failed."));
       })
       .withFailureHandler(() => { btn.innerHTML = original; btn.disabled = false; crescAlert("❌ Network error: please retry."); })
-      .processPharmacyReturn(payload);
+      .processPharmacyReturn(payload, window.sessionToken);
   }
 
   function phrPrintCreditNote() {
@@ -470,6 +470,6 @@ function phdShowTab(name) {
           `<div class="d-flex justify-content-between"><span style="color:var(--text-muted);">Credit outstanding</span><span style="color:var(--warning-fg);">${r2(res.creditOutstanding)} (${res.creditCount})</span></div>`;
       })
       .withFailureHandler(() => { phdOverlay(false); crescAlert("❌ Network error."); })
-      .getPharmacyFinanceSummary(from, to);
+      .getPharmacyFinanceSummary(from, to, window.sessionToken);
   }
 </script>

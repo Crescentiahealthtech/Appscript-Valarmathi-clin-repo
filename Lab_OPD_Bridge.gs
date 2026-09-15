@@ -30,8 +30,9 @@
  * @return {{success, panels:[], tests:[], packages:[], total}}
  *   each item = { testId, testCode, testName, requiresConsent }
  */
-function getOPDOrderableTests() {
+function getOPDOrderableTests(sessionToken) {
   try {
+    crescRequire_(sessionToken, ['lab.order', 'lab.read']);
     var res = getOrderableTests();
     if (!res || !res.success) {
       return { success: false, message: (res && res.message) || 'Catalog unavailable.',

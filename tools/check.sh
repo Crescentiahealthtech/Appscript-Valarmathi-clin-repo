@@ -3,7 +3,7 @@
 # Static checks for this Apps Script project.
 #
 # There is no build step here and no test runner - the code is pasted into an
-# Apps Script editor, where a typo is discovered by a user. These eight checks
+# Apps Script editor, where a typo is discovered by a user. These ten checks
 # are what can be verified without a Google account, and they each exist
 # because the thing they look for was actually found in this codebase.
 #
@@ -37,7 +37,13 @@ node tools/sym.js
 hr "7. Endpoints the browser can call with no permission check"
 node tools/rbac.js | head -n 4
 
-hr "8. CSS classes used but never defined"
+hr "8. Calls that do not pass the session token their endpoint asks for"
+node tools/token.js
+
+hr "9. The password code, exercised against Node's own HMAC"
+node tools/credtest.js || FAILED=1
+
+hr "10. CSS classes used but never defined"
 echo "   (review by hand — template literals produce false positives)"
 node tools/css.js | tail -n 20
 
@@ -48,6 +54,19 @@ cat <<'NOTE'
   normaliseSheetDates()    IP_Schema_Repair.gs  dry run: text dates in sheets
   dpdpReadinessCheck()     DPDP_Compliance.gs   DPDP posture of this deployment
   crescRbacCoverage()      RBAC.gs              the same count as check 7
+  crescRbacSelfTest()      RBAC.gs              the role matrix against itself
+  crescCredentialStatus()  Auth_Credentials.gs  hashed vs plain-text passwords
+  crescPwdBenchmark()      Auth_Credentials.gs  what hashing costs on this runtime
+  dpdpTriggerStatus()      DPDP_Triggers.gs     whether the scheduled jobs exist
+NOTE
+
+hr "Set up once, on a new deployment"
+cat <<'NOTE'
+  dpdpSetup()              create every DPDP register
+  dpdpSetGrievanceOfficer(name, email, phone)      section 13
+  dpdpInstallTriggers()    the daily, weekly and monthly jobs
+  crescMigrateCredentials()  hash every password and force a reset
+  See docs/DPDP_READINESS.md, "Do these five things this week".
 NOTE
 
 exit "${FAILED:-0}"

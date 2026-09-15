@@ -520,11 +520,12 @@ function getAccountsDashboard() {
 // =========================================================================
 // WRITE: Record a realized cash-flow entry (Expenses & Manual Incomes)
 // =========================================================================
-function recordLedgerEntry(obj) {
+function recordLedgerEntry(obj, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
 
+    crescRequire_(sessionToken, 'accounts.write');
     if (!obj) return { success: false, message: "No data received." };
     var dir = acc_str_(obj.direction).toUpperCase();
     if (dir !== 'IN' && dir !== 'OUT') return { success: false, message: "direction must be IN or OUT." };
@@ -590,10 +591,11 @@ function recordLedgerEntry(obj) {
 // =========================================================================
 // WRITE: Lock a financial period (YYYY-MM). Stamps Is_Locked on its rows.
 // =========================================================================
-function lockFinancialPeriod(period, loggedBy) {
+function lockFinancialPeriod(period, loggedBy, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.lock_period');
     period = acc_str_(period) || acc_period_(new Date());
     if (!/^\d{4}-\d{2}$/.test(period)) return { success: false, message: "Invalid period format (YYYY-MM)." };
 

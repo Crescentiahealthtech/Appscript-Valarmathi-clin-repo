@@ -707,7 +707,7 @@ function receiveLabSampleByBarcode(barcodeId, sessionToken) {
     });
 
     var complete = (outstanding.length === 0);
-    if (complete) advanceOrderStatus(orderId, 'IN_PROCESS');
+    if (complete) lab_setOrderStatus_(orderId, 'IN_PROCESS');
 
     logAudit_(sess, 'SAMPLE_RECEIVED_SCAN', 'LabSample', code,
               { orderId: orderId, alreadyReceived: !!already, outstanding: outstanding.length });

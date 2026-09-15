@@ -3626,7 +3626,7 @@ function ipn_prompt(message, value, done, opts) {
         .withFailureHandler(function () {
           roleSel.innerHTML = '<option value="CROSS_CONSULT">Cross Consult</option>';
         })
-        .getIPTeamRoles();
+        .getIPTeamRoles(window.sessionToken);
     }
 
     _hideErr_('xc-error');

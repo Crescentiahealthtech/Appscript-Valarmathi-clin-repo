@@ -865,8 +865,9 @@ function getStaffRoster(sessionToken) {
 
 // ── 12. FETCH PHARMACY MASTER FOR AUTOCOMPLETE ────────────
 
-function fetchPharmacyMasterForIP() {
+function fetchPharmacyMasterForIP(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];
@@ -952,6 +953,11 @@ function getIPLabResults(ipNumber, patientId, sessionToken) {
 function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
   try {
     var gate = resolveIPRead_(sessionToken, ipNumber);
+    // Finding M2: a complete ward-notes document, assembled and printed.
+    if (gate.ok) {
+      dpdpLogRead_(crescActor_(sessionToken), 'WardNotes', String(ipNumber || ''),
+                   { endpoint: 'getIPNotesPrintHtml' });
+    }
     if (!gate.ok) return { success: false, message: gate.message };
 
     opts = opts || {};

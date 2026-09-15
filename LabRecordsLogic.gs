@@ -6,8 +6,9 @@
 // 🗄️ LAB RECORDS ARCHIVE LOGIC (Search-First Relational)
 // ==========================================
 
-function searchLabRecords(query) {
+function searchLabRecords(query, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     if (!query || !String(query).trim()) return { success:false, message:'Enter a Patient ID, Name, or Mobile.' };
     var q = String(query).trim().toUpperCase();
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -142,8 +143,9 @@ function searchLabRecords(query) {
 /**
  * Server-Side function: Generates the Lab Report as a PDF and emails it via GMAIL API.
  */
-function emailLabReportPDF(orderId, patientEmail) {
+function emailLabReportPDF(orderId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     const reportResponse = getLabReportHtml(orderId); 
     
     if (!reportResponse.success) {
@@ -198,8 +200,9 @@ function emailLabReportPDF(orderId, patientEmail) {
 /**
  * Server-Side function: Generates PDF, saves to Drive, and returns public link.
  */
-function generateAndStoreLabReportPDF(orderId) {
+function generateAndStoreLabReportPDF(orderId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     console.log("1. Starting PDF generation for Order: " + orderId);
 
     // 1. Generate HTML using your existing engine
@@ -252,21 +255,27 @@ function generateAndStoreLabReportPDF(orderId) {
 
     console.log("4. Folders mapped. Saving file to Drive...");
 
-    // 4. Save File & Set Permissions
+    // 4. Save the file
     const file = monthFolder.createFile(pdfBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Registered so it can be un-shared. A link that nothing lists is a link
-    // nobody can revoke, and this file carries the patient's name and their
-    // results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
-    try { dpdpRegisterSharedFile(file, 'LAB_REPORT', (typeof patientId !== 'undefined' ? patientId : ''), Session.getActiveUser().getEmail()); } catch (e) {}
+    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
+    // their ID and their results; a Drive link that never expires, sent over
+    // WhatsApp, is forwarded, backed up and restored on devices nobody here
+    // will ever see. The file stays PRIVATE and the patient gets a link back
+    // into this web app with a one-off key that expires, counts its opens and
+    // can be withdrawn. See DPDP_Documents.gs, finding H1.
+    var grant = dpdpIssueDocumentLink_(file, 'LAB_REPORT',
+                                       (typeof patientId !== 'undefined' ? patientId : ''),
+                                       (crescActor_(sessionToken) || {}).username || '');
+    if (!grant.success) return { success: false, message: grant.message };
 
-    console.log("5. Success! File URL: " + file.getUrl());
-
-    // 5. Return the Secure Drive Link to Frontend
-    return { 
-      success: true, 
-      link: file.getUrl() 
+    // 5. Return the private, expiring link to the frontend
+    return {
+      success: true,
+      link: grant.url,
+      expiresAt: grant.expiresAt,
+      grantId: grant.grantId,
+      message: grant.message
     };
 
   } catch (error) {
@@ -285,9 +294,10 @@ function forceDriveAuthorization() {
 // 🗄️ LAB RECORDS INVOICE DISPATCH ENGINE
 // ==========================================
 
-function getArchiveInvoiceLink(orderId) {
+function getArchiveInvoiceLink(orderId, sessionToken) {
   try {
     // 1. Get the HTML Invoice (Uses the existing function that handles IP logic)
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabBillHtml(orderId); 
     if (!reportResponse.success) throw new Error("Invoice HTML Generation Failed");
 
@@ -308,21 +318,28 @@ function getArchiveInvoiceLink(orderId) {
     let monthFolder = yearFolder.getFoldersByName(monthStr).hasNext() ? yearFolder.getFoldersByName(monthStr).next() : yearFolder.createFolder(monthStr);
 
     const file = monthFolder.createFile(pdfBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
-    // Registered so it can be un-shared. A link that nothing lists is a link
-    // nobody can revoke, and this file carries the patient's name and their
-    // results. See dpdpExpireSharedLinks() in DPDP_Compliance.gs.
-    try { dpdpRegisterSharedFile(file, 'LAB_ARCHIVE_INVOICE', (typeof patientId !== 'undefined' ? patientId : ''), Session.getActiveUser().getEmail()); } catch (e) {}
+    // NOT setSharing(ANYONE_WITH_LINK). This file carries the patient's name,
+    // their ID and their results; a Drive link that never expires, sent over
+    // WhatsApp, is forwarded, backed up and restored on devices nobody here
+    // will ever see. The file stays PRIVATE and the patient gets a link back
+    // into this web app with a one-off key that expires, counts its opens and
+    // can be withdrawn. See DPDP_Documents.gs, finding H1.
+    var grant = dpdpIssueDocumentLink_(file, 'LAB_ARCHIVE_INVOICE',
+                                       (typeof patientId !== 'undefined' ? patientId : ''),
+                                       (crescActor_(sessionToken) || {}).username || '');
+    if (!grant.success) return { success: false, message: grant.message };
 
-    return { success: true, link: file.getUrl() };
+    return { success: true, link: grant.url, expiresAt: grant.expiresAt,
+             grantId: grant.grantId, message: grant.message };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
 }
 
-function emailArchiveInvoice(orderId, patientEmail) {
+function emailArchiveInvoice(orderId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabBillHtml(orderId); 
     if (!reportResponse.success) throw new Error("Invoice HTML Generation Failed");
 

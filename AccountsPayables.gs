@@ -34,10 +34,11 @@ function pay_days_(due) {
 
 // RECEIVE a bill (no cash). payload = {entityType, name, documentType, invoiceRef,
 //   amount, gstInput, dueDate, notes, user, payNow, payMode}
-function recordPayable(payload) {
+function recordPayable(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.payables');
     var entity = acc_str_(payload.entityType).toUpperCase();
     if (PAY_CFG.TYPES.indexOf(entity) === -1) entity = 'VENDOR';
     var name = acc_str_(payload.name).trim();
@@ -68,10 +69,11 @@ function recordPayable(payload) {
 }
 
 // PAY (full or partial) -> cash leaves to the ledger as an expense.
-function payPayable(payload) {
+function payPayable(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.payables');
     var target = acc_str_(payload.payableId).trim();
     var amt = acc_money_(payload.amount);
     if (!target) return { success: false, message: "Missing payable reference." };
@@ -105,8 +107,9 @@ function payPayable(payload) {
 }
 
 // Dashboard for the Payables screen: open queue + aging + recent paid.
-function getPayables(filter) {
+function getPayables(filter, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'accounts.payables');
     var f = acc_str_(filter).toUpperCase();
     var open = [], paidRecent = [], totalPending = 0, overdue = 0, dueWeek = 0, byType = { VENDOR: 0, DOCTOR: 0, PAYROLL: 0 };
     pay_objs_().forEach(function (r) {

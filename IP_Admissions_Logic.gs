@@ -232,8 +232,9 @@ function ipa_dayEnd_(v) {
  * query = { consultant: exact consultant or '', search: free text }
  * Returns { success, message, data, total, facets:{consultants,wards} }
  */
-function getActiveIPWard(query) {
+function getActiveIPWard(query, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'ward.read');
     var q = query || {};
     var consultF = ipa_str_(q.consultant).toUpperCase();
     var search   = ipa_str_(q.search).toLowerCase();
@@ -309,7 +310,8 @@ function getActiveIPWard(query) {
  *           fromDate:'yyyy-MM-dd', toDate:'yyyy-MM-dd' }
  * Returns { success, message, data, total, capped, cap, facets, counts }
  */
-function getIPHistory(query) {
+function getIPHistory(query, sessionToken) {
+  crescRequire_(sessionToken, 'ward.read');
   var CAP = 500;
   try {
     var q = query || {};
@@ -404,8 +406,9 @@ function getIPHistory(query) {
 }
 
 /** Full record for the archive drill-down. */
-function getAdmissionDetail(ipNumber) {
+function getAdmissionDetail(ipNumber, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'ward.read');
     var ip = ipa_str_(ipNumber);
     if (!ip) return { success: false, message: 'IP Number is required.' };
 
@@ -431,8 +434,9 @@ function getAdmissionDetail(ipNumber) {
 
 // ---- READ: patient lookup -------------------------------------------------
 
-function fetchPatientForAdmit(patientId) {
+function fetchPatientForAdmit(patientId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'ward.admit');
     var sheet = ipa_ss_().getSheetByName(IPA_CFG.PATIENTS);
     if (!sheet) return { success: false, message: 'Patients sheet not found.' };
 
@@ -485,8 +489,9 @@ function ipa_liveAdmissionFor_(patientId) {
 
 // ---- READ: wards and beds -------------------------------------------------
 
-function getWardList() {
+function getWardList(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'ward.read');
     var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
     if (!sheet) return { success: true, message: 'No bed master.', data: [] };
 
@@ -506,8 +511,9 @@ function getWardList() {
   }
 }
 
-function getAvailableBedsByWard(ward) {
+function getAvailableBedsByWard(ward, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'ward.read');
     var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
     if (!sheet) return { success: true, message: 'No bed master.', data: [] };
 
@@ -531,11 +537,12 @@ function getAvailableBedsByWard(ward) {
 
 // ---- WRITE: new admission -------------------------------------------------
 
-function saveNewAdmissionLedger(payload) {
+function saveNewAdmissionLedger(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(IPA_CFG.LOCK_MS);
 
+    crescRequire_(sessionToken, 'ward.admit');
     var patientId = ipa_pid_(payload && payload.patientId);
     var bed       = ipa_str_(payload && payload.bed);
     var ward      = ipa_str_(payload && payload.ward);
@@ -694,11 +701,12 @@ function ipa_setPrimaryDoctorId_(sheet, ipNumber, doctorId) {
 
 // ---- WRITE: bed transfer --------------------------------------------------
 
-function processBedTransfer(ipNumber, oldBedId, newWard, newBedId) {
+function processBedTransfer(ipNumber, oldBedId, newWard, newBedId, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(IPA_CFG.LOCK_MS);
 
+    crescRequire_(sessionToken, 'ward.admit');
     var ip     = ipa_str_(ipNumber);
     var newBed = ipa_str_(newBedId);
     var ward   = ipa_str_(newWard);
@@ -969,9 +977,10 @@ var IPA_DEFAULT_CONSULTANTS = [
  *             source }. `data` is ALWAYS an array; older callers that read
  * plain strings still work because every entry carries a `name`.
  */
-function getConsultantList() {
+function getConsultantList(sessionToken) {
   try {
     // --- tier 1: the Doctors master (Doctor_ID + Display_Name + Specialty) --
+    crescRequire_(sessionToken, 'ward.read');
     var docs = [];
     try {
       docs = (typeof getActiveDoctors === 'function') ? (getActiveDoctors() || []) : [];
@@ -1078,8 +1087,9 @@ function seedMasterDoctors() {
  * Every bed in a ward with its true status. Drives the housekeeping board
  * and lets the UI explain WHY no beds are selectable.
  */
-function getWardBedBoard(ward) {
+function getWardBedBoard(ward, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'ward.read');
     var sheet = ipa_ss_().getSheetByName(IPA_CFG.BEDS);
     if (!sheet) return { success: true, message: 'No bed master.', data: [], counts: {} };
 
