@@ -27,6 +27,19 @@ function doGet(e) {
     return HtmlService.createHtmlOutput('Verification is not available on this deployment.');
   }
 
+  // 0c. The privacy notice and the request form: ?privacy
+  //     Section 5 requires the notice AT OR BEFORE collection, and ss.11-13
+  //     give the rights to a person, not to a person with a staff login. A
+  //     form only reachable from inside the application is a way of receiving
+  //     fewer requests, not of answering them. Print this URL on the
+  //     registration slip and the invoice footer.
+  if (e && e.parameter && (e.parameter.privacy !== undefined ||
+                           e.parameter.rights !== undefined)) {
+    return HtmlService.createHtmlOutputFromFile('DPDP_Privacy_Page')
+      .setTitle('Your information and your rights')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
+
   // 1. A document shared with a patient: ?doc=<grant>&k=<key>
   //    The file itself stays private in Drive. This route holds the expiry,
   //    the open counter and the audit row. See DPDP_Documents.gs.
@@ -233,6 +246,10 @@ function registerPatient(data, sessionToken, consent) {
 function getAllPatients(sessionToken) {
   try {
     crescRequire_(sessionToken, 'patient.read');
+    // Finding M2: a read of the ENTIRE register is the one read that must
+    // never be silent. Who pulled the directory, and when.
+    dpdpLogRead_(crescActor_(sessionToken), 'PatientRegister', 'ALL',
+                 { endpoint: 'getAllPatients' });
   } catch (e) {
     // The directory screen renders whatever array it gets, so an empty one
     // with a message is the shape it can already handle.

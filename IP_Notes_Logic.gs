@@ -953,6 +953,11 @@ function getIPLabResults(ipNumber, patientId, sessionToken) {
 function getIPNotesPrintHtml(ipNumber, opts, sessionToken) {
   try {
     var gate = resolveIPRead_(sessionToken, ipNumber);
+    // Finding M2: a complete ward-notes document, assembled and printed.
+    if (gate.ok) {
+      dpdpLogRead_(crescActor_(sessionToken), 'WardNotes', String(ipNumber || ''),
+                   { endpoint: 'getIPNotesPrintHtml' });
+    }
     if (!gate.ok) return { success: false, message: gate.message };
 
     opts = opts || {};

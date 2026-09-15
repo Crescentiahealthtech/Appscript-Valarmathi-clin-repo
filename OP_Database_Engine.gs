@@ -453,6 +453,9 @@ function getOPPrescriptionHtml(encounterId, sessionToken) {
   try {
     // 1. Fetch the data using your existing fetcher
     crescRequire_(sessionToken, 'emr.read');
+    // Finding M2: a complete prescription, assembled for printing or sending.
+    dpdpLogRead_(crescActor_(sessionToken), 'Prescription', String(encounterId || ''),
+                 { endpoint: 'getOPPrescriptionHtml' });
     const fetchRes = getEncounterForPrint(encounterId);
     if (!fetchRes.success) return { success: false, message: fetchRes.message };
     

@@ -200,6 +200,10 @@ function ipr_ms_(v) {
  */
 function getIPRecordFile(encounterId, sessionToken) {
   try {
+    // Finding M2. Every print and export of an admission record goes through
+    // here, including getIPRecordPrintHtml() — one log line covers both.
+    dpdpLogRead_(crescActor_(sessionToken), 'AdmissionRecord', String(encounterId || ''),
+                 { endpoint: 'getIPRecordFile' });
     var found = ipr_locate_(encounterId);
     if (!found.ipNumber) {
       return { success: false, message: "No IP record matches " + dc_str_(encounterId) + "." };

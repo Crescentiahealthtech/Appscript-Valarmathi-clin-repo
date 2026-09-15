@@ -1,0 +1,688 @@
+<div id="tab-admin-dpdp" class="page-section d-none">
+
+<style>
+  #tab-admin-dpdp                 { font-size: 0.85rem; }
+  #tab-admin-dpdp h3              { font-size: 1.1rem; }
+  #tab-admin-dpdp .dp-card        { background-color: var(--bg-card);
+                                    border: 1px solid var(--border-color);
+                                    border-radius: 12px; }
+  #tab-admin-dpdp .dp-rule        { border-top: 1px solid var(--border-color); opacity: 1; }
+  #tab-admin-dpdp label           { font-size: 0.75rem; color: var(--text-label);
+                                    font-weight: 600; margin-bottom: 4px; }
+  #tab-admin-dpdp .dp-input       { font-size: 0.85rem; padding: 0.4rem 0.6rem; }
+  #tab-admin-dpdp .dp-kpi         { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+  #tab-admin-dpdp .dp-sev         { font-size: .68rem; font-weight: 700; padding: 2px 7px;
+                                    border-radius: 999px; letter-spacing: .4px; }
+  #tab-admin-dpdp .dp-CRITICAL    { background: #7f1d1d; color: #fff; }
+  #tab-admin-dpdp .dp-HIGH        { background: #b45309; color: #fff; }
+  #tab-admin-dpdp .dp-MEDIUM      { background: #1d4ed8; color: #fff; }
+  #tab-admin-dpdp .dp-LOW         { background: var(--bg-input); color: var(--text-muted); }
+  #tab-admin-dpdp .dp-row         { border-bottom: 1px solid var(--border-color); }
+  #tab-admin-dpdp .dp-overdue     { color: #ef4444; font-weight: 700; }
+  #tab-admin-dpdp pre             { white-space: pre-wrap; font-size: .75rem;
+                                    background: var(--bg-input); padding: 12px;
+                                    border-radius: 8px; color: var(--text-main); }
+</style>
+
+  <div class="d-flex align-items-center gap-3 mb-3 mt-4 flex-wrap">
+    <h3 class="fw-bold m-0"><i class="fa-solid fa-shield-halved me-2"></i>Data protection</h3>
+    <span class="small" style="color: var(--text-muted);">
+      Digital Personal Data Protection Act, 2023 — the registers, the clock, and what is waiting on you.
+    </span>
+    <button class="btn btn-sm ms-auto" style="border:1px solid var(--border-color);color:var(--text-main);background:transparent;"
+            onclick="dpConsoleLoad()"><i class="fa-solid fa-rotate me-1"></i>Refresh</button>
+  </div>
+
+  <!-- ══ what is waiting on somebody ══ -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="dp-card p-3">
+        <div class="dp-kpi" id="dp-k-overdue">–</div>
+        <div class="small" style="color: var(--text-muted);">requests overdue</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="dp-card p-3">
+        <div class="dp-kpi" id="dp-k-open">–</div>
+        <div class="small" style="color: var(--text-muted);">requests open</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="dp-card p-3">
+        <div class="dp-kpi" id="dp-k-unassessed">–</div>
+        <div class="small" style="color: var(--text-muted);">incidents not assessed</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="dp-card p-3">
+        <div class="dp-kpi" id="dp-k-anomalies">–</div>
+        <div class="small" style="color: var(--text-muted);">audit flags this week</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dp-status" class="mb-3 small fw-bold d-none"></div>
+
+  <ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#dp-pane-requests">Requests</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-patient">A patient</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-breach">Breach register</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-posture">Posture</a></li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ══ ss.11-13: the queue with the clock on it ══ -->
+    <div class="tab-pane fade show active" id="dp-pane-requests">
+      <div class="dp-card p-3 mb-3">
+        <div class="small mb-2" style="color: var(--text-muted);">
+          Access, correction, erasure and grievance each carry a deadline. Overdue is
+          shown first because it is the only thing on this screen that is already a
+          failure. A request cannot be closed until somebody has recorded how they
+          checked that the person asking is the person the data is about — answering
+          one to the wrong person is a disclosure dressed as compliance.
+        </div>
+        <div id="dp-requests">Loading…</div>
+      </div>
+
+      <div class="dp-card p-3">
+        <div class="fw-bold mb-2">Log a request taken at the desk or on the phone</div>
+        <div class="row g-2">
+          <div class="col-md-3">
+            <label>Patient ID</label>
+            <input id="dp-rq-pid" class="form-control dp-input" placeholder="LMTVS0001">
+          </div>
+          <div class="col-md-3">
+            <label>What are they asking for</label>
+            <select id="dp-rq-type" class="form-select dp-input">
+              <option value="ACCESS">A copy of what is held</option>
+              <option value="CORRECTION">Correction</option>
+              <option value="ERASURE">Erasure</option>
+              <option value="GRIEVANCE">Complaint</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label>How you checked it is them</label>
+            <select id="dp-rq-verify" class="form-select dp-input">
+              <option value="UNVERIFIED">Not yet checked</option>
+              <option value="IN_PERSON_ID">Photo ID, in person</option>
+              <option value="REGISTERED_MOBILE">Called the number on file</option>
+              <option value="GUARDIAN_ID">Parent or guardian, in person</option>
+              <option value="NOMINEE_PROOF">Nominee, with evidence</option>
+            </select>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-sm w-100 text-white fw-bold on-accent"
+                    style="background-color: var(--accent-purple);"
+                    onclick="dpRaiseRequest()">Log it</button>
+          </div>
+          <div class="col-12">
+            <label>In their words</label>
+            <textarea id="dp-rq-details" class="form-control dp-input" rows="2"
+                      placeholder="What they asked for, as they put it."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ one patient: consent, nomination, documents, export ══ -->
+    <div class="tab-pane fade" id="dp-pane-patient">
+      <div class="dp-card p-3 mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4">
+            <label>Patient ID</label>
+            <input id="dp-pt-id" class="form-control dp-input" placeholder="LMTVS0001">
+          </div>
+          <div class="col-md-8 d-flex gap-2 flex-wrap">
+            <button class="btn btn-sm text-white fw-bold on-accent"
+                    style="background-color: var(--accent-purple);"
+                    onclick="dpLoadPatient()">Look up</button>
+            <button class="btn btn-sm" style="border:1px solid var(--border-color);color:var(--text-main);background:transparent;"
+                    onclick="dpExportPatient()">Assemble everything held (s.11)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="dp-card p-3 h-100">
+            <div class="fw-bold mb-1">Consent, per purpose</div>
+            <div class="small mb-2" style="color: var(--text-muted);">
+              Withdrawal has to be as easy as giving — s.6(6). Care and billing are
+              legitimate uses under s.7 and cannot be withdrawn; erasure is the remedy
+              for those, once the retention period ends.
+            </div>
+            <div id="dp-consent">Look up a patient.</div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="dp-card p-3 h-100">
+            <div class="fw-bold mb-1">Nominee (s.14)</div>
+            <div class="small mb-2" style="color: var(--text-muted);">
+              Who may exercise these rights if the patient dies or becomes incapable.
+              This is not the emergency contact: that was collected to reach somebody
+              in a hurry and was never given for this purpose.
+            </div>
+            <div id="dp-nomination" class="mb-2">Look up a patient.</div>
+            <div class="row g-2">
+              <div class="col-md-5"><label>Nominee</label>
+                <input id="dp-nom-name" class="form-control dp-input" placeholder="Full name"></div>
+              <div class="col-md-3"><label>Relationship</label>
+                <input id="dp-nom-rel" class="form-control dp-input" placeholder="Daughter"></div>
+              <div class="col-md-4"><label>Contact</label>
+                <input id="dp-nom-contact" class="form-control dp-input" placeholder="Phone or email"></div>
+              <div class="col-12 d-flex gap-2">
+                <button class="btn btn-sm text-white fw-bold on-accent"
+                        style="background-color: var(--accent-purple);"
+                        onclick="dpSaveNomination()">Record nomination</button>
+                <button class="btn btn-sm" style="border:1px solid var(--border-color);color:var(--text-main);background:transparent;"
+                        onclick="dpRevokeNomination()">Withdraw</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="dp-card p-3">
+            <div class="fw-bold mb-1">Documents sent to this patient</div>
+            <div class="small mb-2" style="color: var(--text-muted);">
+              Every report, prescription and invoice shared as a link — s.11(1)(b), the
+              identities their data has been disclosed to. A link opened far more often
+              than a patient would open their own report has probably been forwarded;
+              withdraw it.
+            </div>
+            <div id="dp-documents">Look up a patient.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ s.8(6) ══ -->
+    <div class="tab-pane fade" id="dp-pane-breach">
+      <div class="dp-card p-3 mb-3">
+        <div class="small mb-2" style="color: var(--text-muted);">
+          Record anything that <em>might</em> be a breach. The decision comes after, and
+          a register that holds only confirmed breaches proves nothing about the ones
+          you decided were fine. Both answers need a reason, written at the time, by a
+          named person.
+        </div>
+        <div id="dp-breaches">Loading…</div>
+      </div>
+
+      <div class="dp-card p-3 mb-3">
+        <div class="fw-bold mb-2">Record an incident</div>
+        <div class="row g-2">
+          <div class="col-md-3">
+            <label>What kind</label>
+            <select id="dp-br-cat" class="form-select dp-input">
+              <option value="DISCLOSURE">Data seen by someone who should not have</option>
+              <option value="LOSS">Records lost or deleted</option>
+              <option value="CREDENTIAL">Password or account compromised</option>
+              <option value="DEVICE">Device lost or stolen</option>
+              <option value="MISDIRECTED">Sent to the wrong person</option>
+              <option value="UNCLASSIFIED">Something else</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label>People affected</label>
+            <input id="dp-br-count" type="number" min="0" class="form-control dp-input" value="0">
+          </div>
+          <div class="col-md-7">
+            <label>What happened</label>
+            <input id="dp-br-summary" class="form-control dp-input"
+                   placeholder="A sentence or two. Not 'issue'.">
+          </div>
+          <div class="col-12">
+            <button class="btn btn-sm text-white fw-bold on-accent"
+                    style="background-color: var(--accent-purple);"
+                    onclick="dpRaiseBreach()">Record it</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dp-card p-3">
+        <div class="fw-bold mb-2">Audit review — the last seven days</div>
+        <div id="dp-anomalies">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ══ where the deployment stands ══ -->
+    <div class="tab-pane fade" id="dp-pane-posture">
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="dp-card p-3 h-100">
+            <div class="fw-bold mb-1">Grievance officer (s.13)</div>
+            <div class="small mb-2" style="color: var(--text-muted);">
+              A Data Fiduciary must publish the person a data principal complains to.
+              These details appear on the notice the patient is given.
+            </div>
+            <div class="row g-2">
+              <div class="col-12"><label>Name</label>
+                <input id="dp-of-name" class="form-control dp-input"></div>
+              <div class="col-md-7"><label>Email</label>
+                <input id="dp-of-email" class="form-control dp-input"></div>
+              <div class="col-md-5"><label>Phone</label>
+                <input id="dp-of-phone" class="form-control dp-input"></div>
+              <div class="col-12">
+                <button class="btn btn-sm text-white fw-bold on-accent"
+                        style="background-color: var(--accent-purple);"
+                        onclick="dpSaveOfficer()">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="dp-card p-3 h-100">
+            <div class="fw-bold mb-1">Where this deployment stands</div>
+            <div id="dp-findings" class="mb-2">Loading…</div>
+            <hr class="dp-rule">
+            <div class="fw-bold mb-1">Scheduled jobs</div>
+            <pre id="dp-triggers" class="mb-0">Loading…</pre>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="dp-card p-3">
+            <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+              <div class="fw-bold">Retention (s.8(7))</div>
+              <button class="btn btn-sm ms-auto" style="border:1px solid var(--border-color);color:var(--text-main);background:transparent;"
+                      onclick="dpRetention()">Run the report</button>
+            </div>
+            <div class="small mb-2" style="color: var(--text-muted);">
+              This reports and never deletes. A medico-legal case or an insurance
+              dispute can require a record years after the ordinary period, and a sweep
+              that deletes on its own is how a clinic loses the file it is about to be
+              asked for. The schedule and its legal basis are in
+              docs/RETENTION_SCHEDULE.md.
+            </div>
+            <pre id="dp-retention" class="mb-0">Not run yet.</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SNAP = null;
+  var CURRENT_PATIENT = '';
+
+  function $(id) { return document.getElementById(id); }
+  function esc(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function tok() { return window.sessionToken || ''; }
+
+  function say(msg, bad) {
+    var el = $('dp-status');
+    if (!el) return;
+    el.className = 'mb-3 small fw-bold p-2 rounded ' + (bad ? 'bg-danger text-white' : 'bg-success text-white');
+    el.textContent = msg;
+    el.classList.remove('d-none');
+    setTimeout(function () { el.classList.add('d-none'); }, 6000);
+  }
+
+  /**
+   * One place that calls the server, so every call on this screen has a
+   * failure path and every one carries the session token from its caller.
+   *
+   * `server[fn].apply(server, args)` and not `.apply(null, …)`: the runner's
+   * methods are properties of the object google.script.run hands back, and
+   * calling one with the wrong `this` is the kind of thing that works until a
+   * browser changes.
+   */
+  function call(fn, args, onOk) {
+    var server = google.script.run
+      .withSuccessHandler(function (res) { onOk(res); })
+      .withFailureHandler(function (err) {
+        say('The server did not answer: ' + (err && err.message ? err.message : err), true);
+      });
+    if (typeof server[fn] !== 'function') {
+      say('This build has no server function called ' + fn + '().', true);
+      return;
+    }
+    server[fn].apply(server, args);
+  }
+
+  // ── first paint ────────────────────────────────────────────────────────
+  window.dpConsoleLoad = function () {
+    call('dpdpConsoleSnapshot', [tok()], function (res) {
+      if (!res || !res.success) { say((res && res.message) || 'Could not load.', true); return; }
+      SNAP = res;
+      $('dp-k-overdue').textContent    = res.overdue || 0;
+      $('dp-k-open').textContent       = (res.requests || []).filter(function (r) {
+                                            return r.status === 'OPEN'; }).length;
+      $('dp-k-unassessed').textContent = res.unassessed || 0;
+      $('dp-k-anomalies').textContent  = (res.anomalies || []).length;
+
+      renderRequests(res.requests || []);
+      renderBreaches(res.breaches || []);
+      renderFindings(res.findings || []);
+      renderAnomalies(res.anomalies || []);
+      $('dp-triggers').textContent = res.triggers || '';
+
+      var o = res.officer || {};
+      $('dp-of-name').value  = o.name  || '';
+      $('dp-of-email').value = o.email || '';
+      $('dp-of-phone').value = o.phone || '';
+    });
+  };
+
+  function renderRequests(rows) {
+    var host = $('dp-requests');
+    if (!rows.length) { host.innerHTML = '<div class="small" style="color:var(--text-muted);">Nothing outstanding.</div>'; return; }
+    var html = '';
+    rows.forEach(function (r) {
+      var unverified = !r.verification || r.verification === 'UNVERIFIED';
+      html +=
+        '<div class="dp-row py-2">' +
+          '<div class="d-flex gap-2 align-items-center flex-wrap">' +
+            '<span class="fw-bold">' + esc(r.type) + '</span>' +
+            '<span class="small" style="color:var(--text-muted);">' + esc(r.requestId) + '</span>' +
+            '<span class="small">' + esc(r.patientName || r.patientId) + '</span>' +
+            (r.overdue
+              ? '<span class="dp-overdue small">OVERDUE by ' + Math.abs(r.daysLeft) + ' day(s)</span>'
+              : '<span class="small" style="color:var(--text-muted);">due ' + esc(r.dueBy) + '</span>') +
+            (r.status === 'OPEN' ? '' : '<span class="dp-sev dp-LOW">' + esc(r.status) + '</span>') +
+            (unverified && r.status === 'OPEN'
+              ? '<span class="dp-sev dp-HIGH">NOT VERIFIED</span>' : '') +
+          '</div>' +
+          '<div class="small" style="color:var(--text-muted);">' + esc(r.details) + '</div>' +
+          (r.status === 'OPEN'
+            ? '<div class="d-flex gap-2 mt-1 flex-wrap">' +
+                (unverified
+                  ? '<select class="form-select form-select-sm dp-input" style="max-width:260px" id="dp-v-' + esc(r.requestId) + '">' +
+                      '<option value="IN_PERSON_ID">Photo ID, in person</option>' +
+                      '<option value="REGISTERED_MOBILE">Called the number on file</option>' +
+                      '<option value="PORTAL_SESSION">Asked through the portal</option>' +
+                      '<option value="GUARDIAN_ID">Parent or guardian, in person</option>' +
+                      '<option value="NOMINEE_PROOF">Nominee, with evidence</option>' +
+                    '</select>' +
+                    '<button class="btn btn-sm btn-outline-info" onclick="dpVerify(\'' + esc(r.requestId) + '\')">Record how it was checked</button>'
+                  : '<span class="small" style="color:var(--text-muted);">verified: ' + esc(r.verification || '') + '</span>') +
+                '<button class="btn btn-sm btn-outline-secondary" onclick="dpClose(\'' + esc(r.requestId) + '\')">Close with an answer</button>' +
+              '</div>'
+            : '<div class="small" style="color:var(--text-muted);">' + esc(r.outcome || '') + '</div>') +
+        '</div>';
+    });
+    host.innerHTML = html;
+  }
+
+  function renderBreaches(rows) {
+    var host = $('dp-breaches');
+    if (!rows.length) { host.innerHTML = '<div class="small" style="color:var(--text-muted);">The register is empty.</div>'; return; }
+    var html = '';
+    rows.forEach(function (b) {
+      html +=
+        '<div class="dp-row py-2">' +
+          '<div class="d-flex gap-2 align-items-center flex-wrap">' +
+            '<span class="fw-bold">' + esc(b.category) + '</span>' +
+            '<span class="small" style="color:var(--text-muted);">' + esc(b.breachId) + '</span>' +
+            '<span class="small">' + esc(b.detectedAt) + '</span>' +
+            (b.assessed
+              ? '<span class="dp-sev ' + (b.notifiable === 'YES' ? 'dp-HIGH' : 'dp-LOW') + '">' +
+                (b.notifiable === 'YES' ? 'NOTIFIABLE' : 'not notifiable') + '</span>'
+              : '<span class="dp-sev dp-CRITICAL">NOT ASSESSED</span>') +
+            (b.affectedCount ? '<span class="small">' + b.affectedCount + ' affected</span>' : '') +
+          '</div>' +
+          '<div class="small" style="color:var(--text-muted);">' + esc(b.summary) + '</div>' +
+          '<div class="d-flex gap-2 mt-1 flex-wrap">' +
+            (b.assessed ? '' :
+              '<button class="btn btn-sm btn-outline-danger" onclick="dpAssess(\'' + esc(b.breachId) + '\', true)">Notifiable</button>' +
+              '<button class="btn btn-sm btn-outline-secondary" onclick="dpAssess(\'' + esc(b.breachId) + '\', false)">Not notifiable</button>') +
+            (b.notifiable === 'YES'
+              ? '<button class="btn btn-sm btn-outline-info" onclick="dpNotice(\'' + esc(b.breachId) + '\')">Draft the notifications</button>'
+              : '') +
+          '</div>' +
+        '</div>';
+    });
+    host.innerHTML = html;
+  }
+
+  function renderFindings(f) {
+    var host = $('dp-findings');
+    if (!f.length) { host.innerHTML = '<div class="small text-success">Nothing outstanding in the technical checks.</div>'; return; }
+    host.innerHTML = f.map(function (x) {
+      return '<div class="mb-2">' +
+        '<span class="dp-sev dp-' + esc(x.severity) + '">' + esc(x.severity) + '</span> ' +
+        '<span class="fw-bold small">' + esc(x.area) + '</span>' +
+        '<div class="small" style="color:var(--text-muted);">' + esc(x.text) + '</div>' +
+        '<div class="small"><em>' + esc(x.fix) + '</em></div></div>';
+    }).join('');
+  }
+
+  function renderAnomalies(a) {
+    var host = $('dp-anomalies');
+    if (!a.length) { host.innerHTML = '<div class="small text-success">Nothing unusual in the last seven days.</div>'; return; }
+    host.innerHTML = a.map(function (x) {
+      return '<div class="dp-row py-2">' +
+        '<span class="dp-sev dp-' + esc(x.severity) + '">' + esc(x.severity) + '</span> ' +
+        '<span class="fw-bold small">' + esc(x.title) + '</span>' +
+        '<div class="small" style="color:var(--text-muted);">' + esc(x.detail) + '</div>' +
+        '<div class="small"><em>' + esc(x.action) + '</em></div></div>';
+    }).join('');
+  }
+
+  // ── requests ───────────────────────────────────────────────────────────
+  window.dpRaiseRequest = function () {
+    var payload = {
+      patientId: $('dp-rq-pid').value.trim(),
+      type: $('dp-rq-type').value,
+      details: $('dp-rq-details').value.trim(),
+      verification: $('dp-rq-verify').value,
+      channel: 'DESK'
+    };
+    if (!payload.patientId || payload.details.length < 10) {
+      return say('Give the patient ID and what they asked for, in a sentence.', true);
+    }
+    call('raiseDPDPRequest', [payload, tok()], function (res) {
+      say((res && res.message) || 'Logged.', !(res && res.success));
+      if (res && res.success) { $('dp-rq-details').value = ''; dpConsoleLoad(); }
+    });
+  };
+
+  window.dpVerify = function (id) {
+    var sel = $('dp-v-' + id);
+    var method = sel ? sel.value : 'IN_PERSON_ID';
+    var note = prompt('Anything worth recording about how you checked? (optional)') || '';
+    call('dpdpVerifyRequester', [id, method, note, tok()], function (res) {
+      say((res && res.message) || 'Recorded.', !(res && res.success));
+      dpConsoleLoad();
+    });
+  };
+
+  window.dpClose = function (id) {
+    var outcome = prompt('What was actually done? "Closed" is not an answer to a statutory request.');
+    if (!outcome) return;
+    call('closeDPDPRequest', [id, outcome, tok()], function (res) {
+      say((res && res.message) || 'Closed.', !(res && res.success));
+      dpConsoleLoad();
+    });
+  };
+
+  // ── one patient ────────────────────────────────────────────────────────
+  window.dpLoadPatient = function () {
+    var pid = $('dp-pt-id').value.trim().toUpperCase();
+    if (!pid) return say('Give a patient ID.', true);
+    CURRENT_PATIENT = pid;
+
+    call('getConsentStatus', [pid, tok()], function (res) {
+      var host = $('dp-consent');
+      if (!res || !res.success) { host.innerHTML = '<div class="small text-danger">' + esc((res && res.message) || 'Not found.') + '</div>'; return; }
+      host.innerHTML = res.purposes.map(function (p) {
+        var state = p.state === 'GIVEN' ? '<span class="text-success fw-bold">given</span>'
+                  : p.state === 'REFUSED' ? '<span class="text-danger fw-bold">refused</span>'
+                  : p.state === 'WITHDRAWN' ? '<span class="text-warning fw-bold">withdrawn</span>'
+                  : '<span class="dp-overdue">never asked</span>';
+        return '<div class="dp-row py-1 d-flex gap-2 align-items-center flex-wrap">' +
+          '<span class="small fw-bold">' + esc(p.label) + '</span>' +
+          (p.legitimate ? '<span class="dp-sev dp-LOW">s.7 legitimate use</span>' : '') +
+          '<span class="small">' + state + '</span>' +
+          (p.stale ? '<span class="dp-sev dp-MEDIUM">older notice</span>' : '') +
+          (!p.legitimate
+            ? '<span class="ms-auto d-flex gap-1">' +
+              '<button class="btn btn-sm btn-outline-success py-0" onclick="dpConsent(\'' + esc(p.key) + '\', true)">give</button>' +
+              '<button class="btn btn-sm btn-outline-secondary py-0" onclick="dpConsent(\'' + esc(p.key) + '\', false)">refuse</button>' +
+              '<button class="btn btn-sm btn-outline-warning py-0" onclick="dpWithdraw(\'' + esc(p.key) + '\')">withdraw</button>' +
+              '</span>' : '') +
+          '</div>';
+      }).join('');
+    });
+
+    call('getNomination', [pid, tok()], function (res) {
+      var host = $('dp-nomination');
+      if (!res || !res.success) { host.innerHTML = '<div class="small text-danger">Not available.</div>'; return; }
+      host.innerHTML = res.nomination
+        ? '<div class="small"><strong>' + esc(res.nomination.nominee) + '</strong> (' +
+          esc(res.nomination.relationship) + ') · ' + esc(res.nomination.contact) +
+          '<br><span style="color:var(--text-muted);">recorded ' + esc(res.nomination.recordedAt) +
+          ' by ' + esc(res.nomination.recordedBy) + '</span></div>'
+        : '<div class="small" style="color:var(--text-muted);">No nominee recorded.</div>';
+    });
+
+    call('dpdpListDocumentLinks', [pid, tok()], function (res) {
+      var host = $('dp-documents');
+      if (!res || !res.success) { host.innerHTML = '<div class="small text-danger">Not available.</div>'; return; }
+      if (!res.rows.length) { host.innerHTML = '<div class="small" style="color:var(--text-muted);">Nothing has been sent to this patient as a link.</div>'; return; }
+      host.innerHTML = res.rows.map(function (d) {
+        var busy = d.opens >= 6;
+        return '<div class="dp-row py-1 d-flex gap-2 align-items-center flex-wrap">' +
+          '<span class="small fw-bold">' + esc(d.docType) + '</span>' +
+          '<span class="small" style="color:var(--text-muted);">' + esc(d.document) + '</span>' +
+          '<span class="small">sent ' + esc(d.issuedAt) + ' by ' + esc(d.issuedBy) + '</span>' +
+          '<span class="dp-sev ' + (d.status === 'ACTIVE' ? 'dp-MEDIUM' : 'dp-LOW') + '">' + esc(d.status) + '</span>' +
+          '<span class="small' + (busy ? ' dp-overdue' : '') + '">opened ' + d.opens + '×</span>' +
+          (d.status === 'ACTIVE'
+            ? '<button class="btn btn-sm btn-outline-danger py-0 ms-auto" onclick="dpRevokeDoc(\'' + esc(d.grantId) + '\')">withdraw</button>'
+            : '') +
+          '</div>';
+      }).join('');
+    });
+  };
+
+  window.dpConsent = function (purpose, give) {
+    if (!CURRENT_PATIENT) return;
+    var decisions = {};
+    decisions[purpose] = !!give;
+    call('recordConsent', [{ patientId: CURRENT_PATIENT, decisions: decisions,
+                             method: 'IN_PERSON', notes: 'Recorded from the privacy console' }, tok()],
+      function (res) {
+        say((res && res.message) || 'Recorded.', !(res && res.success));
+        dpLoadPatient();
+      });
+  };
+
+  window.dpWithdraw = function (purpose) {
+    if (!CURRENT_PATIENT) return;
+    var reason = prompt('Why are they withdrawing? (optional, but it helps)') || '';
+    call('withdrawConsent', [CURRENT_PATIENT, purpose, reason, tok()], function (res) {
+      say((res && res.message) || 'Withdrawn.', !(res && res.success));
+      dpLoadPatient();
+    });
+  };
+
+  window.dpSaveNomination = function () {
+    if (!CURRENT_PATIENT) return say('Look up a patient first.', true);
+    call('recordNomination', [{
+      patientId: CURRENT_PATIENT,
+      nomineeName: $('dp-nom-name').value.trim(),
+      relationship: $('dp-nom-rel').value.trim(),
+      contact: $('dp-nom-contact').value.trim()
+    }, tok()], function (res) {
+      say((res && res.message) || 'Recorded.', !(res && res.success));
+      if (res && res.success) {
+        $('dp-nom-name').value = ''; $('dp-nom-rel').value = ''; $('dp-nom-contact').value = '';
+        dpLoadPatient();
+      }
+    });
+  };
+
+  window.dpRevokeNomination = function () {
+    if (!CURRENT_PATIENT) return say('Look up a patient first.', true);
+    var reason = prompt('Why is it being withdrawn? (optional)') || '';
+    call('revokeNomination', [CURRENT_PATIENT, reason, tok()], function (res) {
+      say((res && res.message) || 'Withdrawn.', !(res && res.success));
+      dpLoadPatient();
+    });
+  };
+
+  window.dpRevokeDoc = function (grantId) {
+    call('dpdpRevokeDocumentLink', [grantId, tok()], function (res) {
+      say((res && res.message) || 'Withdrawn.', !(res && res.success));
+      dpLoadPatient();
+    });
+  };
+
+  window.dpExportPatient = function () {
+    var pid = $('dp-pt-id').value.trim().toUpperCase();
+    if (!pid) return say('Give a patient ID.', true);
+    say('Assembling — this reads eleven sheets and takes a moment.');
+    call('exportPatientData', [pid, tok()], function (res) {
+      if (!res || !res.success) return say((res && res.message) || 'Could not assemble.', true);
+      var w = window.open('', '_blank');
+      if (!w) return say('Allow pop-ups to see the export.', true);
+      w.document.write('<pre style="font:12px/1.5 monospace;padding:20px;white-space:pre-wrap">' +
+        esc(JSON.stringify(res.data, null, 2)) + '</pre>');
+      w.document.title = 'Everything held about ' + pid;
+      w.document.close();
+    });
+  };
+
+  // ── breaches ───────────────────────────────────────────────────────────
+  window.dpRaiseBreach = function () {
+    call('dpdpRaiseBreach', [{
+      category: $('dp-br-cat').value,
+      summary: $('dp-br-summary').value.trim(),
+      affectedCount: parseInt($('dp-br-count').value, 10) || 0,
+      source: 'REPORTED'
+    }, tok()], function (res) {
+      say((res && res.message) || 'Recorded.', !(res && res.success));
+      if (res && res.success) { $('dp-br-summary').value = ''; dpConsoleLoad(); }
+    });
+  };
+
+  window.dpAssess = function (id, notifiable) {
+    var why = prompt(notifiable
+      ? 'Why is this notifiable? (this goes on the record)'
+      : 'Why is this NOT notifiable? This is the one you will be asked to justify.');
+    if (!why) return;
+    call('dpdpAssessBreach', [id, notifiable, why, tok()], function (res) {
+      say((res && res.message) || 'Recorded.', !(res && res.success));
+      dpConsoleLoad();
+    });
+  };
+
+  window.dpNotice = function (id) {
+    call('dpdpBreachNotice', [id, tok()], function (res) {
+      if (!res || !res.success) return say((res && res.message) || 'Could not draft.', true);
+      var w = window.open('', '_blank');
+      if (!w) return say('Allow pop-ups to see the drafts.', true);
+      w.document.write('<pre style="font:13px/1.6 monospace;padding:24px;white-space:pre-wrap">' +
+        '=== TO THE DATA PROTECTION BOARD ===\n\n' + esc(res.board) +
+        '\n\n\n=== TO EACH AFFECTED PATIENT ===\n\n' + esc(res.principal) + '</pre>');
+      w.document.title = 'Breach notifications — ' + id;
+      w.document.close();
+    });
+  };
+
+  // ── posture ────────────────────────────────────────────────────────────
+  window.dpSaveOfficer = function () {
+    call('dpdpSaveGrievanceOfficer', [{
+      name: $('dp-of-name').value.trim(),
+      email: $('dp-of-email').value.trim(),
+      phone: $('dp-of-phone').value.trim()
+    }, tok()], function (res) {
+      say((res && res.message) || 'Saved.', !(res && res.success));
+      dpConsoleLoad();
+    });
+  };
+
+  window.dpRetention = function () {
+    $('dp-retention').textContent = 'Running…';
+    call('dpdpRetentionReportUI', [tok()], function (res) {
+      $('dp-retention').textContent = (res && res.report) || (res && res.message) || 'Failed.';
+    });
+  };
+})();
+</script>

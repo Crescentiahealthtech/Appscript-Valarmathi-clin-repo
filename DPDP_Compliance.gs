@@ -43,6 +43,7 @@ var DPDP_CFG = {
   CONSENT:   'Consent_Register',
   REQUESTS:  'DPDP_Requests',
   SHARED:    'Shared_Documents',
+  NOMINEES:  'Nomination_Register',
   NOTICE_PROP: 'DPDP_NOTICE_VERSION',
   OFFICER_PROP: 'DPDP_GRIEVANCE_OFFICER',
   TZ: 'Asia/Kolkata',
@@ -51,6 +52,25 @@ var DPDP_CFG = {
   // period. These are the clinic's committed response times, shown to the
   // patient and used to flag an overdue request.
   RESPONSE_DAYS: { ACCESS: 30, CORRECTION: 30, ERASURE: 30, GRIEVANCE: 30 },
+
+  /**
+   * How the clinic satisfied itself that the person asking is the person the
+   * data is about — finding M5.
+   *
+   * Answering an access request to the wrong person is itself a disclosure,
+   * and it is the disclosure an attacker will choose because it arrives
+   * gift-wrapped in a statutory right. Every request row records which of
+   * these was used; UNVERIFIED exists so that a request can be TAKEN before
+   * it is verified, and so that the gap is visible rather than assumed away.
+   */
+  VERIFICATION: {
+    IN_PERSON_ID:  'Photo ID checked at the clinic, in person',
+    REGISTERED_MOBILE: 'Call-back to the mobile number already on the record',
+    PORTAL_SESSION: 'Asked through the patient portal, signed in',
+    GUARDIAN_ID:   'Parent or guardian identified in person (s.9)',
+    NOMINEE_PROOF: 'Nominee under s.14, with the death or incapacity evidenced',
+    UNVERIFIED:    'NOT YET VERIFIED — do not answer this request until it is'
+  },
 
   // How long each kind of record is kept once its purpose is served.
   // CLINICAL is three years from the last entry, which is what the NMC
@@ -140,7 +160,11 @@ function dpdp_requestSheet_() {
   return dc_ensureSheet_(SpreadsheetApp.getActiveSpreadsheet(), DPDP_CFG.REQUESTS, [
     'Request_ID', 'Patient_ID', 'Patient_Name', 'Type', 'Details',
     'Raised_By', 'Raised_At', 'Due_By', 'Status', 'Handled_By',
-    'Closed_At', 'Outcome'
+    'Closed_At', 'Outcome',
+    // Finding M5. Answering an access request to the wrong person is a
+    // disclosure dressed as compliance, so how the requester was identified
+    // is part of the record, not part of the memory of whoever was at the desk.
+    'Verification_Method', 'Verified_By', 'Verified_At', 'Channel'
   ]);
 }
 
@@ -151,21 +175,49 @@ function dpdp_sharedSheet_() {
   ]);
 }
 
+/**
+ * s.14 — the nominee.
+ *
+ * A separate register rather than a purpose on the consent sheet, because a
+ * nomination is not a consent: it is an instruction about who may exercise
+ * these rights if the patient dies or becomes incapable of exercising them
+ * themselves. It is append-only for the same reason consent is — the
+ * question "who was nominated on the day they died" has exactly one right
+ * answer and it is not "whoever the row says now".
+ *
+ * The emergency contact already on the patient record is NOT this. That was
+ * collected to reach somebody in a hurry; it was never given for this
+ * purpose and the patient never chose it for this purpose.
+ */
+function dpdp_nomineeSheet_() {
+  return dc_ensureSheet_(SpreadsheetApp.getActiveSpreadsheet(), DPDP_CFG.NOMINEES, [
+    'Entry_ID', 'Patient_ID', 'Patient_Name', 'Nominee_Name', 'Relationship',
+    'Nominee_Contact', 'Scope', 'Notice_Version', 'Recorded_By', 'Recorded_At',
+    'Revoked_At', 'Revoked_Reason', 'Notes'
+  ]);
+}
+
 /** ONE-OFF. Creates every register. Safe to re-run. */
 function dpdpSetup() {
   dpdp_consentSheet_();
   dpdp_requestSheet_();
   dpdp_sharedSheet_();
+  dpdp_nomineeSheet_();
+  if (typeof dpdp_grantSheet_ === 'function') dpdp_grantSheet_();
+  if (typeof dpdp_breachSheet_ === 'function') dpdp_breachSheet_();
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty(DPDP_CFG.NOTICE_PROP)) {
     props.setProperty(DPDP_CFG.NOTICE_PROP, 'v1-' +
       Utilities.formatDate(new Date(), DPDP_CFG.TZ, 'yyyyMMdd'));
   }
-  return 'DPDP registers ready: ' + DPDP_CFG.CONSENT + ', ' + DPDP_CFG.REQUESTS +
-         ', ' + DPDP_CFG.SHARED + '.\n' +
-         'Now set the grievance officer:\n' +
-         '  dpdpSetGrievanceOfficer("Dr. …", "officer@clinic.in", "+91 …")\n' +
-         'and run dpdpReadinessCheck().';
+  return 'DPDP registers ready: ' + [DPDP_CFG.CONSENT, DPDP_CFG.REQUESTS,
+           DPDP_CFG.SHARED, DPDP_CFG.NOMINEES, 'Document_Grants',
+           'Breach_Register'].join(', ') + '.\n' +
+         'Now, in order:\n' +
+         '  1. dpdpSetGrievanceOfficer("Dr. …", "officer@clinic.in", "+91 …")  — s.13\n' +
+         '  2. dpdpInstallTriggers()        — the daily and weekly jobs\n' +
+         '  3. crescMigrateCredentials()    — hash every password, force a reset\n' +
+         '  4. dpdpReadinessCheck()         — where you stand afterwards';
 }
 
 /**
@@ -521,6 +573,21 @@ function raiseDPDPRequest(payload, sessionToken) {
       return { success: false, message: 'Say what is being asked for, in a sentence.' };
     }
 
+    // s.11-13 with finding M5. A patient asking through the portal has already
+    // proved who they are — their session IS the verification, and asking the
+    // desk to type that again invites them to type something else. Anyone
+    // else has to say how the person in front of them was identified, and
+    // UNVERIFIED is allowed so that the request can be taken now and the gap
+    // stays visible instead of being assumed away.
+    var method = dpdp_str_(payload.verification).toUpperCase();
+    if (actor.role === 'patient') method = 'PORTAL_SESSION';
+    if (!method) method = 'UNVERIFIED';
+    if (!DPDP_CFG.VERIFICATION.hasOwnProperty(method)) {
+      return { success: false,
+               message: 'Verification must be one of: ' +
+                        Object.keys(DPDP_CFG.VERIFICATION).join(', ') + '.' };
+    }
+
     var profile = null;
     try { profile = pt_readProfile_(patientId); } catch (e) { profile = null; }
 
@@ -531,7 +598,10 @@ function raiseDPDPRequest(payload, sessionToken) {
 
     dpdp_requestSheet_().appendRow([
       id, patientId, profile ? profile.name : '', type, details,
-      actor.username, now, due, 'OPEN', '', '', ''
+      actor.username, now, due, 'OPEN', '', '', '',
+      method, method === 'UNVERIFIED' ? '' : actor.username,
+      method === 'UNVERIFIED' ? '' : now,
+      dpdp_str_(payload.channel) || (actor.role === 'patient' ? 'PORTAL' : 'DESK')
     ]);
     dc_invalidate_(DPDP_CFG.REQUESTS);
     SpreadsheetApp.flush();
@@ -542,9 +612,14 @@ function raiseDPDPRequest(payload, sessionToken) {
     } catch (e) {}
 
     return { success: true, requestId: id, dueBy: dpdp_fmt_(due),
+             verification: method,
              message: type.charAt(0) + type.slice(1).toLowerCase() +
                       ' request ' + id + ' logged. It is due by ' +
-                      Utilities.formatDate(due, DPDP_CFG.TZ, 'dd-MMM-yyyy') + '.' };
+                      Utilities.formatDate(due, DPDP_CFG.TZ, 'dd-MMM-yyyy') + '.' +
+                      (method === 'UNVERIFIED'
+                        ? ' IT IS NOT VERIFIED: confirm who is asking before you ' +
+                          'answer it, and record how (dpdpVerifyRequester).'
+                        : '') };
 
   } catch (err) {
     var m = String((err && err.message) || err);
@@ -619,6 +694,18 @@ function closeDPDPRequest(requestId, outcome, sessionToken) {
     var data = dc_sheetValues_(sh);
     for (var i = 1; i < (data ? data.length : 0); i++) {
       if (dpdp_str_(data[i][m['Request_ID']]).toUpperCase() !== want) continue;
+
+      // An access request answered to the wrong person is a disclosure, and
+      // the statutory right is what an attacker would use to ask for it. So a
+      // request nobody verified cannot be closed as answered.
+      var how = dpdp_str_(data[i][m['Verification_Method']]).toUpperCase();
+      if (!how || how === 'UNVERIFIED') {
+        return { success: false, code: 'UNVERIFIED',
+                 message: 'This request has not been verified. Confirm the person ' +
+                          'asking is the person the data is about, record how with ' +
+                          'dpdpVerifyRequester("' + want + '", METHOD, token), and ' +
+                          'then close it.' };
+      }
       sh.getRange(i + 1, m['Status'] + 1).setValue('CLOSED');
       sh.getRange(i + 1, m['Handled_By'] + 1).setValue(actor.username);
       sh.getRange(i + 1, m['Closed_At'] + 1).setValue(dpdp_now_());
@@ -633,6 +720,340 @@ function closeDPDPRequest(requestId, outcome, sessionToken) {
     return { success: false, message: m3.replace('FORBIDDEN: ', '') };
   } finally {
     try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/**
+ * FRONTEND ENTRY. Records HOW the clinic satisfied itself that the person who
+ * asked is the person the data is about — finding M5.
+ *
+ * Separate from raising the request on purpose: the request usually arrives
+ * before the proof does. A call back to the number already on the record is
+ * the cheapest method the clinic already has, and it is the one thing the
+ * person impersonating a patient cannot arrange.
+ */
+function dpdpVerifyRequester(requestId, method, note, sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, ['dpdp.manage', 'patient.read']);
+    var how = dpdp_str_(method).toUpperCase();
+    if (!DPDP_CFG.VERIFICATION.hasOwnProperty(how) || how === 'UNVERIFIED') {
+      return { success: false,
+               message: 'Verification must be one of: ' +
+                        Object.keys(DPDP_CFG.VERIFICATION)
+                          .filter(function (k) { return k !== 'UNVERIFIED'; })
+                          .join(', ') + '.' };
+    }
+
+    var sh = dpdp_requestSheet_();
+    var m = dc_headerMap_(sh);
+    var data = dc_sheetValues_(sh);
+    var want = dpdp_str_(requestId).toUpperCase();
+
+    for (var i = 1; i < (data ? data.length : 0); i++) {
+      if (dpdp_str_(data[i][m['Request_ID']]).toUpperCase() !== want) continue;
+      sh.getRange(i + 1, m['Verification_Method'] + 1).setValue(how);
+      sh.getRange(i + 1, m['Verified_By'] + 1).setValue(actor.username);
+      sh.getRange(i + 1, m['Verified_At'] + 1).setValue(dpdp_now_());
+      if (dpdp_str_(note)) {
+        sh.getRange(i + 1, m['Details'] + 1).setValue(
+          dpdp_str_(data[i][m['Details']]) + '\n[verification: ' + dpdp_str_(note) + ']');
+      }
+      dc_invalidate_(DPDP_CFG.REQUESTS);
+      SpreadsheetApp.flush();
+      try {
+        logAudit_({ username: actor.username, role: actor.role },
+                  'DPDP_REQUESTER_VERIFIED', 'Request', want, { method: how });
+      } catch (e) {}
+      return { success: true, message: 'Recorded: ' + DPDP_CFG.VERIFICATION[how] + '.' };
+    }
+    return { success: false, message: 'No request with the id ' + requestId + '.' };
+  } catch (err) {
+    return { success: false, message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
+/**
+ * PUBLIC BY DESIGN. A data principal asks without holding a staff login.
+ *
+ * s.11-13 give the right to a person, not to a person with a password.
+ * Requiring somebody to come to the desk to ask for their own data — or to
+ * get past a login they may have forgotten — is a way of receiving fewer
+ * requests, not of answering them.
+ *
+ * WHAT MAKES THIS SAFE TO LEAVE OPEN:
+ *   * it WRITES a request and returns nothing about anybody;
+ *   * every row lands UNVERIFIED, and closeDPDPRequest() refuses to answer an
+ *     unverified request, so the form cannot be used to have data posted to
+ *     a stranger;
+ *   * it is rate-limited per browser, because an open write endpoint that is
+ *     not rate-limited is a way to fill a spreadsheet.
+ */
+function dpdpSubmitPublicRequest(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    payload = payload || {};
+
+    var type = dpdp_str_(payload.type).toUpperCase();
+    if (!DPDP_CFG.RESPONSE_DAYS.hasOwnProperty(type)) {
+      return { success: false,
+               message: 'Choose what you are asking for: ' +
+                        Object.keys(DPDP_CFG.RESPONSE_DAYS).join(', ') + '.' };
+    }
+    var name = dpdp_str_(payload.name);
+    var contact = dpdp_str_(payload.contact);
+    var details = dpdp_str_(payload.details);
+    if (name.length < 2 || contact.length < 6) {
+      return { success: false,
+               message: 'We need your name and a phone number or email address to ' +
+                        'reply to — and to check that it is you asking.' };
+    }
+    if (details.length < 10) {
+      return { success: false, message: 'Tell us in a sentence what you would like.' };
+    }
+
+    // Crude but sufficient: four requests per hour from one browser. The cache
+    // key is the best identifier a web app gets — Apps Script does not expose
+    // the caller's IP address — so this slows a person down rather than
+    // stopping a determined script, and is said plainly rather than dressed up.
+    try {
+      var cache = CacheService.getScriptCache();
+      var seen = parseInt(cache.get('DPDP_PUB_' + dpdp_str_(payload.formId)), 10) || 0;
+      if (seen >= 4) {
+        return { success: false,
+                 message: 'Several requests have already been sent from this page. ' +
+                          'Please call the clinic instead.' };
+      }
+      cache.put('DPDP_PUB_' + dpdp_str_(payload.formId), String(seen + 1), 3600);
+    } catch (e) { /* the cache is best effort; never block a statutory right on it */ }
+
+    var now = dpdp_now_();
+    var due = new Date(now.getTime() + DPDP_CFG.RESPONSE_DAYS[type] * 86400000);
+    var id = 'DPR-' + Utilities.formatDate(now, DPDP_CFG.TZ, 'yyMMdd-HHmmss') + '-' +
+             Utilities.getUuid().substring(0, 4).toUpperCase();
+
+    // The patient ID is whatever they typed, and it is NOT trusted — it is a
+    // lead for the person who verifies them, not an identification.
+    dpdp_requestSheet_().appendRow([
+      id, dpdp_str_(payload.patientId).toUpperCase(), name, type,
+      details + '\n[submitted through the public form by ' + name + ', ' + contact + ']',
+      'PUBLIC_FORM', now, due, 'OPEN', '', '', '',
+      'UNVERIFIED', '', '', 'PUBLIC_FORM'
+    ]);
+    dc_invalidate_(DPDP_CFG.REQUESTS);
+    SpreadsheetApp.flush();
+
+    try {
+      logAudit_({ username: 'PUBLIC_FORM', role: '' },
+                'DPDP_REQUEST_RAISED', 'Request', id, { type: type, channel: 'PUBLIC' });
+    } catch (e) {}
+
+    var officer = dpdp_officer_();
+    if (officer && officer.email) {
+      try {
+        MailApp.sendEmail({
+          to: officer.email,
+          subject: 'Data principal request ' + id + ' (' + type + ')',
+          body: [
+            'A request has come in through the public form.',
+            '',
+            'Reference:  ' + id,
+            'Type:       ' + type,
+            'From:       ' + name + ' (' + contact + ')',
+            'Patient ID they gave: ' + (dpdp_str_(payload.patientId) || '(none)'),
+            'Due by:     ' + dpdp_fmt_(due),
+            '',
+            details,
+            '',
+            'IT IS NOT VERIFIED. Confirm who is asking before answering — a call ' +
+            'back to the number already on their record is enough and is the one ' +
+            'thing somebody impersonating them cannot arrange. Record it with ' +
+            'dpdpVerifyRequester().'
+          ].join('\n')
+        });
+      } catch (e) { /* the row is the record; the email is a convenience */ }
+    }
+
+    return { success: true, requestId: id,
+             dueBy: Utilities.formatDate(due, DPDP_CFG.TZ, 'dd-MMM-yyyy'),
+             message: 'Your request has been logged as ' + id + '. We will reply by ' +
+                      Utilities.formatDate(due, DPDP_CFG.TZ, 'dd MMMM yyyy') + '. ' +
+                      'We will contact you first to check it is you asking.' };
+  } catch (err) {
+    return { success: false, message: 'The request could not be sent: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SECTION 14 — NOMINATION
+// ---------------------------------------------------------------------------
+
+/**
+ * FRONTEND ENTRY. Records who the patient nominates to exercise their rights
+ * if they die or become incapable of exercising them — finding M4.
+ *
+ * NOT the emergency contact. That was collected so somebody could be reached
+ * in a hurry; it was never given for this purpose, the patient never chose it
+ * for this purpose, and s.14 requires the patient's own act. Same affirmative
+ * action as a consent, recorded the same way, against the same notice
+ * version.
+ */
+function recordNomination(payload, sessionToken) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    payload = payload || {};
+    var actor = crescRequire_(sessionToken, ['patient.write', 'patient.register', 'portal.self']);
+
+    var patientId = dpdp_str_(payload.patientId).toUpperCase();
+    if (!patientId) return { success: false, message: 'No patient was named.' };
+    if (actor.role === 'patient' && dpdp_str_(actor.username).toUpperCase() !== patientId) {
+      return { success: false, message: 'You can only nominate on your own record.' };
+    }
+
+    var nominee = dpdp_str_(payload.nomineeName);
+    var relation = dpdp_str_(payload.relationship);
+    var contact = dpdp_str_(payload.contact);
+    if (nominee.length < 2 || !relation || contact.length < 6) {
+      return { success: false,
+               message: 'A nomination needs the nominee\'s name, their relationship ' +
+                        'to the patient, and a way to reach them.' };
+    }
+
+    var profile = null;
+    try { profile = pt_readProfile_(patientId); } catch (e) { profile = null; }
+    if (!profile) return { success: false, message: 'No patient with the ID ' + patientId + '.' };
+
+    var now = dpdp_now_();
+    var sh = dpdp_nomineeSheet_();
+    var m = dc_headerMap_(sh);
+    var data = dc_sheetValues_(sh);
+
+    // A new nomination replaces the last one, and the old row stays, revoked.
+    // "Who was nominated when they died" has one right answer and it is not
+    // "whoever the current row says".
+    for (var i = 1; i < (data ? data.length : 0); i++) {
+      if (dpdp_str_(data[i][m['Patient_ID']]).toUpperCase() !== patientId) continue;
+      if (dpdp_str_(data[i][m['Revoked_At']])) continue;
+      sh.getRange(i + 1, m['Revoked_At'] + 1).setValue(now);
+      sh.getRange(i + 1, m['Revoked_Reason'] + 1).setValue('Replaced by a later nomination');
+    }
+
+    sh.appendRow([
+      'NOM-' + Utilities.formatDate(now, DPDP_CFG.TZ, 'yyMMdd-HHmmss') + '-' +
+        Utilities.getUuid().substring(0, 4).toUpperCase(),
+      patientId, profile.name, nominee, relation, contact,
+      dpdp_str_(payload.scope) || 'ALL_RIGHTS',
+      dpdp_noticeVersion_(), actor.username, now, '', '', dpdp_str_(payload.notes)
+    ]);
+    dc_invalidate_(DPDP_CFG.NOMINEES);
+    SpreadsheetApp.flush();
+
+    try {
+      logAudit_({ username: actor.username, role: actor.role },
+                'DPDP_NOMINATION_RECORDED', 'Patient', patientId, { relationship: relation });
+    } catch (e) {}
+
+    return { success: true,
+             message: nominee + ' is recorded as ' + profile.name + '\'s nominee under ' +
+                      'section 14. Tell the patient that a nomination can be changed or ' +
+                      'withdrawn at any time.' };
+  } catch (err) {
+    return { success: false, message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/** FRONTEND ENTRY. The nomination in force, and the ones it replaced. */
+function getNomination(patientId, sessionToken) {
+  try {
+    crescRequire_(sessionToken, ['patient.read', 'portal.self']);
+    var want = dpdp_str_(patientId).toUpperCase();
+    var sh = dpdp_nomineeSheet_();
+    var m = dc_headerMap_(sh);
+    var data = dc_sheetValues_(sh);
+    var current = null, history = [];
+
+    for (var i = 1; i < (data ? data.length : 0); i++) {
+      if (dpdp_str_(data[i][m['Patient_ID']]).toUpperCase() !== want) continue;
+      var row = {
+        entryId: dpdp_str_(data[i][m['Entry_ID']]),
+        nominee: dpdp_str_(data[i][m['Nominee_Name']]),
+        relationship: dpdp_str_(data[i][m['Relationship']]),
+        contact: dpdp_str_(data[i][m['Nominee_Contact']]),
+        scope: dpdp_str_(data[i][m['Scope']]),
+        recordedAt: dpdp_str_(data[i][m['Recorded_At']]),
+        recordedBy: dpdp_str_(data[i][m['Recorded_By']]),
+        revokedAt: dpdp_str_(data[i][m['Revoked_At']])
+      };
+      if (row.revokedAt) history.push(row); else current = row;
+    }
+    return { success: true, patientId: want, nomination: current,
+             history: history.reverse(), message: '' };
+  } catch (err) {
+    return { success: false, nomination: null, history: [],
+             message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
+/** FRONTEND ENTRY. Withdraws a nomination. As easy as making one. */
+function revokeNomination(patientId, reason, sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, ['patient.write', 'portal.self']);
+    var want = dpdp_str_(patientId).toUpperCase();
+    if (actor.role === 'patient' && dpdp_str_(actor.username).toUpperCase() !== want) {
+      return { success: false, message: 'You can only change your own nomination.' };
+    }
+    var sh = dpdp_nomineeSheet_();
+    var m = dc_headerMap_(sh);
+    var data = dc_sheetValues_(sh);
+    var n = 0;
+    for (var i = 1; i < (data ? data.length : 0); i++) {
+      if (dpdp_str_(data[i][m['Patient_ID']]).toUpperCase() !== want) continue;
+      if (dpdp_str_(data[i][m['Revoked_At']])) continue;
+      sh.getRange(i + 1, m['Revoked_At'] + 1).setValue(dpdp_now_());
+      sh.getRange(i + 1, m['Revoked_Reason'] + 1).setValue(dpdp_str_(reason) || 'Withdrawn by the patient');
+      n++;
+    }
+    dc_invalidate_(DPDP_CFG.NOMINEES);
+    SpreadsheetApp.flush();
+    try {
+      logAudit_({ username: actor.username, role: actor.role },
+                'DPDP_NOMINATION_REVOKED', 'Patient', want, {});
+    } catch (e) {}
+    return { success: n > 0,
+             message: n ? 'Nomination withdrawn.' : 'There was no nomination on this record.' };
+  } catch (err) {
+    return { success: false, message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
+/**
+ * Records that somebody READ a clinical document or a patient record —
+ * finding M2.
+ *
+ * logAudit_() was called on writes only, so "who looked at this patient's
+ * file" — the question every incident actually asks — could not be answered
+ * at all. Reads are far more numerous than writes, so this logs the ones that
+ * matter: a whole document assembled, printed, exported or searched for, not
+ * every cell fetched to paint a list.
+ *
+ * Never throws. An audit that can break the thing it audits is worse than no
+ * audit: nobody should be unable to print a discharge summary because the log
+ * sheet hit a quota.
+ */
+function dpdpLogRead_(actor, what, entityId, details) {
+  try {
+    var a = actor || {};
+    logAudit_({ username: dpdp_str_(a.username) || '(unknown)',
+                role: dpdp_str_(a.role), doctorId: dpdp_str_(a.doctorId) },
+              'CLINICAL_DOCUMENT_READ', dpdp_str_(what) || 'Document',
+              dpdp_str_(entityId), details || {});
+  } catch (e) {
+    Logger.log('dpdpLogRead_ failed: ' + e.message);
   }
 }
 
@@ -717,6 +1138,20 @@ function exportPatientData(patientId, sessionToken) {
         }
         return rows;
       });
+    });
+
+    // s.14 — the person the patient nominated to exercise these rights.
+    section('nomination', function () {
+      var res = getNomination(want, sessionToken);
+      return res.success ? { current: res.nomination, previous: res.history } : null;
+    });
+
+    // s.11(1)(b) — every document link issued for this patient, whether it is
+    // still live or not. This is the modern half of "who has my data been
+    // given to"; the Shared_Documents section below is the legacy Drive half.
+    section('documentLinks', function () {
+      var res = dpdpListDocumentLinks(want, sessionToken);
+      return res.success ? res.rows : [];
     });
 
     // s.11(1)(b): who it has been shared with. Guessed from the register of
@@ -905,6 +1340,96 @@ function dpdpRetentionReport() {
   var report = lines.join('\n');
   Logger.log(report);
   return report;
+}
+
+// ---------------------------------------------------------------------------
+// THE CONSOLE'S OWN ENDPOINTS
+// ---------------------------------------------------------------------------
+
+/**
+ * FRONTEND ENTRY. Names the person a patient complains to — s.13.
+ *
+ * The editor version (dpdpSetGrievanceOfficer) stays, because this is the
+ * kind of setting that gets changed once by whoever is holding the laptop.
+ * This one exists so it can be changed by the clinic rather than by someone
+ * who knows how to open Apps Script.
+ */
+function dpdpSaveGrievanceOfficer(payload, sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, ['dpdp.manage', 'admin.config']);
+    payload = payload || {};
+    var msg = dpdpSetGrievanceOfficer(payload.name, payload.email, payload.phone);
+    var ok = msg.indexOf('set:') !== -1;
+    if (ok) {
+      try {
+        logAudit_({ username: actor.username, role: actor.role },
+                  'DPDP_OFFICER_SET', 'Config', 'GRIEVANCE_OFFICER',
+                  { name: dpdp_str_(payload.name) });
+      } catch (e) {}
+    }
+    return { success: ok, message: msg };
+  } catch (err) {
+    return { success: false, message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
+/**
+ * FRONTEND ENTRY. Everything the privacy console shows on first paint, in one
+ * round trip — the posture, the queue, the register and the officer.
+ *
+ * One call rather than six because this screen is opened by somebody checking
+ * whether anything needs them today, and six sequential Apps Script round
+ * trips is most of a minute.
+ */
+function dpdpConsoleSnapshot(sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, ['dpdp.manage', 'admin.config', 'admin.audit']);
+
+    var out = { success: true, actor: actor.displayName || actor.username,
+                officer: dpdp_officer_(), noticeVersion: dpdp_noticeVersion_(),
+                requests: [], overdue: 0, breaches: [], unassessed: 0,
+                findings: [], anomalies: [], triggers: '', message: '' };
+
+    try {
+      var rq = listDPDPRequests(sessionToken, { openOnly: false });
+      if (rq.success) { out.requests = rq.rows; out.overdue = rq.overdue; }
+    } catch (e) { out.message += 'Requests unavailable. '; }
+
+    try {
+      var br = dpdpListBreaches(sessionToken);
+      if (br.success) { out.breaches = br.rows; out.unassessed = br.unassessed; }
+    } catch (e) { out.message += 'Breach register unavailable. '; }
+
+    try {
+      var rd = dpdpReadinessCheck();
+      if (rd && rd.findings) out.findings = rd.findings;
+    } catch (e) { out.message += 'Readiness check failed. '; }
+
+    try {
+      var an = dpdp_anomalyScan_(7);
+      out.anomalies = (an && an.findings) || [];
+    } catch (e) { out.message += 'Audit review failed. '; }
+
+    try {
+      out.triggers = (typeof dpdpTriggerStatus === 'function') ? dpdpTriggerStatus() : '';
+    } catch (e) { out.triggers = 'Could not read the trigger list.'; }
+
+    return out;
+  } catch (err) {
+    return { success: false, requests: [], breaches: [], findings: [], anomalies: [],
+             message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
+/** FRONTEND ENTRY. The retention report, for the console. Reports, never deletes. */
+function dpdpRetentionReportUI(sessionToken) {
+  try {
+    crescRequire_(sessionToken, ['dpdp.manage', 'admin.config']);
+    return { success: true, report: dpdpRetentionReport() };
+  } catch (err) {
+    return { success: false, report: '',
+             message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
 }
 
 // ---------------------------------------------------------------------------

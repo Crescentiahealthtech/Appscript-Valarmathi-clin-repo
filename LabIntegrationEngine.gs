@@ -1224,6 +1224,9 @@ function DIAG_labRecords() {
 function getLabReportHtml(orderId, sessionToken) {
   try {
     crescRequire_(sessionToken, 'lab.read');
+    // Finding M2. A full report with results and the ordering diagnosis.
+    dpdpLogRead_(crescActor_(sessionToken), 'LabReport', String(orderId || ''),
+                 { endpoint: 'getLabReportHtml' });
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const ordSheet = ss.getSheetByName("LAB_ORDERS");
     const resSheet = ss.getSheetByName("LAB_RESULTS");
@@ -2132,6 +2135,8 @@ function _safeParse(s){ try{return JSON.parse(s);}catch(e){return [];} }
 function searchPatientByMobile(mobile, sessionToken) {
   try {
     crescRequire_(sessionToken, 'patient.read');
+    dpdpLogRead_(crescActor_(sessionToken), 'PatientSearch', String(mobile || ''),
+                 { endpoint: 'searchPatientByMobile' });
     var q = String(mobile || '').replace(/\D/g, '');   // digits only
     if (q.length < 4) return { success: false, message: 'Enter at least 4 digits of the mobile number.' };
     var ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName('Patients');

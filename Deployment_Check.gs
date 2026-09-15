@@ -92,7 +92,27 @@ var DEP_MAP = {
     "getConsentStatus", "withdrawConsent", "raiseDPDPRequest",
     "listDPDPRequests", "closeDPDPRequest", "exportPatientData",
     "dpdpRegisterSharedFile", "dpdpExpireSharedLinks", "dpdpRetentionReport",
-    "dpdpReadinessCheck"
+    "dpdpReadinessCheck", "dpdpVerifyRequester", "dpdpSubmitPublicRequest",
+    "recordNomination", "getNomination", "revokeNomination", "dpdpLogRead_",
+    "dpdpSaveGrievanceOfficer", "dpdpConsoleSnapshot", "dpdpRetentionReportUI"
+  ],
+  "DPDP_Documents.gs": [
+    "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
+    "dpdpListDocumentLinks", "dpdpExpireDocumentGrants"
+  ],
+  "DPDP_Breach.gs": [
+    "dpdp_anomalyScan_", "dpdpAnomalyScan", "dpdpRaiseBreach",
+    "dpdpAssessBreach", "dpdpRecordBreachNotification", "dpdpCloseBreach",
+    "dpdpListBreaches", "dpdpBreachNotice"
+  ],
+  "DPDP_Triggers.gs": [
+    "dpdpInstallTriggers", "dpdpRemoveTriggers", "dpdpTriggerStatus",
+    "dpdpDailyMaintenance", "dpdpWeeklyReview", "dpdpMonthlyRetentionReport"
+  ],
+  "Auth_Credentials.gs": [
+    "crescPwdEncode_", "crescPwdVerify_", "crescPwdIsHashed_", "crescPwdEquals_",
+    "crescRandomPassword_", "crescChangePassword", "crescAdminResetPassword",
+    "crescCredentialStatus", "crescMigrateCredentials"
   ],
   "Clinic_Profile.gs": [
     "cresc_clinic_", "getClinicProfile", "setClinicProfile"
