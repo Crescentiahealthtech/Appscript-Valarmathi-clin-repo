@@ -106,8 +106,9 @@ a setting in this repository.
 ## 4. What to do with this file
 
 1. Fill in the blank rows and the ⬜ boxes.
-2. Get the Workspace question answered this week. It is one click and it
-   determines whether section 8(2) is met at all.
+2. **Start the Workspace migration.** The question is answered — the records
+   are on a personal account — so this is the action, not the enquiry. Nothing
+   else on this page moves section 8(2) as far.
 3. For each processor without a contract, either get one or stop using them for
    personal data.
 4. Review it when anything changes — a new gateway, a new insurer, a new
