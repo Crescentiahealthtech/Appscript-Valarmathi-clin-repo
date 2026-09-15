@@ -48,6 +48,18 @@ cat <<'NOTE'
   normaliseSheetDates()    IP_Schema_Repair.gs  dry run: text dates in sheets
   dpdpReadinessCheck()     DPDP_Compliance.gs   DPDP posture of this deployment
   crescRbacCoverage()      RBAC.gs              the same count as check 7
+  crescRbacSelfTest()      RBAC.gs              the role matrix against itself
+  crescCredentialStatus()  Auth_Credentials.gs  hashed vs plain-text passwords
+  dpdpTriggerStatus()      DPDP_Triggers.gs     whether the scheduled jobs exist
+NOTE
+
+hr "Set up once, on a new deployment"
+cat <<'NOTE'
+  dpdpSetup()              create every DPDP register
+  dpdpSetGrievanceOfficer(name, email, phone)      section 13
+  dpdpInstallTriggers()    the daily, weekly and monthly jobs
+  crescMigrateCredentials()  hash every password and force a reset
+  See docs/DPDP_READINESS.md, "Do these five things this week".
 NOTE
 
 exit "${FAILED:-0}"

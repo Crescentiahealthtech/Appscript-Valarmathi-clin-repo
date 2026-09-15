@@ -1,12 +1,11 @@
 # DPDP Act readiness — Crescentia HealthTech
 
-**Digital Personal Data Protection Act, 2023** · assessed 14 September 2026
-against the code in this repository.
+**Digital Personal Data Protection Act, 2023** · first assessed 14 September
+2026 · **revised 15 September 2026, after the remediation described below**
 
-This is an engineering assessment, not legal advice. It says what the
-software does and does not do, and what to change. A lawyer has to decide
-whether your clinic is a Significant Data Fiduciary and sign off your
-Consent Notice.
+This is an engineering assessment, not legal advice. It says what the software
+does and does not do, and what to change. A lawyer has to decide whether your
+clinic is a Significant Data Fiduciary and sign off your Consent Notice.
 
 ---
 
@@ -14,439 +13,522 @@ Consent Notice.
 
 | | |
 |---|---|
-| **Overall** | Not ready. Four findings would each on their own be a reportable breach. |
-| **Critical** | 3 |
-| **High** | 6 |
-| **Medium** | 5 |
-| **What is already in place** | An append-only audit log, a server-side permission matrix (`RBAC.gs`), durable sessions, lockout on repeated failed sign-ins, and — as of this change — consent, rights and retention registers. |
+| **Overall** | The code findings are closed. What is left is **deployment, decisions and documents** — and until the redeployment in step 1 below is done, the most serious finding is still live in production. |
+| **Critical, was** | 3 — all three addressed in code; C1 needs a redeployment to take effect |
+| **High, was** | 6 — five closed in code, H6 is a contract the clinic has to hold |
+| **Medium, was** | 5 — all five closed |
+| **New findings** | 1 — the old scanner undercounted: 136 endpoints were reachable without a session, not 62 |
 
 Run `dpdpReadinessCheck()` from the Apps Script editor for the live version of
-the technical half of this list. The organisational half is below and no
-function can assert it.
+the technical half of this list, or open **Privacy → Posture** in the
+application. The organisational half is below and no function can assert it.
+
+### The four documents this assessment now has behind it
+
+| | |
+|---|---|
+| `docs/CONSENT_NOTICE.md` | the words a patient is given, s.5 |
+| `docs/RETENTION_SCHEDULE.md` | how long each record is kept and on what basis, s.8(7) |
+| `docs/BREACH_PROCEDURE.md` | who decides, who notifies, by when, s.8(6) |
+| `docs/PROCESSORS.md` | who else touches the data, and the record of processing, s.8(2) |
+
+Each has blanks the clinic fills in. They are drafts of the clinic's documents,
+not a substitute for the clinic adopting them.
+
+---
+
+## Do these five things this week
+
+1. **Redeploy the web app.** `appsscript.json` now says `access: "ANYONE"`, but
+   the manifest only takes effect on a **new version**: an `/exec` URL
+   published before the change keeps `ANYONE_ANONYMOUS` until it is
+   redeployed. Deploy → Manage deployments → edit → **New version**. Then open
+   the URL in a private window: if it answers without asking you to sign in,
+   the old deployment is still live. *(C1)*
+2. **Hash the passwords.** `crescCredentialStatus()` to see where you are, then
+   `crescMigrateCredentials()`. It issues a fresh random password per account,
+   prints them **once**, and forces a change at first sign-in. Nobody can sign
+   in with a plain-text credential from now on, so this is not optional — it is
+   the step that lets people back in. *(C3)*
+3. **Create the registers and name the officer.** `dpdpSetup()`, then
+   `dpdpSetGrievanceOfficer("…", "…@…", "+91 …")` — or the Privacy console. *(H2, H3)*
+4. **Install the scheduled jobs.** `dpdpInstallTriggers()`, then
+   `dpdpTriggerStatus()` to confirm. Without them nothing expires, nobody reads
+   the audit log, and no retention report is ever produced. *(H1, H4, H5)*
+5. **Find out whether the spreadsheet is on Google Workspace or a personal
+   Gmail account.** Open <https://admin.google.com> from the owning account. On
+   a personal account there is **no Data Processing Addendum**, so s.8(2) is
+   not met for any of the clinic's data. *(H6)*
 
 ---
 
 ## The findings
 
-### C1 · The web app answers anyone, and answers as the owner — **CRITICAL**
+### C1 · The web app answered anyone, and answered as the owner — **CRITICAL**
 
-`appsscript.json`:
+`appsscript.json` said:
 
 ```json
 "webapp": { "executeAs": "USER_DEPLOYING", "access": "ANYONE_ANONYMOUS" }
 ```
 
-Every `google.script.run` endpoint runs with the deploying account's **full**
-access to the spreadsheet — not the caller's — for anybody who has the `/exec`
+Every `google.script.run` endpoint ran with the deploying account's **full**
+access to the spreadsheet — not the caller's — for anybody who had the `/exec`
 URL, signed in or not. Patient IDs are sequential (`LMTVS0001`, `LMTVS0002`, …)
 and printed on the barcode on every patient's card, so the identifier needed to
 walk the register is public.
 
-Until this change, 66 client-callable functions carried no session check at
-all. Two of them were as bad as it gets:
+**Changed.** The manifest asks for `"access": "ANYONE"` — a Google sign-in is
+required, which does not authorise anyone but does put a name and Google's own
+rate limiting in front of the door. `executeAs` stays `USER_DEPLOYING` because
+the script owns the spreadsheet; that is exactly why every endpoint now carries
+its own check (C2).
 
-- `getAllPatients()` returned **the entire patient register** — name, age,
-  sex, mobile, address — with no token and no check.
-- `saveUserProfile(data)` was an **unauthenticated write** to any patient's
-  name, date of birth, mobile and address, keyed on a `username` the caller
-  supplied.
+**Still to do.**
 
-**Fixed in this change:** both are now behind `crescRequire_`, and their
-callers pass the session token.
-
-**Still to do — this is the fix that matters most:**
-
-1. Redeploy with `"access": "ANYONE"` (Google sign-in required) or `"DOMAIN"`.
-   `ANYONE_ANONYMOUS` means the only thing between the clinic's whole record
-   and the internet is that nobody has guessed the URL.
-2. Work `node tools/rbac.js` down to zero. 62 client-callable functions still
-   have no guard, and it names every one of them. §C2 below ranks them.
-3. Treat the current deployment as potentially breached. Under §8(6) you must
-   notify the Data Protection Board and every affected Data Principal. Ask
-   your lawyer whether the URL's distribution history makes that necessary.
+1. **Redeploy** — see step 1 above. Until then this finding is live.
+2. Treat the period the deployment was anonymous as potentially breached. Under
+   s.8(6) you must notify the Board and every affected Data Principal. Ask your
+   lawyer whether the URL's distribution history makes that necessary; record
+   the decision either way in `Breach_Register` (`docs/BREACH_PROCEDURE.md`).
 
 ---
 
-### C2 · 62 client-callable endpoints still have no permission check — **CRITICAL**
+### C2 · 136 client-callable endpoints had no permission check — **CRITICAL — CLOSED**
 
-Measured by `tools/rbac.js`, which is check 7 of `tools/check.sh`: **397
-public `.gs` functions, 108 with a session or permission check, 289 with
-none** — of which **62** are reachable from the browser today. Re-run it as
-you work through the list; the number is the progress bar.
+The first assessment said 62. It was wrong, and the way it was wrong is worth
+recording: `tools/rbac.js` read 700 characters after `google.script.run` and
+took the last call in that window, so any endpoint sitting behind a long
+success handler was never counted. `registerPatient` — an unauthenticated write
+to the patient master — was one of the invisible ones. It also stopped at the
+first `//` comment in a chain, which is how `setupLabDatabase` stayed hidden.
+In the other direction it called every endpoint that delegates its check to a
+gate helper unguarded.
 
-The worst, by what they return:
+The scanner now walks the chain properly and follows the call graph.
 
-| Endpoint | What an unauthenticated caller gets |
-|---|---|
-| `getActiveIPWard`, `getWardBedBoard` | every inpatient: name, age/sex, bed, consultant, **diagnosis** |
-| `getIPNotesPrintHtml`, `getIPRecordPrintHtml` | a complete ward-notes or admission document |
-| `getLabReportHtml`, `getLabBillHtml` | a full lab report with results |
-| `getActiveIPAdmissionsForNotes`, `getIPHistory` | the admission register |
-| `getRunningTab`, `getOpenAdmissions` | live inpatient bills |
-| `hb_getInvoice`, `hb_saveInvoice`, `hb_recordPayment` | read **and raise and settle** hospital bills |
-| `getInsuranceClaims`, `settleClaim` | insurance claims, and settling them |
-| `openShift`, `closeShift`, `lockFinancialPeriod` | open and reconcile cash drawers; lock the books |
-| `getFinanceDashboard`, `getReceivables` | the clinic's financial position |
-| `saveIPNote`, `saveNewAdmissionLedger` | **write** clinical records |
-| `setupLabDatabase` | rebuild the lab database |
+**The measurement today:**
 
-`node tools/rbac.js` prints the full list, by file.
-
-**Fix.** One line at the top of each:
-
-```js
-function getActiveIPWard(sessionToken) {
-  var actor = crescRequire_(sessionToken, 'ward.read');
-  …
-}
+```
+428 public .gs functions
+  281 carry a session or permission check
+    8 are public by design (CRESC_PUBLIC_BY_DESIGN in RBAC.gs)
+  139 carry none — 0 of those are reachable from the browser
 ```
 
-Do it in severity order: anything returning clinical text first, anything
-writing second, anything financial third. `RBAC.gs` already has the vocabulary
-and the matrix; nothing new has to be designed.
+**What was open**, before this change: the ward board with every inpatient's
+name, bed, consultant and **diagnosis**; complete ward-notes and admission
+documents; full lab reports with results; the admission register; live
+inpatient bills; hospital invoices — read, raise **and settle**; insurance
+claims and their settlement; the cash drawers and the financial period lock;
+the finance dashboard; **writes** to clinical records; and the lab database
+rebuild.
+
+**Three things this needed beyond the one-line guards:**
+
+- **An ambient actor** (`CRESC_CURRENT_ACTOR`, `RBAC.gs`). Server functions call
+  each other — the case sheet raises a lab order, the discharge settlement
+  settles the credit bill — and the inner call has no token to pass. A
+  successful guard now records the actor for the length of **one execution**,
+  so an inner guard checks its own permission against the same person. Apps
+  Script gives every call a fresh script context, so it cannot leak between
+  callers.
+- **The lab status machine split in two.** Six internal callers drive it, each
+  already guarded by what its own user is doing. Had they inherited the
+  endpoint's permission, an accountant raising a lab bill would have been
+  refused for not holding `lab.collect`.
+- **An allowlist with reasons.** Eight endpoints answer without a session and
+  say why in `CRESC_PUBLIC_BY_DESIGN`: the three sign-in steps, the password
+  change, the clinic letterhead, the UI bundles, the DPDP notice, and the
+  public request form. Anything not on that list and not guarded is a finding.
+
+**Still to do.** 139 functions still carry no guard and are not called from any
+`.html` here. Apps Script exposes every one of them to `google.script.run`
+anyway, so they are a smaller hole rather than none. `node tools/rbac.js`
+names them in its closing note; work them down when you touch those files.
 
 ---
 
-### C3 · Passwords are stored and compared in plain text — **CRITICAL**
+### C3 · Passwords were stored and compared in plain text — **CRITICAL — CLOSED IN CODE**
 
-`AuthLogin.gs`:
+`AuthLogin.gs` compared `storedPassword.toString().trim() === passwordInput`.
+Staff passwords sat in column B of `Users` in clear: everyone with edit access
+to the spreadsheet, every Google account it had ever been shared with and
+anyone with a copy could read all of them. People reuse passwords, so the blast
+radius was never this system.
 
-```js
-if (storedPassword.toString().trim() === passwordInput) { … }
-```
+Patient portal passwords were worse — they were **derived**.
+`registerPatient()` generated `Mei2001`: the first three letters of the name
+plus the birth year, stored in clear, with both inputs printed on the
+registration slip, beside the barcode of the ID needed to use them.
 
-Staff passwords sit in column B of the `Users` sheet in clear. Anyone who can
-open the spreadsheet — every staff member with edit access, every Google
-account the file has ever been shared with, anyone who gets a copy — can read
-all of them. People reuse passwords, so the blast radius is not this system.
+**Changed** — `Auth_Credentials.gs`:
 
-Patient portal passwords are worse. `registerPatient()` generates them as
-**the first three letters of the name plus the birth year** (`Mei2001`), stores
-them in clear in column B, and prints both inputs on the registration
-confirmation. Anybody holding a patient's prescription can derive their portal
-password.
+- A salted, iterated SHA-256 digest (`pbkdf2$sha256$iterations$salt$digest`),
+  10,000 iterations by default, tunable with the `CRESC_PWD_ITERATIONS` script
+  property. Apps Script has no native slow KDF and cannot load one; this is
+  what the platform permits, and the file says so rather than implying more.
+- Constant-time comparison.
+- A plain-text cell is **refused** at sign-in and cannot be used to change
+  itself either. Hashing a password that has already been readable keeps the
+  compromise; letting it authorise its own replacement hands the account to
+  whoever copied it. Only an administrator resets it.
+- New portal passwords are random, shown once at the desk, and must be changed
+  at first sign-in. `Auth.html` has the screen that happens on.
+- `crescAdminResetPassword()` for one account, `crescMigrateCredentials()` for
+  all of them.
 
-**Fix.**
+**Still to do.**
 
-1. Store a salted hash. Apps Script has `Utilities.computeDigest(SHA_256, …)`;
-   generate a per-user random salt, store `salt` and `hash`, compare digests
-   with a constant-time comparison.
-2. Force every existing password to be reset when you deploy it. Migrating a
-   plaintext column by hashing it in place keeps the compromise.
-3. Generate patient portal passwords randomly and require a change at first
-   sign-in. Never derive a credential from data printed on a document.
-4. Reconsider whether the patient portal needs a password at all — an OTP to
-   the registered mobile removes the stored credential entirely.
-
----
-
-### H1 · Patient documents are published to the open web and never revoked — **HIGH**
-
-Five functions do this:
-
-```js
-file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-```
-
-— for lab reports, prescriptions, pharmacy invoices and lab invoices, then send
-the link over WhatsApp. Each file carries the patient's name, ID, and in the
-case of a report their **results and diagnosis**. The link never expires,
-nothing recorded that the file existed, and WhatsApp messages are forwarded.
-
-This is §8(7) (retain no longer than necessary) and §8(5) (reasonable security
-safeguards) at the same time.
-
-**Fixed in this change:** every one of the five now calls
-`dpdpRegisterSharedFile()`, so the set is finite and listable.
-`dpdpExpireSharedLinks()` revokes anything past a 30-day window.
-
-**Still to do:** add a daily time-driven trigger for `dpdpExpireSharedLinks()`,
-and run it once against the backlog. Longer term, serve documents through the
-web app behind a session instead of publishing them to Drive at all.
+1. Run `crescMigrateCredentials()` — step 2 above. Nobody can sign in until you
+   do, which is the intended shape of a forced reset.
+2. Hand the passwords out by a route that is not the one they sign in through,
+   and do not paste the migration log anywhere.
+3. Consider dropping the patient portal password entirely in favour of an OTP
+   to the registered mobile. That removes the stored credential and gives you
+   the identity check that s.11 requests need anyway (M5) — it needs an SMS
+   gateway this deployment does not have.
 
 ---
 
-### H2 · No consent was captured, ever — **HIGH**
+### H1 · Patient documents were published to the open web and never revoked — **HIGH — CLOSED**
 
-§6 requires consent that is free, specific, informed, unambiguous, given by a
-clear affirmative action, and **as easy to withdraw as to give**. §6(10) puts
-the burden of proving it on you.
+Five functions did `file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, …)` for
+lab reports, prescriptions, pharmacy invoices and lab invoices, then sent the
+Drive URL over WhatsApp. Each file carries the patient's name, ID, and for a
+report their **results and diagnosis**. The link never expired, nothing recorded
+that the file existed, and WhatsApp messages are forwarded, backed up and
+restored onto devices nobody here will ever see.
 
-Before this change there was no consent record of any kind. Registration
-collected twenty-two fields and asked nothing.
+**Changed** — `DPDP_Documents.gs`. The file stays **private**. The patient gets
+a link back into the web app carrying a one-off random key:
 
-**Fixed in this change:** `Consent_Register`, append-only, one row per purpose
-per decision, stamped with the notice version it was given against.
-`recordConsent()`, `getConsentStatus()`, `withdrawConsent()`. Purposes are
-separable — treatment, billing, insurance, communications, marketing, research
-— because one "I agree" covering all six is not specific, and marketing is
-precisely what a patient wants to refuse while still being treated.
+- it expires (14 days by default),
+- it counts its opens and closes itself after 25,
+- it can be withdrawn in one call from the Privacy console,
+- every open writes an audit row,
+- the register stores only a **digest** of the key, so the spreadsheet does not
+  hold the capability,
+- `dpdpIssueDocumentLink_()` also un-shares any public sharing the file already
+  had, so re-sending a document closes the old hole rather than adding to it.
 
-Treatment and billing are recorded as **legitimate uses** under §7, not gated
-behind a tick box: a patient who has approached a clinic for care should not be
-blocked from being treated by a consent dialog.
+`?viewReport=<orderId>` is **withdrawn rather than fixed**. It returned any
+order's complete lab report as a PDF to anyone who asked, with no key and no
+session, and order ids are sequential and printed on the patient's own
+paperwork. Old messages now get a page saying the clinic will re-send it.
 
-**Still to do:**
-
-1. Write the Consent Notice. The machinery is here; the words are not.
-   `getDPDPNotice()` returns the structure to render it from.
-2. Put consent capture in the registration flow, and a prompt at the next
-   visit for the patients already on file.
-3. §9 — a patient under 18 needs verifiable consent from a parent or guardian.
-   `recordConsent()` refuses without a named guardian, but "verifiable" means
-   you must also decide *how* you verify, and record that.
+**Still to do.** Run `dpdpExpireSharedLinks()` once against the backlog of
+files published before this change — `dpdpDailyMaintenance()` does it nightly,
+but the first run over a long backlog is worth watching.
 
 ---
 
-### H3 · No way to answer a data principal's request — **HIGH**
+### H2 · No consent was captured, ever — **HIGH — CLOSED IN CODE**
 
-§11 (access), §12 (correction and erasure), §13 (grievance) each carry a
+s.6 requires consent that is free, specific, informed, unambiguous, given by a
+clear affirmative action and **as easy to withdraw as to give**. s.6(10) puts
+the burden of proving it on you. Registration collected twenty-two fields and
+asked nothing.
+
+**Changed.** `Consent_Register` is append-only, one row per purpose per
+decision, stamped with the notice version. Registration now captures it in the
+same call that creates the patient, and:
+
+- **an unticked box is recorded as a REFUSAL** — "we never asked" and "they said
+  no" are not the same fact, and only one of them needs asking again;
+- treatment and billing are shown as **legitimate uses under s.7**, not tick
+  boxes, because a consent dialog should not be able to stop somebody being
+  treated;
+- under-18 registration asks who consented and how they are related (s.9);
+- the patient can give or withdraw any of it themselves, on their own portal
+  page — which is what s.6(6) actually asks for;
+- `docs/CONSENT_NOTICE.md` is the notice, in words.
+
+**Still to do.** Adopt the notice: fill in its blanks, **translate it into
+Tamil**, put it on the wall and print `?privacy` on the registration slip. Then
+backfill — every patient already on file has no consent record, and
+`dpdpReadinessCheck()` counts them until they do.
+
+---
+
+### H3 · No way to answer a data principal's request — **HIGH — CLOSED**
+
+ss.11 (access), 12 (correction and erasure) and 13 (grievance) each carry a
 deadline. There was no register, no clock and no way to assemble what is held
 about one patient — it is spread across eleven sheets.
 
-**Fixed in this change:** `DPDP_Requests` with a `Due_By` on every row;
-`raiseDPDPRequest()`, `listDPDPRequests()` (overdue first),
-`closeDPDPRequest()` — which refuses an outcome shorter than a sentence,
-because "Closed" is not an answer to a statutory request. `exportPatientData()`
-assembles demographics, consent, appointments, consultations, admissions, case
-sheets, ward notes, lab orders and bills, pharmacy and hospital bills,
-referrals, insurance claims, and the list of documents shared — which is
-§11(1)(b), the identities data has been disclosed to.
+**Changed.** `DPDP_Requests` with a `Due_By` on every row; `raiseDPDPRequest()`,
+`listDPDPRequests()` (overdue first), `closeDPDPRequest()` — which refuses an
+outcome shorter than a sentence, because "Closed" is not an answer to a
+statutory request. `exportPatientData()` assembles demographics, consent,
+appointments, consultations, admissions, case sheets, ward notes, lab orders
+and bills, pharmacy and hospital bills, referrals, insurance claims, the
+nomination, and every document link issued — which is s.11(1)(b), the
+identities data has been disclosed to.
 
-**Still to do:** name the grievance officer
-(`dpdpSetGrievanceOfficer(…)`) — §13 requires you to publish one — and put the
-request form somewhere a patient can reach it.
+And the two halves that were missing:
 
----
+- **A form the patient can reach.** `?privacy` on the web app serves the notice
+  and a request form with no staff login. A form only staff can reach is a way
+  of receiving fewer requests, not of answering them.
+- **A place to work the queue.** Privacy → Requests, on the rail.
 
-### H4 · No retention policy — **HIGH**
-
-§8(7): erase when the purpose is served, unless the law requires otherwise.
-Nothing in this system ever deletes anything. Sessions, audit rows, old
-appointments and years-old consultations accumulate indefinitely.
-
-**Fixed in this change:** `dpdpRetentionReport()` reports what is past its
-period, per sheet, **and deletes nothing**. That is deliberate: a medico-legal
-case or an insurance dispute can require a record years after the ordinary
-period, and a sweep that deletes on its own is how a clinic loses the file it
-is about to be asked for.
-
-**Still to do:** decide the schedule and write it down. Starting points used in
-`DPDP_CFG.RETENTION_DAYS`:
-
-| Record | Period | Basis |
-|---|---|---|
-| Outpatient clinical record | 3 years from last entry | NMC Ethics Regulations 2002, reg. 1.3.1 |
-| Inpatient / medico-legal | longer — take advice | state Clinical Establishments rules |
-| Financial records | 8 years | Income Tax Act practice |
-| Sign-in sessions | 30 days | no reason to keep them |
-| Audit log | 3 years | matches the clinical period it documents |
-| Marketing contact data | 1 year, or until withdrawal | no statutory basis to keep it |
+**Still to do.** Name the officer (step 3), and publish the `?privacy` URL where
+patients see it.
 
 ---
 
-### H5 · No breach detection or notification procedure — **HIGH**
+### H4 · No retention policy — **HIGH — CLOSED IN CODE**
 
-§8(6) requires notification to the Data Protection Board **and to every
-affected Data Principal** on a personal data breach. There is no procedure, no
-template and no monitoring.
+s.8(7): erase when the purpose is served, unless the law requires otherwise.
+Nothing in this system ever deleted anything.
 
-`Audit_Log` and `Auth_Audit` exist and are append-only, which is the hard part.
-Nothing reads them for anomalies, and nobody is assigned to.
+**Changed.** `docs/RETENTION_SCHEDULE.md` is the schedule, per record type, with
+its legal basis and **who decides**. `dpdpRetentionReport()` reports what is
+past its period and **deletes nothing** — a medico-legal case or an insurance
+dispute can require a record years after the ordinary period, and a sweep that
+deletes on its own is how a clinic loses the file it is about to be asked for.
+`dpdpMonthlyRetentionReport()` emails it. What *is* deleted automatically is
+what nobody could ever need: expired document links, dead sessions, and
+(once, by hand) the three columns nothing ever read.
 
-**Fix.**
-
-1. Write the procedure: who decides it is a breach, who notifies, within what
-   time, using what template. One page.
-2. Add a weekly review of `Auth_Audit` for failed-login clusters and of
-   `Audit_Log` for bulk reads. A trigger that emails the officer a summary is
-   twenty lines.
-3. Keep a breach register even for incidents you conclude are not notifiable.
-   The record of having considered it is worth as much as the conclusion.
-
----
-
-### H6 · No processor agreements — **HIGH**
-
-§8(2): a Data Fiduciary remains responsible for processing done by a Data
-Processor, and must have a contract with them.
-
-This deployment processes personal data through:
-
-| Processor | What reaches them |
-|---|---|
-| **Google** (Sheets, Apps Script, Drive, Gmail) | everything |
-| **WhatsApp / Meta** | patient name and mobile in the message, plus a link to a document with their results |
-| **Google speech services** | dictated clinical text, if voice typing is used |
-
-Google Workspace's Data Processing Addendum covers the first if you are on
-Workspace rather than a personal Gmail account. **Check which.** A clinic
-running its records on a personal `@gmail.com` account has no DPA at all.
-
-WhatsApp's consumer terms are not a processor agreement. Either move dispatch
-to a business API with a contract, or record the patient's specific consent to
-receive documents that way — which `recordConsent(… COMMUNICATION …)` now
-supports.
+**Still to do.** Have the schedule read and adopted — particularly the
+inpatient and medico-legal periods, which depend on your state's Clinical
+Establishments rules and are marked *take advice*.
 
 ---
 
-### M1 · Data is collected that is never used — **MEDIUM**
+### H5 · No breach detection or notification procedure — **HIGH — CLOSED**
 
-§6(1) permits consent only for the purpose specified. Registration collects
-`Education`, `Occupation` and `Marital_Status`; nothing in the codebase reads
-them for any clinical or billing purpose.
+s.8(6) requires notification to the Board **and to every affected Data
+Principal**. There was no procedure, no template and no monitoring.
 
-**Fix.** Either drop the fields or name the purpose in the notice. Data
-collected "because the form had a box" is the easiest finding to close and the
-easiest to leave open.
+**Changed.** `DPDP_Breach.gs` and `docs/BREACH_PROCEDURE.md`:
 
----
+- `Breach_Register`, which holds incidents judged **not** notifiable too, with
+  the reason and the named person who decided. In an inquiry that register is
+  the only thing that shows the clinic was looking.
+- `dpdpAssessBreach()` refuses a decision without a reason — "not notifiable" is
+  the one you will be asked to justify.
+- `dpdpBreachNotice()` drafts both notifications from the row.
+- `dpdpWeeklyReview()` reads the audit log every Monday for the four patterns
+  that precede a disclosure here — repeated failures against one account,
+  failures spread across many identifiers (which is what walking the patient ID
+  range looks like), one person reading an unusual number of records in a day,
+  and one shared document opened six times or more — and emails the officer.
 
-### M2 · The audit log does not record reads — **MEDIUM**
-
-`logAudit_()` is called on writes. Opening a patient's record, printing a
-report and exporting a ledger leave no trace — so the question "who looked at
-this patient's file" cannot be answered, and that is the question asked after
-an incident.
-
-**Fix.** Log reads of clinical documents at least: `getIPRecordPrintHtml`,
-`getLabReportHtml`, `exportPatientData` (already logged), and the patient
-search. Sample rather than log every row read if volume is a concern.
-
----
-
-### M3 · Voice typing sends audio to a third party — **MEDIUM**
-
-The dictation added in this change uses the browser's Web Speech API. In Chrome
-and Edge that sends the audio to the browser vendor's speech service.
-
-**Already handled:** the consent notice is shown before first use, in the words
-of what actually happens, and the answer is stored per browser. It is opt-in
-and the application records nothing itself.
-
-**Still to do:** decide clinic policy and say so in the notice. A clinic that
-does not want audio leaving the building simply never enables it.
+**Still to do.** Put names in the procedure's table, and check the Board's
+current intimation route **before** you need it.
 
 ---
 
-### M4 · No nomination mechanism — **MEDIUM**
+### H6 · No processor agreements — **HIGH — OPEN, and not an engineering problem**
 
-§14 gives a Data Principal the right to nominate someone to exercise their
-rights if they die or become incapable. Nothing captures a nominee.
+s.8(2): a Data Fiduciary remains responsible for processing done by a Data
+Processor, and must have a contract with them. `docs/PROCESSORS.md` is the
+register and the record of processing.
 
-The `Relation_Type` / `Relation_Name` and emergency-contact fields on the
-patient record are close but are not a nomination — they are a contact, and
-were not collected for that purpose.
+The one that matters: **everything in this repository runs inside one Google
+account.** If that account is a personal `@gmail.com`, there is no Data
+Processing Addendum and s.8(2) is met for none of the clinic's data. Check it
+(step 5). If it is personal, migrating to Workspace is the highest-value
+non-engineering action available.
 
-**Fix.** Add a nomination purpose to the consent register with the nominee's
-name and relationship, captured with the same affirmative action.
-
----
-
-### M5 · No verification that a requester is who they say — **MEDIUM**
-
-`exportPatientData()` and `raiseDPDPRequest()` are guarded by role, so staff
-raise requests on a patient's behalf. Nothing defines how the clinic satisfies
-itself that the person at the desk is the patient.
-
-**Fix.** Write the identity-verification step into the procedure — an OTP to
-the registered mobile is the cheapest and is already possible with the number
-on file — and record which method was used on the request row.
+WhatsApp's consumer terms are not a processor agreement either. Either move
+dispatch to the Business API with a contract, or rely on the patient's specific
+consent to receive documents that way — which `recordConsent(… COMMUNICATION …)`
+records per patient — and say in the notice that the message goes through Meta.
 
 ---
 
-## What to do, in order
+### M1 · Data was collected that is never used — **MEDIUM — CLOSED**
 
-**This week**
+Registration collected `Education`, `Occupation` and `Marital_Status`; nothing
+in the codebase read them. s.6(1) permits collection for a specified purpose,
+and a field that exists because the form had a box has no purpose to specify.
 
-1. Redeploy with `access: "ANYONE"` instead of `ANYONE_ANONYMOUS`. *(C1)*
-2. Hash the passwords and force a reset. *(C3)*
-3. Run `dpdpSetup()` and `dpdpSetGrievanceOfficer(…)`. *(H2, H3)*
-4. Run `dpdpExpireSharedLinks()` against the backlog and add the daily trigger. *(H1)*
-5. Check whether the spreadsheet is on Workspace or a personal Gmail account. *(H6)*
+**Changed.** They are gone from registration, from the profile editor and from
+the patient search. The columns stay — the sheet layout is positional and every
+column index in the project depends on it — and `dpdpEraseUnusedFields(true)`
+clears what was already collected. That function deletes where the retention
+sweep deliberately does not, because there is no legal reason to keep a field
+nothing reads and no upside to weigh against erasing it.
 
-**This month**
+---
 
-6. Guard the clinical and write endpoints — 62 of them, worst first. *(C2)*
-7. Write the Consent Notice and put capture into registration. *(H2)*
-8. Decide and document the retention schedule. *(H4)*
-9. Write the one-page breach procedure and name who decides. *(H5)*
+### M2 · The audit log did not record reads — **MEDIUM — CLOSED**
 
-**This quarter**
+`logAudit_()` was called on writes. Opening a record, printing a report and
+exporting a ledger left no trace, so "who looked at this patient's file" — the
+question asked after every incident — could not be answered.
 
-10. Move document delivery off public Drive links and behind the session. *(H1)*
-11. Log clinical reads. *(M2)*
-12. Drop the unused fields or justify them. *(M1)*
-13. Add nomination and identity verification. *(M4, M5)*
+**Changed.** `dpdpLogRead_()` records the reads that matter: the whole patient
+register, the master directory, a lab report, a prescription, a case sheet, an
+admission record, a patient search, a longitudinal timeline, and every open of
+a shared document link. Not every cell fetched to paint a list — that is volume
+without information. `dpdpWeeklyReview()` then reads those rows for anomalies,
+which is what makes logging them worth the space.
+
+---
+
+### M3 · Voice typing sends audio to a third party — **MEDIUM — CLOSED**
+
+Dictation uses the browser's Web Speech API; in Chrome and Edge that sends the
+audio to the browser vendor's speech service.
+
+**Changed.** The per-browser consent dialog was already there and is the right
+thing to show the person dictating — but it is the wrong place to make the
+decision. One clinician clicking *Enable* on one laptop is not the clinic
+deciding that recorded clinical speech may be sent to a third party. So the
+clinic decides once (`dpdpSetVoicePolicy`, on the Privacy console), the browser
+dialog can only ask within that decision, and the feature **fails closed** if it
+cannot reach the policy. `dpdpReadinessCheck()` names an undecided policy until
+somebody decides either way.
+
+**Still to do.** Decide, and say which in the notice — the paragraph is drafted
+both ways in `docs/CONSENT_NOTICE.md`.
+
+---
+
+### M4 · No nomination mechanism — **MEDIUM — CLOSED**
+
+s.14 gives a Data Principal the right to nominate someone to exercise their
+rights if they die or become incapable.
+
+**Changed.** `Nomination_Register`, append-only, with `recordNomination()`,
+`getNomination()` and `revokeNomination()`. A patient can do it themselves in
+the portal.
+
+Deliberately **not** the emergency contact already on the patient record: that
+was collected so somebody could be reached in a hurry, it was never given for
+this purpose, and s.14 requires the patient's own act. The register is
+append-only because "who was nominated on the day they died" has exactly one
+right answer, and it is not "whoever the row says now".
+
+---
+
+### M5 · No verification that a requester is who they say — **MEDIUM — CLOSED**
+
+**Changed.** Every request row records **how** the clinic satisfied itself that
+the person asking is the person the data is about, and `closeDPDPRequest()`
+refuses to close a request that nobody verified. Answering an access request to
+the wrong person is a disclosure dressed as compliance, and the statutory right
+is exactly what an attacker would use to ask for it. A portal session counts as
+verification by itself; everything else is recorded from a short list, of which
+a call back to the number already on the record is the cheapest and the one
+thing an impersonator cannot arrange.
 
 ---
 
 ## Checklist
 
-Copy this into your compliance file and tick it as you go.
+Copy this into your compliance file and tick it as you go. Items already done
+in code are ticked; the rest are yours.
 
 ### Notice and consent
-- [ ] Consent Notice written in plain language, and in every language the clinic serves
-- [ ] Notice given **at or before** collection, not after
-- [ ] Consent recorded per purpose, not as one blanket agreement
-- [ ] Consent recorded against a notice **version**
-- [ ] Withdrawal as easy as giving, and it works
-- [ ] Guardian consent for patients under 18, with a stated verification method
-- [ ] No tracking or targeted advertising directed at children (§9(3))
+- [x] Consent recorded per purpose, not as one blanket agreement
+- [x] Consent recorded against a notice **version**
+- [x] Withdrawal as easy as giving, and it works — the patient can do it themselves
+- [x] Guardian consent for patients under 18, with the guardian named
+- [x] No tracking or targeted advertising directed at children (§9(3)) — none exists
+- [ ] Consent Notice adopted, in plain language, **and in Tamil**
+- [ ] Notice given at or before collection — on the wall, and `?privacy` printed on the slip
+- [ ] A stated method for verifying guardian consent, not just recording it
+- [ ] Backfill: every patient already on file has no consent record
 
 ### Security (§8(5))
-- [ ] Web app not deployed as `ANYONE_ANONYMOUS`
-- [ ] Every client-callable endpoint carries `crescRequire_`
-- [ ] Passwords hashed and salted; no plaintext anywhere
-- [ ] Patient portal credentials not derivable from printed data
-- [ ] No patient document published with a permanent public link
+- [x] Every client-callable endpoint carries a check, or is on an allowlist with a reason
+- [x] Passwords hashed and salted; plain-text ones refused
+- [x] Patient portal credentials not derivable from printed data
+- [x] No patient document published with a permanent public link
+- [ ] Web app **redeployed** so `access: ANYONE` is actually in force
 - [ ] Spreadsheet access limited to staff who need it, and reviewed
-- [ ] Offboarding removes both the login and the spreadsheet access
+- [ ] Offboarding removes the login, the spreadsheet access **and** the Drive folders
 
 ### Retention (§8(7))
-- [ ] Retention schedule written down, per record type, with its legal basis
-- [ ] Sweep runs and is reviewed by a human before anything is deleted
-- [ ] Sessions and logs cleared on their own schedule
-- [ ] Marketing data erased on withdrawal
+- [x] Retention schedule written down, per record type, with its legal basis
+- [x] Sweep runs and is reviewed by a human before anything is deleted
+- [x] Sessions and links cleared on their own schedule
+- [x] Marketing data erased on withdrawal
+- [ ] Inpatient and medico-legal periods confirmed against your state's rules
+- [ ] A paper retention and shredding policy — nothing here covers print-outs
 
 ### Data principal rights (§§11–14)
-- [ ] Access request answerable within the committed period
-- [ ] Correction and completion possible — *(done: `updatePatientProfile`)*
-- [ ] Erasure request assessed against the retention schedule, and the answer explained
+- [x] Access request answerable — `exportPatientData()` across eleven sheets
+- [x] Correction and completion possible — `updatePatientProfile()`
+- [x] Erasure request assessed against the schedule, and the answer explained
+- [x] Nomination capturable
+- [x] Requester identity verified, and the method recorded
 - [ ] Grievance officer named and published
-- [ ] Nomination capturable
-- [ ] Requester identity verified, and the method recorded
 
 ### Accountability (§§8(2), 8(6), 10)
-- [ ] Data Processor agreements in place — Google, WhatsApp, any other
-- [ ] Breach procedure written, with who decides and who notifies
-- [ ] Breach register kept, including incidents judged not notifiable
-- [ ] Audit log covers reads as well as writes
+- [x] Audit log covers reads as well as writes
+- [x] Breach register kept, including incidents judged not notifiable
+- [x] Breach procedure written, with who decides and who notifies
+- [ ] Names filled into that procedure
+- [ ] Data Processor agreements in place — **Google first**
 - [ ] Whether you are a Significant Data Fiduciary assessed in writing
 - [ ] If you are: DPO appointed, independent audit, DPIA done (§10)
 
 ### Records of processing
-- [ ] Every category of personal data listed, with its purpose and legal basis
-- [ ] Every place data leaves the system listed — WhatsApp, email, Drive, TPAs
-- [ ] Cross-border transfers identified (Google's storage is not all in India)
+- [x] Every category of personal data listed, with its purpose and legal basis
+- [x] Every place data leaves the system listed
+- [x] Cross-border transfer identified
+- [ ] The blanks in `docs/PROCESSORS.md` filled in
 
 ---
 
-## The machinery this repository now provides
+## The machinery this repository provides
 
+### Set-up, once
 | Function | What it does |
 |---|---|
-| `dpdpSetup()` | creates the three registers |
+| `dpdpSetup()` | creates every register |
 | `dpdpSetGrievanceOfficer(name, email, phone)` | §13 |
+| `dpdpInstallTriggers()` | the daily, weekly and monthly jobs |
+| `crescCredentialStatus()` / `crescMigrateCredentials()` | §8(5) — see what is stored, then hash it |
+| `dpdpEraseUnusedFields(true)` | §6(1) — clear the three columns nothing reads |
+
+### Notice and consent
+| Function | What it does |
+|---|---|
 | `getDPDPNotice()` | the notice's structure, unauthenticated by design |
 | `recordConsent(payload, token)` | §6, append-only, per purpose |
 | `getConsentStatus(patientId, token)` | current state, `NOT_ASKED` distinguished from `REFUSED` |
 | `withdrawConsent(patientId, purpose, reason, token)` | §6(6) |
+| `recordNomination` / `getNomination` / `revokeNomination` | §14 |
+
+### Rights
+| Function | What it does |
+|---|---|
 | `raiseDPDPRequest(payload, token)` | §§11–13, with the clock |
+| `dpdpSubmitPublicRequest(payload)` | the same, from the public page, always unverified |
+| `dpdpVerifyRequester(id, method, note, token)` | §11 — how you know it is them |
 | `listDPDPRequests(token, opts)` | overdue first |
-| `closeDPDPRequest(id, outcome, token)` | refuses a non-answer |
+| `closeDPDPRequest(id, outcome, token)` | refuses a non-answer, and an unverified request |
 | `exportPatientData(patientId, token)` | §11, across eleven sheets |
-| `dpdpRegisterSharedFile(file, type, patientId, by)` | makes a shared link revocable |
-| `dpdpExpireSharedLinks(dryRun)` | revokes the expired ones |
+
+### Documents and retention
+| Function | What it does |
+|---|---|
+| `dpdpIssueDocumentLink_(file, type, patientId, by)` | §8(5) — private, expiring, counted, revocable |
+| `dpdpRevokeDocumentLink(grantId, token)` | withdraw one |
+| `dpdpListDocumentLinks(patientId, token)` | §11(1)(b) — what was sent, and how often it was opened |
+| `dpdpExpireDocumentGrants()` / `dpdpExpireSharedLinks(dryRun)` | the sweeps |
 | `dpdpRetentionReport()` | §8(7) — reports, never deletes |
+
+### Breach
+| Function | What it does |
+|---|---|
+| `dpdpAnomalyScan(days, token)` | the four patterns, from the audit log |
+| `dpdpRaiseBreach` / `dpdpAssessBreach` / `dpdpCloseBreach` | the register, and the decision with its reason |
+| `dpdpBreachNotice(id, token)` | §8(6) — both notifications, drafted |
+| `dpdpRecordBreachNotification(id, who, token)` | that you actually told them |
+
+### Checking
+| Function | What it does |
+|---|---|
 | `dpdpReadinessCheck()` | the technical half of this document, live |
+| `dpdpConsoleSnapshot(token)` | the same, plus the queue, for the Privacy console |
+| `dpdpTriggerStatus()` | whether the jobs are installed |
+| `crescRbacCoverage()` / `node tools/rbac.js` | endpoints with no check |
