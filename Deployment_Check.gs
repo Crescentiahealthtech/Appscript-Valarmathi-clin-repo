@@ -105,6 +105,17 @@ var DEP_MAP = {
     "dpdpAssessBreach", "dpdpRecordBreachNotification", "dpdpCloseBreach",
     "dpdpListBreaches", "dpdpBreachNotice"
   ],
+  "RUN_Setup.gs": [
+    "RUN_01_checkFilesArrived_", "RUN_02_checkRoleMatrix_", "RUN_03_checkPasswordStorage_",
+    "RUN_04_timePasswordHashing_", "RUN_04b_makeSignInFaster_", "RUN_05_createRegisters_",
+    "RUN_06_nameGrievanceOfficer_", "RUN_07a_migrateCredentials_DRYRUN_",
+    "RUN_07b_migrateCredentials_FOR_REAL_", "RUN_08_installScheduledJobs_",
+    "RUN_09_checkScheduledJobs_", "RUN_10a_revokeOldPublicLinks_DRYRUN_",
+    "RUN_10b_revokeOldPublicLinks_FOR_REAL_", "RUN_11a_eraseUnusedFields_DRYRUN_",
+    "RUN_11b_eraseUnusedFields_FOR_REAL_", "RUN_12_readinessCheck_",
+    "RUN_13_retentionReport_", "RUN_14_auditReviewThisWeek_",
+    "RUN_90_resetOnePassword_", "RUN_91_setVoicePolicy_", "RUN_99_removeScheduledJobs_"
+  ],
   "DPDP_Triggers.gs": [
     "dpdpInstallTriggers", "dpdpRemoveTriggers", "dpdpTriggerStatus",
     "dpdpDailyMaintenance", "dpdpWeeklyReview", "dpdpMonthlyRetentionReport"
