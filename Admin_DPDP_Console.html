@@ -66,6 +66,8 @@
   <ul class="nav nav-tabs mb-3" role="tablist">
     <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#dp-pane-requests">Requests</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-patient">A patient</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-consent"
+                            onclick="dpConsentLoad()">Consent</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-breach">Breach register</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-posture">Posture</a></li>
   </ul>
@@ -197,6 +199,83 @@
     </div>
 
     <!-- ══ s.8(6) ══ -->
+    <!-- ══ s.6: the existing patients, and what is still to ask them ══ -->
+    <div class="tab-pane fade" id="dp-pane-consent">
+
+      <div class="dp-card p-3 mb-3">
+        <div class="fw-bold mb-2">Record the s.7 basis for every patient</div>
+        <div class="small mb-3" style="color: var(--text-muted);">
+          Care and billing are <strong>legitimate uses</strong> under s.7 — the
+          patient came here to be treated, and neither is gated behind a tick box.
+          What the register is missing for the patients already on file is not
+          permission but the <em>record</em> that the basis was considered for
+          them. This writes those two, for every patient with no row.
+          <br><br>
+          It deliberately does <strong>not</strong> touch the four real consents.
+          A row saying a patient agreed to something nobody asked them is a false
+          record, and a false consent record is worse than the gap it closes —
+          it converts "we had not got round to asking" into "we claimed they
+          agreed", and the clinic then sends their reports over WhatsApp on the
+          strength of it.
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-outline-info" onclick="dpBackfill(true)">
+            Show me what it would write
+          </button>
+          <button class="btn btn-sm text-white fw-bold on-accent"
+                  style="background-color: var(--accent-purple);"
+                  onclick="dpBackfill(false)">Write it</button>
+        </div>
+        <pre id="dp-backfill-out" class="small mt-3 mb-0 d-none"
+             style="white-space:pre-wrap; color:var(--text-main); max-height:260px; overflow:auto;"></pre>
+      </div>
+
+      <div class="dp-card p-3 mb-3">
+        <div class="fw-bold mb-2">Consent already collected on paper</div>
+        <div class="small mb-3" style="color: var(--text-muted);">
+          If the clinic holds signed forms, those answers belong in the register.
+          Say which purposes were agreed and where the paper is — every row
+          written carries that sentence, and it is the only thing that tells an
+          audit these are recorded consents rather than assumed ones.
+        </div>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label>Which purposes the forms say yes to</label>
+            <div id="dp-bf-purposes" class="small">Loading…</div>
+          </div>
+          <div class="col-md-6">
+            <label>How they were collected</label>
+            <select id="dp-bf-method" class="form-select dp-input mb-2">
+              <option value="PAPER_FORM">Signed paper form</option>
+              <option value="IN_PERSON">Asked in person, noted at the desk</option>
+              <option value="PHONE">Asked on the telephone</option>
+            </select>
+            <label>Where the evidence is kept</label>
+            <input id="dp-bf-evidence" class="form-control dp-input"
+                   placeholder="e.g. signed consent forms in the registration file, Jan–Sep 2026, at reception">
+          </div>
+          <div class="col-12 d-flex gap-2 mt-1">
+            <button class="btn btn-sm btn-outline-info" onclick="dpBackfillRecord(true)">
+              Show me what it would write
+            </button>
+            <button class="btn btn-sm text-white fw-bold on-accent"
+                    style="background-color: var(--accent-purple);"
+                    onclick="dpBackfillRecord(false)">Write it</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="dp-card p-3">
+        <div class="fw-bold mb-2">Still to ask, at the next visit</div>
+        <div class="small mb-2" style="color: var(--text-muted);">
+          This list cannot be cleared by any function — the patient has to be
+          asked. Until they are, documents cannot be sent to them: the WhatsApp
+          and email buttons put the question at the counter and record the answer.
+        </div>
+        <div id="dp-consent-queue">Open this tab to load.</div>
+      </div>
+    </div>
+
     <div class="tab-pane fade" id="dp-pane-breach">
       <div class="dp-card p-3 mb-3">
         <div class="small mb-2" style="color: var(--text-muted);">
@@ -730,6 +809,105 @@
       el.className = 'small fw-bold ' + (res.decided ? '' : 'dp-overdue');
     });
   }
+
+  // ══ s.6: the consent tab ════════════════════════════════════════════════
+  var CONSENT_PURPOSES = [];
+
+  window.dpConsentLoad = function () {
+    call('dpdpConsentQueue', [tok()], function (res) {
+      var host = $('dp-consent-queue');
+      if (!res || !res.success) {
+        host.textContent = (res && res.message) || 'Could not load the queue.';
+        return;
+      }
+      CONSENT_PURPOSES = res.purposes || [];
+      var box = $('dp-bf-purposes');
+      if (box) {
+        box.innerHTML = CONSENT_PURPOSES.map(function (p) {
+          // Three states on purpose: yes, no, and "the forms do not say".
+          // A two-state control would force every purpose into an answer the
+          // paper may not contain, which is how a batch job starts inventing.
+          return '<div class="mb-2"><div class="fw-semibold">' + esc(p.label) + '</div>' +
+            '<select class="form-select form-select-sm dp-input" data-bf="' + esc(p.key) + '">' +
+              '<option value="">the forms do not say — leave unasked</option>' +
+              '<option value="yes">they agreed</option>' +
+              '<option value="no">they said no</option>' +
+            '</select></div>';
+        }).join('');
+      }
+
+      var c = res.counts || {};
+      if (!res.rows.length) {
+        host.innerHTML = '<div class="small" style="color:var(--text-muted);">' +
+          esc(res.message) + '</div>';
+        return;
+      }
+      host.innerHTML =
+        '<div class="small mb-2" style="color:var(--text-muted);">' +
+          esc(res.message) + ' (' + (c.none || 0) + ' with nothing on record, ' +
+          (c.partial || 0) + ' part-answered, ' + (c.complete || 0) + ' done)</div>' +
+        '<div class="table-responsive"><table class="table table-sm mb-0">' +
+        '<thead><tr><th>Patient</th><th>Still to ask</th></tr></thead><tbody>' +
+        res.rows.map(function (r) {
+          return '<tr><td><strong>' + esc(r.patientId) + '</strong> ' + esc(r.name) +
+            (r.needsGuardian
+              ? '<br><span class="dp-overdue" style="font-size:.72rem;">under 18 — ' +
+                'a parent or guardian has to answer (s.9)</span>'
+              : '') +
+            '</td><td class="small">' + esc(r.outstandingLabels.join('; ')) +
+            '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    });
+  };
+
+  /**
+   * The reply is written out in full rather than toasted.
+   *
+   * A dry run's whole value is the per-patient list of what WOULD be written,
+   * and the real run's is the count plus the under-18s it skipped. Neither
+   * survives a toast that fades in six seconds, and both are things the
+   * person pressing the button has to read before pressing the next one.
+   */
+  function backfillOut(res, wasDryRun) {
+    var out = $('dp-backfill-out');
+    out.classList.remove('d-none');
+    out.textContent = ((res && res.message) || 'No answer.') +
+      (res && res.rows && res.rows.length ? '\n\n' + res.rows.join('\n') : '');
+    say((res && res.message) || 'No answer.', !(res && res.success));
+    // Only a real write changes the queue. Reloading after a dry run would
+    // suggest something had happened.
+    if (res && res.success && !wasDryRun) dpConsentLoad();
+  }
+
+  window.dpBackfill = function (dryRun) {
+    var dry = (dryRun === true);
+    call('dpdpBackfillConsent',
+         [{ mode: 'LEGITIMATE', dryRun: dry }, tok()],
+         function (res) { backfillOut(res, dry); });
+  };
+
+  window.dpBackfillRecord = function (dryRun) {
+    var decisions = {};
+    var any = false;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-bf]'), function (el) {
+      if (!el.value) return;                 // "the forms do not say" — untouched
+      decisions[el.getAttribute('data-bf')] = (el.value === 'yes');
+      any = true;
+    });
+    if (!any) {
+      return say('Say what the forms actually answer for at least one purpose. ' +
+                 'Anything left on "the forms do not say" stays unasked, which ' +
+                 'is the correct record when the paper is silent.', true);
+    }
+    var dry = (dryRun === true);
+    call('dpdpBackfillConsent', [{
+      mode: 'RECORD',
+      decisions: decisions,
+      method: $('dp-bf-method').value,
+      evidence: $('dp-bf-evidence').value,
+      dryRun: dry
+    }, tok()], function (res) { backfillOut(res, dry); });
+  };
 
   window.dpRetention = function () {
     $('dp-retention').textContent = 'Running…';

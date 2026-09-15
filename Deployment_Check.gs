@@ -100,6 +100,11 @@ var DEP_MAP = {
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
     "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
   ],
+  "DPDP_Consent_Backfill.gs": [
+    "dpdpBackfillConsent", "dpdpConsentQueue", "dpdp_consentMatrix_",
+    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN",
+    "RUN_consentBackfill_FOR_REAL", "RUN_consentQueue"
+  ],
   "DPDP_Dispatch.gs": [
     "dpdpRequireDispatchConsent_", "dpdp_resolvePatientFor_", "dpdp_consentState_",
     "getDispatchChannelNotice", "dpdpDispatchChannels", "getDispatchConsent",

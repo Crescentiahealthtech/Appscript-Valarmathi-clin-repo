@@ -1636,26 +1636,73 @@ function dpdpReadinessCheck() {
   }
 
   // --- consent coverage ---------------------------------------------------
+  //
+  // TWO SEPARATE FACTS, reported separately, because the remedies are not the
+  // same and the old single count conflated them.
+  //
+  //   "no record at all" is an accountability gap: nothing says the basis for
+  //   processing this patient was ever considered. It is closeable by the
+  //   clinic on its own — dpdpBackfillConsent() writes the two s.7 legitimate
+  //   uses, which is a record of a decision the clinic did make.
+  //
+  //   "the optional purposes have not been put to them" is a gap only the
+  //   PATIENT can close, by being asked. No function can close it and no
+  //   report should imply one could; what it needs is a worklist, which is
+  //   dpdpConsentQueue().
+  //
+  // Reporting them as one number invited exactly the fix that must not
+  // happen: a batch write of GIVEN against everything, which would clear the
+  // finding by putting a false consent on the record.
   try {
     var pts = ss.getSheetByName('Patients');
-    var consented = {};
+    var anyRow = {}, optionalDone = {};
+    var OPTIONAL = ['INSURANCE', 'COMMUNICATION', 'MARKETING', 'RESEARCH'];
     var cs = ss.getSheetByName(DPDP_CFG.CONSENT);
     if (cs) {
       var cv = dc_sheetValues_(cs);
       var cm = dc_headerMap_(cs);
       for (var i = 1; i < (cv ? cv.length : 0); i++) {
-        consented[dpdp_str_(cv[i][cm['Patient_ID']]).toUpperCase()] = true;
+        var pid = dpdp_str_(cv[i][cm['Patient_ID']]).toUpperCase();
+        if (!pid) continue;
+        anyRow[pid] = true;
+        var pk = dpdp_str_(cv[i][cm['Purpose']]).toUpperCase();
+        if (OPTIONAL.indexOf(pk) === -1) continue;
+        if (!optionalDone[pid]) optionalDone[pid] = {};
+        optionalDone[pid][pk] = true;
       }
     }
     if (pts) {
       var total = Math.max(0, pts.getLastRow() - 1);
-      var have = Object.keys(consented).length;
+      var have = Object.keys(anyRow).length;
+
       if (have < total) {
         add(have === 0 ? 'HIGH' : 'MEDIUM', 'Section 6',
-            (total - have) + ' of ' + total + ' patients have no consent record ' +
-            'at all.',
-            'Capture consent at registration and backfill at the next visit. ' +
-            'recordConsent() is the endpoint.');
+            (total - have) + ' of ' + total + ' patients have no consent ' +
+            'record at all — nothing says the basis for processing them was ' +
+            'ever considered.',
+            'Run dpdpBackfillConsent({mode:"LEGITIMATE"}) — or Privacy > ' +
+            'Consent > "Record the s.7 basis for every patient". It writes ' +
+            'care and billing as the legitimate uses they are, and ' +
+            'deliberately does NOT invent the four optional consents.');
+      }
+
+      // How many have been asked about ALL FOUR optional purposes.
+      var asked = 0;
+      Object.keys(optionalDone).forEach(function (pid) {
+        var n = 0;
+        OPTIONAL.forEach(function (k) { if (optionalDone[pid][k]) n++; });
+        if (n === OPTIONAL.length) asked++;
+      });
+      if (asked < total) {
+        add('MEDIUM', 'Section 6',
+            (total - asked) + ' of ' + total + ' patients have not been asked ' +
+            'about insurance, reports by WhatsApp or email, health camps or ' +
+            'research. Documents cannot be sent to them until they are — the ' +
+            'dispatch gate refuses.',
+            'This one cannot be fixed by a function: the patient has to be ' +
+            'asked. dpdpConsentQueue() is the worklist, Privacy > Consent ' +
+            'shows it, and the WhatsApp button now puts the question at the ' +
+            'counter and records the answer.');
       }
     }
   } catch (e) { /* the check itself must not fail the report */ }
