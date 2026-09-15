@@ -126,9 +126,13 @@ var LabBill=(function(){
       .withSuccessHandler(function(res) { clearTimeout(to); stop(); onOk(res); })
       .withFailureHandler(function(err) { clearTimeout(to); stop(); flash('Error: ' + (err.message || err), false); });
     
-    if (!args || args.length === 0) server[fn]();
-    else if (args.length === 1) server[fn](args[0]);
-    else server[fn].apply(server, args);
+    /* The session token goes on the END of every call — see the same note in
+       LabModuleUI.html. Every lab billing endpoint is behind billing.read or
+       billing.write now, and a call with no token is refused by the server. */
+    var argv = (args || []).slice();
+    var tok = window.sessionToken || '';
+    if (argv.indexOf(tok) === -1) argv.push(tok);
+    server[fn].apply(server, argv);
   }
 
   /* ─── LOAD ─── */

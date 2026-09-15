@@ -31,8 +31,9 @@ var PH_RETURN_ITEM_HEADERS = ["Return_No","Timestamp","Invoice_No","Brand","Gene
 // ---------------------------------------------------------------------
 // LOOKUP — load an invoice with per-line returnable quantities
 // ---------------------------------------------------------------------
-function getInvoiceForReturn(query) {
+function getInvoiceForReturn(query, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'pharmacy.return');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var hSheet = ss.getSheetByName(PH_SHEETS.INVOICES);
     var iSheet = ss.getSheetByName(PH_SHEETS.INVOICE_ITEMS);
@@ -90,8 +91,9 @@ function getInvoiceForReturn(query) {
 // ---------------------------------------------------------------------
 // CORE — process a return / partial or full cancellation + refund
 // ---------------------------------------------------------------------
-function processPharmacyReturn(payload) {
+function processPharmacyReturn(payload, sessionToken) {
   var lock = LockService.getScriptLock();
+  crescRequire_(sessionToken, 'pharmacy.return');
   if (!lock.tryLock(15000)) return { success: false, message: "System busy, please retry." };
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -239,8 +241,9 @@ function processPharmacyReturn(payload) {
 // ---------------------------------------------------------------------
 // FINANCE — recompute sales, returns, refunds and net GST for a range
 // ---------------------------------------------------------------------
-function getPharmacyFinanceSummary(fromKey, toKey) {
+function getPharmacyFinanceSummary(fromKey, toKey, sessionToken) {
   try {
+    crescRequire_(sessionToken, ['pharmacy.read', 'accounts.read']);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var from = String(fromKey || "0000-00-00"), to = String(toKey || "9999-99-99");
 
@@ -293,8 +296,9 @@ function getPharmacyFinanceSummary(fromKey, toKey) {
 // It now counts partially-returned credit bills and shows the amount
 // still collectible (net of refunds) instead of the original net.
 // ---------------------------------------------------------------------
-function getPendingCreditBills() {
+function getPendingCreditBills(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVOICES);
     if (!sheet || sheet.getLastRow() <= 1) return { success: true, data: [] };

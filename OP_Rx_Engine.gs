@@ -484,6 +484,7 @@ function deleteRxBundle(bundleId, sessionToken) {
 /** Records that a bundle was actually used, for ranking. Fire-and-forget. */
 function noteRxBundleUsed(bundleId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'rx.write');
     var sh = rx_bundleSheet_();
     var data = sh.getDataRange().getDisplayValues();
     for (var i = 1; i < data.length; i++) {
@@ -511,8 +512,9 @@ function noteRxBundleUsed(bundleId, sessionToken) {
  * Returns steps, a human-readable sig, and computedQty — which pharmacy MUST
  * use, because a taper's quantity cannot be inferred from duration alone.
  */
-function buildTaperPlan(spec) {
+function buildTaperPlan(spec, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     spec = spec || {};
     var unit  = parseFloat(spec.unitStrength) || 0;
     var freq  = dc_int_(spec.frequency) || 1;
@@ -842,8 +844,9 @@ function getLastVisitRecall(patientId, sessionToken) {
  * suggestion. Deliberately does NOT write to the sig field — the doctor
  * inserts it with a click, like every other suggestion in this engine.
  */
-function suggestPaediatricDose(drugName, weightKg, ageYears, frequency) {
+function suggestPaediatricDose(drugName, weightKg, ageYears, frequency, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     var w = parseFloat(weightKg);
     var age = parseFloat(ageYears);
     var freq = dc_int_(frequency) || 2;

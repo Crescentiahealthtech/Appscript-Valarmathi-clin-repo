@@ -41,7 +41,7 @@ const AccIns = (function () {
     google.script.run
       .withSuccessHandler(function (res) { if (!res || !res.success) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc((res && res.message) || 'Failed.') + '</div>'; return; } CACHE = res.claims; render(res); })
       .withFailureHandler(function (e) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc(e.message || 'Server error — Insurance.js deployed?') + '</div>'; })
-      .getInsuranceClaims({ status: FS, network: FN });
+      .getInsuranceClaims({ status: FS, network: FN }, window.sessionToken);
   }
 
   function render(res) {
@@ -102,7 +102,7 @@ const AccIns = (function () {
       '<div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="ins-n-net"><label class="form-check-label small" for="ins-n-net">Network / empanelled hospital</label></div>' +
       '<input id="ins-n-notes" class="form-control mb-3" placeholder="Notes (optional)">' +
       '<button class="btn btn-primary w-100 fw-bold" onclick="AccIns.create()">Raise Claim</button>');
-    try { google.script.run.withSuccessHandler(function (r) { if (r && r.insurers) { const dl = $('ins-n-list'); r.insurers.forEach(function (n) { const o = document.createElement('option'); o.value = (typeof n === 'string' ? n : n.name); dl.appendChild(o); }); } }).withFailureHandler(function () {}).getInsurers(); } catch (e) {}
+    try { google.script.run.withSuccessHandler(function (r) { if (r && r.insurers) { const dl = $('ins-n-list'); r.insurers.forEach(function (n) { const o = document.createElement('option'); o.value = (typeof n === 'string' ? n : n.name); dl.appendChild(o); }); } }).withFailureHandler(function () {}).getInsurers(window.sessionToken); } catch (e) {}
   }
   function create() {
     if (!val('ins-n-name').trim()) { toast('Enter patient name.', false); return; }
@@ -110,7 +110,7 @@ const AccIns = (function () {
     if (num('ins-n-claimed') <= 0) { toast('Enter claimed amount.', false); return; }
     google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { closeModal(); load(); } })
       .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
-      .createManualClaim({ source: val('ins-n-source'), caseRef: val('ins-n-ref'), patientName: val('ins-n-name'), patientId: val('ins-n-pid'), insurer: val('ins-n-insurer'), billedAmount: num('ins-n-billed'), claimedAmount: num('ins-n-claimed'), policyNo: val('ins-n-policy'), preAuth: val('ins-n-preauth'), network: chk('ins-n-net'), notes: val('ins-n-notes'), user: who() });
+      .createManualClaim({ source: val('ins-n-source'), caseRef: val('ins-n-ref'), patientName: val('ins-n-name'), patientId: val('ins-n-pid'), insurer: val('ins-n-insurer'), billedAmount: num('ins-n-billed'), claimedAmount: num('ins-n-claimed'), policyNo: val('ins-n-policy'), preAuth: val('ins-n-preauth'), network: chk('ins-n-net'), notes: val('ins-n-notes'), user: who() }, window.sessionToken);
   }
 
   function updateModal(id) {
@@ -127,7 +127,7 @@ const AccIns = (function () {
   function update(id) {
     google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { closeModal(); load(); } })
       .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
-      .updateClaim({ claimId: id, status: val('ins-u-status'), preAuthStatus: val('ins-u-preauth'), approvedAmount: num('ins-u-approved'), policyNo: val('ins-u-policy'), tpaRef: val('ins-u-tpa'), notes: val('ins-u-notes'), user: who() });
+      .updateClaim({ claimId: id, status: val('ins-u-status'), preAuthStatus: val('ins-u-preauth'), approvedAmount: num('ins-u-approved'), policyNo: val('ins-u-policy'), tpaRef: val('ins-u-tpa'), notes: val('ins-u-notes'), user: who() }, window.sessionToken);
   }
 
   function settleModal(id) {
@@ -145,7 +145,7 @@ const AccIns = (function () {
   function settle(id) {
     google.script.run.withSuccessHandler(function (r) { toast(r.message, !!r.success); if (r.success) { closeModal(); load(); } })
       .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
-      .settleClaim({ claimId: id, settledAmount: chk('ins-s-reject') ? 0 : num('ins-s-amt'), payMode: val('ins-s-mode'), tpaRef: val('ins-s-tpa'), shortfallToPatient: chk('ins-s-short'), reject: chk('ins-s-reject'), notes: val('ins-s-notes'), user: who() });
+      .settleClaim({ claimId: id, settledAmount: chk('ins-s-reject') ? 0 : num('ins-s-amt'), payMode: val('ins-s-mode'), tpaRef: val('ins-s-tpa'), shortfallToPatient: chk('ins-s-short'), reject: chk('ins-s-reject'), notes: val('ins-s-notes'), user: who() }, window.sessionToken);
   }
 
   function shell(title, body) {

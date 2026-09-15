@@ -40,7 +40,8 @@ function formatTimeSafely(timeVal) {
 }
 
 // 1. DOCTOR AVAILABILITY ENGINE
-function getAvailableTimeSlots(dateStr) {
+function getAvailableTimeSlots(dateStr, sessionToken) {
+  crescRequire_(sessionToken, ['appointment.read', 'portal.self']);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
   if(!sheet) return [];
   const data = sheet.getDataRange().getValues();
@@ -98,7 +99,8 @@ function getAppointmentsByDate(dateStr) {
 }
 
 // 2. PATIENT AUTO-FETCH DEMOGRAPHICS
-function getPatientDemographics(patientId) {
+function getPatientDemographics(patientId, sessionToken) {
+  crescRequire_(sessionToken, 'patient.read');
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
   if (!sheet || !patientId) return null;
   const data = sheet.getDataRange().getValues();
@@ -163,10 +165,11 @@ function fetchDailyLedger(dateStr) {
 }
 
 // 4. BOOK APPOINTMENT WRITER (With Security Overrides)
-function submitNewAppointment(apptObj) {
+function submitNewAppointment(apptObj, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, ['appointment.write', 'portal.self']);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
     const data = sheet.getDataRange().getValues();
 

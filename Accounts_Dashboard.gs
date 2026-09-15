@@ -26,8 +26,9 @@ function accd_ipSettlements_() {
   return out;
 }
 
-function getFinanceDashboard(scope, periodKey) {
+function getFinanceDashboard(scope, periodKey, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'accounts.read');
     scope = (scope || 'OVERALL').toUpperCase();
     var tz = ACC_CFG.TZ;
     var nowMonth = Utilities.formatDate(new Date(), tz, "yyyy-MM");
@@ -138,10 +139,11 @@ function getFinanceDashboard(scope, periodKey) {
 }
 
 // WRITE: cash <-> bank transfer (unchanged contract).
-function recordBankTransfer(payload) {
+function recordBankTransfer(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.write');
     if (!payload) return { success: false, message: "No data received." };
     var dir = acc_str_(payload.direction).toUpperCase(), amt = acc_money_(payload.amount);
     if (amt <= 0) return { success: false, message: "Amount must be greater than 0." };

@@ -215,7 +215,7 @@
         if (c) c.innerHTML = '<div class="alert alert-danger">' +
           esc((err && err.message) || 'The bed map could not be loaded.') + '</div>';
       })
-      .getBedStatuses();
+      .getBedStatuses(window.sessionToken);
   };
 
   window.renderBedGrid = function (dataStr) {
@@ -386,7 +386,7 @@
         }
         window.initBedMap();
       })
-      .updateBedStatusInDB(bedId, newStatus);
+      .updateBedStatusInDB(bedId, newStatus, window.sessionToken);
   };
 
   // Kept for older call sites that used the previous global name.

@@ -102,10 +102,11 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent(); 
 }
 
-function registerPatient(data) {
+function registerPatient(data, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'patient.register');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('Patients');
     

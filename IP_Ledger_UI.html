@@ -223,7 +223,7 @@
         message('&#9888; Server Error: ' + esc(err && err.message) +
           '<br><button class="btn btn-sm btn-outline-secondary mt-3" onclick="loadIPHistory()">Retry</button>', 'error');
       })
-      .getIPHistory(iphQuery);
+      .getIPHistory(iphQuery, window.sessionToken);
   }
 
   function renderHistory(p) {
@@ -388,7 +388,7 @@
         body.innerHTML = '<div class="alert alert-danger mb-0">Lookup failed: ' +
                          esc(err.message) + '</div>';
       })
-      .getAdmissionDetail(ipNumber);
+      .getAdmissionDetail(ipNumber, window.sessionToken);
   }
 
   // ---- discharge from the archive ----------------------------------------

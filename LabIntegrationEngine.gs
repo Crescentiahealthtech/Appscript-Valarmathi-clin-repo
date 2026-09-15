@@ -25,8 +25,9 @@ var _LAB_STATUS_MACHINE = {
    SECTION 1 — CATALOG
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function getOrderableTests() {
+function getOrderableTests(sessionToken) {
   try {
+    crescRequire_(sessionToken, ['lab.read', 'lab.order']);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, tests: [] };
@@ -57,8 +58,9 @@ function getOrderableTests() {
   }
 }
 
-function getLabCatalog() {
+function getLabCatalog(sessionToken) {
   try {
+    crescRequire_(sessionToken, ['lab.read', 'lab.order']);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, panels: [], individuals: [], packages: [] };
@@ -113,10 +115,11 @@ function _rowToCatalogItem(r, map) {
   };
 }
 
-function saveCatalogEntry(p) {
+function saveCatalogEntry(p, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.catalog');
     if (!p || !p.testName || !String(p.testName).trim()) return { success: false, message: 'Test name required.' };
     if (!p.testCode || !String(p.testCode).trim())       return { success: false, message: 'Test code required.' };
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -187,10 +190,11 @@ function saveCatalogEntry(p) {
   }
 }
 
-function setCatalogActive(testId, isActive) {
+function setCatalogActive(testId, isActive, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.catalog');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'Catalog empty.' };
@@ -228,10 +232,11 @@ function calculateFlag(value, resultType, gender, ref) {
   return '';
 }
 
-function savePanelWithParameters(p) {
+function savePanelWithParameters(p, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.catalog');
     if (!p || !p.testName || !String(p.testName).trim()) return { success: false, message: 'Panel name required.' };
     if (!p.testCode || !String(p.testCode).trim())       return { success: false, message: 'Panel code required.' };
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -332,10 +337,11 @@ function savePanelWithParameters(p) {
    SECTION 3 — ORDERS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function createLabRequest(d) {
+function createLabRequest(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.order');
     if (!d) return { success: false, message: 'No data received.' };
     if (!d.patientId || !String(d.patientId).trim()) {
     const wiSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.ORDERS);
@@ -464,10 +470,29 @@ function getLabOrderDetail(orderId) {
   }
 }
 
+/**
+ * FRONTEND ENTRY. Move one order to a status by hand, from the lab desk.
+ *
+ * WHY THIS IS A THIN WRAPPER. The status machine is also driven from inside
+ * billing, collection, resulting and verification — six places, each already
+ * guarded by the permission that matches what the person is doing. If those
+ * called this function they would inherit ITS permission as well, and the
+ * accountant who raises a lab bill would be refused for not holding
+ * lab.collect. So the transition itself is private and unguarded, and this
+ * is the door the browser comes through.
+ */
+function advanceOrderStatus(orderId, newStatus, sessionToken) {
+  crescRequire_(sessionToken, ['lab.collect', 'lab.result', 'lab.verify']);
+  return lab_setOrderStatus_(orderId, newStatus);
+}
+
 /** * 🔥 HARDENED: FORCED TRANSITION
  * Bypasses strict indexOf checks to prevent UI gridlocks.
+ *
+ * PRIVATE. Every caller has already established who is asking and what they
+ * are allowed to do — see advanceOrderStatus() above.
  */
-function advanceOrderStatus(orderId, newStatus) {
+function lab_setOrderStatus_(orderId, newStatus) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -512,8 +537,9 @@ function advanceOrderStatus(orderId, newStatus) {
    SECTION 4 — WORKSPACE 
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function getLabWorkspaceData() {
+function getLabWorkspaceData(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const oSheet = ss.getSheetByName(LAB.ORDERS);
     // agedOut = rows the queue is deliberately not showing (finished, or
@@ -613,8 +639,9 @@ function getLabWorkspaceData() {
   }
 }
 
-function getLabOrderPanel(orderId) {
+function getLabOrderPanel(orderId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     const od = getLabOrderDetail(orderId);
     if (!od.success) return { success: false, message: od.message };
     const bill = getLabBill(orderId);
@@ -634,10 +661,11 @@ function getLabOrderPanel(orderId) {
    SECTION 5 — BILLING
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function generateLabBill(d) {
+function generateLabBill(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'billing.write');
     if (!d||!d.orderId) return { success: false, message: 'Order ID required.' };
     const od = getLabOrderDetail(d.orderId);
     if (!od.success) return { success: false, message: od.message };
@@ -728,7 +756,7 @@ function generateLabBill(d) {
     // 👆 END NEW HOOK 👆
 
     labAudit('BILL_GENERATED','BILL',billId,null,{orderId:order.orderId,net:net,category:category});
-    if (order.status === 'PENDING') advanceOrderStatus(order.orderId,'BILLED');
+    if (order.status === 'PENDING') lab_setOrderStatus_(order.orderId,'BILLED');
     SpreadsheetApp.flush();
 
     return { success:true, message: ip?('₹'+net.toFixed(2)+' posted to IP account.'):(billId+' · '+receipt+' · ₹'+net.toFixed(2)+' '+payStatus+'.'), billId:billId, receiptNumber:receipt, netAmount:net, category:category };
@@ -764,10 +792,11 @@ function getLabBill(orderId) {
    SECTION 6 — SAMPLES
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function collectLabSample(d) {
+function collectLabSample(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.collect');
     if(!d||!d.orderId) return {success:false,message:'Order ID required.'};
     if(!Array.isArray(d.samples)||!d.samples.length) return {success:false,message:'Add at least one tube.'};
     const od = getLabOrderDetail(d.orderId);
@@ -797,7 +826,7 @@ function collectLabSample(d) {
     });
 
     _startTat(order, nowStr);
-    advanceOrderStatus(order.orderId,'SAMPLE_COLLECTED');
+    lab_setOrderStatus_(order.orderId,'SAMPLE_COLLECTED');
     labAudit('SAMPLE_COLLECTED','SAMPLE',order.orderId,null,{count:sampleIds.length});
     SpreadsheetApp.flush();
     return {success:true,message:sampleIds.length+' sample(s) collected.',sampleIds:sampleIds};
@@ -805,10 +834,11 @@ function collectLabSample(d) {
   finally{try{lock.releaseLock();}catch(e){}}
 }
 
-function receiveLabSample(orderId) {
+function receiveLabSample(orderId, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.collect');
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.SAMPLES);
     if(!sheet||sheet.getLastRow()<2) return {success:false,message:'No samples found.'};
@@ -824,7 +854,7 @@ function receiveLabSample(orderId) {
       }
     });
     if(!n) return {success:false,message:'No unprocessed samples for this order.'};
-    advanceOrderStatus(orderId,'IN_PROCESS');
+    lab_setOrderStatus_(orderId,'IN_PROCESS');
     labAudit('SAMPLE_RECEIVED','SAMPLE',orderId,null,{count:n});
     SpreadsheetApp.flush();
     return {success:true,message:n+' sample(s) received. Processing started.'};
@@ -832,10 +862,11 @@ function receiveLabSample(orderId) {
   finally{try{lock.releaseLock();}catch(e){}}
 }
 
-function rejectLabSample(sampleId, reason) {
+function rejectLabSample(sampleId, reason, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.collect');
     if(!sampleId) return {success:false,message:'Sample ID required.'};
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.SAMPLES);
@@ -850,7 +881,7 @@ function rejectLabSample(sampleId, reason) {
     sheet.getRange(rowFound,map['CollectionStatus']+1).setValue('REJECTED');
     sheet.getRange(rowFound,map['RejectionReason']+1).setValue(String(reason||'').toUpperCase());
     const ncrId=_raiseNcr({orderId:orderId,sampleId:sampleId,patientId:patientId,type:'SAMPLE_REJECTION',description:'Sample '+sampleId+' rejected: '+reason,immediateAction:'Recollection requested'});
-    advanceOrderStatus(orderId,'RECOLLECT');
+    lab_setOrderStatus_(orderId,'RECOLLECT');
     labAudit('SAMPLE_REJECTED','SAMPLE',sampleId,null,{reason:reason,ncr:ncrId});
     SpreadsheetApp.flush();
     return {success:true,message:'Rejected. NCR '+ncrId+' raised.',ncrId:ncrId};
@@ -880,8 +911,9 @@ function getOrderSamples(orderId) {
    SECTION 7 — RESULTS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function buildResultEntrySheet(orderId) {
+function buildResultEntrySheet(orderId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.result');
     const od=getLabOrderDetail(orderId);
     if(!od.success) return {success:false,message:od.message};
     const order=od.order;
@@ -920,10 +952,11 @@ function buildResultEntrySheet(orderId) {
   } catch(err){return{success:false,message:'buildResultEntrySheet failed: '+err.message};}
 }
 
-function saveLabResultsDraft(d) {
+function saveLabResultsDraft(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.result');
     if(!d||!d.orderId) return {success:false,message:'Order ID required.'};
     if(!Array.isArray(d.results)) return {success:false,message:'No results provided.'};
     const od=getLabOrderDetail(d.orderId);
@@ -1000,10 +1033,11 @@ function saveLabResultsDraft(d) {
 
 /** * 🔥 HARDENED: Submit Results 
  */
-function submitLabResults(d) {
+function submitLabResults(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.result');
     if(!d||!d.orderId) return {success:false,message:'Order ID required.'};
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.RESULTS);
@@ -1034,7 +1068,7 @@ function submitLabResults(d) {
     if(emptyCount > 0 && emptyCount === n) return {success:false,message:'Cannot submit completely blank results. Enter values first.'};
     
     // Force transition safely
-    advanceOrderStatus(d.orderId,'RESULT_ENTERED');
+    lab_setOrderStatus_(d.orderId,'RESULT_ENTERED');
     
     crits.forEach(function(c){_logCritical(d.orderId,c);});
     labAudit('RESULTS_SUBMITTED','RESULT',d.orderId,null,{count:n,critical:crits.length});
@@ -1049,10 +1083,11 @@ function submitLabResults(d) {
 
 /** * 🔥 HARDENED: Verify Results 
  */
-function verifyLabResults(d) {
+function verifyLabResults(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'lab.verify');
     if(!d||!d.orderId) return {success:false,message:'Order ID required.'};
     const od=getLabOrderDetail(d.orderId);
     if(!od.success) return {success:false,message:od.message};
@@ -1095,7 +1130,7 @@ function verifyLabResults(d) {
     _closeTat(d.orderId,nowStr);
     
     // Force transition to verified
-    advanceOrderStatus(d.orderId,'VERIFIED');
+    lab_setOrderStatus_(d.orderId,'VERIFIED');
     
     labAudit('RESULTS_VERIFIED','RESULT',d.orderId,null,{verifier:verifier,hash:hash.substring(0,12)+'…'});
     SpreadsheetApp.flush();
@@ -1111,8 +1146,9 @@ function verifyLabResults(d) {
    SECTION 8 — PATIENT LOOKUP & LAB RECORDS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function lookupLabPatient(pid) {
+function lookupLabPatient(pid, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'patient.read');
     if(!pid||!String(pid).trim()) return {success:false,message:'Enter a Patient ID.'};
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName('Patients');
@@ -1185,8 +1221,9 @@ function DIAG_labRecords() {
 /**
  * Generates an NABL/ISO 15189 Compliant HTML Report (Mobile Responsive + Printable)
  */
-function getLabReportHtml(orderId) {
+function getLabReportHtml(orderId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const ordSheet = ss.getSheetByName("LAB_ORDERS");
     const resSheet = ss.getSheetByName("LAB_RESULTS");
@@ -2092,8 +2129,9 @@ function _safeParse(s){ try{return JSON.parse(s);}catch(e){return [];} }
    Patients sheet: col A(0)=PatientID, C(2)=Name, D(3)=Age, E(4)=Gender,
    G(6)=Mobile. Returns all matches (mobile may be shared by family).
    ─────────────────────────────────────────────────────────────────── */
-function searchPatientByMobile(mobile) {
+function searchPatientByMobile(mobile, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'patient.read');
     var q = String(mobile || '').replace(/\D/g, '');   // digits only
     if (q.length < 4) return { success: false, message: 'Enter at least 4 digits of the mobile number.' };
     var ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName('Patients');
@@ -2126,8 +2164,9 @@ function searchPatientByMobile(mobile) {
    with the count of tests needing each. Front-end pre-fills tubes from
    this, and the tech can still add / delete / modify.
    ─────────────────────────────────────────────────────────────────── */
-function getSuggestedTubes(orderId) {
+function getSuggestedTubes(orderId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.collect');
     if (!orderId) return { success: false, message: 'Order ID required.' };
     var byType = {};
 
@@ -2186,8 +2225,9 @@ function getSuggestedTubes(orderId) {
    Separate from the lab REPORT. Reads the saved LAB_BILLING row, renders
    a clean invoice. Front-end loads this into the print window.
    ─────────────────────────────────────────────────────────────────── */
-function getLabBillHtml(orderId) {
+function getLabBillHtml(orderId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     if (!orderId) return { success: false, message: 'Order ID required.' };
     var od = getLabOrderDetail(orderId);
     if (!od.success) return { success: false, message: od.message };

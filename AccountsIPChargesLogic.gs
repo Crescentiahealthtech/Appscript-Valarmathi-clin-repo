@@ -97,10 +97,11 @@ function ipc_admission_(ipNumber) {
 
 // ---- charge entry ---------------------------------------------------------
 // Manual clinical charge (room/nursing/surgeon/OT/etc.).
-function addIpCharge(payload) {
+function addIpCharge(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'billing.write');
     var ip = acc_str_(payload.ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };
@@ -168,10 +169,11 @@ function markIpChargePaidAtCounter(source, sourceRef, payMode, user) {
 }
 
 // ---- advances -------------------------------------------------------------
-function collectIpAdvance(payload) {
+function collectIpAdvance(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'billing.write');
     var ip = acc_str_(payload.ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };
@@ -193,8 +195,9 @@ function collectIpAdvance(payload) {
 }
 
 // ---- running tab (feeds the discharge simulator) --------------------------
-function getRunningTab(ipNumber) {
+function getRunningTab(ipNumber, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var ip = acc_str_(ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };
@@ -247,10 +250,11 @@ function getRunningTab(ipNumber) {
 }
 
 // save (upsert) discharge draft — ward counts, rates, remarks; no charges posted yet
-function saveDischargeDraft(payload) {
+function saveDischargeDraft(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.settle');
     var ip = acc_str_(payload.ipNumber).trim();
     if (!ip) return { success: false, message: "IP number required." };
     var sh = ipc_drafts_(), d = sh.getDataRange().getValues();
@@ -265,8 +269,9 @@ function saveDischargeDraft(payload) {
 
 // clinical visit log (view + record) — feeds consultant/surgeon counts
 function ipc_visits_() { return ipc_ensure_('IP_Visits', ['Visit_ID', 'IP_Number', 'Date', 'Doctor', 'Type', 'Count', 'Remark', 'By']); }
-function getIpVisits(ipNumber) {
+function getIpVisits(ipNumber, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var ip = acc_str_(ipNumber).trim(), out = [];
     ipc_objs_(ipc_visits_()).forEach(function (r) {
       if (acc_str_(r['IP_Number']).trim() !== ip) return;
@@ -276,10 +281,11 @@ function getIpVisits(ipNumber) {
     return { success: true, visits: out };
   } catch (e) { return { success: false, message: e.message }; }
 }
-function addIpVisit(p) {
+function addIpVisit(p, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'billing.write');
     var ip = acc_str_(p.ipNumber).trim(); if (!ip) return { success: false, message: 'IP number required.' };
     ipc_visits_().appendRow([ipc_id_('VIS'), ip, acc_str_(p.date) || Utilities.formatDate(new Date(), ACC_CFG.TZ, 'yyyy-MM-dd'), acc_str_(p.doctor), acc_str_(p.type), acc_money_(p.count) || 1, acc_str_(p.remark), acc_str_(p.user) || 'UNKNOWN']);
     SpreadsheetApp.flush();
@@ -289,8 +295,9 @@ function addIpVisit(p) {
 }
 
 // list of currently admitted patients (for the discharge picker)
-function getOpenAdmissions() {
+function getOpenAdmissions(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var sh = ipc_ss_().getSheetByName(IPC_CFG.ADMISSIONS);
     if (!sh) return { success: true, admissions: [] };
     var d = sh.getDataRange().getValues(), out = [];
@@ -305,10 +312,11 @@ function getOpenAdmissions() {
 // payload = {ipNumber, packageCap, insuranceApproved, patientPayMode, reason, user}
 // payload = {ipNumber, wardCharges:[{category,multiplier,rate,remark}], discountPercent,
 //            packageCap, insuranceApproved, patientPayMode, reason, user}
-function settleDischarge(payload) {
+function settleDischarge(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.settle');
     var ip = acc_str_(payload.ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };

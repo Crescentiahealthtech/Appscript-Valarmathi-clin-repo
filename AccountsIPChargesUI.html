@@ -42,7 +42,7 @@ const IPTab = (function () {
         renderPicker(res.admissions || []);
       })
       .withFailureHandler(function (e) { root.innerHTML = '<div class="text-danger text-center py-5">' + esc(e.message || 'Server error — IP_Charges_Logic.js deployed?') + '</div>'; })
-      .getOpenAdmissions();
+      .getOpenAdmissions(window.sessionToken);
   }
 
   function renderPicker(adms) {
@@ -69,7 +69,7 @@ const IPTab = (function () {
         TAB = res; renderTab();
       })
       .withFailureHandler(function (e) { if (body) body.innerHTML = '<div class="text-danger py-3">' + esc(e.message || 'Server error.') + '</div>'; })
-      .getRunningTab(IP);
+      .getRunningTab(IP, window.sessionToken);
   }
 
   function lineRows() {
@@ -125,7 +125,7 @@ const IPTab = (function () {
     google.script.run
       .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) refresh(); })
       .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
-      .addIpCharge({ ipNumber: IP, category: val('acc-ipc-cat'), description: val('acc-ipc-desc'), amount: num('acc-ipc-amt'), gst: num('acc-ipc-gst'), isNonPayable: ($('acc-ipc-np') || {}).checked === true, user: who() });
+      .addIpCharge({ ipNumber: IP, category: val('acc-ipc-cat'), description: val('acc-ipc-desc'), amount: num('acc-ipc-amt'), gst: num('acc-ipc-gst'), isNonPayable: ($('acc-ipc-np') || {}).checked === true, user: who() }, window.sessionToken);
   }
 
   function addAdvance() {
@@ -133,7 +133,7 @@ const IPTab = (function () {
     google.script.run
       .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) refresh(); })
       .withFailureHandler(function (e) { toast(e.message || 'Server error.', false); })
-      .collectIpAdvance({ ipNumber: IP, amount: num('acc-adv-amt'), payMode: val('acc-adv-mode'), txnId: val('acc-adv-txn'), user: who() });
+      .collectIpAdvance({ ipNumber: IP, amount: num('acc-adv-amt'), payMode: val('acc-adv-mode'), txnId: val('acc-adv-txn'), user: who() }, window.sessionToken);
   }
 
   return { load, open, refresh, addCharge, addAdvance };

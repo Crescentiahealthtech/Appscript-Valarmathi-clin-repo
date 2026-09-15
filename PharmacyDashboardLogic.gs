@@ -24,8 +24,9 @@ function _refundInfoByInvoice_(ss) {
 }
 
 // Operational snapshot for a date range: counts, mode tallies, per-bill refund, bill list.
-function getPharmacyDashboard(fromKey, toKey) {
+function getPharmacyDashboard(fromKey, toKey, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'pharmacy.read');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var from = String(fromKey || "0000-00-00"), to = String(toKey || "9999-99-99");
     var tz = Session.getScriptTimeZone();
@@ -81,8 +82,9 @@ function getPharmacyDashboard(fromKey, toKey) {
 }
 
 // Search past bills by Patient ID / Name / Mobile / Invoice No.
-function searchPharmacyInvoices(query) {
+function searchPharmacyInvoices(query, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var q = String(query || "").trim().toLowerCase();
     if (!q) return { success: false, message: "Enter an ID, name, mobile, or invoice number." };
@@ -115,8 +117,9 @@ function searchPharmacyInvoices(query) {
 }
 
 // Rebuild the print payload for ANY past invoice (same shape buildPrintInvoiceRaw expects).
-function getInvoiceForPrint(invoiceNo) {
+function getInvoiceForPrint(invoiceNo, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var target = String(invoiceNo || "").trim().toUpperCase();
     if (!target) return { success: false, message: "No invoice number." };

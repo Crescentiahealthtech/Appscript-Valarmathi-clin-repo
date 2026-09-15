@@ -127,7 +127,7 @@ const AccShift = (function () {
         loadOverview();
       })
       .withFailureHandler(function (err) { toast(err.message || 'Server error — is Accounts_Shifts.js deployed?', false); if (p) p.innerHTML = tabs(); })
-      .getShiftState(SELECTED);
+      .getShiftState(SELECTED, window.sessionToken);
   }
 
   // theme-safe counter selector
@@ -210,7 +210,7 @@ const AccShift = (function () {
     google.script.run
       .withSuccessHandler(function (res) { toast(res.message, !!res.success); if (res.success) load(); })
       .withFailureHandler(function (err) { toast(err.message, false); })
-      .openShift({ counterName: SELECTED, openingCash: amt, user: who() });
+      .openShift({ counterName: SELECTED, openingCash: amt, user: who() }, window.sessionToken);
   }
 
   function close() {
@@ -230,7 +230,7 @@ const AccShift = (function () {
           shiftId: OPEN_SHIFT.shiftId, cashCollected: num('acc-shift-col'), pettyExpenses: num('acc-shift-pet'),
           refunds: num('acc-shift-ref'), actualCash: num('acc-shift-act'),
           postAdjustment: $('acc-shift-adj') ? $('acc-shift-adj').checked : false, reason: reason, user: who()
-        });
+        }, window.sessionToken);
     });
   }
 

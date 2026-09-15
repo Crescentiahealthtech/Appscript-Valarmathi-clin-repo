@@ -10,9 +10,20 @@ function getPatientNameById(patientId) {
   } catch(e) {} return null;
 }
 
-// 🚀 UI BUG FIX: Clean Date Extraction & Stacked Booking Engine
-function getPatientDashboardStats(patientId) {
+/**
+ * FRONTEND ENTRY (patient portal and front desk). One patient's next
+ * appointment, last visit and what the doctor's plan said to come back for.
+ *
+ * crescRequireOwnRecord_ rather than a plain permission: this is the portal's
+ * own screen, and 'portal.self' has to mean THIS patient's record, not any
+ * patient in the portal. Staff holding patient.read pass through and are
+ * audited instead. Patient IDs are sequential and printed on every barcode
+ * label, so an unguarded version of this function was a directory of who has
+ * an appointment and when.
+ */
+function getPatientDashboardStats(patientId, sessionToken) {
   try {
+    crescRequireOwnRecord_(sessionToken, patientId);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     
     // 1. Check Appointments Ledger

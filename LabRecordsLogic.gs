@@ -6,8 +6,9 @@
 // 🗄️ LAB RECORDS ARCHIVE LOGIC (Search-First Relational)
 // ==========================================
 
-function searchLabRecords(query) {
+function searchLabRecords(query, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     if (!query || !String(query).trim()) return { success:false, message:'Enter a Patient ID, Name, or Mobile.' };
     var q = String(query).trim().toUpperCase();
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -142,8 +143,9 @@ function searchLabRecords(query) {
 /**
  * Server-Side function: Generates the Lab Report as a PDF and emails it via GMAIL API.
  */
-function emailLabReportPDF(orderId, patientEmail) {
+function emailLabReportPDF(orderId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     const reportResponse = getLabReportHtml(orderId); 
     
     if (!reportResponse.success) {
@@ -198,8 +200,9 @@ function emailLabReportPDF(orderId, patientEmail) {
 /**
  * Server-Side function: Generates PDF, saves to Drive, and returns public link.
  */
-function generateAndStoreLabReportPDF(orderId) {
+function generateAndStoreLabReportPDF(orderId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'lab.read');
     console.log("1. Starting PDF generation for Order: " + orderId);
 
     // 1. Generate HTML using your existing engine
@@ -285,9 +288,10 @@ function forceDriveAuthorization() {
 // 🗄️ LAB RECORDS INVOICE DISPATCH ENGINE
 // ==========================================
 
-function getArchiveInvoiceLink(orderId) {
+function getArchiveInvoiceLink(orderId, sessionToken) {
   try {
     // 1. Get the HTML Invoice (Uses the existing function that handles IP logic)
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabBillHtml(orderId); 
     if (!reportResponse.success) throw new Error("Invoice HTML Generation Failed");
 
@@ -321,8 +325,9 @@ function getArchiveInvoiceLink(orderId) {
   }
 }
 
-function emailArchiveInvoice(orderId, patientEmail) {
+function emailArchiveInvoice(orderId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabBillHtml(orderId); 
     if (!reportResponse.success) throw new Error("Invoice HTML Generation Failed");
 

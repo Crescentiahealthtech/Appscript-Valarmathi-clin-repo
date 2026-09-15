@@ -301,8 +301,9 @@ function fetchPharmacyInventoryForOP() {
 // ─────────────────────────────────────────────────────────────
 // 5. UNIVERSAL DRUG MASTER  (Brand[0] Generic[1] Type[2]) — external fallback
 // ─────────────────────────────────────────────────────────────
-function fetchUniversalDrugs() {
+function fetchUniversalDrugs(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Drug_Master_Universal");
     if (!sheet) return [];
     const data = sheet.getDataRange().getDisplayValues();
@@ -411,8 +412,9 @@ function learnTemplates(items) {
 //            G RefDose(mg/kg/day, optional) | H AdultDose(optional) | I Reorder(optional)
 //  F stays "Unit" to match your working fetchPharmacyMasterForIP().
 // ============================================================
-function fetchOPDrugMaster() {
+function fetchOPDrugMaster(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];
     const data = sheet.getDataRange().getValues();
@@ -447,9 +449,10 @@ function fetchOPDrugMaster() {
 // 🖨️ OP PRESCRIPTION - BACKEND HTML GENERATOR
 // =========================================================================
 
-function getOPPrescriptionHtml(encounterId) {
+function getOPPrescriptionHtml(encounterId, sessionToken) {
   try {
     // 1. Fetch the data using your existing fetcher
+    crescRequire_(sessionToken, 'emr.read');
     const fetchRes = getEncounterForPrint(encounterId);
     if (!fetchRes.success) return { success: false, message: fetchRes.message };
     
@@ -689,9 +692,10 @@ function getOPPrescriptionHtml(encounterId) {
 /**
  * Generates OP Prescription PDF, saves to Drive, and returns public link for WhatsApp.
  */
-function generateAndStoreOPPrescriptionPDF(encounterId) {
+function generateAndStoreOPPrescriptionPDF(encounterId, sessionToken) {
   try {
     // 1. Generate HTML using your existing OP engine
+    crescRequire_(sessionToken, 'emr.read');
     const reportResponse = getOPPrescriptionHtml(encounterId); 
     if (!reportResponse.success) {
       return { success: false, message: "Could not generate HTML: " + reportResponse.message };
@@ -758,8 +762,9 @@ function generateAndStoreOPPrescriptionPDF(encounterId) {
 /**
  * Generates OP Prescription PDF and emails it directly via GMAIL API.
  */
-function emailOPPrescriptionPDF(encounterId, patientEmail) {
+function emailOPPrescriptionPDF(encounterId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'emr.read');
     const reportResponse = getOPPrescriptionHtml(encounterId); 
     
     if (!reportResponse.success) {

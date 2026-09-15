@@ -131,7 +131,7 @@
       .withFailureHandler(err => {
          document.getElementById('emr-timeline-ledger-tbody').innerHTML = `<tr><td colspan="5" class="text-center py-4" style="color: var(--danger-fg) !important; font-weight: bold;">Error: ${err.message}</td></tr>`;
       })
-      .getMasterPatientDirectory();
+      .getMasterPatientDirectory(window.sessionToken);
   }
 
   function renderMasterLedger(dataStr) {
@@ -178,7 +178,7 @@
       .withFailureHandler(err => {
         document.getElementById('clinical-stream-container').innerHTML = `<div class="text-center mt-5" style="color: var(--danger-fg) !important; font-weight: bold;">Fetch Engine Blocked: ${err.message}</div>`;
       })
-      .buildLongitudinalTimeline(patientId);
+      .buildLongitudinalTimeline(patientId, window.sessionToken);
   }
 
   function closeTimelineView() {

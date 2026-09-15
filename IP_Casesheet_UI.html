@@ -2662,7 +2662,7 @@ function ipcOfferPaediatricDose(inputEl) {
                              '<i class="fa-solid fa-child"></i> Suggested: ' + ipcEsc(res.sig) + ' &mdash; click to insert</span>';
         })
         .withFailureHandler(function () {})
-        .suggestPaediatricDose(inputEl.value, wt, age, 2);
+        .suggestPaediatricDose(inputEl.value, wt, age, 2, window.sessionToken);
 }
 
 function ipcApplyPedsSig(el) {
@@ -2818,7 +2818,7 @@ function ipcRecalcTaper() {
             sm.innerText = res.summary + (res.warning ? '  \u2014 ' + res.warning : '');
         })
         .withFailureHandler(function () {})
-        .buildTaperPlan(spec);
+        .buildTaperPlan(spec, window.sessionToken);
 }
 
 function ipcApplyTaperToRow() {
@@ -2849,7 +2849,7 @@ function ipcLoadIPCLabCatalog() {
             ipcRenderIPCLabModal();
         })
         .withFailureHandler(function () { ipcRenderIPCLabModal(); })
-        .getOPDOrderableTests();
+        .getOPDOrderableTests(window.sessionToken);
 }
 
 function ipcRenderIPCLabModal() {
@@ -2927,13 +2927,13 @@ function ipcLoadIntegrationData() {
         google.script.run
             .withSuccessHandler(function (list) { ipcCachedDrugsRich = ipcNormalizeIPCDrugs(list); })
             .withFailureHandler(function () {})
-            .fetchOPDrugMaster();
+            .fetchOPDrugMaster(window.sessionToken);
     }
     if (!ipcCachedUniversalDrugs.length) {
         google.script.run
             .withSuccessHandler(function (d) { ipcCachedUniversalDrugs = d || []; })
             .withFailureHandler(function () {})
-            .fetchUniversalDrugs();
+            .fetchUniversalDrugs(window.sessionToken);
     }
     if (!(ipcLabCatalog.tests || []).length && !(ipcLabCatalog.panels || []).length) {
         ipcLoadIPCLabCatalog();

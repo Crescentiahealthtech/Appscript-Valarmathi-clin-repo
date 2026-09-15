@@ -279,7 +279,7 @@
       btnSpinner.classList.add('d-none');
       btn.disabled = false;
       showStatus("An error occurred connecting to the server.", true);
-    }).registerPatient(data); 
+    }).registerPatient(data, window.sessionToken); 
   }
 
   /**

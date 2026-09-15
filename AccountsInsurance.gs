@@ -52,8 +52,9 @@ function ins_createClaimsForSettlement_(setId, ip, adm, billed, insurers, user) 
   SpreadsheetApp.flush();
 }
 
-function getInsuranceClaims(payload) {
+function getInsuranceClaims(payload, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'accounts.read');
     payload = payload || {};
     var fStatus = acc_str_(payload.status).toUpperCase(), fNet = acc_str_(payload.network).toUpperCase();
     var claims = [], totalPending = 0, netPending = 0, nonNetPending = 0, byStatus = {};
@@ -83,10 +84,11 @@ function getInsuranceClaims(payload) {
 }
 
 // raise a claim by hand (OP cashless, standalone, or any non-IP case)
-function createManualClaim(payload) {
+function createManualClaim(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.write');
     payload = payload || {};
     var insurer = acc_str_(payload.insurer).trim();
     if (!insurer) return { success: false, message: "Insurer / TPA required." };
@@ -116,10 +118,11 @@ function createManualClaim(payload) {
 }
 
 // update lifecycle / pre-auth / approved amount / refs (no cash)
-function updateClaim(payload) {
+function updateClaim(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.write');
     var id = acc_str_(payload.claimId).trim(); if (!id) return { success: false, message: "Missing claim." };
     var sh = ins_sheet_(), d = sh.getDataRange().getValues(), h = d[0].map(function (x) { return acc_str_(x).trim(); });
     var cId = h.indexOf('Claim_ID');
@@ -147,10 +150,11 @@ function updateClaim(payload) {
 }
 
 // record bank settlement -> cash-in + revenue recognized; close the claim
-function settleClaim(payload) {
+function settleClaim(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.settle');
     var id = acc_str_(payload.claimId).trim(); if (!id) return { success: false, message: "Missing claim." };
     var settled = acc_money_(payload.settledAmount); if (settled < 0) return { success: false, message: "Invalid amount." };
     var sh = ins_sheet_(), d = sh.getDataRange().getValues(), h = d[0].map(function (x) { return acc_str_(x).trim(); });

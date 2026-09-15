@@ -119,13 +119,51 @@ var CRESC_PERMS = {
   'accounts.payables':       'Pay a vendor',
   'accounts.tax':            'Tax and compliance',
 
+  // --- reference and overview -------------------------------------------
+  // Neither of these touches a patient record, but an endpoint nobody has to
+  // sign in for is still an endpoint. They are separated from patient.read so
+  // that "may look up a drug dose" never has to mean "may open a patient".
+  'reference.read':          'Look up drug, dose and test reference data',
+  'dashboard.read':          'See the clinic overview dashboard',
+
   // --- administration ---------------------------------------------------
   'admin.users':             'Create and disable staff logins',
   'admin.audit':             'Read the audit log',
   'admin.config':            'Change clinic configuration',
 
+  // --- data protection (DPDP Act, 2023) ---------------------------------
+  // Held by whoever answers a data principal. Kept separate from admin.config
+  // because the grievance officer is a named person under s.13, and the
+  // clinic may want them to reach the registers without holding the keys to
+  // everything else.
+  'dpdp.manage':             'Run the data-protection registers and answer a data principal',
+
   // --- the patient portal -----------------------------------------------
   'portal.self':             'Read your own record in the patient portal'
+};
+
+
+/**
+ * ENDPOINTS THAT ANSWER WITHOUT A SESSION, AND WHY.
+ *
+ * An allowlist exists so that "this one is fine" has to be written down and
+ * defended once, instead of being re-argued every time somebody reads the
+ * file — and so that tools/rbac.js counts them as a decision rather than as
+ * a gap. Anything not on this list and not guarded is a finding.
+ *
+ * The test each entry has to pass: it returns NO personal data, or it is the
+ * step that creates the session in the first place. Nothing is here because
+ * adding a token was inconvenient.
+ */
+var CRESC_PUBLIC_BY_DESIGN = {
+  'verifyLogin':        'The sign-in itself. There is no session to check yet; it is rate-limited and audited instead (Auth_Audit.gs).',
+  'verifyGoogleLogin':  'The same, for Google sign-in.',
+  'verifyMFA':          'The second factor of a sign-in still in progress.',
+  'crescChangePassword': 'Changing a password after a forced reset, before a session exists. It proves the old password itself.',
+  'getClinicProfile':   'The clinic letterhead — name, address, phone, GSTIN. Already printed on every document that leaves the building, and the invoice renderers need it before sign-in.',
+  'crescGetBundle':     'UI markup only: the same HTML the shell used to inline. No patient data passes through it.',
+  'getDPDPNotice':      'Section 5 requires the notice to be given AT OR BEFORE collection. A notice you have to sign in to read is not a notice.',
+  'dpdpSubmitPublicRequest': 'Section 11-13: a data principal must be able to ask without holding a staff login. It writes to a queue that is verified before anything is answered, and is rate-limited per browser.'
 };
 
 
@@ -158,7 +196,8 @@ var CRESC_ROLE_MATRIX = {
     'ward.read', 'ward.write', 'ward.admit', 'ward.discharge',
     'lab.read', 'lab.order', 'lab.verify', 'lab.ack_critical',
     'pharmacy.read',
-    'billing.read'
+    'billing.read',
+    'reference.read', 'dashboard.read'
   ],
 
   nurse: [
@@ -169,28 +208,32 @@ var CRESC_ROLE_MATRIX = {
     // A nurse takes the call from the lab and is the person who reaches the
     // clinician, so acknowledging is theirs. Verifying a result is not.
     'lab.read', 'lab.order', 'lab.collect', 'lab.ack_critical',
-    'pharmacy.read'
+    'pharmacy.read',
+    'reference.read', 'dashboard.read'
   ],
 
   receptionist: [
     'patient.read', 'patient.write', 'patient.register',
     'appointment.read', 'appointment.write', 'appointment.cancel',
     'billing.read', 'billing.write',
-    'ward.read'
+    'ward.read',
+    'dashboard.read'
   ],
 
   pharmacist: [
     'patient.read',
     'pharmacy.read', 'pharmacy.dispense', 'pharmacy.stock_add',
     'pharmacy.stock_edit', 'pharmacy.stock_discard', 'pharmacy.return',
-    'billing.read', 'billing.write'
+    'billing.read', 'billing.write',
+    'reference.read', 'dashboard.read'
   ],
 
   lab: [
     'patient.read',
     'lab.read', 'lab.order', 'lab.collect', 'lab.result', 'lab.verify',
     'lab.ack_critical', 'lab.catalog',
-    'billing.read', 'billing.write'
+    'billing.read', 'billing.write',
+    'reference.read', 'dashboard.read'
   ],
 
   accountant: [
@@ -198,7 +241,8 @@ var CRESC_ROLE_MATRIX = {
     'billing.read', 'billing.write',
     'accounts.read', 'accounts.write', 'accounts.settle',
     'accounts.lock_period', 'accounts.payables', 'accounts.tax',
-    'ward.read'
+    'ward.read',
+    'dashboard.read'
   ],
 
   // A patient reaches exactly one thing: their own record. Every portal
@@ -251,26 +295,60 @@ function crescCan_(role, permission) {
 }
 
 /**
+ * THE AMBIENT ACTOR — who this execution has already proved itself to be.
+ *
+ * WHY IT EXISTS. Guarding every endpoint broke something that was not
+ * obvious until it was done: server functions call each other. The discharge
+ * settlement calls the credit-bill settler; the case sheet calls
+ * createLabRequest(); the ward note calls saveIPNote(); the archive link
+ * builder calls getLabBillHtml(). The browser passed a token to the OUTER
+ * call and there is nothing to pass to the inner one, so a guard on the
+ * inner function would refuse the clinic's own code.
+ *
+ * The fix is not to leave the inner function open — it is reachable from the
+ * browser too. It is to remember, for the length of ONE execution, the actor
+ * the outer guard already resolved, and let the inner guard check ITS OWN
+ * permission against that same person. A nurse whose ward note raises a lab
+ * order still has to hold lab.order; she simply does not have to re-prove
+ * who she is.
+ *
+ * WHY THIS IS SAFE. Apps Script gives every google.script.run call a fresh
+ * script context: globals are re-initialised per execution and never shared
+ * between two callers or two requests. So this variable cannot leak one
+ * user's identity into another user's call — it has the lifetime of a single
+ * server call and dies with it. It is only ever SET by a successful
+ * crescRequire_ / crescActor_, so an unauthenticated outer call leaves it
+ * null and every inner guard still fails closed.
+ */
+var CRESC_CURRENT_ACTOR = null;
+
+/**
  * Resolves a session token to an actor, or null.
  *
  * Never throws: callers that want a hard stop use crescRequire_(). This is
  * for the handful of reads that legitimately degrade — a dashboard that
  * shows fewer cards to a role rather than refusing to load.
  *
+ * A call with no usable token inherits the ambient actor if — and only if —
+ * an outer call in the same execution has already been authorised. See
+ * CRESC_CURRENT_ACTOR above.
+ *
  * @param {string} token
  * @return {{username,role,doctorId,displayName,permissions}|null}
  */
 function crescActor_(token) {
+  if (!crescStr_(token) && CRESC_CURRENT_ACTOR) return CRESC_CURRENT_ACTOR;
+
   var sess = null;
   try {
     sess = (typeof dc_validateSession_ === 'function')
       ? dc_validateSession_(token)
       : validateSession_(token);
   } catch (e) { sess = null; }
-  if (!sess) return null;
+  if (!sess) return CRESC_CURRENT_ACTOR || null;
 
   var role = crescRole_(sess.role);
-  return {
+  var actor = {
     username:    crescStr_(sess.username),
     role:        role,
     rawRole:     crescStr_(sess.role),
@@ -279,6 +357,8 @@ function crescActor_(token) {
                    ? dc_sessionName_(sess) : crescStr_(sess.username),
     permissions: crescPermsFor_(role)
   };
+  CRESC_CURRENT_ACTOR = actor;
+  return actor;
 }
 
 /**

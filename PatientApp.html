@@ -293,7 +293,7 @@
       if (typeof showToast === 'function')
         showToast('Could not refresh your dashboard',
                   (err && err.message) || 'Please try again in a moment.', 'error');
-    }).getPatientDashboardStats(loggedInUser);
+    }).getPatientDashboardStats(loggedInUser, window.sessionToken);
   }
 
   function initPatientBooking() {
@@ -401,7 +401,7 @@
 
     }).withFailureHandler(err => {
        container.innerHTML = `<div class="text-danger py-4 text-center">Failed to load slots. Please refresh.</div>`;
-    }).getAvailableTimeSlots(dateVal); 
+    }).getAvailableTimeSlots(dateVal, window.sessionToken); 
   }
 
   function submitPatientBooking() {
@@ -427,7 +427,7 @@
       restoreBtn();
       crescAlert('The booking did not go through: ' + ((err && err.message) || 'the server did not reply') +
                  '. No appointment was made — please try again.', 'err');
-    }).submitNewAppointment(apptObj);
+    }).submitNewAppointment(apptObj, window.sessionToken);
   }
 
 /* setDateRestrictions() moved to Auth.html. It bounds three different date

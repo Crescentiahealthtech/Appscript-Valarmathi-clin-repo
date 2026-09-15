@@ -541,6 +541,7 @@ function ipc_routeLabOrders_(payload, patientId, encounterId, w) {
  */
 function getIPCasesheetPrintHtml(encounterId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'emr.read');
     var sheet = ipc_casesheetSheet_();
     var m = dc_headerMap_(sheet);
     var data = sheet.getDataRange().getDisplayValues();

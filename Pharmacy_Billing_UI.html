@@ -341,7 +341,7 @@
         Object.keys(phStockByBrand).forEach(k => phStockByBrand[k].sort((a, b) => a.expSort - b.expSort));
       })
       .withFailureHandler(() => { phStock = []; phStockByBrand = {}; })
-      .fetchBillableStock();
+      .fetchBillableStock(window.sessionToken);
   }
 
   // ===================================================================
@@ -390,7 +390,7 @@
         if (!p && phPrescriptions.length === 0) crescAlert("No patient record or pending prescription found. Continue as Walk-In.");
       })
       .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network error. Try again."); })
-      .getPatientBillingContext(query);
+      .getPatientBillingContext(query, window.sessionToken);
   }
 
   function hasUnsavedItems() {
@@ -831,7 +831,7 @@
           } else crescAlert("❌ " + ((res && res.message) || "Save failed."));
         })
         .withFailureHandler(err => { btn.innerHTML = original; btn.disabled = false; crescAlert("❌ Network error: please retry."); })
-        .processPharmacyBill(payload);
+        .processPharmacyBill(payload, window.sessionToken);
     }
   }
 
@@ -968,7 +968,7 @@
         } else crescAlert("❌ Error generating PDF: " + (res.message || "Unknown error."));
       })
       .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
-      .generateAndStorePharmacyInvoicePDF(invNo, currentDispatchHtml);
+      .generateAndStorePharmacyInvoicePDF(invNo, currentDispatchHtml, window.sessionToken);
   }
 
   function sendPharmaEmail() {
@@ -988,7 +988,7 @@
         else crescAlert("❌ Error: " + (res.message || "Unknown error."));
       })
       .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
-      .emailPharmacyInvoice(invNo, currentDispatchHtml, targetEmail);
+      .emailPharmacyInvoice(invNo, currentDispatchHtml, targetEmail, window.sessionToken);
   }
 
   /**
@@ -1086,7 +1086,7 @@
           </div>`).join('');
       })
       .withFailureHandler(() => { list.innerHTML = `<div class="cm-row text-danger">Network error.</div>`; })
-      .getPendingCreditBills();
+      .getPendingCreditBills(window.sessionToken);
   }
 
   function closeCreditPanel() { document.getElementById('ph-credit-modal').style.display = 'none'; }
@@ -1111,7 +1111,7 @@
         else { rowEl.style.opacity = '1'; crescAlert("❌ " + ((res && res.message) || "Failed.")); }
       })
       .withFailureHandler(() => { rowEl.style.opacity = '1'; crescAlert("❌ Network error."); })
-      .settleCreditBill({ invoiceNo: invoiceNo, payMode: mode, txnId: txn });
+      .settleCreditBill({ invoiceNo: invoiceNo, payMode: mode, txnId: txn }, window.sessionToken);
   }
 
   function returnToPharmacyMenu() {

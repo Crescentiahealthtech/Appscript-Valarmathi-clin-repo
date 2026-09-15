@@ -2,8 +2,9 @@
 // 💰 LAB BILLING DESK BACKEND ENGINE
 // ==========================================
 
-function getLabBillingWorkspace() {
+function getLabBillingWorkspace(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const billingSheet = ss.getSheetByName("LAB_BILLING");
     const ordersSheet = ss.getSheetByName("LAB_ORDERS");
@@ -168,8 +169,9 @@ function parseTestsForUI(jsonStr) {
   }
 }
 
-function getLabDailyCollection() {
+function getLabDailyCollection(sessionToken) {
   try {
+    crescRequire_(sessionToken, ['billing.read', 'accounts.read']);
     const ws = getLabBillingWorkspace();
     if (!ws.success) throw new Error(ws.message);
 
@@ -193,8 +195,9 @@ function getLabDailyCollection() {
  * Generates the physical HTML for the Lab Receipt Pop-up
  * Matches the premium UI/UX of the Lab Integration Engine
  */
-function getLabReceiptHtml(billId) {
+function getLabReceiptHtml(billId, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("LAB_BILLING");
     if (!sheet) throw new Error("LAB_BILLING sheet not found.");
@@ -363,9 +366,10 @@ function _esc(s) {
 /**
  * Server-Side function: Generates Invoice PDF, saves to Drive, and returns public link for WhatsApp.
  */
-function generateAndStoreLabInvoicePDF(billId) {
+function generateAndStoreLabInvoicePDF(billId, sessionToken) {
   try {
     // 1. Generate HTML using existing engine
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabReceiptHtml(billId); 
     if (!reportResponse.success) throw new Error("HTML Generation Failed: " + reportResponse.message);
 
@@ -417,8 +421,9 @@ function generateAndStoreLabInvoicePDF(billId) {
 /**
  * Server-Side function: Generates Invoice PDF and emails it directly via GMAIL API.
  */
-function emailLabInvoicePDF(billId, patientEmail) {
+function emailLabInvoicePDF(billId, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const reportResponse = getLabReceiptHtml(billId); 
     if (!reportResponse.success) throw new Error("HTML Generation Failed");
 

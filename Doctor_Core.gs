@@ -655,7 +655,8 @@ function dc_normaliseTeamRole_(raw) {
 }
 
 /** The role list for a picker, as { value, label } pairs. */
-function getIPTeamRoles() {
+function getIPTeamRoles(sessionToken) {
+  crescRequire_(sessionToken, 'ward.read');
   return DC_TEAM_ROLES.filter(function (r) { return r !== "PRIMARY"; })
     .map(function (r) {
       return { value: r, label: r.toLowerCase().replace(/_/g, " ")

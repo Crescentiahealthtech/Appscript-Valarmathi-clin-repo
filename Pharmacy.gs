@@ -80,8 +80,9 @@ var PH_INVOICE_HEADERS = ["Invoice_No","Timestamp","Bill_Type","Patient_ID","Pat
 // SECTION A — INVENTORY (used by Ledger + Add screens)
 // =====================================================================
 
-function fetchPharmacyInventory() {
+function fetchPharmacyInventory(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'pharmacy.read');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
     if (!sheet) return { success: false, message: "Pharmacy_Inventory sheet not found." };
@@ -221,7 +222,8 @@ function _phDisposalSheet_(ss) {
 }
 
 /** FRONTEND ENTRY. The reason codes, so the dialog and the server agree. */
-function getDisposalReasons() {
+function getDisposalReasons(sessionToken) {
+  crescRequire_(sessionToken, 'pharmacy.read');
   return Object.keys(PH_DISPOSAL_REASONS).map(function (k) {
     return { code: k, label: PH_DISPOSAL_REASONS[k] };
   });
@@ -424,8 +426,9 @@ function getDisposalLog(opts) {
 // SECTION B — BILLING DATA READS
 // =====================================================================
 
-function fetchBillableStock() {
+function fetchBillableStock(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'pharmacy.read');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
     if (!sheet) return { success: true, data: [] };
@@ -458,8 +461,9 @@ function fetchBillableStock() {
   }
 }
 
-function getPatientBillingContext(query) {
+function getPatientBillingContext(query, sessionToken) {
   try {
+    crescRequire_(sessionToken, ['billing.read', 'pharmacy.read']);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var patient = _findPatient_(ss, query);
     var pid = patient ? String(patient.id) : String(query || "").trim();
@@ -711,8 +715,9 @@ function _dedupePrescriptions_(list) {
 // SECTION C — ATOMIC + IDEMPOTENT BILLING
 // =====================================================================
 
-function processPharmacyBill(payload) {
+function processPharmacyBill(payload, sessionToken) {
   var lock = LockService.getScriptLock();
+  crescRequire_(sessionToken, 'pharmacy.dispense');
   if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -821,8 +826,9 @@ function processPharmacyBill(payload) {
 // SECTION D — CREDIT SETTLEMENT (close IPD / staff credit bills)
 // =====================================================================
 
-function settleCreditBill(payload) {
+function settleCreditBill(payload, sessionToken) {
   var lock = LockService.getScriptLock();
+  crescRequire_(sessionToken, 'billing.write');
   if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -933,8 +939,9 @@ function _expiryToSortKey_(exp) {
 // SECTION F — DIGITAL DISPATCH ENGINE (PDF, WhatsApp, Email)
 // =====================================================================
 
-function generateAndStorePharmacyInvoicePDF(invoiceNo, htmlContent) {
+function generateAndStorePharmacyInvoicePDF(invoiceNo, htmlContent, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     const htmlBlob = Utilities.newBlob(htmlContent, 'text/html', 'invoice.html');
     const pdfBlob = htmlBlob.getAs('application/pdf');
     pdfBlob.setName("Crescentia_Pharmacy_Invoice_" + invoiceNo + ".pdf");
@@ -963,8 +970,9 @@ function generateAndStorePharmacyInvoicePDF(invoiceNo, htmlContent) {
   }
 }
 
-function emailPharmacyInvoice(invoiceNo, htmlContent, patientEmail) {
+function emailPharmacyInvoice(invoiceNo, htmlContent, patientEmail, sessionToken) {
   try {
+    crescRequire_(sessionToken, 'billing.read');
     if (!patientEmail) throw new Error("No valid email address provided.");
     
     const htmlBlob = Utilities.newBlob(htmlContent, 'text/html', 'invoice.html');

@@ -7,11 +7,12 @@
 // =========================================================================
 
 // READ: open dues grouped into running tabs.
-function getReceivables() {
+function getReceivables(sessionToken) {
   try {
     // Hospital invoices (OP consultations, procedures, packages) join pharmacy
     // and lab here: a part-paid or credit bill raised at the billing desk is a
     // receivable like any other, and used to be invisible to this screen.
+    crescRequire_(sessionToken, 'accounts.read');
     var open = acc_pharmaRows_()
       .concat(acc_labRows_())
       .concat(acc_hospitalRowsSafe_())
@@ -52,10 +53,11 @@ function getReceivables() {
 }
 
 // WRITE: settle a single source bill. payload = {source, billId, payMode, loggedBy}
-function settleReceivableBill(payload) {
+function settleReceivableBill(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    crescRequire_(sessionToken, 'accounts.settle');
     if (!payload || !payload.billId) return { success: false, message: "Missing bill reference." };
     var source = acc_str_(payload.source).toUpperCase();
     var mode = acc_str_(payload.payMode) || 'Cash';

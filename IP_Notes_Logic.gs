@@ -865,8 +865,9 @@ function getStaffRoster(sessionToken) {
 
 // ── 12. FETCH PHARMACY MASTER FOR AUTOCOMPLETE ────────────
 
-function fetchPharmacyMasterForIP() {
+function fetchPharmacyMasterForIP(sessionToken) {
   try {
+    crescRequire_(sessionToken, 'reference.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];

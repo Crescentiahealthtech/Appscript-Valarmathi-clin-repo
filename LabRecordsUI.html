@@ -177,7 +177,7 @@ var LabRecordsApp = (function () {
 
     }).withFailureHandler(function(e){ 
       $('lr-results').innerHTML='<div class="text-danger small py-3 text-center"><i class="fa-solid fa-triangle-exclamation me-1"></i> Server Error: '+esc(e.message)+'</div>'; 
-    }).searchLabRecords(q);
+    }).searchLabRecords(q, window.sessionToken);
   }
 
   // --- FRONTEND LOGIC ---
@@ -219,7 +219,7 @@ var LabRecordsApp = (function () {
     }).withFailureHandler(function(e){
       btn.innerHTML = originalHtml;
       crescAlert("Failed to load report: " + e.message);
-    }).getLabReportHtml(orderId);
+    }).getLabReportHtml(orderId, window.sessionToken);
   }
 
   function dispatchEmail(orderId, patientEmail) {
@@ -250,7 +250,7 @@ var LabRecordsApp = (function () {
     }).withFailureHandler(function(e){
       btn.innerHTML = originalHtml;
       crescAlert("❌ Server Error: " + e.message);
-    }).emailLabReportPDF(orderId, patientEmail);
+    }).emailLabReportPDF(orderId, patientEmail, window.sessionToken);
   }
 
   function dispatchWhatsApp(orderId, patientName, mobileNumber) {
@@ -305,7 +305,7 @@ var LabRecordsApp = (function () {
       btn.innerHTML = originalHtml;
       btn.disabled = false;
       crescAlert("❌ Server Error: " + e.message);
-    }).generateAndStoreLabReportPDF(orderId);
+    }).generateAndStoreLabReportPDF(orderId, window.sessionToken);
   }
 
   // --- ARCHIVE INVOICE DISPATCHERS (Hardened) ---
@@ -321,7 +321,7 @@ var LabRecordsApp = (function () {
       setTimeout(function() { w.print(); }, 500);
     }).withFailureHandler(function(err){
       crescAlert("Failed to load invoice: " + err.message);
-    }).getLabBillHtml(orderId);
+    }).getLabBillHtml(orderId, window.sessionToken);
   }
 
   function waArchiveInvoice(orderId, mobileNumber) {
@@ -353,7 +353,7 @@ var LabRecordsApp = (function () {
     }).withFailureHandler(function(err){
       btn.innerHTML = ogHtml;
       crescAlert("Network Error: " + err.message);
-    }).getArchiveInvoiceLink(orderId);
+    }).getArchiveInvoiceLink(orderId, window.sessionToken);
   }
 
   function emailArchiveInvoiceJS(orderId, patientEmail) {
@@ -382,7 +382,7 @@ var LabRecordsApp = (function () {
     }).withFailureHandler(function(err){
       btn.innerHTML = ogHtml;
       crescAlert("Network Error: " + err.message);
-    }).emailArchiveInvoice(orderId, patientEmail.trim());
+    }).emailArchiveInvoice(orderId, patientEmail.trim(), window.sessionToken);
   }
 
   // Ensure ALL functions are fully mapped out for UI accessibility

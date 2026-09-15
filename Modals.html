@@ -308,7 +308,7 @@ function autoFetchPatient() {
       });
       crescAlert('Could not fetch patient: ' + err.message);
     })
-    .getPatientDemographics(pId);
+    .getPatientDemographics(pId, window.sessionToken);
 }
 
 function saveAdminBooking() {

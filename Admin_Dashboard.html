@@ -412,7 +412,7 @@
         document.getElementById('dash-error-msg').innerText = err && err.message ? err.message : 'Network error.';
         elErr.classList.remove('d-none');
       })
-      .getDashboardData(role, bust === true);
+      .getDashboardData(role, bust === true, window.sessionToken);
   }
 
   function paintDashboard(d) {
