@@ -62,7 +62,33 @@
     <input type="password" id="in-password" class="form-control mb-4 py-2 text-white-force" placeholder="Password">
 
     <button id="btn-login" class="btn w-100 py-2 mb-3 text-white fw-bold on-accent" style="background-color: var(--accent-purple);" onclick="handleLogin()">Secure Login</button>
+
+    <!-- The only route out of a forgotten password used to be telephoning
+         somebody with admin.users and having a temporary one read out loud.
+         See Auth_Reset.gs for why that is the wrong channel. -->
+    <button class="btn btn-link w-100 p-0 small label-bright" style="text-decoration:none;"
+            onclick="showForgotPassword()">Forgot your password?</button>
   </div>
+</div>
+
+<div id="forgot-screen" class="d-none text-center mx-auto mt-5" style="max-width: 400px; padding: 40px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 16px;">
+  <i class="fa-solid fa-envelope-circle-check text-info mb-3" style="font-size: 2rem;"></i>
+  <h4 class="fw-bold text-white mb-2">Forgot your password</h4>
+  <p class="small text-muted mb-4">
+    Enter your user ID or patient ID. We will email a temporary password to the
+    address already on your record — you will be asked to choose a new one as
+    soon as you sign in with it.
+  </p>
+
+  <input type="text" id="forgot-username" class="form-control mb-3 py-2 text-white-force"
+         placeholder="Patient ID / User ID" autocomplete="username">
+
+  <button id="btn-forgot-send" class="btn w-100 py-2 text-white fw-bold on-accent"
+          style="background-color: var(--accent-purple);"
+          onclick="submitForgotPassword()">Email me a temporary password</button>
+  <button class="btn btn-link text-muted w-100 mt-2 small" onclick="cancelForgotPassword()">Back to sign in</button>
+
+  <div id="forgot-msg" class="small mt-3 text-start" style="line-height:1.5;"></div>
 </div>
 
 <div id="mfa-screen" class="d-none text-center mx-auto mt-5" style="max-width: 350px; padding: 40px; background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 16px;">
@@ -186,7 +212,13 @@
     const appScreen = document.getElementById('app-screen');
     if (appScreen) appScreen.classList.add('d-none');
 
-    document.getElementById('mfa-screen').classList.add('d-none');
+    // Every alternate sign-in pane, not just the MFA one: signing out while
+    // the forgot-password or set-password screen was open used to leave it
+    // stacked on top of the sign-in card.
+    ['mfa-screen', 'pwd-screen', 'forgot-screen'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.add('d-none');
+    });
     document.getElementById('auth-screen').classList.remove('d-none');
 
     try { if (auth) auth.signOut(); } catch (e) { /* never block logout */ }
@@ -907,6 +939,85 @@
         crescAlert('Network Error: ' + (err && err.message ? err.message : err));
       })
       .crescChangePassword({ username: username, currentPassword: current, newPassword: next });
+  }
+
+  // ==========================================
+  // 4c. FORGOT PASSWORD
+  // ------------------------------------------
+  // The screen deliberately says the SAME thing whatever the server found —
+  // see CRESC_RESET.SAME_ANSWER in Auth_Reset.gs. Patient ids here are
+  // sequential and printed on every barcode label, so a screen that said "no
+  // such account" for one id and "check your email" for the next would be a
+  // directory of who is a patient at this clinic, readable by anyone with the
+  // URL. The only reply that differs is the one where the reset happened and
+  // the EMAIL failed, because that leaves a real person locked out and they
+  // need to be told why.
+  // ==========================================
+  function showForgotPassword() {
+    document.getElementById('auth-screen').classList.add('d-none');
+    document.getElementById('mfa-screen').classList.add('d-none');
+    document.getElementById('pwd-screen').classList.add('d-none');
+    document.getElementById('forgot-screen').classList.remove('d-none');
+
+    var f = document.getElementById('forgot-username');
+    // Carried over, so somebody who has just mistyped their password three
+    // times does not retype their id a fourth.
+    f.value = (document.getElementById('in-username').value || '').trim();
+    document.getElementById('forgot-msg').textContent = '';
+    f.focus();
+  }
+
+  function cancelForgotPassword() {
+    document.getElementById('forgot-msg').textContent = '';
+    document.getElementById('forgot-screen').classList.add('d-none');
+    document.getElementById('auth-screen').classList.remove('d-none');
+    document.getElementById('in-password').focus();
+  }
+
+  function submitForgotPassword() {
+    var btn = document.getElementById('btn-forgot-send');
+    var msg = document.getElementById('forgot-msg');
+    var who = document.getElementById('forgot-username').value.trim();
+
+    if (!who) {
+      msg.className = 'small mt-3 text-start text-warning';
+      msg.textContent = 'Enter your user ID or patient ID first.';
+      return;
+    }
+
+    var label = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending…';
+    btn.disabled = true;
+    msg.textContent = '';
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.innerHTML = label;
+        btn.disabled = false;
+        if (!res) {
+          msg.className = 'small mt-3 text-start text-danger';
+          msg.textContent = 'The server gave no answer. Please try again.';
+          return;
+        }
+        msg.className = 'small mt-3 text-start ' + (res.success ? 'text-success' : 'text-danger');
+        msg.textContent = res.message || '';
+        if (res.success) {
+          // The button is left disabled on success: the throttle allows three
+          // per hour and a second click would spend one for nothing while
+          // also replacing the password just emailed.
+          btn.disabled = true;
+          btn.innerHTML = '<i class="fa-solid fa-check"></i> Sent';
+          document.getElementById('in-username').value = who;
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.innerHTML = label;
+        btn.disabled = false;
+        msg.className = 'small mt-3 text-start text-danger';
+        msg.textContent = 'Could not reach the server: ' +
+                          ((err && err.message) ? err.message : err);
+      })
+      .crescRequestPasswordReset({ username: who });
   }
 
   // ==========================================

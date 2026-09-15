@@ -56,6 +56,12 @@ var CRESC_AUTH_EVENTS = {
   // change" is the second question asked after "who signed in".
   PASSWORD_CHANGED:   'PASSWORD_CHANGED',
   PASSWORD_RESET:     'PASSWORD_RESET',
+  // A self-service reset that did NOT happen, and why. The sign-in screen
+  // gives every outcome the same answer so it cannot be used to discover
+  // which ids exist (Auth_Reset.gs), which means the audit log is the ONLY
+  // place the difference is recorded. Without this row, "somebody tried to
+  // reset a patient id that does not exist, forty times" is invisible.
+  PASSWORD_RESET_REFUSED: 'PASSWORD_RESET_REFUSED',
   PASSWORD_MIGRATION: 'PASSWORD_MIGRATION',
   LEGACY_REFUSED:     'LOGIN_LEGACY_CREDENTIAL',   // plain-text cell, refused
   MUST_CHANGE:        'LOGIN_MUST_CHANGE'          // correct password, expired by policy

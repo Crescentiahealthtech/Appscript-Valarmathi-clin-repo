@@ -98,7 +98,12 @@ var DEP_MAP = {
   ],
   "DPDP_Documents.gs": [
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
-    "dpdpListDocumentLinks", "dpdpExpireDocumentGrants"
+    "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
+  ],
+  "DPDP_Dispatch.gs": [
+    "dpdpRequireDispatchConsent_", "dpdp_resolvePatientFor_", "dpdp_consentState_",
+    "getDispatchChannelNotice", "dpdpDispatchChannels", "getDispatchConsent",
+    "recordDispatchConsent", "dpdpDispatchReadiness"
   ],
   "DPDP_Breach.gs": [
     "dpdp_anomalyScan_", "dpdpAnomalyScan", "dpdpRaiseBreach",
@@ -125,8 +130,13 @@ var DEP_MAP = {
     "crescRandomPassword_", "crescChangePassword", "crescAdminResetPassword",
     "crescCredentialStatus", "crescMigrateCredentials", "crescPwdBenchmark"
   ],
+  "Auth_Reset.gs": [
+    "crescRequestPasswordReset", "cresc_sendResetEmail_", "cresc_resetThrottle_",
+    "crescResetReadiness"
+  ],
   "Clinic_Profile.gs": [
-    "cresc_clinic_", "getClinicProfile", "setClinicProfile"
+    "cresc_clinic_", "getClinicProfile", "setClinicProfile",
+    "cresc_clinicWebsite_", "cresc_publicBaseUrl_", "cresc_publicLinkBase_"
   ],
   "Patient_Profile_Edit.gs": [
     "updatePatientProfile", "getPatientProfileHistory", "ppe_validate_"
