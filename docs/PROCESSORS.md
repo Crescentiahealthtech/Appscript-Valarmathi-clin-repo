@@ -14,17 +14,20 @@ and what is missing.
 
 | Processor | What reaches them | Contract | Status |
 |---|---|---|---|
-| **Google** — Sheets, Drive, Apps Script, Gmail, the account the script runs as | **Everything.** The whole record lives in a Google spreadsheet; documents are PDFs in Drive; every server function runs on Apps Script. | Google Workspace Data Processing Addendum — **only on a Workspace account**. A personal `@gmail.com` account is covered by the consumer terms, which are **not** a processor agreement. | ⬜ **CHECK WHICH ONE THIS DEPLOYMENT IS** |
+| **Google** — Sheets, Drive, Apps Script, Gmail, the account the script runs as | **Everything.** The whole record lives in a Google spreadsheet; documents are PDFs in Drive; every server function runs on Apps Script. | Google Workspace Data Processing Addendum — **only on a Workspace account**. A personal `@gmail.com` account is covered by the consumer terms, which are **not** a processor agreement. | 🔴 **CHECKED: the spreadsheet is owned by `crescentiahealthtech@gmail.com`, a personal Google account. There is no DPA.** |
 | **Meta / WhatsApp** | The patient's name and mobile number in the message, and a link to a document about them. Not the document itself — links are now private and expiring. | WhatsApp's consumer terms, which are not a processor agreement. | ⬜ Move to the WhatsApp Business API with a contract, **or** rely on the patient's specific consent (`COMMUNICATION`) and say in the notice that the message goes through Meta. |
 | **Google / Microsoft speech services** | The **audio** of a clinician dictating a clinical note, if voice typing is enabled. | Nothing specific. It is the browser's own feature, used by the clinician's browser. | ⬜ Decide: `dpdpSetVoicePolicy("ALLOWED"\|"FORBIDDEN")`. If allowed, it goes in the notice. |
 | **The insurer / TPA named on a claim** | The patient's identity, the admission, the diagnosis and the bill. | The insurer's own empanelment agreement. | ⬜ Confirm the agreement has a data-protection clause. Consent for this purpose (`INSURANCE`) is recorded per patient. |
 | **[Your SMS gateway, if any]** | Name, mobile, appointment or result availability. | | ⬜ |
 | **[Your accountant or auditor, if they get exports]** | Bills, patient names, sometimes diagnoses on insurance claims. | | ⬜ A person outside the clinic handling patient data is a processor, even when they are a family friend. |
 
-### The first one is the one that matters
+### The first one is the one that matters, and it has been checked
 
-Everything in this repository runs inside one Google account. If that account is
-a personal Gmail account:
+**The clinic's spreadsheet is owned by `crescentiahealthtech@gmail.com`.** That
+is a personal Google account, not Google Workspace. It was read from the file's
+own metadata, so this is not an inference.
+
+That means, today:
 
 - there is **no Data Processing Addendum**, so section 8(2) is not met for
   100% of the clinic's personal data;
@@ -33,14 +36,27 @@ a personal Gmail account:
   obligation;
 - the account's owner personally, rather than the clinic, controls the records.
 
-**How to check:** sign in and open <https://admin.google.com>. A Workspace
-account reaches an admin console; a personal account does not. Alternatively,
-the email address is the answer — `something@gmail.com` is personal,
-`something@yourclinic.in` is usually Workspace.
+**Migrating to Google Workspace is the single highest-value non-engineering
+action available to this clinic.** It is not a code change and nothing in this
+repository can do it. Roughly what it involves:
 
-If it is personal: migrating to Workspace is the single highest-value
-non-engineering action on this list. Until then, say so honestly in any answer
-to a patient about where their data is held.
+1. Buy Workspace on the clinic's own domain (Business Starter is enough for
+   this; the DPA comes with every paid tier).
+2. Create a clinic account for each member of staff.
+3. **Transfer ownership** of the spreadsheet and the Drive folders
+   (`Crescentia_Lab_Invoices`, `Valarmathi_OP_Prescriptions`,
+   `Crescentia_Pharmacy_Invoices` and the rest) to the clinic account —
+   transfer, not copy, so there is one authoritative record and not two.
+4. Move the Apps Script project with them, and **redeploy**. The `/exec` URL
+   changes, so re-print anything that carries it.
+5. Set the Workspace data region if the clinic wants storage in India.
+6. Remove the personal account's access, and check it holds no leftover copy.
+
+Until that is done, two things follow that the clinic should be honest about:
+section 8(2) is not met for any of its patient data, and if anything happens to
+that personal account — lost password, recovery failure, the person who owns it
+leaving — the clinic's entire medical record goes with it. There is no admin
+console to recover it from.
 
 ---
 

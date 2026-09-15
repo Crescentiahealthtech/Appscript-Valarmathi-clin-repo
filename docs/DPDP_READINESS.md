@@ -14,6 +14,7 @@ clinic is a Significant Data Fiduciary and sign off your Consent Notice.
 | | |
 |---|---|
 | **Overall** | The code findings are closed. What is left is **deployment, decisions and documents** — and until the redeployment in step 1 below is done, the most serious finding is still live in production. |
+| **Confirmed while doing this work** | The records are held in a spreadsheet owned by a **personal Gmail account**, so there is no Google Data Processing Addendum covering any of it (H6), and the patient passwords in it are the derived plain-text ones described in C3. |
 | **Critical, was** | 3 — all three addressed in code; C1 needs a redeployment to take effect |
 | **High, was** | 6 — five closed in code, H6 is a contract the clinic has to hold |
 | **Medium, was** | 5 — all five closed |
@@ -55,10 +56,11 @@ not a substitute for the clinic adopting them.
 4. **Install the scheduled jobs.** `dpdpInstallTriggers()`, then
    `dpdpTriggerStatus()` to confirm. Without them nothing expires, nobody reads
    the audit log, and no retention report is ever produced. *(H1, H4, H5)*
-5. **Find out whether the spreadsheet is on Google Workspace or a personal
-   Gmail account.** Open <https://admin.google.com> from the owning account. On
-   a personal account there is **no Data Processing Addendum**, so s.8(2) is
-   not met for any of the clinic's data. *(H6)*
+5. **Start the move to Google Workspace.** This has been checked: the
+   spreadsheet is owned by `crescentiahealthtech@gmail.com`, a personal Google
+   account, so there is no Data Processing Addendum and s.8(2) is met for none
+   of the clinic's data — and there is no admin console to recover the records
+   from if that account is ever lost. `docs/PROCESSORS.md` has the steps. *(H6)*
 
 ---
 
@@ -328,11 +330,16 @@ s.8(2): a Data Fiduciary remains responsible for processing done by a Data
 Processor, and must have a contract with them. `docs/PROCESSORS.md` is the
 register and the record of processing.
 
-The one that matters: **everything in this repository runs inside one Google
-account.** If that account is a personal `@gmail.com`, there is no Data
-Processing Addendum and s.8(2) is met for none of the clinic's data. Check it
-(step 5). If it is personal, migrating to Workspace is the highest-value
-non-engineering action available.
+The one that matters has now been checked, and the answer is the bad one:
+**the clinic's spreadsheet is owned by `crescentiahealthtech@gmail.com`, a
+personal Google account.** There is therefore no Data Processing Addendum, and
+s.8(2) is met for **none** of the clinic's patient data.
+
+That also means there is no admin console: if that account is lost, recovered
+by somebody else, or belongs to a person who leaves, the clinic's entire
+medical record goes with it. Migrating to Google Workspace on the clinic's own
+domain is the highest-value action on this whole list, and it is not something
+code can do. `docs/PROCESSORS.md` has the steps.
 
 WhatsApp's consumer terms are not a processor agreement either. Either move
 dispatch to the Business API with a contract, or rely on the patient's specific
