@@ -54,10 +54,18 @@ var PP = {
   VISIT_LIMIT: 12,
   LAB_LIMIT: 20,
 
-  /** How far back a trend looks. Two years of HbA1c is four to eight points. */
-  TREND_DAYS: 730,
-
-  /** Parameter-name aliases, because a lab catalogue is typed by humans. */
+  /**
+   * Parameter-name aliases, because a lab catalogue is typed by humans.
+   *
+   * LAB_TEST_CATALOG has no code a trend could key on — the same analyte is
+   * "HbA1c" in one clinic's catalogue and "Glycated Haemoglobin" in the next,
+   * and this deployment's has been edited by hand. Matching on the name with
+   * a list of spellings is how the chart finds the values instead of showing
+   * an empty panel to a diabetic with three years of results.
+   *
+   * Only the analytes something on screen actually plots are listed. Adding a
+   * key here does nothing on its own; it needs a series and a panel.
+   */
   ANALYTES: {
     HBA1C: ['HBA1C', 'HB A1C', 'GLYCATED HAEMOGLOBIN', 'GLYCOSYLATED HEMOGLOBIN',
             'GLYCATED HEMOGLOBIN', 'A1C'],
@@ -66,9 +74,7 @@ var PP = {
     PPBS:  ['PPBS', 'PBS', 'POST PRANDIAL BLOOD SUGAR', 'POSTPRANDIAL GLUCOSE',
             'POST PRANDIAL GLUCOSE', 'GLUCOSE POST PRANDIAL', 'PP BLOOD SUGAR',
             'POST PRANDIAL PLASMA GLUCOSE'],
-    RBS:   ['RBS', 'RANDOM BLOOD SUGAR', 'RANDOM GLUCOSE'],
-    CREAT: ['CREATININE', 'SERUM CREATININE'],
-    HB:    ['HAEMOGLOBIN', 'HEMOGLOBIN', 'HB']
+    RBS:   ['RBS', 'RANDOM BLOOD SUGAR', 'RANDOM GLUCOSE']
   }
 };
 
