@@ -1212,19 +1212,19 @@ function exportPatientData(patientId, sessionToken) {
 // ---------------------------------------------------------------------------
 
 /**
- * Registers a file that has just been shared on Drive.
+ * LEGACY. Registers a file shared on Drive with ANYONE_WITH_LINK.
  *
- * WHY THIS MATTERS MORE THAN IT LOOKS. Five places in this project do
+ * NOTHING CALLS THIS ANY MORE, and that is the point. The five places that
+ * used to publish a report, a prescription or an invoice to the open web now
+ * call dpdpIssueDocumentLink_() (DPDP_Documents.gs), which keeps the file
+ * private and hands out an expiring key instead.
  *
- *     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, ...)
- *
- * to hand a patient a lab report, a prescription or an invoice over
- * WhatsApp. Those files carry the patient's name, ID, diagnoses and results,
- * the link never expires, nobody records that it exists, and a WhatsApp
- * message is forwarded. There is no way to un-share what cannot be listed.
- *
- * Called by each of those five sites, this makes the set finite:
- * dpdpExpireSharedLinks() can then revoke the ones past their window.
+ * It is kept for two reasons: dpdpExpireSharedLinks() still has to work
+ * through the backlog of files published before that change, and a deployment
+ * that adds another Drive-sharing integration later should register it here
+ * rather than inventing a second register. If you find yourself calling this,
+ * look at dpdpIssueDocumentLink_() first — publishing to Drive is almost
+ * never the answer.
  */
 function dpdpRegisterSharedFile(file, docType, patientId, sharedBy) {
   try {
@@ -1720,12 +1720,48 @@ function dpdpReadinessCheck() {
             'past their retention window.',
             'Run dpdpExpireSharedLinks() and add a daily time-driven trigger for it.');
       }
-      if (!open && !overdue) {
-        add('MEDIUM', 'Section 8(5)',
-            'The shared-document register is empty. If documents are still being ' +
-            'put on Drive with ANYONE_WITH_LINK and not registered here, they ' +
-            'cannot be revoked because nothing lists them.',
-            'Confirm every setSharing() call also calls dpdpRegisterSharedFile().');
+      // The empty-register case is no longer a finding on its own: since
+      // DPDP_Documents.gs there are no setSharing(ANYONE_WITH_LINK) calls
+      // left, so an empty legacy register means the backlog is cleared, which
+      // is the good outcome rather than a suspicious one.
+    }
+  } catch (e) { /* ditto */ }
+
+  // --- document grants (the register that replaced the public links) ------
+  try {
+    var gs = ss.getSheetByName('Document_Grants');
+    if (!gs) {
+      add('MEDIUM', 'Section 8(5)',
+          'Document_Grants does not exist, so no document has been shared with a ' +
+          'patient since private links replaced public Drive links — or the ' +
+          'registers were never created.',
+          'Run dpdpSetup(). If documents ARE being sent, check that ' +
+          'dpdpIssueDocumentLink_() is what sends them: grep the project for ' +
+          'setSharing to be sure nothing publishes to Drive directly.');
+    } else {
+      var gv = dc_sheetValues_(gs);
+      var gm = dc_headerMap_(gs);
+      var liveOverdue = 0, heavilyOpened = 0, nowG = Date.now();
+      for (var g = 1; g < (gv ? gv.length : 0); g++) {
+        if (dpdp_str_(gv[g][gm['Status']]).toUpperCase() !== 'ACTIVE') continue;
+        var gexp = (typeof cresc_parseDate_ === 'function')
+          ? cresc_parseDate_(gv[g][gm['Expires_At']]) : new Date(gv[g][gm['Expires_At']]);
+        if (gexp && !isNaN(gexp.getTime()) && gexp.getTime() < nowG) liveOverdue++;
+        if ((parseInt(gv[g][gm['Opens']], 10) || 0) >= 6) heavilyOpened++;
+      }
+      if (liveOverdue) {
+        add('MEDIUM', 'Section 8(7)',
+            liveOverdue + ' document link(s) are past their expiry but still marked ' +
+            'active, which means the daily job is not running.',
+            'dpdpInstallTriggers(), then dpdpTriggerStatus() to confirm.');
+      }
+      if (heavilyOpened) {
+        add('MEDIUM', 'Section 8(6)',
+            heavilyOpened + ' shared document(s) have been opened six times or more. ' +
+            'A patient reading their own report does not do that; a forwarded ' +
+            'message does.',
+            'Privacy console > A patient > withdraw the link, and consider whether ' +
+            'the patient should be told (docs/BREACH_PROCEDURE.md).');
       }
     }
   } catch (e) { /* ditto */ }
