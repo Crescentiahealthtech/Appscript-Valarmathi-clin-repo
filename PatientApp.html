@@ -188,6 +188,70 @@
       <button class="btn text-white w-100 fw-bold on-accent" style="background-color: var(--accent-purple);" onclick="saveProfile()">Save Changes</button>
     </div>
   </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       MY PRIVACY — DPDP Act ss.6(6), 11-14
+
+       s.6(6) says withdrawal must be AS EASY AS GIVING. Consent was given at
+       a desk in a few seconds; if taking it back means telephoning the clinic
+       during working hours and persuading somebody, it is not as easy, and
+       the section is not met by a form that exists somewhere the patient
+       cannot reach. So the patient can do it here, themselves, in the same
+       number of clicks.
+
+       Care and billing are not shown as switches: the clinic processes those
+       as legitimate uses under s.7 because the patient came here to be
+       treated, and a switch implying otherwise would be a lie about what
+       happens when it is turned off.
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="card p-4 border-secondary mt-4" style="max-width: 600px;">
+    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-3">
+      <h5 class="m-0 text-white"><i class="fa-solid fa-shield-halved me-2" style="color: var(--accent-fg);"></i> My privacy</h5>
+      <span class="small label-bright" id="pp-notice-version"></span>
+    </div>
+
+    <div class="small label-bright mb-2">What you have agreed to</div>
+    <div id="pp-consent" class="mb-4 small text-white">Loading…</div>
+
+    <div class="small label-bright mb-2">
+      Who may act for me if I cannot
+      <i class="fa-solid fa-circle-info ms-1" title="Section 14: a nominee exercises these rights if you die or become unable to exercise them yourself."></i>
+    </div>
+    <div id="pp-nominee" class="mb-2 small text-white">Loading…</div>
+    <div class="row g-2 mb-4">
+      <div class="col-5"><input id="pp-nom-name" class="form-control form-control-sm text-white-force" placeholder="Their name"></div>
+      <div class="col-3"><input id="pp-nom-rel" class="form-control form-control-sm text-white-force" placeholder="Relation"></div>
+      <div class="col-4"><input id="pp-nom-contact" class="form-control form-control-sm text-white-force" placeholder="Phone/email"></div>
+      <div class="col-12 d-flex gap-2">
+        <button class="btn btn-sm text-white fw-bold on-accent" style="background-color: var(--accent-purple);"
+                onclick="ppSaveNominee()">Save nominee</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="ppRemoveNominee()">Remove</button>
+      </div>
+    </div>
+
+    <div class="small label-bright mb-2">Ask us for something</div>
+    <div class="row g-2">
+      <div class="col-12 col-md-5">
+        <select id="pp-rq-type" class="form-select form-select-sm text-white-force premium-select">
+          <option value="ACCESS">A copy of everything you hold about me</option>
+          <option value="CORRECTION">Correct something that is wrong</option>
+          <option value="ERASURE">Erase my information</option>
+          <option value="GRIEVANCE">Make a complaint</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-7">
+        <input id="pp-rq-details" class="form-control form-control-sm text-white-force"
+               placeholder="In your own words">
+      </div>
+      <div class="col-12">
+        <button class="btn btn-sm text-white fw-bold on-accent" style="background-color: var(--accent-purple);"
+                onclick="ppRaiseRequest()">Send</button>
+        <span class="small label-bright ms-2">We answer within 30 days.</span>
+      </div>
+    </div>
+
+    <div id="pp-msg" class="small mt-3"></div>
+  </div>
 </div>
 
 <div id="tab-pat-records" class="page-section">
@@ -483,5 +547,172 @@
        if (document.getElementById('hba1cChart')) renderCharts(true);
      });
    }
+
+
+
+  /* ══════════════════════════════════════════════════════════════════════
+     MY PRIVACY
+
+     Everything below acts on THIS patient only: the server checks that the
+     session's username is the patient id on every one of these calls, so the
+     screen cannot be pointed at somebody else's record by editing what it
+     sends.
+     ══════════════════════════════════════════════════════════════════════ */
+  function ppMe() {
+    return (window.loggedInUser || localStorage.getItem('loggedInUser') || '').toUpperCase();
+  }
+  function ppTok() { return window.sessionToken || ''; }
+  function ppEsc(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function ppSay(msg, bad) {
+    var el = document.getElementById('pp-msg');
+    if (!el) return;
+    el.className = 'small mt-3 ' + (bad ? 'text-danger' : 'text-success');
+    el.textContent = msg;
+  }
+
+  function ppLoadPrivacy() {
+    var me = ppMe();
+    if (!me || !document.getElementById('pp-consent')) return;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var host = document.getElementById('pp-consent');
+        if (!res || !res.success) { host.textContent = 'Could not load your consent record.'; return; }
+        var v = document.getElementById('pp-notice-version');
+        if (v) v.textContent = 'notice ' + (res.noticeVersion || '');
+
+        host.innerHTML = res.purposes.map(function (p) {
+          if (p.legitimate) {
+            // Shown, not offered. Turning "being treated" into a switch would
+            // imply something happens when it is off, and nothing does.
+            return '<div class="d-flex align-items-center gap-2 py-1">' +
+              '<i class="fa-solid fa-circle-check" style="color:var(--accent-fg)"></i>' +
+              '<span>' + ppEsc(p.label) + '</span>' +
+              '<span class="label-bright ms-auto" style="font-size:.7rem">part of treating you</span>' +
+              '</div>';
+          }
+          var on = (p.state === 'GIVEN');
+          return '<div class="d-flex align-items-center gap-2 py-1">' +
+            '<div class="form-check form-switch m-0">' +
+              '<input class="form-check-input" type="checkbox" ' + (on ? 'checked' : '') +
+              ' onchange="ppSetConsent(\'' + ppEsc(p.key) + '\', this.checked)">' +
+            '</div>' +
+            '<span>' + ppEsc(p.label) + '</span>' +
+            '<span class="label-bright ms-auto" style="font-size:.7rem">' +
+              (p.state === 'NOT_ASKED' ? 'not asked yet'
+               : p.state === 'WITHDRAWN' ? 'withdrawn'
+               : p.state === 'REFUSED' ? 'you said no' : 'you agreed') +
+            '</span></div>';
+        }).join('');
+      })
+      .withFailureHandler(function () {
+        document.getElementById('pp-consent').textContent = 'Could not load your consent record.';
+      })
+      .getConsentStatus(me, ppTok());
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var host = document.getElementById('pp-nominee');
+        if (!host) return;
+        host.innerHTML = (res && res.success && res.nomination)
+          ? '<strong>' + ppEsc(res.nomination.nominee) + '</strong> (' +
+            ppEsc(res.nomination.relationship) + ') · ' + ppEsc(res.nomination.contact)
+          : '<span class="label-bright">Nobody nominated yet.</span>';
+      })
+      .withFailureHandler(function () {})
+      .getNomination(me, ppTok());
+  }
+
+  window.ppSetConsent = function (purpose, give) {
+    var me = ppMe();
+    if (!me) return;
+    if (give) {
+      var decisions = {};
+      decisions[purpose] = true;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          ppSay((res && res.message) || 'Saved.', !(res && res.success));
+          ppLoadPrivacy();
+        })
+        .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
+        .recordConsent({ patientId: me, decisions: decisions, method: 'PORTAL' }, ppTok());
+    } else {
+      google.script.run
+        .withSuccessHandler(function (res) {
+          ppSay((res && res.message) || 'Withdrawn.', !(res && res.success));
+          ppLoadPrivacy();
+        })
+        .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
+        .withdrawConsent(me, purpose, 'Withdrawn by the patient in the portal', ppTok());
+    }
+  };
+
+  window.ppSaveNominee = function () {
+    var me = ppMe();
+    if (!me) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        ppSay((res && res.message) || 'Saved.', !(res && res.success));
+        if (res && res.success) {
+          ['pp-nom-name', 'pp-nom-rel', 'pp-nom-contact'].forEach(function (id) {
+            var el = document.getElementById(id); if (el) el.value = '';
+          });
+          ppLoadPrivacy();
+        }
+      })
+      .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
+      .recordNomination({
+        patientId: me,
+        nomineeName: (document.getElementById('pp-nom-name') || {}).value || '',
+        relationship: (document.getElementById('pp-nom-rel') || {}).value || '',
+        contact: (document.getElementById('pp-nom-contact') || {}).value || ''
+      }, ppTok());
+  };
+
+  window.ppRemoveNominee = function () {
+    var me = ppMe();
+    if (!me) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        ppSay((res && res.message) || 'Removed.', !(res && res.success));
+        ppLoadPrivacy();
+      })
+      .withFailureHandler(function () { ppSay('Could not do that. Please try again.', true); })
+      .revokeNomination(me, 'Withdrawn by the patient in the portal', ppTok());
+  };
+
+  window.ppRaiseRequest = function () {
+    var me = ppMe();
+    if (!me) return;
+    var details = (document.getElementById('pp-rq-details') || {}).value || '';
+    if (details.trim().length < 10) {
+      return ppSay('Tell us in a sentence what you would like.', true);
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        ppSay((res && res.message) || 'Sent.', !(res && res.success));
+        if (res && res.success) document.getElementById('pp-rq-details').value = '';
+      })
+      .withFailureHandler(function () { ppSay('Could not send that. Please try again.', true); })
+      .raiseDPDPRequest({
+        patientId: me,
+        type: (document.getElementById('pp-rq-type') || {}).value || 'ACCESS',
+        details: details.trim(),
+        channel: 'PORTAL'
+      }, ppTok());
+  };
+
+  // The portal loads its screens once, so this runs on first paint and again
+  // whenever the profile tab is opened.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ppLoadPrivacy);
+  } else {
+    ppLoadPrivacy();
+  }
+  window.ppLoadPrivacy = ppLoadPrivacy;
 
 </script>

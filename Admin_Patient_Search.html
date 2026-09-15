@@ -161,16 +161,17 @@
     { key: 'dob',             label: 'Date of birth',     type: 'date',  width: 3 },
     { key: 'bloodGroup',      label: 'Blood group',       type: 'select', width: 3,
       options: ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'] },
-    { key: 'maritalStatus',   label: 'Marital status',    type: 'select', width: 3,
-      options: ['', 'Single', 'Married', 'Widowed', 'Divorced'] },
     { key: 'mobile',          label: 'Primary mobile',    type: 'tel',   width: 3 },
 
     { key: 'whatsapp',        label: 'WhatsApp',          type: 'tel',   width: 3 },
     { key: 'email',           label: 'Email',             type: 'email', width: 5 },
-    { key: 'occupation',      label: 'Occupation',        type: 'text',  width: 4 },
 
+    /* Marital status, occupation and education were here. Nothing read them,
+       so under s.6(1) there was no purpose to state for holding them — see
+       docs/DPDP_READINESS.md finding M1. They are no longer collected,
+       displayed or editable; dpdpEraseUnusedFields() clears what was already
+       collected. */
     { key: 'address',         label: 'Residential address', type: 'text', width: 8 },
-    { key: 'education',       label: 'Education',         type: 'text',  width: 4 },
 
     { key: 'comorb',          label: 'Co-morbidities',    type: 'text',  width: 6,
       placeholder: 'Nil' },

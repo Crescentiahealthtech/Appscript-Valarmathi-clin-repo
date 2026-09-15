@@ -321,10 +321,19 @@ function recordConsent(payload, sessionToken) {
     lock.waitLock(10000);
     payload = payload || {};
 
-    var actor = crescRequire_(sessionToken, ['patient.register', 'patient.write']);
+    // s.6(6): withdrawal has to be as easy as giving, and the patient portal
+    // is where a patient can do either without telephoning the clinic during
+    // working hours. A patient reaches this with 'portal.self' and may only
+    // ever act on their own record — checked immediately below, because
+    // 'portal.self' says "the portal", not "any patient in it".
+    var actor = crescRequire_(sessionToken,
+                              ['patient.register', 'patient.write', 'portal.self']);
 
     var patientId = dpdp_str_(payload.patientId).toUpperCase();
     if (!patientId) return { success: false, message: 'No patient was named.' };
+    if (actor.role === 'patient' && dpdp_str_(actor.username).toUpperCase() !== patientId) {
+      return { success: false, message: 'You can only change your own consent.' };
+    }
 
     var decisions = payload.decisions || {};
     var keys = Object.keys(decisions);
@@ -409,9 +418,13 @@ function recordConsent(payload, sessionToken) {
  */
 function getConsentStatus(patientId, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'patient.read');
+    // A patient may read their own consent record, and nobody else's.
+    var actor = crescRequire_(sessionToken, ['patient.read', 'portal.self']);
     var want = dpdp_str_(patientId).toUpperCase();
     if (!want) return { success: false, message: 'No patient was named.' };
+    if (actor.role === 'patient' && dpdp_str_(actor.username).toUpperCase() !== want) {
+      return { success: false, message: 'You can only see your own consent record.' };
+    }
 
     var sh = dpdp_consentSheet_();
     var data = dc_sheetValues_(sh);
@@ -970,8 +983,12 @@ function recordNomination(payload, sessionToken) {
 /** FRONTEND ENTRY. The nomination in force, and the ones it replaced. */
 function getNomination(patientId, sessionToken) {
   try {
-    crescRequire_(sessionToken, ['patient.read', 'portal.self']);
+    var actor = crescRequire_(sessionToken, ['patient.read', 'portal.self']);
     var want = dpdp_str_(patientId).toUpperCase();
+    if (actor.role === 'patient' && dpdp_str_(actor.username).toUpperCase() !== want) {
+      return { success: false, nomination: null, history: [],
+               message: 'You can only see your own nomination.' };
+    }
     var sh = dpdp_nomineeSheet_();
     var m = dc_headerMap_(sh);
     var data = dc_sheetValues_(sh);
@@ -1278,6 +1295,66 @@ function dpdpExpireSharedLinks(dryRun) {
 }
 
 /**
+ * ADMIN. Erases the three columns that were collected for no stated purpose —
+ * marital status, occupation and education — from every existing patient row.
+ *
+ * WHY THIS ONE DOES DELETE, WHEN THE RETENTION SWEEP DOES NOT. Everything the
+ * retention report lists is a CLINICAL or FINANCIAL record: a medico-legal
+ * case or an insurance dispute can require it years after its ordinary
+ * period, so deleting it on a schedule is how a clinic loses the file it is
+ * about to be asked for. These three fields are the opposite case. Nothing
+ * reads them, no purpose was ever stated for them, and s.6(1) permits
+ * collection only for a specified purpose — so keeping them has no upside to
+ * weigh against, and erasing them is the plain s.8(7) answer.
+ *
+ * Dry run by default. Pass true to actually clear them.
+ *
+ * @param {boolean} [confirm]  false/omitted reports; true erases
+ */
+function dpdpEraseUnusedFields(confirm) {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
+  if (!sh || sh.getLastRow() < 2) return 'No patient rows.';
+
+  var COLUMNS = [
+    { col: 13, name: 'Marital_Status' },   // 1-based: M
+    { col: 15, name: 'Occupation' },       // O
+    { col: 16, name: 'Education' }         // P
+  ];
+  var rows = sh.getLastRow() - 1;
+  var lines = ['Unused-field erasure' + (confirm ? '' : ' — DRY RUN') + ' — ' +
+               dpdp_fmt_(dpdp_now_()), ''];
+  var total = 0;
+
+  COLUMNS.forEach(function (c) {
+    if (sh.getLastColumn() < c.col) { lines.push('  ' + c.name + ': column absent.'); return; }
+    var range = sh.getRange(2, c.col, rows, 1);
+    var values = range.getValues();
+    var filled = values.filter(function (r) { return dpdp_str_(r[0]) !== ''; }).length;
+    total += filled;
+    if (confirm && filled) range.clearContent();
+    lines.push('  ' + c.name + ': ' + filled + ' value(s) ' +
+               (confirm ? 'erased.' : 'would be erased.'));
+  });
+
+  lines.push('');
+  lines.push(confirm
+    ? total + ' value(s) erased from ' + rows + ' patient row(s). The columns are ' +
+      'left in place so the sheet layout, which every column index in this ' +
+      'project depends on, does not move.'
+    : 'Nothing has been changed. Run dpdpEraseUnusedFields(true) to erase.');
+
+  var report = lines.join('\n');
+  Logger.log(report);
+  if (confirm) {
+    try {
+      logAudit_({ username: 'ADMIN', role: '' }, 'DPDP_FIELDS_ERASED', 'Patients', 'ALL',
+                { columns: COLUMNS.map(function (c) { return c.name; }), values: total });
+    } catch (e) {}
+  }
+  return report;
+}
+
+/**
  * REPORTS what is past its retention period. NEVER DELETES.
  *
  * Erasure under s.8(7) is a decision with legal consequences — a medico-legal
@@ -1421,6 +1498,75 @@ function dpdpConsoleSnapshot(sessionToken) {
   }
 }
 
+/**
+ * FRONTEND ENTRY. May dictation leave this building?
+ *
+ * Finding M3. Voice typing uses the browser's Web Speech API, which in Chrome
+ * and Edge sends the AUDIO — a clinician saying a patient's history out loud —
+ * to the browser vendor's speech service. The per-browser consent dialog in
+ * Voice_Input.html is the right thing to show the person using it, but it is
+ * the wrong place to make the decision: one clinician clicking Enable on one
+ * laptop is not the clinic deciding that recorded clinical speech may go to a
+ * third party.
+ *
+ * So the clinic decides once, here, and the browser dialog can only ask
+ * within that decision. Default is ALLOWED, because that is what the
+ * application did before this existed and changing behaviour silently is its
+ * own kind of wrong — but the readiness check names it until it has been set
+ * deliberately either way.
+ */
+function dpdpVoicePolicy(sessionToken) {
+  try {
+    crescRequire_(sessionToken, ['emr.write', 'ward.write', 'rx.write', 'admin.config',
+                                 'dpdp.manage', 'patient.read']);
+    var raw = '';
+    try {
+      raw = PropertiesService.getScriptProperties().getProperty('CRESC_VOICE_POLICY') || '';
+    } catch (e) {}
+    var policy = dpdp_str_(raw).toUpperCase() || 'UNSET';
+    return {
+      success: true,
+      policy: policy,
+      allowed: policy !== 'FORBIDDEN',
+      decided: policy === 'ALLOWED' || policy === 'FORBIDDEN',
+      message: policy === 'FORBIDDEN'
+        ? 'This clinic has decided that dictated audio must not leave the building. ' +
+          'Voice typing is switched off here — type the note instead.'
+        : ''
+    };
+  } catch (err) {
+    // Fail CLOSED on an unreadable policy: a dictation feature that works when
+    // the server cannot be asked is a feature that works for someone who is
+    // not signed in.
+    return { success: false, policy: 'UNSET', allowed: false, decided: false,
+             message: 'Voice typing could not confirm the clinic policy, so it is off.' };
+  }
+}
+
+/** FRONTEND ENTRY. Records the clinic's decision about dictation. */
+function dpdpSetVoicePolicy(policy, sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, ['dpdp.manage', 'admin.config']);
+    var want = dpdp_str_(policy).toUpperCase();
+    if (want !== 'ALLOWED' && want !== 'FORBIDDEN') {
+      return { success: false, message: 'Policy must be ALLOWED or FORBIDDEN.' };
+    }
+    PropertiesService.getScriptProperties().setProperty('CRESC_VOICE_POLICY', want);
+    try {
+      logAudit_({ username: actor.username, role: actor.role },
+                'DPDP_VOICE_POLICY_SET', 'Config', 'CRESC_VOICE_POLICY', { policy: want });
+    } catch (e) {}
+    return { success: true, policy: want,
+             message: want === 'ALLOWED'
+               ? 'Voice typing is allowed. Each person is still asked once, in their ' +
+                 'own browser, before the first use.'
+               : 'Voice typing is off for the whole clinic. No dictated audio leaves ' +
+                 'the building through this application.' };
+  } catch (err) {
+    return { success: false, message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
 /** FRONTEND ENTRY. The retention report, for the console. Reports, never deletes. */
 function dpdpRetentionReportUI(sessionToken) {
   try {
@@ -1535,6 +1681,23 @@ function dpdpReadinessCheck() {
             'the list once, and forces a change at first sign-in.');
       }
     });
+  } catch (e) { /* ditto */ }
+
+  // --- dictation (finding M3) ---------------------------------------------
+  try {
+    var vp = '';
+    try { vp = PropertiesService.getScriptProperties().getProperty('CRESC_VOICE_POLICY') || ''; }
+    catch (e) {}
+    if (!vp) {
+      add('MEDIUM', 'Section 8(5)',
+          'No decision has been recorded about voice typing. It uses the browser’s ' +
+          'speech recognition, which in Chrome and Edge sends the audio — a ' +
+          'clinician dictating a patient’s history — to the browser vendor’s ' +
+          'speech service.',
+          'Decide, and record it: dpdpSetVoicePolicy("ALLOWED") or ' +
+          'dpdpSetVoicePolicy("FORBIDDEN"), from the Privacy console. Then say ' +
+          'which in the Consent Notice.');
+    }
   } catch (e) { /* ditto */ }
 
   // --- shared links -------------------------------------------------------
