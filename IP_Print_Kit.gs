@@ -240,11 +240,16 @@ function ipp_doc_(o) {
   var printedAt = ipp_when_(new Date());
 
   // The slim strip that repeats at the top of every page.
+  //
+  // The IP number is omitted when there is not one, rather than printed as
+  // "IP --". This kit now renders outpatient documents too (an OPD
+  // consultation from the master timeline), and a running head telling a
+  // patient their admission number is "--" reads as a fault in the document.
   var strip =
     '<div class="runhead clearfix">' +
       '<span><strong>' + ipp_esc_(p.name || "--") + '</strong>' +
         (p.ageSex ? ' (' + ipp_esc_(p.ageSex) + ')' : '') +
-        ' &nbsp;&middot;&nbsp; IP ' + ipp_esc_(p.ipNumber || "--") +
+        (p.ipNumber ? ' &nbsp;&middot;&nbsp; IP ' + ipp_esc_(p.ipNumber) : '') +
         ' &nbsp;&middot;&nbsp; PID ' + ipp_esc_(p.pid || "--") + '</span>' +
       '<span class="r">' + ipp_esc_(o.docTitle || "") + '</span>' +
     '</div>';
@@ -252,7 +257,7 @@ function ipp_doc_(o) {
   var foot =
     '<div class="runfoot clearfix">' +
       '<span>' + ipp_esc_(IPP_CLINIC.name) + ' &middot; ' + ipp_esc_(p.name || "--") +
-        ' &middot; IP ' + ipp_esc_(p.ipNumber || "--") + '</span>' +
+        (p.ipNumber ? ' &middot; IP ' + ipp_esc_(p.ipNumber) : '') + '</span>' +
       '<span class="r">Printed ' + ipp_esc_(printedAt) +
         (o.footNote ? ' &middot; ' + ipp_esc_(o.footNote) : '') + '</span>' +
     '</div>';

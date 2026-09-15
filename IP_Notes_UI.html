@@ -2270,7 +2270,12 @@ function ipn_prompt(message, value, done, opts) {
       CONSULTANT:    'fa-stethoscope',
       PROCEDURE:     'fa-scalpel',
       QUICK:         'fa-comment-medical',
-      INVESTIGATION: 'fa-flask'
+      INVESTIGATION: 'fa-flask',
+      // The stay's concluding entry. The timeline used to simply END at the
+      // last progress note — nothing in it said the patient had been
+      // discharged, on what, or with what to take home. See
+      // DS_Record_Bridge.gs.
+      DISCHARGE_SUMMARY: 'fa-file-circle-check'
     };
     const icon = iconMap[roleType] || 'fa-notes-medical';
 
@@ -2390,6 +2395,47 @@ function ipn_prompt(message, value, done, opts) {
       bodyHTML += `<div class="feed-text">${_esc(nd.text||'')}</div>`;
     }
 
+    /* THE DISCHARGE SUMMARY, IN FULL.
+       Not a link to it and not its final diagnosis alone: every section of
+       the signed document, in the order it prints, because this entry is the
+       one a nurse or a covering doctor reads to find out what the patient
+       went home on. It is collapsed by default — it is long, and the rest of
+       the stay is above it. */
+    if (roleType === 'DISCHARGE_SUMMARY') {
+      const secs = Array.isArray(nd.sections) ? nd.sections : [];
+      const badge = nd.isAmendment
+        ? `<span class="feed-role ms-2" style="background:var(--warning-bg); color:var(--warning-fg);">amendment v${_esc(nd.version)}</span>`
+        : '';
+      bodyHTML += `<div style="font-size:0.84rem; font-weight:700; color:var(--text-main); margin-bottom:2px;">`
+        + `${_esc(nd.documentTitle || 'Discharge summary')}${badge}</div>`;
+      if (nd.finalDiagnosis) {
+        bodyHTML += `<div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:4px;">`
+          + `<strong style="color:var(--text-muted);">Final diagnosis:</strong> ${_esc(nd.finalDiagnosis)}</div>`;
+      }
+      bodyHTML += `<div style="font-size:0.72rem; color:var(--text-faint); margin-bottom:6px;">`
+        + `Signed ${_esc(nd.signedAt || '')} by ${_esc(nd.signedBy || '')}`
+        + (nd.signerRegNo ? ` (${_esc(nd.signerRegNo)})` : '')
+        + (nd.shortHash ? ` &middot; ${_esc(nd.shortHash)}` : '') + `</div>`;
+
+      if (secs.length) {
+        const bodyId = 'dsnote-' + String(note.noteId || Math.random()).replace(/[^\w-]/g, '');
+        bodyHTML += `<button class="btn btn-sm btn-outline-secondary no-print mb-2" type="button"
+            onclick="ipnToggleSummary('${bodyId}', this)">
+            <i class="fas fa-chevron-down me-1"></i>Read the whole summary (${secs.length} sections)</button>`;
+        bodyHTML += `<div id="${bodyId}" class="ipn-ds-body" style="display:none;">`
+          + secs.map(function (sec) {
+              return `<div style="margin-bottom:8px;">`
+                + `<div style="font-size:0.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted);">${_esc(sec.title)}</div>`
+                + `<div style="font-size:0.8rem; color:var(--text-secondary); white-space:pre-wrap;">${_esc(sec.text)}</div>`
+                + `</div>`;
+            }).join('')
+          + `</div>`;
+      } else {
+        bodyHTML += `<div style="font-size:0.78rem; color:var(--text-faint);">`
+          + `Every section of this summary was empty when it was signed.</div>`;
+      }
+    }
+
     if (roleType === 'INVESTIGATION') {
       bodyHTML += `<div style="font-size:0.82rem; color:var(--teal-fg); margin-bottom:4px;">${_esc(nd.testName||'')} <span style="color:var(--text-faint);">${_esc(nd.priority||'')}</span></div>`;
       if (nd.result) {
@@ -2402,7 +2448,8 @@ function ipn_prompt(message, value, done, opts) {
     const roleLabelMap = {
       DOCTOR:'Progress Note', NURSE:'Nursing Note', CONSULTANT:'Consultant Note',
       PROCEDURE:'Procedure Note', QUICK:'Quick Note',
-      INVESTIGATION:'Lab Result'
+      INVESTIGATION:'Lab Result',
+      DISCHARGE_SUMMARY:'Discharge Summary'
     };
     const roleLabel = roleLabelMap[roleType] || roleType;
 
@@ -2427,7 +2474,11 @@ function ipn_prompt(message, value, done, opts) {
           </div>
           <span class="feed-time">
             ${_esc(note.timestamp)}
-            ${printableAlone ? `<button class="ipn-note-print no-print" type="button"
+            ${roleType === 'DISCHARGE_SUMMARY' ? `<button class="ipn-note-print no-print" type="button"
+                title="Print the signed discharge summary"
+                aria-label="Print the signed discharge summary"
+                onclick="ipnPrintDischargeSummary('${_esc(nd.summaryId || '')}', this)"><i class="fas fa-print me-1"></i>Print</button>`
+              : printableAlone ? `<button class="ipn-note-print no-print" type="button"
                 title="Print this ${_esc(roleLabel.toLowerCase())} on its own sheet"
                 aria-label="Print this ${_esc(roleLabel.toLowerCase())}"
                 onclick="ipnPrintOneNote('${_esc(note.noteId)}', this)"><i class="fas fa-print me-1"></i>Print</button>` : ''}
@@ -3998,6 +4049,61 @@ function ipn_prompt(message, value, done, opts) {
       .getIPNotesPrintHtml(ctx.ipNumber, { noteIds: [noteId] }, window.sessionToken);
   }
   window.ipnPrintOneNote = ipnPrintOneNote;
+
+  /** Expands or collapses the discharge summary inside its timeline entry. */
+  function ipnToggleSummary(bodyId, btn) {
+    const el = document.getElementById(bodyId);
+    if (!el) return;
+    const open = (el.style.display !== 'none');
+    el.style.display = open ? 'none' : 'block';
+    if (btn) {
+      btn.innerHTML = open
+        ? '<i class="fas fa-chevron-down me-1"></i>Read the whole summary'
+        : '<i class="fas fa-chevron-up me-1"></i>Collapse';
+    }
+  }
+  window.ipnToggleSummary = ipnToggleSummary;
+
+  /**
+   * The signed discharge summary, printed as the document it is.
+   *
+   * Deliberately NOT the note-print path above: that renders a ward note on a
+   * letterhead, and a discharge summary already has its own signed layout
+   * with the signature block, the verification QR and the patient
+   * acknowledgement. ds_getPrintHtml renders from the SIGNED snapshot, so
+   * what prints is what was signed.
+   */
+  function ipnPrintDischargeSummary(summaryId, btn) {
+    if (!summaryId) {
+      ipnToast('This entry has no summary reference — print it from the ' +
+               'discharge desk.', 'warn');
+      return;
+    }
+    const done = function () {
+      if (!btn) return;
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-print me-1"></i>Print';
+    };
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:.65rem;height:.65rem;border-width:.1em;" aria-hidden="true"></span>Building…';
+    }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        done();
+        if (!res || !res.success) {
+          ipnToast((res && res.message) || 'The summary could not be built.', 'err');
+          return;
+        }
+        // ds_getPrintHtml answers { success, data: { html } }; the note print
+        // path answers a different shape, which is why this does not reuse
+        // ipnOpenPrintWindow's argument handling.
+        ipnOpenPrintWindow({ success: true, html: (res.data || {}).html || '' });
+      })
+      .withFailureHandler(function (e) { done(); ipnToast('Print failed: ' + e.message, 'err'); })
+      .ds_getPrintHtml(window.sessionToken, summaryId, '', 'FINAL');
+  }
+  window.ipnPrintDischargeSummary = ipnPrintDischargeSummary;
 
   // ── 13g. LAB CATALOGUE ──────────────────────────────────
   /**

@@ -1514,19 +1514,46 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
       onBehalfReason: reason
     });
 
+    // ---- 8. the ward record concludes where the stay concludes -----------
+    //
+    // The notes timeline is the continuous record of an admission, and it
+    // used to simply END at the last progress note: nothing in it said the
+    // patient had been discharged, on what, or with what to take home. The
+    // whole signed summary goes in as one note, section by section.
+    //
+    // It CANNOT fail the signature. The summary is already safe in
+    // DS_Snapshots and the signature is already committed; a note that could
+    // not be appended is reported, not rolled back. See DS_Record_Bridge.gs.
+    var wardNote = { ok: false, message: 'not attempted' };
+    try {
+      if (typeof dsx_writeSummaryToTimeline_ === 'function') {
+        wardNote = dsx_writeSummaryToTimeline_(summaryId, header, payload,
+                                               snapshotNo, actor);
+      }
+    } catch (e) {
+      wardNote = { ok: false, message: e.message };
+    }
+
     SpreadsheetApp.flush();
     // The PDF is deliberately NOT generated here — the lock is released first
     // (Phase 7 does it outside, and a PDF failure must never roll back a
     // signature).
 
-    return dsx_ok_('Signed by ' + profile.name + '.', {
+    return dsx_ok_('Signed by ' + profile.name + '.' +
+                   (wardNote.ok ? ''
+                                : ' NOTE: the summary could not be added to the ' +
+                                  'ward record (' + wardNote.message + ') — the ' +
+                                  'signature itself is safe. Run ' +
+                                  'dsxBackfillSummaryNotes() to add it.'), {
       rowVersion: rowVersion,
       status: DSX_STATUS.SIGNED,
       snapshotNo: snapshotNo,
       shortHash: dsx_shortHash_(contentHash),
       signedAt: dsx_fmt_(signedAt, 'dd-MMM-yyyy hh:mm a'),
       signerName: profile.name,
-      signerRegNo: profile.regNo
+      signerRegNo: profile.regNo,
+      wardNoteId: wardNote.noteId || '',
+      wardNoteWritten: !!wardNote.ok
     });
 
   } catch (e) {

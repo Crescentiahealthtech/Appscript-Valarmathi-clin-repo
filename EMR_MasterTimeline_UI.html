@@ -191,6 +191,22 @@
   // =========================================================================
   // 4. DATA FORMATTERS (Clean White/Gray Monotone with Restored Icons)
   // =========================================================================
+  /**
+   * Clinical free text goes into these cards through template literals, so it
+   * has to be escaped.
+   *
+   * This is not only an injection concern. "SpO2 <90% on air" is a perfectly
+   * ordinary diagnosis, and unescaped it opens a tag the browser never closes
+   * — the rest of that card, and sometimes the rest of the timeline, simply
+   * vanishes from the page with no error anywhere.
+   */
+  function mtEsc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  window.mtEsc = mtEsc;
+
   function safeJSONParse(str, fallback) {
     try { return JSON.parse(str); } catch(e) { return fallback; }
   }
@@ -282,6 +298,15 @@ function buildOPCard(ev) {
             <span style="border: 1px solid var(--border-hover); color: var(--text-main) !important; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 10px; background-color: var(--bg-main);">${ev.apptId}</span>
           </div>
           <div class="d-flex align-items-center gap-3">
+            <!-- Nothing on this timeline was printable on its own. The whole
+                 file could be printed, and a prescription could be printed
+                 from the consult while it was open, but "the paper from my
+                 visit in March" had no route. See mtPrintOPEncounter. -->
+            <button class="btn btn-sm btn-outline-light py-0 px-3 rounded-pill fw-bold"
+                    title="Print this consultation on its own"
+                    onclick="event.stopPropagation(); mtPrintOPD('${ev.apptId}', this)">
+               <i class="fa-solid fa-print me-1"></i> Print
+            </button>
             <button class="btn btn-sm btn-outline-light py-0 px-3 rounded-pill fw-bold" onclick="event.stopPropagation(); triggerEditOPD('${ev.apptId}')">
                <i class="fa-solid fa-pen-to-square me-1"></i> Edit
             </button>
@@ -299,11 +324,11 @@ function buildOPCard(ev) {
               <div class="col-md-7 emr-rec-divider-end">
                 <div class="mb-3">
                   <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-clipboard-list me-1 text-muted"></i> Complaints</span>
-                  <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 2px; font-weight: 500;">${ev.complaints}</p>
+                  <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 2px; font-weight: 500;">${mtEsc(ev.complaints)}</p>
                 </div>
                 <div class="mb-3">
                   <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-clock-rotate-left me-1" style="color: var(--accent-fg);"></i> History</span>
-                  <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 2px; font-weight: 500;">${ev.history}</p>
+                  <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 2px; font-weight: 500;">${mtEsc(ev.history)}</p>
                 </div>
                 <div class="mb-3">
                   <span style="color: var(--accent-fg); font-size: 0.85em; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 4px; letter-spacing: 0.5px;"><i class="fa-solid fa-microscope me-1" style="color: var(--accent-fg);"></i> Examinations</span>
@@ -313,7 +338,7 @@ function buildOPCard(ev) {
 
                 <div style="background-color: var(--surface); border: 1px solid var(--border-hover); border-radius: 6px; padding: 10px; margin-top: 14px;">
                   <span style="color: var(--danger-fg); font-size: 0.8em; font-weight: bold; display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fa-solid fa-triangle-exclamation me-1" style="color: var(--danger-fg);"></i> Diagnosis</span>
-                  <p style="color: var(--text-main) !important; font-weight: bold; font-size: 1.1em; margin-bottom: 0;">${ev.diagnosis}</p>
+                  <p style="color: var(--text-main) !important; font-weight: bold; font-size: 1.1em; margin-bottom: 0;">${mtEsc(ev.diagnosis)}</p>
                 </div>
               </div>
 
@@ -326,12 +351,12 @@ function buildOPCard(ev) {
                 <div style="background-color: var(--surface); border: 1px solid var(--border-hover); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
                   <span style="color: var(--accent-fg); font-size: 0.8em; font-weight: bold; display: block; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;"><i class="fa-solid fa-flask-vial me-1" style="color: var(--accent-fg);"></i> Labs & Advice</span>
                   <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 4px;"><strong style="color: var(--accent-fg);">Labs:</strong> ${formatLabs(ev.labs)}</p>
-                  <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 0;"><strong style="color: var(--accent-fg);">Advice:</strong> ${ev.advice}</p>
+                  <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 0;"><strong style="color: var(--accent-fg);">Advice:</strong> ${mtEsc(ev.advice)}</p>
                 </div>
 
                 <div class="text-end mt-3">
                   <span style="border: 1px solid var(--border-hover); background-color: var(--surface-2); color: var(--text-main) !important; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; display: inline-block;">
-                    <i class="fa-solid fa-calendar-check me-1 text-muted"></i> Review: ${ev.followUp}
+                    <i class="fa-solid fa-calendar-check me-1 text-muted"></i> Review: ${mtEsc(ev.followUp)}
                   </span>
                 </div>
               </div>
@@ -382,20 +407,162 @@ function buildIPDischargeBlock(ev) {
   const label = signed ? 'Discharge summary &mdash; signed'
                        : `Discharge summary &mdash; ${(ev.summaryStatus || '').replace(/_/g, ' ').toLowerCase()}`;
 
+  // The safe id for this stay's expandable body.
+  const key = String(ev.ipNumber || '').replace(/[^\w-]/g, '');
+
   return `
     <div class="p-3 mt-2" style="background-color: var(--surface); border-left: 3px solid ${edge}; border: 1px solid var(--border-hover); border-left-width: 3px; border-radius: 6px;">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <strong style="color:${fg}; font-size:.95em;"><i class="fa-solid ${icon} me-1"></i> ${label}</strong>
-        <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.8em;"
-                onclick="openDischargeSummaryFromTimeline('${ev.ipNumber}')">
-          <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Open
-        </button>
+        <div class="d-flex gap-2">
+          <!-- THE WHOLE SUMMARY, not its final diagnosis alone. This card used
+               to carry six fields from the header — id, status, signer, hash,
+               date, diagnosis — and none of the course, the medications, the
+               advice or the follow-up, all of which exist signed and hashed
+               one sheet away. Fetched on demand rather than folded into the
+               timeline payload, so a patient with six admissions does not
+               carry six complete summaries on every timeline open. -->
+          <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.8em;"
+                  id="ds-read-${key}"
+                  onclick="mtReadSummary('${ev.ipNumber}', '${key}', this)">
+            <i class="fa-solid fa-chevron-down me-1"></i> Read in full
+          </button>
+          ${signed ? `<button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.8em;"
+                  title="Print the signed discharge summary"
+                  onclick="mtPrintSummary('${ev.summaryId}', this)">
+            <i class="fa-solid fa-print me-1"></i> Print
+          </button>` : ''}
+          <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.8em;"
+                  onclick="openDischargeSummaryFromTimeline('${ev.ipNumber}')">
+            <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Open
+          </button>
+        </div>
       </div>
       ${signed ? `<div class="mt-2" style="color: var(--text-main); font-size:.88em;">
           Signed ${ev.signedAt || ''}${ev.signedBy ? ' by ' + ev.signedBy : ''}${ev.signerRegNo ? ' (Reg: ' + ev.signerRegNo + ')' : ''}
           ${ev.shortHash ? `<span class="text-muted ms-2" style="font-family:monospace;">${ev.shortHash}</span>` : ''}
         </div>` : ''}
+      <div id="ds-full-${key}" class="mt-3" style="display:none;"></div>
     </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   READING AND PRINTING ONE EPISODE
+
+   Every OPD and IPD event on this timeline is now individually printable,
+   and an admission's discharge summary can be read here in full rather than
+   only in the discharge desk.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** Cache per stay, so collapsing and re-expanding is free. */
+const MT_SUMMARY_CACHE = {};
+
+function mtReadSummary(ipNumber, key, btn) {
+  const host = document.getElementById('ds-full-' + key);
+  if (!host) return;
+
+  // Already open: collapse.
+  if (host.style.display !== 'none') {
+    host.style.display = 'none';
+    btn.innerHTML = '<i class="fa-solid fa-chevron-down me-1"></i> Read in full';
+    return;
+  }
+
+  const paint = function (res) {
+    if (!res || !res.success) {
+      host.innerHTML = `<div class="text-muted" style="font-size:.88em;">${
+        (res && res.message) || 'The summary could not be read.'}</div>`;
+      return;
+    }
+    const warn = res.signed ? '' :
+      `<div class="mb-2 p-2" style="border:1px solid var(--warning); color:var(--warning-fg); border-radius:4px; font-size:.82em;">
+         <i class="fa-solid fa-triangle-exclamation me-1"></i>${mtEsc(res.message)}</div>`;
+    host.innerHTML = warn + (res.sections || []).map(sec => `
+      <div class="mb-3">
+        <div style="color: var(--accent-fg); font-size:.78em; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;">${mtEsc(sec.title)}</div>
+        <div style="color: var(--text-main); font-size:.92em; white-space:pre-wrap;">${mtEsc(sec.text) || '—'}</div>
+      </div>`).join('') ||
+      `<div class="text-muted" style="font-size:.88em;">Every section was empty.</div>`;
+  };
+
+  host.style.display = 'block';
+  btn.innerHTML = '<i class="fa-solid fa-chevron-up me-1"></i> Collapse';
+
+  if (MT_SUMMARY_CACHE[ipNumber]) { paint(MT_SUMMARY_CACHE[ipNumber]); return; }
+
+  host.innerHTML = `<div class="text-muted" style="font-size:.88em;"><i class="fa-solid fa-circle-notch fa-spin me-1"></i>Reading the signed summary…</div>`;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      // A cached failure would be wrong: a permission that has since been
+      // granted, or a summary signed since, should be picked up on retry.
+      if (res && res.success) MT_SUMMARY_CACHE[ipNumber] = res;
+      paint(res);
+    })
+    .withFailureHandler(function (e) {
+      paint({ success: false, message: 'Could not reach the server: ' + e.message });
+    })
+    .getDischargeSummaryFull(ipNumber, window.sessionToken);
+}
+
+/** Opens a built document in its own window and prints it. */
+function mtOpenPrint(html) {
+  const w = window.open('', '_blank', 'width=900,height=1100');
+  if (!w) {
+    if (typeof crescAlert === 'function') crescAlert('Pop-up blocked. Allow pop-ups, then retry.', 'warn');
+    return;
+  }
+  w.document.open(); w.document.write(html); w.document.close(); w.focus();
+  setTimeout(function () { try { w.print(); } catch (e) {} }, 500);
+}
+
+/** Building the document is a round trip, so the button says so. */
+function mtPrintBusy(btn, on, label) {
+  if (!btn) return;
+  btn.disabled = on;
+  btn.innerHTML = on
+    ? '<span class="spinner-border spinner-border-sm me-1" style="width:.6rem;height:.6rem;border-width:.1em;"></span>Building…'
+    : '<i class="fa-solid fa-print me-1"></i> ' + label;
+}
+
+function mtPrintOPD(encounterId, btn) {
+  mtPrintBusy(btn, true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      mtPrintBusy(btn, false, 'Print');
+      if (!res || !res.success) {
+        if (typeof crescAlert === 'function')
+          crescAlert((res && res.message) || 'That consultation could not be printed.', 'err');
+        return;
+      }
+      mtOpenPrint(res.html);
+    })
+    .withFailureHandler(function (e) {
+      mtPrintBusy(btn, false, 'Print');
+      if (typeof crescAlert === 'function') crescAlert('Print failed: ' + e.message, 'err');
+    })
+    .mtPrintOPEncounter(encounterId, window.sessionToken);
+}
+
+function mtPrintSummary(summaryId, btn) {
+  if (!summaryId) return;
+  mtPrintBusy(btn, true);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      mtPrintBusy(btn, false, 'Print');
+      if (!res || !res.success) {
+        if (typeof crescAlert === 'function')
+          crescAlert((res && res.message) || 'The summary could not be printed.', 'err');
+        return;
+      }
+      // ds_getPrintHtml renders from the SIGNED snapshot, so what prints is
+      // what was signed — never the working row.
+      mtOpenPrint((res.data || {}).html || '');
+    })
+    .withFailureHandler(function (e) {
+      mtPrintBusy(btn, false, 'Print');
+      if (typeof crescAlert === 'function') crescAlert('Print failed: ' + e.message, 'err');
+    })
+    .ds_getPrintHtml(window.sessionToken, summaryId, '', 'FINAL');
 }
 
 /** Opens the discharge desk on this admission's summary. */
@@ -428,10 +595,10 @@ function buildIPCard(ev) {
 
         <div id="body-ip-${ev.ipNumber}" style="display: none;">
           <div class="p-3 mt-2" style="background-color: var(--surface); border: 1px solid var(--border-hover); border-radius: 6px;">
-             <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Ward:</span> ${ev.ward}</p>
+             <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Ward:</span> ${mtEsc(ev.ward)}</p>
              <p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Stay:</span> ${ev.admitted || ev.date}${ev.discharged ? ' &rarr; ' + ev.discharged : ' &rarr; still admitted'}</p>
-             ${ev.consultant ? `<p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Consultant:</span> ${ev.consultant}</p>` : ''}
-             <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 0; font-weight: bold;"><span style="color: var(--danger-fg); font-weight: bold; width: 110px; display:inline-block;">Diagnosis:</span> ${ev.diagnosis}</p>
+             ${ev.consultant ? `<p style="color: var(--text-main) !important; font-size: 0.95em; margin-bottom: 6px;"><span style="color: var(--accent-fg); font-weight: bold; width: 110px; display:inline-block;">Consultant:</span> ${mtEsc(ev.consultant)}</p>` : ''}
+             <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 0; font-weight: bold;"><span style="color: var(--danger-fg); font-weight: bold; width: 110px; display:inline-block;">Diagnosis:</span> ${mtEsc(ev.diagnosis)}</p>
           </div>
 
           <!-- The discharge summary for this stay. Until now the timeline read

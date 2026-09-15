@@ -100,6 +100,11 @@ var DEP_MAP = {
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
     "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
   ],
+  "DS_Record_Bridge.gs": [
+    "dsx_writeSummaryToTimeline_", "dsxBackfillSummaryNotes",
+    "getDischargeSummaryFull", "mtPrintOPEncounter",
+    "dsb_orderedSections_", "dsb_sectionText_"
+  ],
   "DPDP_Consent_Backfill.gs": [
     "dpdpBackfillConsent", "dpdpConsentQueue", "dpdp_consentMatrix_",
     "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN",
