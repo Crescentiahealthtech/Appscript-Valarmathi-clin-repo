@@ -673,13 +673,23 @@
    */
   window.setDateRestrictions = function () {
     var today = new Date();
-    var maxDate = new Date();
-    maxDate.setDate(today.getDate() + 2);
     var strToday = today.toISOString().split('T')[0];
-    var strMax = maxDate.toISOString().split('T')[0];
 
-    var book = document.getElementById('pat-book-date');
-    if (book) { book.setAttribute('min', strToday); book.setAttribute('max', strMax); }
+    // The portal's booking date. 'pat-book-date' was a hidden input behind
+    // three day cards, so the two-day cap was the whole of what a patient
+    // could book — there was no calendar to bound. The portal now offers a
+    // real date input, and the cap is 90 days: a patient told to come back
+    // in three months has to be able to book it, and the server refuses a
+    // day the doctor is not in clinic anyway (portalDoctorSlots).
+    var portalMax = new Date();
+    portalMax.setDate(today.getDate() + 90);
+    var strPortalMax = portalMax.toISOString().split('T')[0];
+    ['pat-book-date', 'pp-date-any'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.setAttribute('min', strToday);
+      el.setAttribute('max', strPortalMax);
+    });
 
     // The availability screen has a start AND an end date, both named for
     // which end they are. This looked for a single "avail-date", which

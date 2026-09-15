@@ -516,6 +516,23 @@
                <div class="col-md-4">
                    <label class="hd-label m-0 text-uppercase mb-2 text-warning">Next Review Date</label>
                    <input type="date" class="hd-input text-warning fw-bold" style="padding: 0.5rem;" id="clin-review-date">
+                   <!-- The two cards that had nowhere to be written. An ANC
+                        visit was going in as a free-text progress note and a
+                        vaccination was going on the parent's paper card, so
+                        neither could be trended, reminded from, or shown to
+                        the patient. See Maternal_Child.gs. -->
+                   <div class="d-flex gap-2 mt-3">
+                     <button class="btn btn-sm btn-outline-info flex-fill" type="button"
+                             onclick="opOpenCard('anc')"
+                             title="Antenatal card — LMP, EDD, this visit, next visit">
+                       <i class="fa-solid fa-baby-carriage me-1"></i>Antenatal
+                     </button>
+                     <button class="btn btn-sm btn-outline-success flex-fill" type="button"
+                             onclick="opOpenCard('imm')"
+                             title="Immunisation card — the national schedule and what is given">
+                       <i class="fa-solid fa-syringe me-1"></i>Vaccines
+                     </button>
+                   </div>
                </div>
            </div>
       </div>
@@ -2341,6 +2358,25 @@ function applyAssistAdvice() {
         document.getElementById('clin-review-date').value = d.toISOString().split('T')[0];
     }
 }
+
+/**
+ * Opens the antenatal or immunisation card for the patient on screen.
+ *
+ * CrescMC lives in the shell (Maternal_Child_UI.html) rather than in this
+ * bundle, because the ward and the patient screens want the same two cards
+ * and they are separate bundles.
+ */
+function opOpenCard(mode) {
+  var pid = opCurrentPatientId();
+  if (!pid) { opToast('Open a patient first.', 'warn'); return; }
+  var nameEl = document.getElementById('hd-pat-name');
+  if (!window.CrescMC) {
+    opToast('The card could not be opened — reload the page and try again.', 'err');
+    return;
+  }
+  window.CrescMC.open(pid, nameEl ? nameEl.innerText : '', mode);
+}
+window.opOpenCard = opOpenCard;
 
 // ============================================================================
 // INTERNAL REFERRAL

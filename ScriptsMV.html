@@ -242,8 +242,15 @@ function switchTab(tabId, clickedElement) {
    because the module that owns one may not be downloaded yet.
    ==================================================================== */
 var CRESC_TAB_INIT = {
-  'tab-pat-home':                 'renderCharts',
-  'tab-pat-appt':                 'initPatientBooking',
+  // The patient portal. Every screen loads its own data when it is opened
+  // rather than all of it at sign-in: the portal is the screen most likely
+  // to be on a phone on mobile data. 'tab-pat-home' used to point at
+  // renderCharts, which drew two charts of hardcoded numbers.
+  'tab-pat-home':                 'ppLoadHome',
+  'tab-pat-records':              'ppLoadRecords',
+  'tab-pat-meds':                 'ppLoadReports',
+  'tab-pat-appt':                 'ppInitBooking',
+  'tab-pat-profile':              'ppLoadPrivacy',
   'tab-admin-dash':               'renderAdminDashboard',
   'tab-admin-appt':               'initAdminLedger',
   'tab-admin-avail':              'initAvailability',

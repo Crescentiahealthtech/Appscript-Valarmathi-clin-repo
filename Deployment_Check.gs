@@ -100,6 +100,18 @@ var DEP_MAP = {
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
     "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
   ],
+  "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
+  "Patient_Portal.gs": [
+    "portalHome", "portalBookableDoctors", "portalDoctorSlots",
+    "portalBookAppointment", "portalCancelAppointment", "portalLabResults",
+    "portalRecords", "pp_me_", "pp_freeSlots_"
+  ],
+  "Maternal_Child.gs": [
+    "mcSetup", "mcGetSchedule", "mcOpenAntenatal", "mcRecordAntenatalVisit",
+    "mcCloseAntenatal", "mcRecordImmunisation", "mcGetAntenatal",
+    "mcGetImmunisation", "mcListOpenAntenatal",
+    "mc_antenatalView_", "mc_immunisationView_"
+  ],
   "DS_Record_Bridge.gs": [
     "dsx_writeSummaryToTimeline_", "dsxBackfillSummaryNotes",
     "getDischargeSummaryFull", "mtPrintOPEncounter",

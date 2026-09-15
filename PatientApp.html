@@ -1,155 +1,244 @@
+<!-- =====================================================================
+     THE PATIENT'S OWN APP
+
+     What was here: four screens, three of them hardcoded. "Active Meds"
+     listed Metformin, Telmisartan and Atorvastatin — typed into the markup,
+     shown to every patient who signed in, including patients who have never
+     been prescribed any of them. "Last Vitals" showed 165 cm, 72 kg, BMI
+     26.4, HbA1c 8.2%, BP 130/85 for everybody. The two charts were literal
+     arrays: [7.2, 7.5, 7.8, 8.0, 8.2]. "Investigations & Prescriptions" and
+     "Order Medications" were one paragraph each reading "mapped here."
+
+     A portal showing a patient somebody else's plausible numbers is worse
+     than a portal showing nothing: nothing is obviously nothing, and 8.2%
+     looks like a result.
+
+     Everything here now comes from portalHome() (Patient_Portal.gs), which
+     reads that patient's own record and nobody else's — the id comes off the
+     session, so there is no patient id in any call this file makes.
+
+     WHAT IS ON IT
+
+       Home        the next appointment, the review date the doctor actually
+                   set, what they are actually taking, their real last vitals,
+                   and whichever condition panels apply to them.
+       Book        a doctor of their choice, on that doctor's real slots.
+       Records     every consultation and admission, with the signed
+                   discharge summary in full.
+       Reports     released lab results, with the trend of each analyte.
+       Profile     their details, and My privacy (unchanged).
+
+     THE CONDITION PANELS
+
+     Shown from the record, not from a flag somebody has to set:
+
+       Diabetes      HbA1c, fasting and post-prandial sugar over time.
+       Hypertension  systolic and diastolic over time.
+       Pregnancy     gestation, the next checkup, weight and BP through the
+                     pregnancy, and fundal height against gestational age —
+                     which is the growth curve an ANC card carries.
+       Immunisation  how far through the national schedule the child is, what
+                     is due next, and what is overdue.
+
+     A panel with no data says what is missing and who can record it. None of
+     them ever shows a number nobody measured.
+     ===================================================================== -->
+
+<style>
+  /* Scoped to the portal, so nothing here can reach the clinical screens. */
+  .pp-wrap { --pp-gap: 1rem; }
+  .pp-card { background: var(--bg-card); border: 1px solid var(--border-color);
+             border-radius: 14px; padding: 18px 20px; height: 100%; }
+  .pp-card h6 { font-size: .95rem; font-weight: 700; color: var(--text-main);
+                margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .pp-lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .5px;
+            color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px; }
+  .pp-val { font-size: 1rem; font-weight: 700; color: var(--text-main); }
+  .pp-big { font-size: 1.35rem; font-weight: 800; color: var(--text-main); line-height: 1.1; }
+  .pp-note { font-size: .76rem; color: var(--text-muted); line-height: 1.5; }
+  .pp-empty { font-size: .8rem; color: var(--text-muted); line-height: 1.55;
+              border: 1px dashed var(--border-color); border-radius: 10px; padding: 12px 14px; }
+  .pp-pill { font-size: .66rem; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+             text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+  .pp-ok   { background: var(--success-bg); color: var(--success-fg); }
+  .pp-warn { background: var(--warning-bg); color: var(--warning-fg); }
+  .pp-bad  { background: var(--danger-bg);  color: var(--danger-fg); }
+  .pp-info { background: var(--info-bg);    color: var(--info-fg); }
+  .pp-row  { display: flex; justify-content: space-between; align-items: center;
+             gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-color); }
+  .pp-row:last-child { border-bottom: 0; }
+  .pp-chart { height: 170px; width: 100%; }
+  .pp-tile { border: 1px solid var(--border-color); border-radius: 10px;
+             padding: 9px 11px; background: var(--bg-elevated); }
+
+  /* Booking */
+  .pp-doc { border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 14px;
+            cursor: pointer; transition: .15s; background: var(--bg-card); }
+  .pp-doc:hover { border-color: var(--accent-purple); }
+  .pp-doc.sel { border-color: var(--accent-purple); box-shadow: 0 0 0 2px var(--accent-glow); }
+  .pp-day { border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 4px;
+            text-align: center; cursor: pointer; background: var(--bg-card); }
+  .pp-day.sel { border-color: var(--accent-purple); background: var(--accent-glow);
+                color: var(--accent-fg); }
+  .pp-day small { display: block; font-size: .64rem; text-transform: uppercase;
+                  letter-spacing: .4px; color: var(--text-muted); }
+  .pp-day.sel small { color: var(--accent-fg); }
+  .pp-day strong { font-size: 1.05rem; }
+  .pp-slot { border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 6px;
+             text-align: center; font-size: .8rem; font-weight: 600; cursor: pointer;
+             background: var(--bg-card); color: var(--text-main); }
+  .pp-slot.sel { background: var(--accent-purple); border-color: var(--accent-purple);
+                 color: #fff; }
+  .pp-slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+                  gap: 8px; }
+
+  /* Immunisation ladder */
+  .pp-imm { display: flex; align-items: center; gap: 10px; padding: 7px 0;
+            border-bottom: 1px solid var(--border-color); }
+  .pp-imm:last-child { border-bottom: 0; }
+  .pp-imm-dot { flex: 0 0 10px; height: 10px; border-radius: 50%; }
+  .pp-bar { height: 8px; border-radius: 4px; background: var(--border-color); overflow: hidden; }
+  .pp-bar > div { height: 100%; background: var(--success); }
+
+  @media (max-width: 575px) {
+    .pp-card { padding: 14px 15px; }
+    .pp-big { font-size: 1.2rem; }
+  }
+</style>
+
 <!-- No "active-section" here on purpose: this pane is the patient portal home.
      It used to ship pre-activated, so every login - admin included - painted the
      patient dashboard for the moment between app-screen being revealed and
      switchTab() running. executeUIRouting() now picks the pane for the role. -->
-<div id="tab-pat-home" class="page-section">
-  <div class="d-flex justify-content-between align-items-end mb-4 animate-slide" style="animation-delay: 0.1s;">
+<div id="tab-pat-home" class="page-section pp-wrap">
+
+  <div class="d-flex justify-content-between align-items-end mb-4">
     <div>
       <p class="label-bright mb-1 fw-bold" style="letter-spacing: 1px; font-size: 0.85rem;" id="live-date">LOADING DATE...</p>
-      <h2 class="fw-bold m-0 text-white">Welcome, <span id="welcome-name">Loading...</span></h2>
+      <h2 class="fw-bold m-0 text-white">Welcome, <span id="welcome-name">…</span></h2>
     </div>
     <div class="text-end d-none d-md-block">
       <h4 class="m-0 text-white fw-bold font-monospace" id="live-time">00:00:00</h4>
     </div>
   </div>
-  
-  <div class="alert alert-info border-0 shadow-sm mb-4 animate-slide" style="background-color: var(--info-bg); color: var(--info-fg); border-radius: 12px; animation-delay: 0.15s;">
-    <i class="fa-solid fa-bell me-2"></i> <strong>Reminder:</strong> Fasting is required for your upcoming lab visit.
+
+  <!-- One banner, and only when there is something real to say. The old one
+       said "Fasting is required for your upcoming lab visit" to every patient
+       on every load, whether or not they had a lab visit. -->
+  <div id="pp-banner"></div>
+
+  <div id="pp-home-body">
+    <div class="pp-card"><span class="pp-note">
+      <i class="fa-solid fa-circle-notch fa-spin me-2"></i>Reading your record…
+    </span></div>
   </div>
-  
-  <div class="row g-4 mb-5 animate-slide" style="animation-delay: 0.2s;">
-    
-    <div class="col-md-4">
-      <div class="card p-4 h-100 soft-glow border-secondary d-flex flex-column">
-        <h5 class="fw-bold text-white mb-3"><i class="fa-regular fa-calendar text-info"></i> Appointments</h5>
-        
-        <div class="mb-3">
-          <small class="d-block mb-1 label-bright">Last Visit</small>
-          <span class="text-white fw-bold" id="dash-last-visit">Loading...</span>
-        </div>
-        
-        <div class="mb-3">
-          <small class="d-block mb-1 label-bright text-warning">Doctor Prescribed Next Visit</small>
-          <span class="text-warning fw-bold" id="dash-emr-next-visit">Loading...</span>
-        </div>
+</div>
 
-        <div class="mb-3">
-          <small class="d-block mb-1 label-bright text-info">Next Lab Visit</small>
-          <span class="text-info fw-bold" id="dash-emr-next-lab">Loading...</span>
-        </div>
+<!-- ══════════════════════════════════════════════════════════════════════
+     BOOK AN APPOINTMENT — with a choice of doctor
 
-        <div class="mb-4 flex-grow-1">
-          <small class="d-block mb-2 label-bright text-success">Your Upcoming Bookings</small>
-          <div id="dash-upcoming-bookings" class="d-flex flex-column">
-             <span class="text-muted small">Loading...</span>
-          </div>
-        </div>
-        
-        <button class="btn btn-sm w-100 text-white fw-bold mt-auto shadow-sm py-2 on-accent" style="background-color: var(--accent-purple); border-radius: 8px;" onclick="switchTab('tab-pat-appt', document.querySelectorAll('#nav-patient .nav-link')[3]); initPatientBooking();">
-          <i class="fa-solid fa-calendar-plus me-1"></i> Book Appointment
-        </button>
-      </div>
-    </div>
-
-    <div class="col-md-4">
-      <div class="card p-4 h-100 border-secondary">
-        <h5 class="fw-bold text-white mb-3"><i class="fa-solid fa-pills text-warning"></i> Active Meds</h5>
-        <ul class="list-unstyled mb-4">
-          <li class="mb-3 border-bottom border-secondary pb-2"><div class="d-flex justify-content-between align-items-center"><span class="text-white">Metformin 500mg</span><span class="badge" style="background-color: var(--accent-glow); color: var(--accent-fg);">Morning, Night</span></div></li>
-          <li class="mb-3 border-bottom border-secondary pb-2"><div class="d-flex justify-content-between align-items-center"><span class="text-white">Telmisartan 40mg</span><span class="badge" style="background-color: var(--accent-glow); color: var(--accent-fg);">Morning</span></div></li>
-          <li class="mb-2"><div class="d-flex justify-content-between align-items-center"><span class="text-white">Atorvastatin 10mg</span><span class="badge" style="background-color: var(--accent-glow); color: var(--accent-fg);">Night</span></div></li>
-        </ul>
-        <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="switchTab('tab-pat-meds', document.querySelectorAll('#nav-patient .nav-link')[4])">Order Medications</button>
-      </div>
-    </div>
-    
-    <div class="col-md-4">
-      <div class="card p-4 h-100 border-secondary">
-        <h5 class="fw-bold text-white mb-3"><i class="fa-solid fa-heart-pulse text-danger"></i> Last Vitals</h5>
-        <div class="row g-2 mb-3">
-          <div class="col-6"><small class="d-block mb-1 label-bright">Height</small><span class="text-white">165 cm</span></div>
-          <div class="col-6"><small class="d-block mb-1 label-bright">Weight</small><span class="text-white">72 kg</span></div>
-          <div class="col-6"><small class="d-block mb-1 label-bright">BMI</small><span class="text-border fw-bold">26.4 <small><i class="fa-solid fa-arrow-down"></i></small></span></div>
-          <div class="col-6"><small class="d-block mb-1 label-bright">HbA1c</small><span class="text-abnormal fw-bold">8.2% <small><i class="fa-solid fa-arrow-up"></i></small></span></div>
-          <div class="col-6"><small class="d-block mb-1 label-bright">BP</small><span class="text-border fw-bold">130/85</span></div>
-          <div class="col-6"><small class="d-block mb-1 label-bright">PR</small><span class="text-normal fw-bold">72 bpm</span></div>
-          <div class="col-6"><small class="d-block mb-1 label-bright">FBS</small><span class="text-border fw-bold">110</span></div>
-          <div class="col-6"><small class="d-block mb-1 label-bright">PPBS</small><span class="text-abnormal fw-bold">180</span></div>
-        </div>
-        <button class="btn btn-sm btn-outline-info w-100 mt-auto" onclick="switchTab('tab-pat-records', document.querySelectorAll('#nav-patient .nav-link')[2])">View Full Records</button>
-      </div>
-    </div>
+     The old screen offered one global grid of quarter-hours with no doctor in
+     it. A patient could not choose whom they were seeing, and a time showed
+     as free when the doctor they had in mind was on leave, because
+     getAvailableTimeSlots reads the whole Appointments sheet and never looks
+     at a schedule.
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="tab-pat-appt" class="page-section pp-wrap">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold text-white m-0">Book an appointment</h3>
+    <button class="btn btn-sm btn-outline-light fw-bold" onclick="ppGo('tab-pat-home')">
+      <i class="fa-solid fa-arrow-left"></i> Back
+    </button>
   </div>
-  
-  <h5 class="fw-bold mb-4 text-white animate-slide" style="animation-delay: 0.3s;"><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--warning-fg);"></i> AI Health Insights</h5>
-  <div class="row g-4 animate-slide" style="animation-delay: 0.4s;">
-    <div class="col-md-6">
-      <div class="card grad-diabetes p-4 h-100 shadow-lg">
-        <h5 class="text-white fw-bold mb-3">Diabetes Module</h5>
-        <div class="mb-3">
-          <div class="status-chip"><i class="fa-solid fa-shoe-prints"></i> Foot Care: Due in 2 wks</div>
-          <div class="status-chip text-abnormal" style="background: var(--danger-bg);"><i class="fa-solid fa-eye"></i> Retina Exam: OVERDUE</div>
+
+  <div class="row g-3">
+    <div class="col-lg-4">
+      <div class="pp-card">
+        <h6><i class="fa-solid fa-user-doctor" style="color: var(--accent-fg);"></i> 1. Choose your doctor</h6>
+        <div id="pp-doctors" class="d-flex flex-column gap-2">
+          <span class="pp-note"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Loading…</span>
         </div>
-        <div style="height: 120px; width: 100%;"><canvas id="hba1cChart"></canvas></div>
       </div>
     </div>
-    <div class="col-md-6">
-      <div class="card grad-bp p-4 h-100 shadow-lg">
-        <h5 class="text-white fw-bold mb-3">Hypertension Module</h5>
-        <div class="mb-3">
-          <div class="status-chip text-border" style="background: var(--warning-bg);"><i class="fa-solid fa-salt-shaker"></i> Limit Salt to &lt; 5g/day</div>
-          <div class="status-chip"><i class="fa-solid fa-person-walking"></i> Target: 30min daily walk</div>
+
+    <div class="col-lg-4">
+      <div class="pp-card">
+        <h6><i class="fa-solid fa-calendar-day" style="color: var(--warning-fg);"></i> 2. Choose a day</h6>
+        <div id="pp-days" style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 8px;"></div>
+        <div class="mt-3">
+          <label class="pp-lbl">Or pick any date</label>
+          <input type="date" id="pp-date-any" class="form-control form-control-sm text-white-force"
+                 onchange="ppPickDate(this.value)">
         </div>
-        <div style="height: 120px; width: 100%;"><canvas id="bpChart"></canvas></div>
+        <div class="mt-3">
+          <label class="pp-lbl">Reason</label>
+          <select id="pp-purpose" class="form-select form-select-sm text-white-force premium-select">
+            <option value="Consultation">General consultation</option>
+            <option value="Follow-up">Follow-up / review</option>
+            <option value="Routine Checkup">Routine checkup</option>
+            <option value="Antenatal check-up">Antenatal check-up</option>
+            <option value="Immunisation">Immunisation</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="pp-card d-flex flex-column">
+        <h6><i class="fa-regular fa-clock" style="color: var(--info-fg);"></i> 3. Choose a time</h6>
+        <div id="pp-slots" class="flex-grow-1 mb-3" style="min-height: 190px;">
+          <span class="pp-note">Choose a doctor and a day first.</span>
+        </div>
+        <button class="btn w-100 text-white fw-bold py-2 on-accent" id="pp-book-btn" disabled
+                style="background-color: var(--accent-purple); border-radius: 10px;"
+                onclick="ppBook()">Select a time</button>
       </div>
     </div>
   </div>
 </div>
 
-<div id="tab-pat-appt" class="page-section">
+<!-- ══════════════════════════════════════════════════════════════════════
+     MY RECORDS — every consultation, every admission
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="tab-pat-records" class="page-section pp-wrap">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold text-white m-0">Book Appointment</h3>
-    <button class="btn btn-sm btn-outline-light fw-bold" onclick="switchTab('tab-pat-home', document.querySelectorAll('#nav-patient .nav-link')[0])"><i class="fa-solid fa-arrow-left"></i> Go Back</button>
+    <h3 class="fw-bold text-white m-0">My records</h3>
+    <div class="d-flex gap-2">
+      <!-- Records are cached for the session so switching tabs is instant.
+           A patient who has just been seen needs a way to ask again without
+           signing out. -->
+      <button class="btn btn-sm btn-outline-secondary" onclick="ppLoadRecords(true)"
+              title="Check for anything new">
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-light fw-bold" onclick="ppGo('tab-pat-home')">
+        <i class="fa-solid fa-arrow-left"></i> Back
+      </button>
+    </div>
   </div>
+  <div id="pp-records">
+    <div class="pp-card"><span class="pp-note">Open this tab to load your records.</span></div>
+  </div>
+</div>
 
-  <div class="row g-4">
-    <div class="col-md-5 col-lg-4">
-      <div class="card p-4 shadow-lg border-secondary" style="height: fit-content;">
-        
-        <div class="mb-5">
-          <label class="label-bright mb-3 fw-bold d-flex align-items-center">
-            <i class="fa-solid fa-stethoscope text-info me-2 fs-5"></i> Reason for Visit
-          </label>
-          <select id="pat-book-reason" class="form-select text-white-force border-secondary shadow-none premium-select" style="background-color: var(--surface); border-radius: 12px; padding: 14px 16px; font-weight: 500; cursor: pointer;">
-            <option value="Consultation">General Consultation</option>
-            <option value="Follow-up">Follow-up / Review</option>
-            <option value="Routine Checkup">Routine Checkup</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="label-bright mb-3 fw-bold d-flex align-items-center">
-            <i class="fa-solid fa-calendar-day text-warning me-2 fs-5"></i> Select Date
-          </label>
-          <input type="hidden" id="pat-book-date">
-          <div id="ui-date-scroller" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;"></div>
-        </div>
-
-      </div>
+<!-- ══════════════════════════════════════════════════════════════════════
+     MY REPORTS — released lab results only
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="tab-pat-meds" class="page-section pp-wrap">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold text-white m-0">My reports</h3>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-secondary" onclick="ppLoadReports(true)"
+              title="Check for a new result">
+        <i class="fa-solid fa-rotate-right"></i>
+      </button>
+      <button class="btn btn-sm btn-outline-light fw-bold" onclick="ppGo('tab-pat-home')">
+        <i class="fa-solid fa-arrow-left"></i> Back
+      </button>
     </div>
-
-    <div class="col-md-7 col-lg-8">
-      <div class="card p-4 shadow-lg border-secondary h-100 d-flex flex-column">
-        <h5 class="text-white fw-bold mb-3 border-bottom border-secondary pb-3">Available Time Slots</h5>
-        
-        <div id="slot-container" class="flex-grow-1 mb-4 overflow-auto pe-2" style="min-height: 250px;">
-          <div class="label-bright small py-4 text-center"><i class="fa-solid fa-spinner fa-spin"></i> Loading availability...</div>
-        </div>
-
-        <hr class="border-secondary mt-auto mb-3">
-        <button class="btn w-100 text-white fw-bold py-3 shadow-sm on-accent" style="background-color: var(--accent-purple); border-radius: 12px; font-size: 1.1rem; transition: 0.3s;" onclick="submitPatientBooking()" id="btn-submit-booking" disabled>Select a Time Slot</button>
-      </div>
-    </div>
+  </div>
+  <div id="pp-reports">
+    <div class="pp-card"><span class="pp-note">Open this tab to load your reports.</span></div>
   </div>
 </div>
 
@@ -160,7 +249,7 @@
       <h5 class="m-0 text-white"><i class="fa-solid fa-id-card me-2" style="color: var(--accent-fg);"></i> Patient Details</h5>
       <button id="btn-edit-profile" class="btn btn-sm text-white" style="background-color: var(--border-color);" onclick="toggleEditProfile()">Edit Profile</button>
     </div>
-    
+
     <div id="profile-view">
       <div class="row mb-3"><div class="col-4 label-bright">Name</div><div class="col-8 fw-bold text-white" id="v-name">...</div></div>
       <div class="row mb-3"><div class="col-4 label-bright">Age</div><div class="col-8 text-white" id="v-age">...</div></div>
@@ -171,7 +260,7 @@
       <div class="row mb-3"><div class="col-4 label-bright">Address</div><div class="col-8 text-white" id="v-address">...</div></div>
       <div class="row mb-2"><div class="col-4 label-bright">Conditions</div><div class="col-8 text-white" id="v-comorb">...</div></div>
     </div>
-    
+
     <div id="profile-edit" class="d-none">
       <div class="mb-3"><label class="small mb-1 label-bright">Full Name</label><input type="text" id="e-name" class="form-control text-white-force"></div>
       <div class="row g-2 mb-3">
@@ -254,16 +343,6 @@
   </div>
 </div>
 
-<div id="tab-pat-records" class="page-section">
-  <h3 class="fw-bold mb-3 text-white">Investigations & Prescriptions</h3>
-  <div class="card p-4 text-muted border-secondary"><p>Electronic Medical Records mapped here.</p></div>
-</div>
-
-<div id="tab-pat-meds" class="page-section">
-  <h3 class="fw-bold mb-3 text-white">Order Medications</h3>
-  <div class="card p-4 text-muted border-secondary"><p>Pharmacy tracking mapped here.</p></div>
-</div>
-
 <div class="fab-container d-none" id="patient-fabs">
   <a href="tel:+918838723513" class="fab-action fab-emergency" title="Emergency Call">
     <i class="fa-solid fa-phone-volume"></i>
@@ -274,445 +353,1403 @@
 </div>
 
 <script>
-  function fetchProfileData() {
-    google.script.run.withSuccessHandler(data => {
-      if(!data) return;
-      loggedInName = data.name || loggedInUser;
-      let firstName = data.name ? data.name.split(" ")[0] : loggedInUser;
-      if(document.getElementById('welcome-name')) document.getElementById('welcome-name').innerText = firstName;
-      if(document.getElementById('display-user-name')) document.getElementById('display-user-name').innerText = firstName;
-      if(document.getElementById('profile-initial')) document.getElementById('profile-initial').innerText = firstName.charAt(0).toUpperCase();
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PORTAL
 
-      document.getElementById('v-name').innerText = data.name || "-"; document.getElementById('v-age').innerText = data.age || "-";
-      document.getElementById('v-gender').innerText = data.gender || "-"; document.getElementById('v-dob').innerText = data.dob || "-";
-      document.getElementById('v-mobile').innerText = data.mobile || "-"; document.getElementById('v-whatsapp').innerText = data.whatsapp || "-";
-      document.getElementById('v-address').innerText = data.address || "-"; document.getElementById('v-comorb').innerText = data.comorb || "-";
+   One state object, filled by ONE call. Every render function reads from it
+   and nothing reads from the DOM, so a repaint after a theme change or a new
+   booking cannot disagree with what the server said.
+   ══════════════════════════════════════════════════════════════════════════ */
+var PPState = {
+  home: null,
+  homeInFlight: false,
+  doctors: [],
+  pick: { doctorId: '', doctorName: '', date: '', time24: '', time12: '' },
+  records: null,
+  reports: null,
+  charts: {}
+};
 
-      document.getElementById('e-name').value = data.name || ""; document.getElementById('e-age').value = data.age || "";
-      document.getElementById('e-gender').value = data.gender || "Male"; document.getElementById('e-dob').value = data.dob || "";
-      document.getElementById('e-mobile').value = data.mobile || ""; document.getElementById('e-whatsapp').value = data.whatsapp || "";
-      document.getElementById('e-address').value = data.address || ""; document.getElementById('e-comorb').value = data.comorb || "";
-    }).withFailureHandler(err => {
-      // Without this the call failed silently and the profile screen sat on
-      // whatever it happened to be showing - usually the placeholder dashes -
-      // with nothing to say the fetch had failed.
-      if (typeof showToast === 'function')
-        showToast('Could not load your profile', (err && err.message) || 'Please try again.', 'error');
-    }).getUserProfile(loggedInUser, window.sessionToken);
+function ppEscHtml(v) {
+  return String(v === null || v === undefined ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function ppEl(id) { return document.getElementById(id); }
+function ppSet(id, html) { var e = ppEl(id); if (e) e.innerHTML = html; }
+
+/** The portal's own toast, delegating to the shared one in Shell_UX. */
+function ppToast(msg, ok) {
+  if (typeof window.showToast === 'function') {
+    window.showToast(ok ? 'Done' : 'Could not complete', msg, ok ? 'success' : 'error');
+  } else if (typeof crescAlert === 'function') {
+    crescAlert(msg, ok ? 'info' : 'err');
   }
+}
 
-  let isEditingProfile = false;
-  function toggleEditProfile() {
-    isEditingProfile = !isEditingProfile;
-    document.getElementById('profile-view').classList.toggle('d-none', isEditingProfile);
-    document.getElementById('profile-edit').classList.toggle('d-none', !isEditingProfile);
-    document.getElementById('btn-edit-profile').innerText = isEditingProfile ? "Cancel" : "Edit Profile";
-  }
+/** switchTab, via the rail's nav link so the highlight follows. */
+function ppGo(tabId) {
+  var links = document.querySelectorAll('#nav-patient .nav-link');
+  var order = ['tab-pat-home', 'tab-pat-records', 'tab-pat-meds',
+               'tab-pat-appt', 'tab-pat-profile'];
+  var idx = order.indexOf(tabId);
+  switchTab(tabId, (idx > -1 && links[idx]) ? links[idx] : null);
+}
 
-  function saveProfile() {
-    const btn = document.querySelector('#profile-edit button');
-    // The button used to be set to "Saving..." with no failure handler behind
-    // it, so a dropped call left it reading "Saving..." for ever - and the
-    // patient, reasonably, pressed it again. It is disabled while the call is
-    // in flight and restored on BOTH outcomes now.
-    const restore = () => { btn.disabled = false; btn.innerText = "Save Changes"; };
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
-    const data = {
-      username: loggedInUser, name: document.getElementById('e-name').value, age: document.getElementById('e-age').value, gender: document.getElementById('e-gender').value, dob: document.getElementById('e-dob').value, mobile: document.getElementById('e-mobile').value, whatsapp: document.getElementById('e-whatsapp').value, address: document.getElementById('e-address').value, comorb: document.getElementById('e-comorb').value
-    };
-    google.script.run.withSuccessHandler(res => {
-      restore(); crescAlert(res); fetchProfileData(); toggleEditProfile();
-    }).withFailureHandler(err => {
-      restore();
-      crescAlert('Your details could not be saved: ' + ((err && err.message) || 'the server did not reply') +
-                 '. Nothing was changed — please try again.', 'err');
-    }).saveUserProfile(data, window.sessionToken);
-  }
+/** "—" rather than "null", and never "undefined" on a patient's screen. */
+function ppOr(v, dash) {
+  var s = (v === null || v === undefined || v === '') ? '' : String(v);
+  return s || (dash === undefined ? '—' : dash);
+}
 
-  function refreshPatientDashboard() {
-    google.script.run.withSuccessHandler(stats => {
+/* ══════════════════════════════════════════════════════════════════════════
+   HOME
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Loads the home payload once.
+ *
+ * THREE separate things ask for it on first paint — the router's tab-init
+ * table, the sign-in hook in Auth.html (through refreshPatientDashboard), and
+ * this file's own bottom-of-script call as a safety net for a deep link that
+ * bypasses both. Without the guard that is three identical round trips on the
+ * slowest connection in the application.
+ *
+ * @param {boolean} [force] re-read even if it is already loaded — after a
+ *                          booking, a cancellation or a profile edit
+ */
+function ppLoadHome(force) {
+  if (PPState.homeInFlight) return;
+  // Strictly true, so a stray argument — the router's tab id, an Event from
+  // addEventListener — cannot turn a cached read into a round trip.
+  if (PPState.home && force !== true) { ppRenderHome(); return; }
+  PPState.homeInFlight = true;
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      PPState.homeInFlight = false;
       // google.script.run hands the SUCCESS handler null when the reply could
-      // not be carried back, so `stats.lastVisit` threw and took the rest of
-      // the dashboard render down with it.
-      if (!stats) {
-        if (typeof showToast === 'function')
-          showToast('Could not refresh your dashboard', 'Pull down to try again.', 'error');
+      // not be carried back, so null is a failure, not an answer.
+      if (!res || !res.success) {
+        ppSet('pp-home-body', '<div class="pp-card"><span class="pp-note">' +
+          ppEscHtml((res && res.message) || 'Your record could not be loaded.') +
+          '</span><div class="mt-3"><button class="btn btn-sm btn-outline-light" ' +
+          'onclick="ppLoadHome(true)">Try again</button></div></div>');
         return;
       }
-      document.getElementById('dash-last-visit').innerText = stats.lastVisit;
-      if(document.getElementById('dash-emr-next-visit')) document.getElementById('dash-emr-next-visit').innerText = stats.emrNextVisit;
-      if(document.getElementById('dash-emr-next-lab')) document.getElementById('dash-emr-next-lab').innerText = stats.emrNextLab;
-      
-      let bookingsHtml = "";
-      if (stats.upcomingBookings && stats.upcomingBookings.length > 0) {
-          stats.upcomingBookings.forEach(b => {
-              bookingsHtml += `<span class="text-white fw-bold mb-1"><i class="fa-solid fa-clock text-success me-1"></i> ${b}</span>`;
-          });
-      } else {
-          bookingsHtml = `<span class="text-abnormal fw-bold" id="dash-next-appt">Not Scheduled</span>`;
-      }
-      document.getElementById('dash-upcoming-bookings').innerHTML = bookingsHtml;
-    }).withFailureHandler(err => {
-      if (typeof showToast === 'function')
-        showToast('Could not refresh your dashboard',
-                  (err && err.message) || 'Please try again in a moment.', 'error');
-    }).getPatientDashboardStats(loggedInUser, window.sessionToken);
+      PPState.home = res;
+      ppRenderHome();
+    })
+    .withFailureHandler(function (err) {
+      PPState.homeInFlight = false;
+      ppSet('pp-home-body', '<div class="pp-card"><span class="pp-note">' +
+        'We could not reach the clinic: ' +
+        ppEscHtml((err && err.message) || err) +
+        '</span><div class="mt-3"><button class="btn btn-sm btn-outline-light" ' +
+        'onclick="ppLoadHome(true)">Try again</button></div></div>');
+    })
+    .portalHome(window.sessionToken);
+}
+window.ppLoadHome = ppLoadHome;
+
+function ppRenderHome() {
+  var h = PPState.home;
+  if (!h) return;
+
+  var nameEl = ppEl('welcome-name');
+  if (nameEl) nameEl.innerText = h.patient.firstName || h.patient.name || '';
+
+  ppRenderBanner(h);
+
+  var col = function (inner, cls) {
+    return '<div class="' + (cls || 'col-md-6 col-xl-4') + '">' + inner + '</div>';
+  };
+
+  var html = '<div class="row g-3 mb-3">' +
+      col(ppCardAppointments(h)) +
+      col(ppCardMeds(h)) +
+      col(ppCardVitals(h)) +
+    '</div>';
+
+  var panels = [];
+  if (h.conditions.pregnancy)    panels.push(ppCardAntenatal(h));
+  if (h.conditions.child)        panels.push(ppCardImmunisation(h));
+  if (h.conditions.diabetes)     panels.push(ppCardDiabetes(h));
+  if (h.conditions.hypertension) panels.push(ppCardBp(h));
+  panels.push(ppCardLabs(h));
+
+  if (panels.length) {
+    html += '<div class="row g-3">' +
+            panels.map(function (p) { return col(p, 'col-xl-6'); }).join('') +
+            '</div>';
   }
 
-  function initPatientBooking() {
-    const scroller = document.getElementById('ui-date-scroller');
-    scroller.innerHTML = "";
-    const today = new Date();
-    let firstDateStr = "";
+  ppSet('pp-home-body', html);
+  ppPaintCharts();
+}
 
-    for(let i=0; i<3; i++) {
-      let loopDate = new Date(today);
-      loopDate.setDate(today.getDate() + i);
-      let isoDate = loopDate.toISOString().split('T')[0];
-      if(i === 0) firstDateStr = isoDate;
-      let dayName = loopDate.toLocaleDateString('en-US', { weekday: 'short' });
-      let dayNum = loopDate.getDate();
+/**
+ * The banner, only when there is something real to say.
+ *
+ * The old one told every patient on every load that fasting was required for
+ * their upcoming lab visit, whether or not they had one. A notice that is
+ * always there is a notice nobody reads, which is how a real one gets missed.
+ */
+function ppRenderBanner(h) {
+  var items = [];
 
-      let card = document.createElement('div');
-      card.className = i === 0 ? 'date-card active' : 'date-card';
-      card.innerHTML = `<span>${dayName}</span><strong>${dayNum}</strong>`;
-      card.onclick = function() {
-        document.querySelectorAll('.date-card').forEach(c => c.classList.remove('active'));
-        this.classList.add('active');
-        document.getElementById('pat-book-date').value = isoDate;
-        loadPatientSlots();
-      };
-      scroller.appendChild(card);
-    }
-    document.getElementById('pat-book-date').value = firstDateStr;
-    loadPatientSlots();
+  if (h.review && h.review.overdue) {
+    items.push({ tone: 'pp-bad', icon: 'fa-calendar-xmark',
+      text: 'Your review was due on ' + ppEscHtml(h.review.text) +
+            '. Please book an appointment.' });
+  }
+  if (h.antenatal && h.antenatal.nextVisitOverdue) {
+    items.push({ tone: 'pp-bad', icon: 'fa-baby',
+      text: 'Your antenatal checkup was due on ' +
+            ppEscHtml(h.antenatal.nextVisitText) + '. Please come in.' });
+  }
+  if (h.immunisation && h.immunisation.overdue.length) {
+    items.push({ tone: 'pp-warn', icon: 'fa-syringe',
+      text: h.immunisation.overdue.length + ' vaccination' +
+            (h.immunisation.overdue.length === 1 ? ' is' : 's are') + ' overdue: ' +
+            ppEscHtml(h.immunisation.overdue.map(function (d) { return d.label; }).join(', ')) });
+  }
+  if (h.labs.abnormalRecent > 0) {
+    items.push({ tone: 'pp-info', icon: 'fa-flask-vial',
+      text: 'Some values in your recent reports are outside the usual range. ' +
+            'Your doctor will go through them with you — please do not change ' +
+            'any medicine on your own.' });
   }
 
-  function loadPatientSlots() {
-    const dateVal = document.getElementById('pat-book-date').value;
-    if(!dateVal) return;
-    const container = document.getElementById('slot-container');
-    container.innerHTML = `<div class="label-bright py-4 text-center"><i class="fa-solid fa-spinner fa-spin"></i> Checking availability...</div>`;
-    
-    google.script.run.withSuccessHandler(availableSlots => {
-      container.innerHTML = "";
-      if(!Array.isArray(availableSlots)) availableSlots = [];
-      
-      const todayStr = new Date().toISOString().split('T')[0];
-      if (dateVal === todayStr) {
-        const now = new Date();
-        availableSlots = availableSlots.filter(slotTimeStr => {
-          let match = slotTimeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-          if(!match) return false; 
-          let h = parseInt(match[1]);
-          let m = parseInt(match[2]);
-          let p = match[3].toUpperCase();
-          if(p === 'PM' && h !== 12) h += 12;
-          if(p === 'AM' && h === 12) h = 0;
-          
-          let slotDate = new Date();
-          slotDate.setHours(h, m, 0, 0);
-          return slotDate > now; 
-        });
-      }
-      
-      const morning = ["10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM", "11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM"];
-      const afternoon = ["12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM"];
-      const evening = ["05:00 PM", "05:15 PM", "05:30 PM", "05:45 PM", "06:00 PM", "06:15 PM", "06:30 PM", "06:45 PM", "07:00 PM", "07:15 PM", "07:30 PM", "07:45 PM", "08:00 PM", "08:15 PM", "08:30 PM", "08:45 PM"];
+  if (!items.length) { ppSet('pp-banner', ''); return; }
+  ppSet('pp-banner', '<div class="d-flex flex-column gap-2 mb-4">' +
+    items.map(function (it) {
+      return '<div class="pp-card d-flex align-items-start gap-3" style="padding:12px 16px;">' +
+        '<span class="pp-pill ' + it.tone + '"><i class="fa-solid ' + it.icon + '"></i></span>' +
+        '<span style="font-size:.85rem; color:var(--text-main);">' + it.text + '</span></div>';
+    }).join('') + '</div>');
+}
 
-      function buildSection(title, icon, timeArray) {
-        let sectionHTML = document.createElement('div');
-        sectionHTML.innerHTML = `<div class="time-category-title"><i class="fa-solid ${icon}"></i> ${title}</div>`;
-        let grid = document.createElement('div');
-        grid.className = 'time-slot-grid';
-        let slotsAdded = false;
+function ppCardAppointments(h) {
+  var a = h.appointments;
+  var body = '';
 
-        timeArray.forEach(slotTime => {
-          let btn = document.createElement('div');
-          if(availableSlots.includes(slotTime)) {
-             btn.className = 'time-btn';
-             btn.innerText = slotTime;
-             btn.onclick = function() {
-               document.querySelectorAll('.time-btn').forEach(el => el.classList.remove('selected'));
-               this.classList.add('selected');
-               selectedTimeSlot = slotTime;
-               let b = document.getElementById('btn-submit-booking');
-               b.innerText = `Confirm Booking • ${slotTime}`;
-               b.disabled = false;
-             };
-          } else {
-             btn.className = 'time-btn booked';
-             btn.innerText = slotTime; 
-          }
-          grid.appendChild(btn);
-          slotsAdded = true;
-        });
-
-        if(slotsAdded) {
-          sectionHTML.appendChild(grid);
-          container.appendChild(sectionHTML);
-        }
-      }
-
-      buildSection("Morning", "fa-sun text-warning", morning);
-      buildSection("Afternoon", "fa-cloud-sun text-info", afternoon);
-      buildSection("Evening", "fa-moon text-primary", evening);
-
-      selectedTimeSlot = "";
-      document.getElementById('btn-submit-booking').innerText = "Select a Time Slot";
-      document.getElementById('btn-submit-booking').disabled = true;
-
-    }).withFailureHandler(err => {
-       container.innerHTML = `<div class="text-danger py-4 text-center">Failed to load slots. Please refresh.</div>`;
-    }).getAvailableTimeSlots(dateVal, window.sessionToken); 
+  if (a.upcoming.length) {
+    body += a.upcoming.slice(0, 3).map(function (x) {
+      return '<div class="pp-tile mb-2">' +
+        '<div class="d-flex justify-content-between align-items-start gap-2">' +
+          '<div><div class="pp-val">' + ppEscHtml(x.dateText) + '</div>' +
+          '<div class="pp-note">' + ppEscHtml(x.time) + ' · ' +
+            ppEscHtml(x.doctorName) + '</div>' +
+          '<div class="pp-note">' + ppEscHtml(x.purpose) + '</div></div>' +
+          '<button class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;"' +
+            ' onclick="ppCancel(\'' + ppEscHtml(x.apptId) + '\')">Cancel</button>' +
+        '</div></div>';
+    }).join('');
+  } else {
+    body += '<div class="pp-empty mb-3">You have no appointment booked.</div>';
   }
 
-  function submitPatientBooking() {
-    const btn = document.getElementById('btn-submit-booking');
-    btn.innerText = "Processing..."; btn.disabled = true;
-    const apptObj = { patientId: loggedInUser, patientName: loggedInName, date: document.getElementById('pat-book-date').value, time: selectedTimeSlot, purpose: document.getElementById('pat-book-reason').value, fee: 0 };
-    const restoreBtn = () => {
-      btn.innerText = selectedTimeSlot ? `Confirm Booking • ${selectedTimeSlot}` : 'Select a Time Slot';
-      btn.disabled = !selectedTimeSlot;
+  // The review date the doctor SET, from the consultation record — not parsed
+  // out of a free-text plan with a keyword search, which is what the old
+  // portal did and why it so often read "See EMR Plan".
+  if (h.review) {
+    body += '<div class="pp-row"><span class="pp-lbl mb-0">Doctor asked you to come back</span>' +
+      '<span class="' + (h.review.overdue ? 'pp-pill pp-bad' : 'pp-val') + '" style="font-size:.85rem;">' +
+      ppEscHtml(h.review.text) + '</span></div>';
+  }
+  if (a.lastVisit) {
+    body += '<div class="pp-row"><span class="pp-lbl mb-0">Last visit</span>' +
+      '<span class="pp-val" style="font-size:.85rem;">' + ppEscHtml(a.lastVisit) + '</span></div>';
+  }
+
+  return '<div class="pp-card d-flex flex-column">' +
+    '<h6><i class="fa-regular fa-calendar" style="color:var(--info-fg);"></i> Appointments</h6>' +
+    '<div class="flex-grow-1">' + body + '</div>' +
+    '<button class="btn btn-sm w-100 text-white fw-bold mt-3 on-accent" ' +
+      'style="background-color: var(--accent-purple); border-radius: 9px;" ' +
+      'onclick="ppGo(\'tab-pat-appt\'); ppInitBooking();">' +
+      '<i class="fa-solid fa-calendar-plus me-1"></i> Book an appointment</button>' +
+    '</div>';
+}
+
+function ppCardMeds(h) {
+  var m = h.medications;
+  var body;
+
+  if (!m || !m.items.length) {
+    body = '<div class="pp-empty">Nothing on record. Your prescription appears ' +
+           'here after a consultation.</div>';
+  } else {
+    body = m.items.map(function (x) {
+      return '<div class="pp-row align-items-start">' +
+        '<div><div class="pp-val" style="font-size:.88rem;">' + ppEscHtml(x.name) + '</div>' +
+          (x.generic ? '<div class="pp-note">' + ppEscHtml(x.generic) + '</div>' : '') +
+          (x.notes ? '<div class="pp-note">' + ppEscHtml(x.notes) + '</div>' : '') +
+        '</div>' +
+        '<div class="text-end" style="white-space:nowrap;">' +
+          '<span class="pp-pill pp-info">' + ppEscHtml(ppOr(x.sig, '')) + '</span>' +
+          (x.days ? '<div class="pp-note">' + ppEscHtml(x.days) + ' days</div>' : '') +
+        '</div></div>';
+    }).join('');
+  }
+
+  return '<div class="pp-card d-flex flex-column">' +
+    '<h6><i class="fa-solid fa-pills" style="color:var(--warning-fg);"></i> What you are taking</h6>' +
+    '<div class="flex-grow-1">' + body + '</div>' +
+    (m && m.source
+      ? '<div class="pp-note mt-3"><i class="fa-solid fa-circle-info me-1"></i>' +
+        'From your ' + ppEscHtml(m.source) +
+        (m.prescriber ? ', ' + ppEscHtml(m.prescriber) : '') + '.<br>' +
+        'If your doctor has changed anything since, follow what they told you.</div>'
+      : '') +
+    '</div>';
+}
+
+function ppCardVitals(h) {
+  var v = h.vitals;
+  var body;
+
+  if (!v) {
+    body = '<div class="pp-empty">No vitals recorded yet. They are measured at ' +
+           'your next visit.</div>';
+  } else {
+    var tiles = [
+      ['BP', v.vitals.bp, 'mmHg'],
+      ['Pulse', v.vitals.pulse, '/min'],
+      ['SpO₂', v.vitals.spo2, '%'],
+      ['Temp', v.vitals.temp, ''],
+      ['Weight', v.vitals.weight, 'kg'],
+      ['BMI', v.vitals.bmi, '']
+    ].filter(function (t) {
+      return t[1] !== null && t[1] !== undefined && String(t[1]) !== '';
+    });
+
+    body = tiles.length
+      ? '<div class="row g-2">' + tiles.map(function (t) {
+          return '<div class="col-4"><div class="pp-tile">' +
+            '<span class="pp-lbl">' + t[0] + '</span>' +
+            '<span class="pp-val" style="font-size:.95rem;">' + ppEscHtml(t[1]) +
+            (t[2] ? '<span class="pp-note"> ' + t[2] + '</span>' : '') +
+            '</span></div></div>';
+        }).join('') + '</div>'
+      : '<div class="pp-empty">No vitals recorded yet.</div>';
+  }
+
+  return '<div class="pp-card d-flex flex-column">' +
+    '<h6><i class="fa-solid fa-heart-pulse" style="color:var(--danger-fg);"></i> Last vitals</h6>' +
+    '<div class="flex-grow-1">' + body + '</div>' +
+    (v ? '<div class="pp-note mt-3">Taken at your ' + ppEscHtml(v.source) + '.</div>' : '') +
+    '<button class="btn btn-sm btn-outline-secondary w-100 mt-2" ' +
+      'onclick="ppGo(\'tab-pat-records\'); ppLoadRecords();">See my records</button>' +
+    '</div>';
+}
+
+function ppCardLabs(h) {
+  var orders = h.labs.orders || [];
+  var body = orders.length
+    ? orders.map(function (o) {
+        return '<div class="pp-row align-items-start">' +
+          '<div><div class="pp-val" style="font-size:.85rem;">' +
+            ppEscHtml(o.testNames || 'Investigation') + '</div>' +
+            '<div class="pp-note">' + ppEscHtml(o.date) + '</div></div>' +
+          (o.abnormal
+            ? '<span class="pp-pill pp-warn">' + o.abnormal + ' to discuss</span>'
+            : '<span class="pp-pill pp-ok">normal</span>') +
+          '</div>';
+      }).join('')
+    : '<div class="pp-empty">No reports released yet. A result appears here ' +
+      'once the laboratory has verified it.</div>';
+
+  return '<div class="pp-card d-flex flex-column">' +
+    '<h6><i class="fa-solid fa-flask-vial" style="color:var(--info-fg);"></i> Reports</h6>' +
+    '<div class="flex-grow-1">' + body + '</div>' +
+    '<button class="btn btn-sm btn-outline-secondary w-100 mt-3" ' +
+      'onclick="ppGo(\'tab-pat-meds\'); ppLoadReports();">See all my reports</button>' +
+    '</div>';
+}
+
+/* ── condition panels ─────────────────────────────────────────────────── */
+
+function ppCardDiabetes(h) {
+  var s = h.conditions.series;
+  var latest = function (arr) { return arr.length ? arr[arr.length - 1] : null; };
+  var a1c = latest(s.hba1c), fbs = latest(s.fbs), ppbs = latest(s.ppbs);
+
+  var tiles = [
+    ['HbA1c', a1c, '%'],
+    ['Fasting sugar', fbs, 'mg/dL'],
+    ['After food', ppbs, 'mg/dL']
+  ].map(function (t) {
+    return '<div class="col-4"><div class="pp-tile">' +
+      '<span class="pp-lbl">' + t[0] + '</span>' +
+      (t[1]
+        ? '<span class="pp-val" style="font-size:.95rem;">' + ppEscHtml(t[1].value) +
+          '</span><div class="pp-note">' + ppEscHtml(t[1].dateText) + '</div>'
+        : '<span class="pp-note">not tested</span>') +
+      '</div></div>';
+  }).join('');
+
+  var hasChart = s.hba1c.length > 1 || s.fbs.length > 1 || s.ppbs.length > 1;
+
+  return '<div class="pp-card">' +
+    '<h6><i class="fa-solid fa-droplet" style="color:var(--danger-fg);"></i> Your sugar control' +
+      (h.conditions.diabetesStatedOnFile ? '' :
+        '<span class="pp-pill pp-info ms-auto">from your test results</span>') +
+    '</h6>' +
+    '<div class="row g-2 mb-3">' + tiles + '</div>' +
+    (hasChart
+      ? '<canvas id="pp-chart-dm" class="pp-chart"></canvas>'
+      : '<div class="pp-empty">One test is a reading, not a trend. After your ' +
+        'next set of results this will show how they are changing.</div>') +
+    '<div class="pp-note mt-2">These are your own laboratory results. Only your ' +
+      'doctor can decide what they mean for your treatment.</div>' +
+    '</div>';
+}
+
+function ppCardBp(h) {
+  var t = h.bpTrend || [];
+  var last = t.length ? t[t.length - 1] : null;
+
+  return '<div class="pp-card">' +
+    '<h6><i class="fa-solid fa-heart-circle-bolt" style="color:var(--warning-fg);"></i> Your blood pressure' +
+      (h.conditions.hypertensionStatedOnFile ? '' :
+        '<span class="pp-pill pp-info ms-auto">from your readings</span>') +
+    '</h6>' +
+    (last
+      ? '<div class="pp-big mb-1">' + last.sys + '/' + last.dia +
+        ' <span class="pp-note">mmHg</span></div>' +
+        '<div class="pp-note mb-3">Measured ' + ppEscHtml(last.dateText) +
+        ' · ' + t.length + ' reading' + (t.length === 1 ? '' : 's') + ' on record</div>'
+      : '') +
+    (t.length > 1
+      ? '<canvas id="pp-chart-bp" class="pp-chart"></canvas>'
+      : '<div class="pp-empty">Your readings will be charted here once there are ' +
+        'a few of them.</div>') +
+    '</div>';
+}
+
+function ppCardAntenatal(h) {
+  var a = h.antenatal;
+  var growth = (a.trend || []).filter(function (v) {
+    return v.fundalHeightCm && v.weeks !== null;
+  });
+
+  var next = a.nextVisitText
+    ? '<span class="' + (a.nextVisitOverdue ? 'pp-pill pp-bad' : 'pp-pill pp-ok') + '">' +
+      ppEscHtml(a.nextVisitText) +
+      (a.nextVisitOverdue ? ' — overdue' :
+        (a.nextVisitInDays === 0 ? ' — today' :
+         (a.nextVisitInDays !== null ? ' — in ' + a.nextVisitInDays + ' days' : ''))) +
+      '</span>'
+    : '<span class="pp-note">not set yet — ask at your next visit</span>';
+
+  return '<div class="pp-card">' +
+    '<h6><i class="fa-solid fa-baby-carriage" style="color:var(--accent-fg);"></i> Your pregnancy</h6>' +
+
+    '<div class="row g-2 mb-3">' +
+      '<div class="col-6"><div class="pp-tile"><span class="pp-lbl">You are now</span>' +
+        '<span class="pp-val" style="font-size:.95rem;">' +
+        ppEscHtml(a.gestationText || '—') + '</span>' +
+        (a.trimester ? '<div class="pp-note">trimester ' + a.trimester + '</div>' : '') +
+        '</div></div>' +
+      '<div class="col-6"><div class="pp-tile"><span class="pp-lbl">Due date</span>' +
+        '<span class="pp-val" style="font-size:.95rem;">' + ppEscHtml(a.eddText || '—') +
+        '</span></div></div>' +
+    '</div>' +
+
+    '<div class="pp-row"><span class="pp-lbl mb-0">Next checkup</span>' + next + '</div>' +
+    (a.visitCount
+      ? '<div class="pp-row"><span class="pp-lbl mb-0">Checkups so far</span>' +
+        '<span class="pp-val" style="font-size:.85rem;">' + a.visitCount + '</span></div>'
+      : '') +
+    (a.lastVisit && a.lastVisit.fetalHeartRate
+      ? '<div class="pp-row"><span class="pp-lbl mb-0">Baby\'s heartbeat</span>' +
+        '<span class="pp-val" style="font-size:.85rem;">' +
+        ppEscHtml(a.lastVisit.fetalHeartRate) + ' /min</span></div>'
+      : '') +
+    (a.lastVisit && a.lastVisit.presentation
+      ? '<div class="pp-row"><span class="pp-lbl mb-0">Baby\'s position</span>' +
+        '<span class="pp-val" style="font-size:.85rem;">' +
+        ppEscHtml(a.lastVisit.presentation) + '</span></div>'
+      : '') +
+
+    // Fundal height against GESTATIONAL AGE, not visit number: two visits
+    // three weeks apart and two a fortnight apart are not the same interval,
+    // and a growth curve plotted against visit number hides exactly the gap a
+    // growth curve exists to show.
+    '<div class="mt-3">' +
+      (growth.length > 1
+        ? '<div class="pp-lbl">Baby\'s growth</div>' +
+          '<canvas id="pp-chart-growth" class="pp-chart"></canvas>' +
+          '<div class="pp-note">Fundal height against the weeks of your pregnancy. ' +
+            'From about 24 weeks these two numbers usually track each other.</div>'
+        : '<div class="pp-empty">The growth chart needs at least two checkups ' +
+          'with a measurement. It will appear here.</div>') +
+    '</div>' +
+
+    ((a.trend || []).filter(function (v) { return v.weightKg; }).length > 1
+      ? '<div class="mt-3"><div class="pp-lbl">Your weight</div>' +
+        '<canvas id="pp-chart-ancwt" class="pp-chart"></canvas></div>'
+      : '') +
+    '</div>';
+}
+
+function ppCardImmunisation(h) {
+  var im = h.immunisation;
+  var tone = function (state) {
+    return state === 'GIVEN' ? 'var(--success)'
+         : state === 'OVERDUE' ? 'var(--danger)'
+         : state === 'DUE' ? 'var(--warning)'
+         : 'var(--border-color)';
+  };
+  var label = { GIVEN: 'done', DUE: 'due now', OVERDUE: 'overdue', UPCOMING: '' };
+
+  // Everything already given, everything due or overdue, and the next two
+  // that are coming. The whole 27-dose schedule on one screen is a wall a
+  // parent scrolls past.
+  var shown = im.doses.filter(function (d) { return d.state !== 'UPCOMING'; });
+  var upcoming = im.doses.filter(function (d) { return d.state === 'UPCOMING'; })
+                         .sort(function (a, b) { return a.dueInDays - b.dueInDays; })
+                         .slice(0, 3);
+
+  var rows = shown.concat(upcoming).map(function (d) {
+    return '<div class="pp-imm">' +
+      '<span class="pp-imm-dot" style="background:' + tone(d.state) + ';"></span>' +
+      '<div class="flex-grow-1"><div class="pp-val" style="font-size:.84rem;">' +
+        ppEscHtml(d.label) + '</div>' +
+        '<div class="pp-note">' +
+          (d.state === 'GIVEN'
+            ? 'given ' + ppEscHtml(d.givenOnText)
+            : 'due ' + ppEscHtml(d.dueText) + (d.at ? ' · ' + ppEscHtml(d.at) : '')) +
+        '</div></div>' +
+      (label[d.state]
+        ? '<span class="pp-pill ' +
+          (d.state === 'GIVEN' ? 'pp-ok' : d.state === 'OVERDUE' ? 'pp-bad' : 'pp-warn') +
+          '">' + label[d.state] + '</span>'
+        : '') +
+      '</div>';
+  }).join('');
+
+  return '<div class="pp-card">' +
+    '<h6><i class="fa-solid fa-syringe" style="color:var(--success-fg);"></i> Vaccinations</h6>' +
+
+    '<div class="d-flex justify-content-between align-items-end mb-1">' +
+      '<span class="pp-lbl mb-0">Up to date</span>' +
+      '<span class="pp-val" style="font-size:.9rem;">' + im.completedOfDue + ' of ' +
+        im.totalDue + '</span>' +
+    '</div>' +
+    // The denominator is doses DUE SO FAR, not all 27. Counting a newborn as
+    // 3 of 27 is a progress bar that tells a parent their healthy baby is 11%
+    // vaccinated.
+    '<div class="pp-bar mb-1"><div style="width:' + im.percentOfDue + '%"></div></div>' +
+    '<div class="pp-note mb-3">' + ppEscHtml(im.ageText) + ' old · of the doses due ' +
+      'by now. There are ' + im.totalInSchedule + ' in the whole schedule.</div>' +
+
+    (im.nextDue
+      ? '<div class="pp-tile mb-3"><span class="pp-lbl">Next</span>' +
+        '<span class="pp-val" style="font-size:.9rem;">' +
+        ppEscHtml(im.nextDueGroup.map(function (d) { return d.label; }).join(', ')) +
+        '</span><div class="pp-note">due ' + ppEscHtml(im.nextDue.dueText) +
+        (im.nextDue.dueInDays > 0 ? ' · in ' + im.nextDue.dueInDays + ' days' : '') +
+        '</div></div>'
+      : '<div class="pp-empty mb-3">Every dose in the schedule has been given.</div>') +
+
+    rows +
+    '<div class="pp-note mt-2">Dates are worked out from the national ' +
+      'immunisation schedule and your child\'s date of birth. Your doctor may ' +
+      'advise a different date, and theirs is the one to follow.</div>' +
+    '</div>';
+}
+
+/* ── charts ───────────────────────────────────────────────────────────── */
+
+/**
+ * Every chart is rebuilt from PPState, so a theme flip repaints them with the
+ * new tokens instead of leaving them on the colours that happened to be live
+ * at first render. Chart.js paints to a canvas, where var() means nothing, so
+ * tokens are resolved to concrete values here.
+ */
+function ppPaintCharts() {
+  if (typeof Chart === 'undefined') return;
+  var h = PPState.home;
+  if (!h) return;
+
+  Object.keys(PPState.charts).forEach(function (k) {
+    try { PPState.charts[k].destroy(); } catch (e) {}
+  });
+  PPState.charts = {};
+
+  var tick = cssVar('--chart-tick'), grid = cssVar('--chart-grid');
+  var danger = cssVar('--danger'), warning = cssVar('--warning');
+  var success = cssVar('--success'), accent = cssVar('--accent-purple');
+  var info = cssVar('--chart-2');
+
+  var base = function (extra) {
+    return Object.assign({
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: true, labels: { color: tick, boxWidth: 10,
+                                                    font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { color: tick, font: { size: 9 } }, grid: { color: grid } },
+        y: { ticks: { color: tick, font: { size: 9 } }, grid: { color: grid } }
+      }
+    }, extra || {});
+  };
+  var line = function (label, pts, colour, yAxis) {
+    return { label: label, data: pts.map(function (p) { return p.value; }),
+             borderColor: colour, backgroundColor: 'transparent',
+             tension: .3, pointRadius: 3, yAxisID: yAxis || 'y' };
+  };
+
+  // ---- sugar control ---------------------------------------------------
+  var dm = ppEl('pp-chart-dm');
+  if (dm) {
+    var s = h.conditions.series;
+    // HbA1c is a percentage and a blood sugar is mg/dL. On one axis the
+    // percentages flatten into a line along the bottom, which is how a
+    // worsening HbA1c comes to look like no change at all.
+    var labels = [], seen = {};
+    [s.hba1c, s.fbs, s.ppbs].forEach(function (arr) {
+      arr.forEach(function (p) { if (!seen[p.date]) { seen[p.date] = true; labels.push(p); } });
+    });
+    labels.sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+    var at = function (arr, date) {
+      for (var i = 0; i < arr.length; i++) if (arr[i].date === date) return arr[i].value;
+      return null;
     };
-    google.script.run.withSuccessHandler(res => {
-      if (res && res.success) {
-        crescAlert("Appointment Confirmed!"); loadPatientSlots(); refreshPatientDashboard();
-      } else {
-        crescAlert("Error: " + ((res && res.message) || 'the booking was not accepted.'), 'err');
-        restoreBtn();
-      }
-    }).withFailureHandler(err => {
-      // This is the worst one to leave hanging: the button read "Processing..."
-      // for ever, so the patient could not tell whether they had an
-      // appointment or not, and the natural response - press it again - risks
-      // a double booking.
-      restoreBtn();
-      crescAlert('The booking did not go through: ' + ((err && err.message) || 'the server did not reply') +
-                 '. No appointment was made — please try again.', 'err');
-    }).submitNewAppointment(apptObj, window.sessionToken);
+    var ds = [];
+    if (s.hba1c.length) ds.push({
+      label: 'HbA1c %', yAxisID: 'y1', borderColor: danger, tension: .3, pointRadius: 3,
+      backgroundColor: 'transparent',
+      data: labels.map(function (p) { return at(s.hba1c, p.date); }), spanGaps: true });
+    if (s.fbs.length) ds.push({
+      label: 'Fasting', yAxisID: 'y', borderColor: warning, tension: .3, pointRadius: 3,
+      backgroundColor: 'transparent',
+      data: labels.map(function (p) { return at(s.fbs, p.date); }), spanGaps: true });
+    if (s.ppbs.length) ds.push({
+      label: 'After food', yAxisID: 'y', borderColor: info, tension: .3, pointRadius: 3,
+      backgroundColor: 'transparent',
+      data: labels.map(function (p) { return at(s.ppbs, p.date); }), spanGaps: true });
+
+    PPState.charts.dm = new Chart(dm, {
+      type: 'line',
+      data: { labels: labels.map(function (p) { return p.dateText; }), datasets: ds },
+      options: base({
+        scales: {
+          x: { ticks: { color: tick, font: { size: 9 } }, grid: { color: grid } },
+          y: { position: 'left', title: { display: true, text: 'mg/dL', color: tick,
+                                          font: { size: 9 } },
+               ticks: { color: tick, font: { size: 9 } }, grid: { color: grid } },
+          y1: { position: 'right', title: { display: true, text: '%', color: tick,
+                                            font: { size: 9 } },
+                ticks: { color: tick, font: { size: 9 } }, grid: { display: false } }
+        }
+      })
+    });
   }
+
+  // ---- blood pressure --------------------------------------------------
+  var bp = ppEl('pp-chart-bp');
+  if (bp && h.bpTrend.length > 1) {
+    PPState.charts.bp = new Chart(bp, {
+      type: 'line',
+      data: {
+        labels: h.bpTrend.map(function (p) { return p.dateText; }),
+        datasets: [
+          { label: 'Upper (systolic)', data: h.bpTrend.map(function (p) { return p.sys; }),
+            borderColor: warning, backgroundColor: 'transparent', tension: .3, pointRadius: 3 },
+          { label: 'Lower (diastolic)', data: h.bpTrend.map(function (p) { return p.dia; }),
+            borderColor: success, backgroundColor: 'transparent', tension: .3, pointRadius: 3 }
+        ]
+      },
+      options: base()
+    });
+  }
+
+  // ---- fetal growth ----------------------------------------------------
+  var gr = ppEl('pp-chart-growth');
+  if (gr && h.antenatal) {
+    var pts = h.antenatal.trend.filter(function (v) {
+      return v.fundalHeightCm && v.weeks !== null;
+    });
+    if (pts.length > 1) {
+      PPState.charts.growth = new Chart(gr, {
+        type: 'line',
+        data: {
+          labels: pts.map(function (p) { return p.weeks + 'w'; }),
+          datasets: [
+            { label: 'Fundal height (cm)',
+              data: pts.map(function (p) { return p.fundalHeightCm; }),
+              borderColor: accent, backgroundColor: 'transparent',
+              tension: .3, pointRadius: 4 },
+            // The reference line every ANC card draws: from about 24 weeks
+            // the fundal height in centimetres tracks the gestational age in
+            // weeks. Shown dashed so it reads as the expectation rather than
+            // as a second measurement.
+            { label: 'Usually expected',
+              data: pts.map(function (p) { return p.weeks; }),
+              borderColor: tick, borderDash: [5, 4], backgroundColor: 'transparent',
+              tension: 0, pointRadius: 0 }
+          ]
+        },
+        options: base({ scales: {
+          x: { title: { display: true, text: 'weeks of pregnancy', color: tick,
+                        font: { size: 9 } },
+               ticks: { color: tick, font: { size: 9 } }, grid: { color: grid } },
+          y: { title: { display: true, text: 'cm', color: tick, font: { size: 9 } },
+               ticks: { color: tick, font: { size: 9 } }, grid: { color: grid } }
+        } })
+      });
+    }
+  }
+
+  // ---- antenatal weight ------------------------------------------------
+  var aw = ppEl('pp-chart-ancwt');
+  if (aw && h.antenatal) {
+    var wpts = h.antenatal.trend.filter(function (v) { return v.weightKg; });
+    if (wpts.length > 1) {
+      PPState.charts.ancwt = new Chart(aw, {
+        type: 'line',
+        data: {
+          labels: wpts.map(function (p) { return (p.weeks !== null ? p.weeks + 'w' : p.dateText); }),
+          datasets: [{ label: 'Weight (kg)',
+            data: wpts.map(function (p) { return p.weightKg; }),
+            borderColor: success, backgroundColor: 'transparent',
+            tension: .3, pointRadius: 3 }]
+        },
+        options: base()
+      });
+    }
+  }
+}
+
+// Repaint on every theme switch, so a chart never keeps the old palette.
+if (window.onThemeChange) {
+  window.onThemeChange(function () {
+    if (ppEl('pp-home-body') && PPState.home) ppPaintCharts();
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BOOKING
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function ppInitBooking() {
+  ppRenderDays();
+  if (PPState.doctors.length) { ppRenderDoctors(); return; }
+
+  ppSet('pp-doctors', '<span class="pp-note"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Loading…</span>');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        ppSet('pp-doctors', '<div class="pp-empty">' +
+          ppEscHtml((res && res.message) || 'The doctor list could not be loaded.') +
+          '</div>');
+        return;
+      }
+      PPState.doctors = res.doctors || [];
+      ppRenderDoctors();
+    })
+    .withFailureHandler(function (err) {
+      ppSet('pp-doctors', '<div class="pp-empty">We could not reach the clinic: ' +
+        ppEscHtml((err && err.message) || err) + '</div>');
+    })
+    .portalBookableDoctors(window.sessionToken);
+}
+window.ppInitBooking = ppInitBooking;
+
+function ppRenderDoctors() {
+  if (!PPState.doctors.length) {
+    ppSet('pp-doctors', '<div class="pp-empty">No doctor is taking bookings just ' +
+      'now. Please telephone the clinic.</div>');
+    return;
+  }
+  ppSet('pp-doctors', PPState.doctors.map(function (d) {
+    var sel = (PPState.pick.doctorId === d.doctorId) ? ' sel' : '';
+    return '<div class="pp-doc' + sel + '" onclick="ppPickDoctor(\'' +
+        ppEscHtml(d.doctorId) + '\')">' +
+      '<div class="pp-val" style="font-size:.9rem;">' + ppEscHtml(d.name) + '</div>' +
+      (d.specialty ? '<div class="pp-note">' + ppEscHtml(d.specialty) + '</div>' : '') +
+      // The soonest each doctor can see them, so the patient does not have to
+      // click through every name to find out who is free this week.
+      (d.nextFree
+        ? '<div class="pp-note mt-1"><i class="fa-regular fa-clock me-1"></i>' +
+          'Next free ' + ppEscHtml(d.nextFreeText) + ' at ' +
+          ppEscHtml(d.nextFreeTime) + '</div>'
+        : '<div class="pp-note mt-1" style="color:var(--warning-fg);">' +
+          'Nothing free in the next month</div>') +
+      '</div>';
+  }).join(''));
+}
+
+function ppRenderDays() {
+  var host = ppEl('pp-days');
+  if (!host) return;
+  var today = new Date();
+  var html = '';
+  for (var i = 0; i < 8; i++) {
+    var d = new Date(today.getTime() + i * 86400000);
+    var iso = d.getFullYear() + '-' +
+              ('0' + (d.getMonth() + 1)).slice(-2) + '-' +
+              ('0' + d.getDate()).slice(-2);
+    var sel = (PPState.pick.date === iso) ? ' sel' : '';
+    html += '<div class="pp-day' + sel + '" onclick="ppPickDate(\'' + iso + '\')">' +
+      '<small>' + d.toLocaleDateString('en-GB', { weekday: 'short' }) + '</small>' +
+      '<strong>' + d.getDate() + '</strong></div>';
+  }
+  host.innerHTML = html;
+}
+
+function ppPickDoctor(id) {
+  var d = null;
+  PPState.doctors.forEach(function (x) { if (x.doctorId === id) d = x; });
+  PPState.pick.doctorId = id;
+  PPState.pick.doctorName = d ? d.name : '';
+  PPState.pick.time24 = '';
+  PPState.pick.time12 = '';
+  // Jump straight to the day that doctor is actually free, so the commonest
+  // case takes one tap instead of hunting through the week.
+  if (d && d.nextFree && !PPState.pick.date) PPState.pick.date = d.nextFree;
+  ppRenderDoctors();
+  ppRenderDays();
+  ppLoadSlots();
+}
+window.ppPickDoctor = ppPickDoctor;
+
+function ppPickDate(iso) {
+  if (!iso) return;
+  PPState.pick.date = iso;
+  PPState.pick.time24 = '';
+  PPState.pick.time12 = '';
+  var any = ppEl('pp-date-any');
+  if (any) any.value = iso;
+  ppRenderDays();
+  ppLoadSlots();
+}
+window.ppPickDate = ppPickDate;
+
+function ppLoadSlots() {
+  var p = PPState.pick;
+  ppBookButton();
+  if (!p.doctorId || !p.date) {
+    ppSet('pp-slots', '<span class="pp-note">Choose a doctor and a day first.</span>');
+    return;
+  }
+  ppSet('pp-slots', '<span class="pp-note"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Checking ' +
+    ppEscHtml(p.doctorName) + '\'s clinic…</span>');
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        ppSet('pp-slots', '<div class="pp-empty">' +
+          ppEscHtml((res && res.message) || 'Slots could not be loaded.') + '</div>');
+        return;
+      }
+      if (!res.slots.length) {
+        ppSet('pp-slots', '<div class="pp-empty">' +
+          ppEscHtml(res.message || 'Nothing free on this day.') + '</div>');
+        return;
+      }
+      // Grouped by the doctor's own session labels — "Morning", "Evening" —
+      // which come from their published schedule rather than from a fixed
+      // list of hours this file would have to keep in step with it.
+      var groups = {}, order = [];
+      res.slots.forEach(function (s) {
+        var k = s.session || 'Available';
+        if (!groups[k]) { groups[k] = []; order.push(k); }
+        groups[k].push(s);
+      });
+      ppSet('pp-slots', order.map(function (k) {
+        return '<div class="mb-3"><div class="pp-lbl">' + ppEscHtml(k) + '</div>' +
+          '<div class="pp-slot-grid">' + groups[k].map(function (s) {
+            var sel = (PPState.pick.time24 === s.time24) ? ' sel' : '';
+            return '<div class="pp-slot' + sel + '" onclick="ppPickSlot(\'' +
+              ppEscHtml(s.time24) + '\',\'' + ppEscHtml(s.time12) + '\')">' +
+              ppEscHtml(s.time12) + '</div>';
+          }).join('') + '</div></div>';
+      }).join(''));
+    })
+    .withFailureHandler(function (err) {
+      ppSet('pp-slots', '<div class="pp-empty">We could not reach the clinic: ' +
+        ppEscHtml((err && err.message) || err) + '</div>');
+    })
+    .portalDoctorSlots(p.doctorId, p.date, window.sessionToken);
+}
+
+function ppPickSlot(t24, t12) {
+  PPState.pick.time24 = t24;
+  PPState.pick.time12 = t12;
+  ppLoadSlotsHighlight();
+  ppBookButton();
+}
+window.ppPickSlot = ppPickSlot;
+
+/** Re-mark the selected slot without another round trip. */
+function ppLoadSlotsHighlight() {
+  Array.prototype.forEach.call(document.querySelectorAll('#pp-slots .pp-slot'),
+    function (el) {
+      el.classList.toggle('sel', el.textContent.trim() === PPState.pick.time12);
+    });
+}
+
+function ppBookButton() {
+  var b = ppEl('pp-book-btn');
+  if (!b) return;
+  var p = PPState.pick;
+  if (p.doctorId && p.date && p.time24) {
+    b.disabled = false;
+    b.innerHTML = 'Confirm ' + ppEscHtml(p.time12) + ' with ' + ppEscHtml(p.doctorName);
+  } else {
+    b.disabled = true;
+    b.innerHTML = p.doctorId ? 'Select a time' : 'Select a doctor';
+  }
+}
+
+function ppBook() {
+  var p = PPState.pick;
+  var b = ppEl('pp-book-btn');
+  if (!p.doctorId || !p.date || !p.time24) return;
+
+  var restore = function () { ppBookButton(); };
+  b.disabled = true;
+  b.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Booking…';
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        restore();
+        ppToast((res && res.message) || 'The booking was not accepted.', false);
+        // A slot taken while the patient was choosing is the common case, and
+        // the fix is to show them what is free NOW rather than leave the dead
+        // time selected.
+        if (res && res.code === 'SLOT_GONE') { PPState.pick.time24 = ''; ppLoadSlots(); }
+        return;
+      }
+      PPState.pick.time24 = '';
+      PPState.pick.time12 = '';
+      ppToast(res.message, true);
+      ppLoadSlots();
+      // The home screen's appointment card is now out of date.
+      ppLoadHome(true);
+    })
+    .withFailureHandler(function (err) {
+      // The worst one to leave hanging: the patient cannot tell whether they
+      // have an appointment, and pressing again risks a double booking.
+      restore();
+      if (typeof crescAlert === 'function') {
+        crescAlert('The booking did not go through: ' +
+          ((err && err.message) || 'the clinic did not reply') +
+          '. No appointment was made — please try again.', 'err');
+      }
+    })
+    .portalBookAppointment({
+      doctorId: p.doctorId, date: p.date, time: p.time24,
+      purpose: (ppEl('pp-purpose') || {}).value || 'Consultation'
+    }, window.sessionToken);
+}
+window.ppBook = ppBook;
+
+function ppCancel(apptId) {
+  var ask = (typeof crescConfirm === 'function')
+    ? crescConfirm('Cancel this appointment? The slot will be offered to ' +
+                   'somebody else.', { title: 'Cancel appointment', okLabel: 'Cancel it' })
+    : Promise.resolve(true);
+
+  ask.then(function (ok) {
+    if (!ok) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        ppToast((res && res.message) || 'Could not cancel.', !!(res && res.success));
+        if (res && res.success) ppLoadHome(true);
+      })
+      .withFailureHandler(function (err) {
+        ppToast('We could not reach the clinic: ' + ((err && err.message) || err), false);
+      })
+      .portalCancelAppointment(apptId, window.sessionToken);
+  });
+}
+window.ppCancel = ppCancel;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RECORDS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function ppLoadRecords(force) {
+  if (PPState.records && force !== true) { ppRenderRecords(); return; }
+  ppSet('pp-records', '<div class="pp-card"><span class="pp-note">' +
+    '<i class="fa-solid fa-circle-notch fa-spin me-2"></i>Reading your records…</span></div>');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        ppSet('pp-records', '<div class="pp-card"><span class="pp-note">' +
+          ppEscHtml((res && res.message) || 'Your records could not be loaded.') +
+          '</span></div>');
+        return;
+      }
+      PPState.records = res;
+      ppRenderRecords();
+    })
+    .withFailureHandler(function (err) {
+      ppSet('pp-records', '<div class="pp-card"><span class="pp-note">' +
+        'We could not reach the clinic: ' + ppEscHtml((err && err.message) || err) +
+        '</span></div>');
+    })
+    .portalRecords(window.sessionToken);
+}
+/* The router resolves this by name and calls it with no argument, so a tab
+   switch reads the cache; the refresh button passes true. A top-level
+   `function` declaration IS the window property, so there is no wrapper here
+   — assigning one would have made it call itself. */
+window.ppLoadRecords = ppLoadRecords;
+
+function ppRenderRecords() {
+  var r = PPState.records;
+  if (!r) return;
+  var html = '';
+
+  if (r.admissions && r.admissions.length) {
+    html += '<h6 class="text-white fw-bold mb-2">Hospital stays</h6>';
+    html += r.admissions.map(function (a, i) {
+      var id = 'pp-adm-' + i;
+      return '<div class="pp-card mb-3">' +
+        '<div class="d-flex justify-content-between align-items-start gap-2">' +
+          '<div><div class="pp-val">' + ppEscHtml(a.diagnosis || 'Admission') + '</div>' +
+            '<div class="pp-note">' + ppEscHtml(a.admittedText) +
+            (a.stillAdmitted ? ' → still in hospital'
+                             : ' → ' + ppEscHtml(a.dischargedText)) +
+            (a.ward ? ' · ' + ppEscHtml(a.ward) : '') +
+            (a.consultant ? ' · ' + ppEscHtml(a.consultant) : '') + '</div></div>' +
+          '<span class="pp-pill ' + (a.summaryReady ? 'pp-ok' : 'pp-warn') + '">' +
+            (a.summaryReady ? 'summary ready' : 'being prepared') + '</span>' +
+        '</div>' +
+        (a.summaryReady
+          ? '<button class="btn btn-sm btn-outline-light mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
+            '<i class="fa-solid fa-chevron-down me-1"></i>Read my discharge summary</button>' +
+            '<div id="' + id + '" class="mt-3" style="display:none;">' +
+              a.sections.map(function (s) {
+                return '<div class="mb-3"><div class="pp-lbl">' + ppEscHtml(s.title) +
+                  '</div><div style="font-size:.85rem; color:var(--text-main); ' +
+                  'white-space:pre-wrap;">' + ppEscHtml(s.text) + '</div></div>';
+              }).join('') +
+              '<div class="pp-note">' + ppEscHtml(a.summaryNote) + '</div>' +
+            '</div>'
+          : '<div class="pp-note mt-3">' + ppEscHtml(a.summaryNote) + '</div>') +
+        '</div>';
+    }).join('');
+  }
+
+  if (r.consultations && r.consultations.length) {
+    html += '<h6 class="text-white fw-bold mb-2 mt-4">Consultations</h6>';
+    html += r.consultations.map(function (c, i) {
+      var id = 'pp-con-' + i;
+      var v = c.vitals || {};
+      var bits = [];
+      if (v.sysBp && v.diaBp) bits.push('BP ' + v.sysBp + '/' + v.diaBp);
+      if (v.pulse) bits.push('Pulse ' + v.pulse);
+      if (v.spo2) bits.push('SpO₂ ' + v.spo2 + '%');
+      if (v.weight) bits.push(v.weight + ' kg');
+
+      return '<div class="pp-card mb-3">' +
+        '<div class="d-flex justify-content-between align-items-start gap-2">' +
+          '<div><div class="pp-val">' + ppEscHtml(c.diagnosis || 'Consultation') + '</div>' +
+            '<div class="pp-note">' + ppEscHtml(c.dateText) +
+            (c.doctorName ? ' · ' + ppEscHtml(c.doctorName) : '') + '</div></div>' +
+          (c.meds.length ? '<span class="pp-pill pp-info">' + c.meds.length +
+                           ' medicine' + (c.meds.length === 1 ? '' : 's') + '</span>' : '') +
+        '</div>' +
+        '<button class="btn btn-sm btn-outline-light mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
+          '<i class="fa-solid fa-chevron-down me-1"></i>See what was recorded</button>' +
+        '<div id="' + id + '" class="mt-3" style="display:none;">' +
+          (bits.length ? '<div class="mb-2"><div class="pp-lbl">Vitals that day</div>' +
+            '<div style="font-size:.85rem; color:var(--text-main);">' +
+            ppEscHtml(bits.join(' · ')) + '</div></div>' : '') +
+          (c.complaints ? '<div class="mb-2"><div class="pp-lbl">What you came with</div>' +
+            '<div style="font-size:.85rem; color:var(--text-main); white-space:pre-wrap;">' +
+            ppEscHtml(c.complaints) + '</div></div>' : '') +
+          (c.meds.length ? '<div class="mb-2"><div class="pp-lbl">Prescribed</div>' +
+            c.meds.map(function (m) {
+              return '<div style="font-size:.85rem; color:var(--text-main);">• ' +
+                ppEscHtml(m.name) + (m.sig ? ' — ' + ppEscHtml(m.sig) : '') +
+                (m.days ? ' × ' + ppEscHtml(m.days) + ' days' : '') +
+                (m.notes ? ' (' + ppEscHtml(m.notes) + ')' : '') + '</div>';
+            }).join('') + '</div>' : '') +
+          (c.advice ? '<div class="mb-2"><div class="pp-lbl">Advice</div>' +
+            '<div style="font-size:.85rem; color:var(--text-main); white-space:pre-wrap;">' +
+            ppEscHtml(c.advice) + '</div></div>' : '') +
+          (c.reviewDate ? '<div><div class="pp-lbl">Come back on</div>' +
+            '<div style="font-size:.85rem; color:var(--text-main);">' +
+            ppEscHtml(c.reviewDate) + '</div></div>' : '') +
+        '</div></div>';
+    }).join('');
+  }
+
+  if (!html) {
+    html = '<div class="pp-card"><div class="pp-empty">' +
+      ppEscHtml(r.message || 'Nothing recorded yet.') + '</div></div>';
+  }
+  ppSet('pp-records', html);
+}
+
+/**
+ * Expands or collapses a block, restoring the button's ORIGINAL words.
+ *
+ * The label is captured on the first press rather than hardcoded, so
+ * "Read my discharge summary" and "See the values" each come back as
+ * themselves instead of both collapsing to a generic "Show more".
+ */
+function ppToggle(id, btn) {
+  var el = ppEl(id);
+  if (!el) return;
+  if (btn && !btn.dataset.shut) btn.dataset.shut = btn.innerHTML;
+  var open = (el.style.display !== 'none');
+  el.style.display = open ? 'none' : 'block';
+  if (btn) {
+    btn.innerHTML = open
+      ? btn.dataset.shut
+      : '<i class="fa-solid fa-chevron-up me-1"></i>Hide';
+  }
+}
+window.ppToggle = ppToggle;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REPORTS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function ppLoadReports(force) {
+  if (PPState.reports && force !== true) { ppRenderReports(); return; }
+  ppSet('pp-reports', '<div class="pp-card"><span class="pp-note">' +
+    '<i class="fa-solid fa-circle-notch fa-spin me-2"></i>Reading your reports…</span></div>');
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        ppSet('pp-reports', '<div class="pp-card"><span class="pp-note">' +
+          ppEscHtml((res && res.message) || 'Your reports could not be loaded.') +
+          '</span></div>');
+        return;
+      }
+      PPState.reports = res;
+      ppRenderReports();
+    })
+    .withFailureHandler(function (err) {
+      ppSet('pp-reports', '<div class="pp-card"><span class="pp-note">' +
+        'We could not reach the clinic: ' + ppEscHtml((err && err.message) || err) +
+        '</span></div>');
+    })
+    .portalLabResults(window.sessionToken);
+}
+window.ppLoadReports = ppLoadReports;
+
+function ppRenderReports() {
+  var r = PPState.reports;
+  if (!r) return;
+  if (!r.orders.length) {
+    ppSet('pp-reports', '<div class="pp-card"><div class="pp-empty">' +
+      'No reports have been released yet. A result appears here once the ' +
+      'laboratory has checked and signed it off — which is why you may have ' +
+      'given a sample without seeing anything here yet.</div></div>');
+    return;
+  }
+
+  ppSet('pp-reports', r.orders.map(function (o, i) {
+    var id = 'pp-rep-' + i;
+    return '<div class="pp-card mb-3">' +
+      '<div class="d-flex justify-content-between align-items-start gap-2">' +
+        '<div><div class="pp-val">' + ppEscHtml(o.testNames || 'Investigation') + '</div>' +
+          '<div class="pp-note">' + ppEscHtml(o.date) +
+          (o.doctor ? ' · ordered by ' + ppEscHtml(o.doctor) : '') + '</div></div>' +
+        (o.abnormal ? '<span class="pp-pill pp-warn">' + o.abnormal + ' to discuss</span>'
+                    : '<span class="pp-pill pp-ok">all normal</span>') +
+      '</div>' +
+      '<button class="btn btn-sm btn-outline-light mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
+        '<i class="fa-solid fa-chevron-down me-1"></i>See the values</button>' +
+      '<div id="' + id + '" class="mt-3" style="display:none;">' +
+        o.results.map(function (x) {
+          // A flag is coloured but never interpreted. "High" is a fact about a
+          // reference range; what it means for this patient is a conversation
+          // with their doctor, and a portal that editorialises turns one
+          // borderline value into a frightened phone call.
+          var tone = x.critical ? 'pp-bad'
+                   : (x.flag && x.flag !== 'N' && x.flag !== 'NORMAL') ? 'pp-warn' : 'pp-ok';
+          return '<div class="pp-row">' +
+            '<div><div style="font-size:.85rem; color:var(--text-main);">' +
+              ppEscHtml(x.parameterName) + '</div>' +
+              (x.refRangeText ? '<div class="pp-note">usual range ' +
+                ppEscHtml(x.refRangeText) + '</div>' : '') + '</div>' +
+            '<span class="pp-pill ' + tone + '">' + ppEscHtml(x.value) + ' ' +
+              ppEscHtml(x.unit) + '</span></div>';
+        }).join('') +
+        '<div class="pp-note mt-2">Verified by the laboratory' +
+          (o.verifiedBy ? ' (' + ppEscHtml(o.verifiedBy) + ')' : '') +
+          '. Please do not start or stop any medicine on the strength of a ' +
+          'number here — bring it to your appointment.</div>' +
+      '</div></div>';
+  }).join(''));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PROFILE (unchanged behaviour, kept as it was)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+function fetchProfileData() {
+  google.script.run.withSuccessHandler(data => {
+    if(!data) return;
+    loggedInName = data.name || loggedInUser;
+    let firstName = data.name ? data.name.split(" ")[0] : loggedInUser;
+    if(document.getElementById('welcome-name')) document.getElementById('welcome-name').innerText = firstName;
+    if(document.getElementById('display-user-name')) document.getElementById('display-user-name').innerText = firstName;
+    if(document.getElementById('profile-initial')) document.getElementById('profile-initial').innerText = firstName.charAt(0).toUpperCase();
+
+    document.getElementById('v-name').innerText = data.name || "-"; document.getElementById('v-age').innerText = data.age || "-";
+    document.getElementById('v-gender').innerText = data.gender || "-"; document.getElementById('v-dob').innerText = data.dob || "-";
+    document.getElementById('v-mobile').innerText = data.mobile || "-"; document.getElementById('v-whatsapp').innerText = data.whatsapp || "-";
+    document.getElementById('v-address').innerText = data.address || "-"; document.getElementById('v-comorb').innerText = data.comorb || "-";
+
+    document.getElementById('e-name').value = data.name || ""; document.getElementById('e-age').value = data.age || "";
+    document.getElementById('e-gender').value = data.gender || "Male"; document.getElementById('e-dob').value = data.dob || "";
+    document.getElementById('e-mobile').value = data.mobile || ""; document.getElementById('e-whatsapp').value = data.whatsapp || "";
+    document.getElementById('e-address').value = data.address || ""; document.getElementById('e-comorb').value = data.comorb || "";
+  }).withFailureHandler(err => {
+    // Without this the call failed silently and the profile screen sat on
+    // whatever it happened to be showing - usually the placeholder dashes -
+    // with nothing to say the fetch had failed.
+    if (typeof showToast === 'function')
+      showToast('Could not load your profile', (err && err.message) || 'Please try again.', 'error');
+  }).getUserProfile(loggedInUser, window.sessionToken);
+}
+
+let isEditingProfile = false;
+function toggleEditProfile() {
+  isEditingProfile = !isEditingProfile;
+  document.getElementById('profile-view').classList.toggle('d-none', isEditingProfile);
+  document.getElementById('profile-edit').classList.toggle('d-none', !isEditingProfile);
+  document.getElementById('btn-edit-profile').innerText = isEditingProfile ? "Cancel" : "Edit Profile";
+}
+
+function saveProfile() {
+  const btn = document.querySelector('#profile-edit button');
+  // The button used to be set to "Saving..." with no failure handler behind
+  // it, so a dropped call left it reading "Saving..." for ever - and the
+  // patient, reasonably, pressed it again. It is disabled while the call is
+  // in flight and restored on BOTH outcomes now.
+  const restore = () => { btn.disabled = false; btn.innerText = "Save Changes"; };
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving…';
+  const data = {
+    username: loggedInUser, name: document.getElementById('e-name').value, age: document.getElementById('e-age').value, gender: document.getElementById('e-gender').value, dob: document.getElementById('e-dob').value, mobile: document.getElementById('e-mobile').value, whatsapp: document.getElementById('e-whatsapp').value, address: document.getElementById('e-address').value, comorb: document.getElementById('e-comorb').value
+  };
+  google.script.run.withSuccessHandler(res => {
+    restore(); crescAlert(res); fetchProfileData(); toggleEditProfile();
+    // The conditions field drives which panels the home screen shows, and the
+    // date of birth drives the immunisation schedule, so a profile edit
+    // invalidates the home payload rather than leaving it stale.
+    ppLoadHome(true);
+  }).withFailureHandler(err => {
+    restore();
+    crescAlert('Your details could not be saved: ' + ((err && err.message) || 'the server did not reply') +
+               '. Nothing was changed — please try again.', 'err');
+  }).saveUserProfile(data, window.sessionToken);
+}
+
+/**
+ * Kept for the front desk, which calls it from the patient search screen.
+ * The portal itself no longer uses it — portalHome() answers the same
+ * questions from the appointment ledger and OP_Encounters rather than by
+ * keyword-searching the free-text plan of an EMR_Records row.
+ */
+function refreshPatientDashboard() { ppLoadHome(); }
+window.refreshPatientDashboard = refreshPatientDashboard;
+
+/* Kept as the name the router calls; the booking screen initialises itself. */
+function initPatientBooking() { ppInitBooking(); }
+window.initPatientBooking = initPatientBooking;
 
 /* setDateRestrictions() moved to Auth.html. It bounds three different date
    inputs — the portal's booking date (here), the availability screen's date
    (appointments bundle) and the admin booking modal's (shell) — so with the
    modules loading separately it cannot live in any one of them. */
 
-   function renderCharts(force) {
-    if(!document.getElementById('hba1cChart')) return;
-    if(!force && document.getElementById('hba1cChart').chart) return;
-
-    // Tokens are resolved to concrete values here because Chart.js paints to
-    // a canvas, where var() has no meaning. renderCharts() is re-invoked on
-    // `themechange` so the plots follow the theme instead of freezing on the
-    // colours that happened to be active at first render.
-    var danger = cssVar('--danger'), warning = cssVar('--warning'), success = cssVar('--success');
-    var tick   = cssVar('--chart-tick');
-
-    if (window.__hba1cChart) window.__hba1cChart.destroy();
-    if (window.__bpChart)    window.__bpChart.destroy();
-
-    window.__hba1cChart = new Chart(document.getElementById('hba1cChart'), {
-      type: 'line',
-      data: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'], datasets: [{
-        label: 'HbA1c %', data: [7.2, 7.5, 7.8, 8.0, 8.2],
-        borderColor: danger, backgroundColor: 'transparent', tension: 0.4, fill: true }] },
-      options: { responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: { x: { display: false }, y: { display: false, min: 6 } },
-        elements: { point: { radius: 3 } } }
-    });
-    // Fill tint has to be an rgba() the canvas understands, so derive it
-    // from the same token rather than hardcoding a second red.
-    window.__hba1cChart.data.datasets[0].backgroundColor = cssVar('--danger-bg');
-    window.__hba1cChart.update('none');
-
-    window.__bpChart = new Chart(document.getElementById('bpChart'), {
-      type: 'line',
-      data: { labels: ['Visit 1', 'Visit 2', 'Visit 3', 'Visit 4'], datasets: [
-        { label: 'Systolic',  data: [145, 140, 135, 130], borderColor: warning, tension: 0.4 },
-        { label: 'Diastolic', data: [95, 90, 88, 85],     borderColor: success, tension: 0.4 }] },
-      options: { responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false, labels: { color: tick } } },
-        scales: { x: { display: false }, y: { display: false } } }
-    });
-
-    document.getElementById('hba1cChart').chart = true;
-   }
-
-   // Repaint the patient charts whenever the theme flips.
-   if (window.onThemeChange) {
-     window.onThemeChange(function () {
-       if (document.getElementById('hba1cChart')) renderCharts(true);
-     });
-   }
+/* renderCharts() was the two hardcoded demo charts. The portal's charts are
+   built from PPState in ppPaintCharts(); the name is kept because the shell's
+   theme handler and the router both call it. */
+function renderCharts(force) { if (PPState.home) ppPaintCharts(); }
+window.renderCharts = renderCharts;
 
 
+/* ══════════════════════════════════════════════════════════════════════
+   MY PRIVACY
 
-  /* ══════════════════════════════════════════════════════════════════════
-     MY PRIVACY
+   Everything below acts on THIS patient only: the server checks that the
+   session's username is the patient id on every one of these calls, so the
+   screen cannot be pointed at somebody else's record by editing what it
+   sends.
+   ══════════════════════════════════════════════════════════════════════ */
+function ppMe() {
+  return (window.loggedInUser || localStorage.getItem('loggedInUser') || '').toUpperCase();
+}
+function ppTok() { return window.sessionToken || ''; }
+function ppEsc(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function ppSay(msg, bad) {
+  var el = document.getElementById('pp-msg');
+  if (!el) return;
+  el.className = 'small mt-3 ' + (bad ? 'text-danger' : 'text-success');
+  el.textContent = msg;
+}
 
-     Everything below acts on THIS patient only: the server checks that the
-     session's username is the patient id on every one of these calls, so the
-     screen cannot be pointed at somebody else's record by editing what it
-     sends.
-     ══════════════════════════════════════════════════════════════════════ */
-  function ppMe() {
-    return (window.loggedInUser || localStorage.getItem('loggedInUser') || '').toUpperCase();
-  }
-  function ppTok() { return window.sessionToken || ''; }
-  function ppEsc(t) {
-    return String(t == null ? '' : t)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
-  function ppSay(msg, bad) {
-    var el = document.getElementById('pp-msg');
-    if (!el) return;
-    el.className = 'small mt-3 ' + (bad ? 'text-danger' : 'text-success');
-    el.textContent = msg;
-  }
+function ppLoadPrivacy() {
+  var me = ppMe();
+  if (!me || !document.getElementById('pp-consent')) return;
 
-  function ppLoadPrivacy() {
-    var me = ppMe();
-    if (!me || !document.getElementById('pp-consent')) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var host = document.getElementById('pp-consent');
+      if (!res || !res.success) { host.textContent = 'Could not load your consent record.'; return; }
+      var v = document.getElementById('pp-notice-version');
+      if (v) v.textContent = 'notice ' + (res.noticeVersion || '');
 
-    google.script.run
-      .withSuccessHandler(function (res) {
-        var host = document.getElementById('pp-consent');
-        if (!res || !res.success) { host.textContent = 'Could not load your consent record.'; return; }
-        var v = document.getElementById('pp-notice-version');
-        if (v) v.textContent = 'notice ' + (res.noticeVersion || '');
-
-        host.innerHTML = res.purposes.map(function (p) {
-          if (p.legitimate) {
-            // Shown, not offered. Turning "being treated" into a switch would
-            // imply something happens when it is off, and nothing does.
-            return '<div class="d-flex align-items-center gap-2 py-1">' +
-              '<i class="fa-solid fa-circle-check" style="color:var(--accent-fg)"></i>' +
-              '<span>' + ppEsc(p.label) + '</span>' +
-              '<span class="label-bright ms-auto" style="font-size:.7rem">part of treating you</span>' +
-              '</div>';
-          }
-          var on = (p.state === 'GIVEN');
+      host.innerHTML = res.purposes.map(function (p) {
+        if (p.legitimate) {
+          // Shown, not offered. Turning "being treated" into a switch would
+          // imply something happens when it is off, and nothing does.
           return '<div class="d-flex align-items-center gap-2 py-1">' +
-            '<div class="form-check form-switch m-0">' +
-              '<input class="form-check-input" type="checkbox" ' + (on ? 'checked' : '') +
-              ' onchange="ppSetConsent(\'' + ppEsc(p.key) + '\', this.checked)">' +
-            '</div>' +
+            '<i class="fa-solid fa-circle-check" style="color:var(--accent-fg)"></i>' +
             '<span>' + ppEsc(p.label) + '</span>' +
-            '<span class="label-bright ms-auto" style="font-size:.7rem">' +
-              (p.state === 'NOT_ASKED' ? 'not asked yet'
-               : p.state === 'WITHDRAWN' ? 'withdrawn'
-               : p.state === 'REFUSED' ? 'you said no' : 'you agreed') +
-            '</span></div>';
-        }).join('');
-      })
-      .withFailureHandler(function () {
-        document.getElementById('pp-consent').textContent = 'Could not load your consent record.';
-      })
-      .getConsentStatus(me, ppTok());
+            '<span class="label-bright ms-auto" style="font-size:.7rem">part of treating you</span>' +
+            '</div>';
+        }
+        var on = (p.state === 'GIVEN');
+        return '<div class="d-flex align-items-center gap-2 py-1">' +
+          '<div class="form-check form-switch m-0">' +
+            '<input class="form-check-input" type="checkbox" ' + (on ? 'checked' : '') +
+            ' onchange="ppSetConsent(\'' + ppEsc(p.key) + '\', this.checked)">' +
+          '</div>' +
+          '<span>' + ppEsc(p.label) + '</span>' +
+          '<span class="label-bright ms-auto" style="font-size:.7rem">' +
+            (p.state === 'NOT_ASKED' ? 'not asked yet'
+             : p.state === 'WITHDRAWN' ? 'withdrawn'
+             : p.state === 'REFUSED' ? 'you said no' : 'you agreed') +
+          '</span></div>';
+      }).join('');
+    })
+    .withFailureHandler(function () {
+      document.getElementById('pp-consent').textContent = 'Could not load your consent record.';
+    })
+    .getConsentStatus(me, ppTok());
 
-    google.script.run
-      .withSuccessHandler(function (res) {
-        var host = document.getElementById('pp-nominee');
-        if (!host) return;
-        host.innerHTML = (res && res.success && res.nomination)
-          ? '<strong>' + ppEsc(res.nomination.nominee) + '</strong> (' +
-            ppEsc(res.nomination.relationship) + ') · ' + ppEsc(res.nomination.contact)
-          : '<span class="label-bright">Nobody nominated yet.</span>';
-      })
-      .withFailureHandler(function () {})
-      .getNomination(me, ppTok());
-  }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var host = document.getElementById('pp-nominee');
+      if (!host) return;
+      host.innerHTML = (res && res.success && res.nomination)
+        ? '<strong>' + ppEsc(res.nomination.nominee) + '</strong> (' +
+          ppEsc(res.nomination.relationship) + ') · ' + ppEsc(res.nomination.contact)
+        : '<span class="label-bright">Nobody nominated yet.</span>';
+    })
+    .withFailureHandler(function () {})
+    .getNomination(me, ppTok());
+}
 
-  window.ppSetConsent = function (purpose, give) {
-    var me = ppMe();
-    if (!me) return;
-    if (give) {
-      var decisions = {};
-      decisions[purpose] = true;
-      google.script.run
-        .withSuccessHandler(function (res) {
-          ppSay((res && res.message) || 'Saved.', !(res && res.success));
-          ppLoadPrivacy();
-        })
-        .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
-        .recordConsent({ patientId: me, decisions: decisions, method: 'PORTAL' }, ppTok());
-    } else {
-      google.script.run
-        .withSuccessHandler(function (res) {
-          ppSay((res && res.message) || 'Withdrawn.', !(res && res.success));
-          ppLoadPrivacy();
-        })
-        .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
-        .withdrawConsent(me, purpose, 'Withdrawn by the patient in the portal', ppTok());
-    }
-  };
-
-  window.ppSaveNominee = function () {
-    var me = ppMe();
-    if (!me) return;
+window.ppSetConsent = function (purpose, give) {
+  var me = ppMe();
+  if (!me) return;
+  if (give) {
+    var decisions = {};
+    decisions[purpose] = true;
     google.script.run
       .withSuccessHandler(function (res) {
         ppSay((res && res.message) || 'Saved.', !(res && res.success));
-        if (res && res.success) {
-          ['pp-nom-name', 'pp-nom-rel', 'pp-nom-contact'].forEach(function (id) {
-            var el = document.getElementById(id); if (el) el.value = '';
-          });
-          ppLoadPrivacy();
-        }
-      })
-      .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
-      .recordNomination({
-        patientId: me,
-        nomineeName: (document.getElementById('pp-nom-name') || {}).value || '',
-        relationship: (document.getElementById('pp-nom-rel') || {}).value || '',
-        contact: (document.getElementById('pp-nom-contact') || {}).value || ''
-      }, ppTok());
-  };
-
-  window.ppRemoveNominee = function () {
-    var me = ppMe();
-    if (!me) return;
-    google.script.run
-      .withSuccessHandler(function (res) {
-        ppSay((res && res.message) || 'Removed.', !(res && res.success));
         ppLoadPrivacy();
       })
-      .withFailureHandler(function () { ppSay('Could not do that. Please try again.', true); })
-      .revokeNomination(me, 'Withdrawn by the patient in the portal', ppTok());
-  };
-
-  window.ppRaiseRequest = function () {
-    var me = ppMe();
-    if (!me) return;
-    var details = (document.getElementById('pp-rq-details') || {}).value || '';
-    if (details.trim().length < 10) {
-      return ppSay('Tell us in a sentence what you would like.', true);
-    }
+      .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
+      .recordConsent({ patientId: me, decisions: decisions, method: 'PORTAL' }, ppTok());
+  } else {
     google.script.run
       .withSuccessHandler(function (res) {
-        ppSay((res && res.message) || 'Sent.', !(res && res.success));
-        if (res && res.success) document.getElementById('pp-rq-details').value = '';
+        ppSay((res && res.message) || 'Withdrawn.', !(res && res.success));
+        ppLoadPrivacy();
       })
-      .withFailureHandler(function () { ppSay('Could not send that. Please try again.', true); })
-      .raiseDPDPRequest({
-        patientId: me,
-        type: (document.getElementById('pp-rq-type') || {}).value || 'ACCESS',
-        details: details.trim(),
-        channel: 'PORTAL'
-      }, ppTok());
-  };
-
-  // The portal loads its screens once, so this runs on first paint and again
-  // whenever the profile tab is opened.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', ppLoadPrivacy);
-  } else {
-    ppLoadPrivacy();
+      .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
+      .withdrawConsent(me, purpose, 'Withdrawn by the patient in the portal', ppTok());
   }
-  window.ppLoadPrivacy = ppLoadPrivacy;
+};
 
+window.ppSaveNominee = function () {
+  var me = ppMe();
+  if (!me) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      ppSay((res && res.message) || 'Saved.', !(res && res.success));
+      if (res && res.success) {
+        ['pp-nom-name', 'pp-nom-rel', 'pp-nom-contact'].forEach(function (id) {
+          var el = document.getElementById(id); if (el) el.value = '';
+        });
+        ppLoadPrivacy();
+      }
+    })
+    .withFailureHandler(function () { ppSay('Could not save that. Please try again.', true); })
+    .recordNomination({
+      patientId: me,
+      nomineeName: (document.getElementById('pp-nom-name') || {}).value || '',
+      relationship: (document.getElementById('pp-nom-rel') || {}).value || '',
+      contact: (document.getElementById('pp-nom-contact') || {}).value || ''
+    }, ppTok());
+};
+
+window.ppRemoveNominee = function () {
+  var me = ppMe();
+  if (!me) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      ppSay((res && res.message) || 'Removed.', !(res && res.success));
+      ppLoadPrivacy();
+    })
+    .withFailureHandler(function () { ppSay('Could not do that. Please try again.', true); })
+    .revokeNomination(me, 'Withdrawn by the patient in the portal', ppTok());
+};
+
+window.ppRaiseRequest = function () {
+  var me = ppMe();
+  if (!me) return;
+  var details = (document.getElementById('pp-rq-details') || {}).value || '';
+  if (details.trim().length < 10) {
+    return ppSay('Tell us in a sentence what you would like.', true);
+  }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      ppSay((res && res.message) || 'Sent.', !(res && res.success));
+      if (res && res.success) document.getElementById('pp-rq-details').value = '';
+    })
+    .withFailureHandler(function () { ppSay('Could not send that. Please try again.', true); })
+    .raiseDPDPRequest({
+      patientId: me,
+      type: (document.getElementById('pp-rq-type') || {}).value || 'ACCESS',
+      details: details.trim(),
+      channel: 'PORTAL'
+    }, ppTok());
+};
+
+// The portal loads its screens once, so this runs on first paint and again
+// whenever the profile tab is opened.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', ppLoadPrivacy);
+} else {
+  ppLoadPrivacy();
+}
+window.ppLoadPrivacy = ppLoadPrivacy;
+
+/* The home screen is painted as soon as this bundle arrives. The bundle is
+   only fetched for a patient session, so there is nothing to guard. */
+if (document.readyState === 'loading') {
+  // Wrapped, not passed directly: addEventListener hands the listener an
+  // Event, which ppLoadHome would read as `force` and turn the safety net
+  // into an extra round trip.
+  document.addEventListener('DOMContentLoaded', function () { ppLoadHome(); });
+} else {
+  ppLoadHome();
+}
 </script>
