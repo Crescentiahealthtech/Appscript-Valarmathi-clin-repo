@@ -67,7 +67,32 @@
   .pp-row  { display: flex; justify-content: space-between; align-items: center;
              gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-color); }
   .pp-row:last-child { border-bottom: 0; }
-  .pp-chart { height: 170px; width: 100%; }
+  /* ------------------------------------------------------------------
+     THE CHART BOX EXISTS TO STOP THE CHART GROWING.
+
+     Chart.js with responsive:true and maintainAspectRatio:false sizes its
+     canvas to the PARENT's content box, and then the canvas it just grew
+     becomes part of what the parent measures. Each resize — a rotation, a
+     keyboard opening, the browser's own ResizeObserver firing on the change
+     Chart.js made — read a slightly taller parent and drew a slightly taller
+     canvas. On a phone the sugar chart walked off the bottom of the screen.
+
+     A height on the canvas itself does not fix it: Chart.js overwrites the
+     canvas's inline style on every resize, so whatever is set there is gone
+     by the second frame.
+
+     So the height lives on a box the chart cannot influence, and the canvas
+     is taken out of flow inside it. The parent's height is now a constant,
+     the feedback loop has nothing to feed on, and the same rule serves every
+     chart in the portal.
+     ------------------------------------------------------------------ */
+  .pp-chart-box { position: relative; width: 100%; height: 170px; }
+  @media (min-width: 768px) { .pp-chart-box { height: 200px; } }
+  .pp-chart-box > .pp-chart {
+    position: absolute; inset: 0;
+    width: 100% !important; height: 100% !important;
+    display: block;
+  }
   .pp-tile { border: 1px solid var(--border-color); border-radius: 10px;
              padding: 9px 11px; background: var(--bg-elevated); }
 
@@ -364,6 +389,10 @@ var PPState = {
   home: null,
   homeInFlight: false,
   doctors: [],
+  // How many days ahead booking is open. The server sends the real figure
+  // with the doctor list (PP.BOOK_HORIZON_DAYS); this is only what the strip
+  // draws before that reply arrives.
+  horizonDays: 7,
   pick: { doctorId: '', doctorName: '', date: '', time24: '', time12: '' },
   records: null,
   reports: null,
@@ -550,13 +579,33 @@ function ppCardAppointments(h) {
     body += '<div class="pp-empty mb-3">You have no appointment booked.</div>';
   }
 
-  // The review date the doctor SET, from the consultation record — not parsed
-  // out of a free-text plan with a keyword search, which is what the old
-  // portal did and why it so often read "See EMR Plan".
+  // THE REVIEW DATE THE DOCTOR SET — from column Z of the consultation, not
+  // parsed out of a free-text plan with a keyword search, which is what the
+  // old portal did and why it so often read "See EMR Plan".
+  //
+  // It leads the card rather than sitting in a row underneath the booked
+  // appointments. It is the clinic telling the patient to come back, and a
+  // patient who has not yet booked has nothing above it to read — so a row
+  // below an empty list was the one place it could not be seen.
   if (h.review) {
-    body += '<div class="pp-row"><span class="pp-lbl mb-0">Doctor asked you to come back</span>' +
-      '<span class="' + (h.review.overdue ? 'pp-pill pp-bad' : 'pp-val') + '" style="font-size:.85rem;">' +
-      ppEscHtml(h.review.text) + '</span></div>';
+    var overdue = h.review.overdue;
+    body = '<div class="pp-tile mb-3" style="border-color:' +
+        (overdue ? 'var(--danger-fg)' : 'var(--accent-purple)') + ';">' +
+        '<span class="pp-lbl">' +
+          (overdue ? 'Your review was due' : 'Your doctor asked you to come back on') +
+        '</span>' +
+        '<span class="pp-val" style="font-size:1rem;">' +
+          ppEscHtml(h.review.text) + '</span>' +
+        '<div class="pp-note">' +
+          (h.review.setBy ? 'set by ' + ppEscHtml(h.review.setBy) : '') +
+          (h.review.setOn ? ' on ' + ppEscHtml(h.review.setOn) : '') +
+        '</div>' +
+        (h.review.date
+          ? '<button class="btn btn-sm btn-outline-light mt-2" style="font-size:.75rem;" ' +
+            'onclick="ppBookForReview(\'' + ppEscHtml(h.review.date) + '\')">' +
+            '<i class="fa-solid fa-calendar-plus me-1"></i>Book for this date</button>'
+          : '') +
+      '</div>' + body;
   }
   if (a.lastVisit) {
     body += '<div class="pp-row"><span class="pp-lbl mb-0">Last visit</span>' +
@@ -699,7 +748,7 @@ function ppCardDiabetes(h) {
     '</h6>' +
     '<div class="row g-2 mb-3">' + tiles + '</div>' +
     (hasChart
-      ? '<canvas id="pp-chart-dm" class="pp-chart"></canvas>'
+      ? '<div class="pp-chart-box"><canvas id="pp-chart-dm" class="pp-chart"></canvas></div>'
       : '<div class="pp-empty">One test is a reading, not a trend. After your ' +
         'next set of results this will show how they are changing.</div>') +
     '<div class="pp-note mt-2">These are your own laboratory results. Only your ' +
@@ -723,7 +772,7 @@ function ppCardBp(h) {
         ' · ' + t.length + ' reading' + (t.length === 1 ? '' : 's') + ' on record</div>'
       : '') +
     (t.length > 1
-      ? '<canvas id="pp-chart-bp" class="pp-chart"></canvas>'
+      ? '<div class="pp-chart-box"><canvas id="pp-chart-bp" class="pp-chart"></canvas></div>'
       : '<div class="pp-empty">Your readings will be charted here once there are ' +
         'a few of them.</div>') +
     '</div>';
@@ -781,7 +830,7 @@ function ppCardAntenatal(h) {
     '<div class="mt-3">' +
       (growth.length > 1
         ? '<div class="pp-lbl">Baby\'s growth</div>' +
-          '<canvas id="pp-chart-growth" class="pp-chart"></canvas>' +
+          '<div class="pp-chart-box"><canvas id="pp-chart-growth" class="pp-chart"></canvas></div>' +
           '<div class="pp-note">Fundal height against the weeks of your pregnancy. ' +
             'From about 24 weeks these two numbers usually track each other.</div>'
         : '<div class="pp-empty">The growth chart needs at least two checkups ' +
@@ -790,7 +839,7 @@ function ppCardAntenatal(h) {
 
     ((a.trend || []).filter(function (v) { return v.weightKg; }).length > 1
       ? '<div class="mt-3"><div class="pp-lbl">Your weight</div>' +
-        '<canvas id="pp-chart-ancwt" class="pp-chart"></canvas></div>'
+        '<div class="pp-chart-box"><canvas id="pp-chart-ancwt" class="pp-chart"></canvas></div></div>'
       : '') +
     '</div>';
 }
@@ -1080,7 +1129,11 @@ function ppInitBooking() {
         return;
       }
       PPState.doctors = res.doctors || [];
+      // The clinic's booking horizon, so the date strip offers exactly the
+      // days the server will accept rather than a fixed eight.
+      if (res.horizonDays) PPState.horizonDays = res.horizonDays;
       ppRenderDoctors();
+      ppRenderDays();
     })
     .withFailureHandler(function (err) {
       ppSet('pp-doctors', '<div class="pp-empty">We could not reach the clinic: ' +
@@ -1109,27 +1162,62 @@ function ppRenderDoctors() {
           'Next free ' + ppEscHtml(d.nextFreeText) + ' at ' +
           ppEscHtml(d.nextFreeTime) + '</div>'
         : '<div class="pp-note mt-1" style="color:var(--warning-fg);">' +
-          'Nothing free in the next month</div>') +
+          'Nothing free in the next ' + (PPState.horizonDays || 7) + ' days</div>') +
       '</div>';
   }).join(''));
 }
+
+/**
+ * The days a patient may pick: today and the next PPState.horizonDays.
+ *
+ * The strip used to run eight days whatever the clinic's rule was, and the
+ * server's rule was thirty. Now the server sends its horizon with the doctor
+ * list and the strip draws exactly that, so a date the patient can tap is a
+ * date the booking will accept. The server still checks on the write — this
+ * strip is a convenience, not the rule.
+ */
+/**
+ * Takes the patient to booking with the doctor's review date already picked.
+ *
+ * If the review date falls outside the booking horizon it still opens the
+ * screen, on the last bookable day, rather than refusing: the patient's next
+ * step is the same either way and the strip shows them what they can have.
+ */
+function ppBookForReview(iso) {
+  ppGo('tab-pat-appt');
+  ppInitBooking();
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var want = new Date(iso + 'T00:00:00');
+  var days = PPState.horizonDays || 7;
+  var withinRange = !isNaN(want.getTime()) &&
+    want >= today &&
+    (want - today) / 86400000 <= days;
+  if (withinRange) {
+    PPState.pick.date = iso;
+    ppRenderDays();
+  }
+}
+window.ppBookForReview = ppBookForReview;
 
 function ppRenderDays() {
   var host = ppEl('pp-days');
   if (!host) return;
   var today = new Date();
+  var days = PPState.horizonDays || 7;
   var html = '';
-  for (var i = 0; i < 8; i++) {
+  for (var i = 0; i <= days; i++) {
     var d = new Date(today.getTime() + i * 86400000);
     var iso = d.getFullYear() + '-' +
               ('0' + (d.getMonth() + 1)).slice(-2) + '-' +
               ('0' + d.getDate()).slice(-2);
     var sel = (PPState.pick.date === iso) ? ' sel' : '';
     html += '<div class="pp-day' + sel + '" onclick="ppPickDate(\'' + iso + '\')">' +
-      '<small>' + d.toLocaleDateString('en-GB', { weekday: 'short' }) + '</small>' +
-      '<strong>' + d.getDate() + '</strong></div>';
+      '<small>' + (i === 0 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' })) +
+      '</small><strong>' + d.getDate() + '</strong></div>';
   }
-  host.innerHTML = html;
+  host.innerHTML = html +
+    '<div class="pp-note w-100 mt-2">Appointments open ' + days + ' days ahead, ' +
+    'and one a day can be booked here. Telephone the clinic for anything else.</div>';
 }
 
 function ppPickDoctor(id) {

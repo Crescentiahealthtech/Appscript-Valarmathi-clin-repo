@@ -55,6 +55,31 @@ var PP = {
   LAB_LIMIT: 20,
 
   /**
+   * HOW FAR AHEAD A PATIENT MAY BOOK, IN DAYS.
+   *
+   * A week. Beyond that a clinic's own list changes under the booking —
+   * leave, a camp, a visiting consultant's day moving — and the patient who
+   * booked five weeks out is the one who is telephoned to be moved. A week
+   * is also the horizon a patient can actually plan against.
+   *
+   * It bounds three things together: the days the browser offers, the dates
+   * portalDoctorSlots will answer for, and the dates portalBookAppointment
+   * will accept. The last of those is the one that matters, because the
+   * other two are suggestions the browser can ignore.
+   */
+  BOOK_HORIZON_DAYS: 7,
+
+  /**
+   * HOW MANY LIVE APPOINTMENTS ONE PATIENT MAY HOLD ON ONE DAY.
+   *
+   * One, for the whole clinic and not one per doctor. The previous rule was
+   * per doctor, so a patient could book three consultants on a Tuesday, and
+   * three consultants on a Tuesday is three slots nobody else can have and
+   * two telephone calls for the desk.
+   */
+  BOOKINGS_PER_DAY: 1,
+
+  /**
    * Parameter-name aliases, because a lab catalogue is typed by humans.
    *
    * LAB_TEST_CATALOG has no code a trend could key on — the same analyte is
@@ -738,7 +763,7 @@ function portalBookableDoctors(sessionToken) {
     pp_me_(sessionToken);
     var docs = getActiveDoctors() || [];
     var out = docs.map(function (d) {
-      var next = pp_nextFreeDay_(d.doctorId, 30);
+      var next = pp_nextFreeDay_(d.doctorId, PP.BOOK_HORIZON_DAYS);
       return {
         doctorId: d.doctorId,
         name: d.name,
@@ -760,11 +785,18 @@ function portalBookableDoctors(sessionToken) {
       return String(a.nextFree).localeCompare(String(b.nextFree));
     });
     return { success: true, doctors: out,
+             horizonDays: PP.BOOK_HORIZON_DAYS,
              message: out.length ? '' :
                'No doctor is taking bookings at the moment. Please telephone the clinic.' };
   } catch (err) {
     return pp_fail_(err, { doctors: [] });
   }
+}
+
+/** The last date a patient may book, as a yyyy-MM-dd key. */
+function pp_lastBookableKey_() {
+  return dc_fmtDate_(new Date(new Date().getTime() +
+                              PP.BOOK_HORIZON_DAYS * 86400000));
 }
 
 /** The first day within `days` on which this doctor has a bookable slot. */
@@ -840,6 +872,13 @@ function portalDoctorSlots(doctorId, dateStr, sessionToken) {
     if (key < todayKey) {
       return { success: false, slots: [], message: 'That date has passed.' };
     }
+    var lastKey = pp_lastBookableKey_();
+    if (key > lastKey) {
+      return { success: false, slots: [],
+               message: 'Bookings open ' + PP.BOOK_HORIZON_DAYS + ' days ahead. ' +
+                        'The last date you can book is ' +
+                        pp_fmt_(lastKey, 'EEE, dd MMM') + '.' };
+    }
 
     var free = pp_freeSlots_(did, key, key === todayKey);
     var grid = [];
@@ -895,6 +934,17 @@ function portalBookAppointment(payload, sessionToken) {
     var todayKey = dc_fmtDate_(new Date());
     if (key < todayKey) return { success: false, message: 'That date has passed.' };
 
+    // The horizon is enforced HERE as well as on the slot list, because the
+    // slot list is a suggestion to a browser and this is the write.
+    var lastKey = pp_lastBookableKey_();
+    if (key > lastKey) {
+      return { success: false, code: 'TOO_FAR_AHEAD',
+               message: 'Bookings open ' + PP.BOOK_HORIZON_DAYS + ' days ahead. ' +
+                        'The last date you can book is ' +
+                        pp_fmt_(lastKey, 'EEE, dd MMM') + '. Please telephone the ' +
+                        'clinic for anything further out.' };
+    }
+
     // The slot must be free in the doctor's OWN grid at the moment of
     // booking. The browser's list is a snapshot from when the screen painted.
     var free = pp_freeSlots_(doc.doctorId, key, key === todayKey);
@@ -905,8 +955,10 @@ function portalBookAppointment(payload, sessionToken) {
                message: 'That time has just been taken. Please pick another.' };
     }
 
-    // One live appointment per patient per doctor per day. A patient who
-    // double-books is a patient the desk has to telephone.
+    // One live appointment per patient per DAY — the whole clinic, not one
+    // per doctor. A patient who double-books is a patient the desk has to
+    // telephone, and a patient holding three consultants on a Tuesday is
+    // three slots nobody else can have.
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
     if (!sh) return { success: false, message: 'Appointments are unavailable. Please telephone the clinic.' };
     var m = dc_headerMap_(sh);
@@ -918,16 +970,27 @@ function portalBookAppointment(payload, sessionToken) {
 
     var data = sh.getDataRange().getDisplayValues();
     var LIVE = ['Booked', 'Arrived', 'In-Progress'];
+    var held = 0, firstHeld = null;
     for (var r = 1; r < data.length; r++) {
       if (pp_up_(data[r][1]) !== pid) continue;
       if (LIVE.indexOf(pp_str_(data[r][6])) === -1) continue;
       if (dc_dateKey_(data[r][3]) !== key) continue;
-      var rowDoc = pp_up_(pp_str_(data[r][docCol]) || DC_DEFAULT_DOCTOR);
-      if (rowDoc !== pp_up_(doc.doctorId)) continue;
+      held++;
+      if (!firstHeld) {
+        var rowDocId = pp_str_(data[r][docCol]) || DC_DEFAULT_DOCTOR;
+        var rowDoc = null;
+        try { rowDoc = dc_getDoctorById_(rowDocId); } catch (e) { rowDoc = null; }
+        firstHeld = { time: pp_str_(data[r][4]),
+                      doctor: rowDoc ? rowDoc.name : rowDocId };
+      }
+    }
+    if (held >= PP.BOOKINGS_PER_DAY) {
       return { success: false, code: 'ALREADY_BOOKED',
-               message: 'You already have an appointment with ' + doc.name +
-                        ' on ' + pp_fmt_(key, 'EEE, dd MMM') + ' at ' +
-                        pp_str_(data[r][4]) + '.' };
+               message: 'You already have an appointment on ' +
+                        pp_fmt_(key, 'EEE, dd MMM') + ' at ' + firstHeld.time +
+                        ' with ' + firstHeld.doctor + '. Only one appointment a ' +
+                        'day can be booked here — cancel that one first, or ' +
+                        'telephone the clinic.' };
     }
 
     var PURPOSES = ['Consultation', 'Follow-up', 'Routine Checkup',
