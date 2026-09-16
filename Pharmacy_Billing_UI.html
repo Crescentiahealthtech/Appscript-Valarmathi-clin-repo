@@ -25,6 +25,10 @@
 
   <div id="ph-drawer-host" class="d-none mb-4"></div>
 
+  <!-- Why the desk is not offering any medicines, when it is not. A toast
+       fades; a desk that could not read the shelf has to keep saying so. -->
+  <div id="ph-stock-problem" class="alert alert-warning py-2 px-3 small d-none"></div>
+
   <style>
     /* ========================================================= */
     /* PHARMACY BILLING — THEME ADAPTIVE (light + dark via vars)  */
@@ -342,16 +346,60 @@
   // ===================================================================
   // 0. STOCK
   // ===================================================================
+  /**
+   * THE STOCK, AND WHAT HAPPENS WHEN IT DOES NOT ARRIVE.
+   *
+   * This used to discard the failure. Both handlers ended with phStock = [],
+   * the server's message was dropped, and nothing on screen changed — so a
+   * pharmacist typed a drug name and was told "No matching stock. Check
+   * inventory or add stock first." That sentence is wrong and unactionable
+   * for every real cause: an expired session, a role without pharmacy.read,
+   * a renamed sheet, a network drop. The desk looked broken and said nothing
+   * about why, which is the whole of "search and add bill do not work".
+   *
+   * Now the reason is kept and shown, once, above the bill.
+   */
   function fetchLivePharmacyStock() {
+    phStockProblem('');
     google.script.run
       .withSuccessHandler(res => {
-        phStock = (res && res.success) ? (res.data || []) : [];
+        if (!res || !res.success) {
+          phStock = []; phStockByBrand = {};
+          phStockProblem((res && res.message) ||
+            'The pharmacy stock could not be read, so the medicine search has ' +
+            'nothing to offer. Reload the page; if it persists, check that you ' +
+            'are still signed in.');
+          return;
+        }
+        phStock = res.data || [];
         phStockByBrand = {};
         phStock.forEach(b => { const k = b.brand.toLowerCase(); (phStockByBrand[k] = phStockByBrand[k] || []).push(b); });
         Object.keys(phStockByBrand).forEach(k => phStockByBrand[k].sort((a, b) => a.expSort - b.expSort));
+
+        // An empty shelf is a different problem from an unreadable one, and
+        // it is worth saying so before a bill is started against nothing.
+        if (!phStock.length) {
+          phStockProblem('No billable stock: every batch in Pharmacy_Inventory ' +
+            'is at zero, or the sheet is empty. Receive stock first — ' +
+            'medicines can still be typed, but no batch can be assigned.');
+        }
       })
-      .withFailureHandler(() => { phStock = []; phStockByBrand = {}; })
+      .withFailureHandler(err => {
+        phStock = []; phStockByBrand = {};
+        phStockProblem('Could not reach the server for the pharmacy stock' +
+          ((err && err.message) ? ': ' + err.message : '.') +
+          ' The medicine search will find nothing until it loads.');
+      })
       .fetchBillableStock(window.sessionToken);
+  }
+
+  /** Shows or clears the one banner above the bill. '' clears it. */
+  function phStockProblem(message) {
+    const el = document.getElementById('ph-stock-problem');
+    if (!el) return;
+    if (!message) { el.classList.add('d-none'); el.textContent = ''; return; }
+    el.textContent = message;
+    el.classList.remove('d-none');
   }
 
   // ===================================================================
@@ -556,10 +604,22 @@
   function handleMedicineSearch(inputElem) {
     closeAllLists();
     const val = (inputElem.value || "").trim().toLowerCase();
-    if (val.length < 1 || phStock.length === 0) return;
+
+    // THE DEAD END THIS USED TO BE. The condition was
+    //     if (val.length < 1 || phStock.length === 0) return;
+    // so when the stock had not loaded — an expired session, a role without
+    // pharmacy.read, a sheet that could not be read — typing a drug name did
+    // nothing whatsoever. No list, no message, no error. The box simply
+    // never responded, which is exactly what "the billing desk does not
+    // work" looks like from the counter.
+    //
+    // An empty stock list now falls through to the "no matches" branch
+    // below, which says which of the two empties this is and points at the
+    // banner above the bill.
+    if (val.length < 1) return;
 
     const seen = {}, matches = [];
-    phStock.forEach(b => {
+    (phStock || []).forEach(b => {
       const bl = b.brand.toLowerCase(), gl = (b.generic || "").toLowerCase();
       if ((bl.indexOf(val) > -1 || gl.indexOf(val) > -1) && !seen[bl]) {
         seen[bl] = true;
@@ -575,7 +635,12 @@
     if (matches.length === 0) {
       const none = document.createElement("div");
       none.style.cursor = "default";
-      none.innerHTML = `<span class="ac-meta">No matching stock. Check inventory or add stock first.</span>`;
+      // Two different empties. With no stock loaded at all the shelf has not
+      // been read, and telling the pharmacist to add stock is the wrong
+      // instruction; the banner above says what actually happened.
+      none.innerHTML = phStock.length
+        ? `<span class="ac-meta">Nothing in stock matches that. Check the spelling, or receive the stock first.</span>`
+        : `<span class="ac-meta">The stock list has not loaded — see the message above the bill.</span>`;
       list.appendChild(none); return;
     }
     matches.slice(0, 30).forEach(m => {

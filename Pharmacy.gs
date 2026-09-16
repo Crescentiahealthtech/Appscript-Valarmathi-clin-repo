@@ -422,6 +422,126 @@ function getDisposalLog(opts) {
   }
 }
 
+/**
+ * FRONTEND ENTRY. REMOVES A BATCH ROW OUTRIGHT.
+ *
+ * DELETE IS NOT DISPOSAL, and the difference is the whole reason both exist.
+ *
+ *   DISPOSAL is stock that was real and has left the shelf — expired,
+ *   damaged, lost. It keeps the row, zeroes the count and writes a permanent
+ *   entry the clinic can total: this is what the wastage cost.
+ *
+ *   DELETE is a row that should never have existed. A duplicate entry, a
+ *   typed batch number nobody can find, stock keyed against the wrong brand.
+ *   Writing that off as wastage would inflate the disposal register with
+ *   money the clinic never lost.
+ *
+ * Until now only disposal existed, so a mis-keyed row could be dealt with
+ * only by writing it off as damaged — which is a false entry in the one
+ * register whose value is that it is true.
+ *
+ * TWO REFUSALS keep the distinction honest:
+ *
+ *   A batch that has been BILLED is not a mistake. Something was dispensed
+ *   against it, and an invoice line refers to it. It has to be written off,
+ *   not removed, or the invoice points at a batch that no longer exists.
+ *
+ *   A reason is required, and the whole row is copied into the audit entry
+ *   before it goes, so a deletion can be read back and undone by hand.
+ *
+ * @param {{rowId:number, reason:string, token:string}} payload
+ */
+function deletePharmacyBatch(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    var p = payload || {};
+    // The same permission a write-off needs: removing stock from the record
+    // is the same kind of act whichever register it lands in.
+    var actor = crescRequire_(p.token, 'pharmacy.stock_discard');
+
+    var rowId = parseInt(p.rowId, 10);
+    if (!rowId || rowId < 2) return { success: false, message: "Which row?" };
+
+    var reason = String(p.reason || '').trim();
+    if (reason.length < 5) {
+      return { success: false,
+               message: 'Say why this row is being removed. "Deleted" is not a ' +
+                        'reason, and this is the only record that it happened.' };
+    }
+
+    if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
+    if (!sheet) return { success: false, message: "Pharmacy_Inventory not found." };
+    if (rowId > sheet.getLastRow()) return { success: false, message: "That row no longer exists." };
+
+    var row = sheet.getRange(rowId, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var brand = String(row[1] || '').trim();
+    var batch = String(row[6] || '').trim();
+    if (!brand) return { success: false, message: "That row is already empty." };
+
+    // Has anything been dispensed against this batch?
+    var billed = 0;
+    try {
+      var items = ss.getSheetByName(PH_SHEETS.INVOICE_ITEMS);
+      if (items && items.getLastRow() > 1) {
+        var idata = items.getDataRange().getValues();
+        for (var i = 1; i < idata.length; i++) {
+          if (String(idata[i][3] || '').trim().toLowerCase() !== brand.toLowerCase()) continue;
+          if (String(idata[i][5] || '').trim().toLowerCase() !== batch.toLowerCase()) continue;
+          billed++;
+        }
+      }
+    } catch (e) { /* an unreadable ledger must not block the check below */ }
+
+    if (billed > 0) {
+      return { success: false, code: 'BILLED',
+               message: brand + ' batch ' + (batch || '(no batch)') + ' appears on ' +
+                        billed + ' invoice line' + (billed === 1 ? '' : 's') + ', so it ' +
+                        'is stock that really existed. Write it off instead — ' +
+                        'deleting it would leave those invoices pointing at a ' +
+                        'batch that is not there.' };
+    }
+
+    // The whole row goes into the audit entry BEFORE it is removed, so the
+    // deletion is reversible by somebody reading the log.
+    var snapshot = {
+      brand: brand,
+      generic: String(row[2] || ''),
+      type: String(row[3] || ''),
+      qty: parseInt(row[4], 10) || 0,
+      unit: String(row[5] || ''),
+      batch: batch,
+      expiry: cresc_expiryText_(row[7]),
+      rack: String(row[8] || ''),
+      buyPrice: parseFloat(row[9]) || 0,
+      mrp: parseFloat(row[10]) || 0,
+      gst: parseFloat(row[11]) || 0,
+      manufacturer: String(row[12] || ''),
+      supplier: String(row[13] || '')
+    };
+
+    sheet.deleteRow(rowId);
+    SpreadsheetApp.flush();
+
+    try {
+      logAudit_({ username: actor.username, role: actor.role },
+                'PHARMACY_BATCH_DELETED', 'Pharmacy_Inventory',
+                brand + ' / ' + (batch || '-'),
+                { reason: reason, row: snapshot });
+    } catch (e) {}
+
+    return { success: true,
+             message: brand + (batch ? ' (batch ' + batch + ')' : '') +
+                      ' removed. The row is in the audit log if it has to come back.' };
+  } catch (error) {
+    return { success: false, message: String(error.message || error).replace('FORBIDDEN: ', '') };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
 // =====================================================================
 // SECTION B — BILLING DATA READS
 // =====================================================================
