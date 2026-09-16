@@ -18,6 +18,12 @@
       <button id="dash-login-audit-btn" class="btn btn-sm btn-outline-info shadow-sm d-none" onclick="openLoginAudit()">
         <i class="fa-solid fa-user-shield me-1"></i> Sign-in Audit
       </button>
+      <!-- Same treatment, on admin.users: adding a member of staff used to
+           mean typing a row into the Users sheet, and the password column
+           holds a PBKDF2 digest that cannot be typed. -->
+      <button id="dash-add-staff-btn" class="btn btn-sm btn-outline-success shadow-sm d-none" onclick="openAddStaff()">
+        <i class="fa-solid fa-user-plus me-1"></i> Add Staff
+      </button>
     </div>
   </div>
 
@@ -32,6 +38,120 @@
      It reads the tail of Audit_Log, not the whole sheet. Audit_Log is
      append-only and is the fastest-growing sheet in the project.
      ══════════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════════════
+     ADD A MEMBER OF STAFF
+
+     There was no way to do this. A row typed into the Users sheet by hand
+     cannot carry a password, because the password column holds a PBKDF2
+     digest — so a hand-added account got either plain text (which AuthLogin
+     refuses outright) or a pasted value that matches nothing.
+
+     A doctor needs a second row, on the Doctors sheet, joined by
+     Linked_Username. Without it the schedule, the signature line, the
+     referral list and the case-sheet author have nothing to attribute to,
+     and the first prescription prints unsigned. Both rows are written here,
+     in that order, from one form.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="addStaffModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force">
+          <i class="fa-solid fa-user-plus me-2" style="color:var(--success-fg);"></i>Add a member of staff
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="as-result" class="d-none mb-3"></div>
+        <div id="as-form">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label small label-bright mb-1">Full name <span class="text-danger">*</span></label>
+              <input id="as-name" class="form-control form-control-sm" placeholder="Dr. Rekha Subramanian">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small label-bright mb-1">Username <span class="text-danger">*</span></label>
+              <input id="as-username" class="form-control form-control-sm" placeholder="rekha" autocomplete="off">
+              <div class="form-text small label-bright">Letters, digits, dot, underscore, hyphen. No spaces.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small label-bright mb-1">Role <span class="text-danger">*</span></label>
+              <select id="as-role" class="form-select form-select-sm" onchange="asRoleChanged()">
+                <option value="doctor">Doctor</option>
+                <option value="nurse">Nurse</option>
+                <option value="receptionist">Receptionist</option>
+                <option value="pharmacist">Pharmacist</option>
+                <option value="lab">Lab technician</option>
+                <option value="accountant">Accountant</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small label-bright mb-1">Email (optional)</label>
+              <input id="as-email" type="email" class="form-control form-control-sm" autocomplete="off">
+            </div>
+          </div>
+
+          <!-- Shown for a doctor only. These are the fields that make a login
+               into somebody a prescription can be attributed to. -->
+          <div id="as-doctor-block" class="mt-3">
+            <div class="small fw-bold label-bright mb-2 pt-2" style="border-top:1px solid var(--border-color);">
+              Doctor profile
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label small label-bright mb-1">Specialty</label>
+                <input id="as-specialty" class="form-control form-control-sm" placeholder="General Medicine">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small label-bright mb-1">Qualification</label>
+                <input id="as-qual" class="form-control form-control-sm" placeholder="MBBS, MD">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small label-bright mb-1">Registration number</label>
+                <input id="as-regno" class="form-control form-control-sm" placeholder="TN/12345">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small label-bright mb-1">Consultation fee</label>
+                <input id="as-fee" type="number" min="0" step="1" class="form-control form-control-sm" value="0">
+              </div>
+              <div class="col-md-8 d-flex align-items-end gap-4 flex-wrap pb-1">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="as-visiting">
+                  <label class="form-check-label small label-bright" for="as-visiting">
+                    Visiting consultant
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="as-viewall">
+                  <label class="form-check-label small label-bright" for="as-viewall">
+                    May open every patient, not only their own
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-2" style="border-top:1px solid var(--border-color);">
+            <label class="form-label small label-bright mb-1">Temporary password (optional)</label>
+            <input id="as-password" class="form-control form-control-sm" autocomplete="new-password"
+                   placeholder="Leave blank and one will be generated">
+            <div class="form-text small label-bright">
+              Hashed before it is stored, either way. It must be changed at first sign-in.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" id="as-save" class="btn btn-sm btn-success fw-bold" onclick="asCreate()">
+          Create the account
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="loginAuditModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
@@ -45,9 +165,13 @@
         <div class="d-flex gap-2 flex-wrap align-items-end mb-3">
           <div>
             <label class="form-label small label-bright mb-1">Period</label>
+            <!-- 24 hours by default. The question this screen is opened to
+                 answer is nearly always about today or last night; a week of
+                 rows to scroll through is how the one that matters is
+                 missed. -->
             <select id="la-days" class="form-select form-select-sm" style="width:150px;" onchange="openLoginAudit()">
-              <option value="1">Last 24 hours</option>
-              <option value="7" selected>Last 7 days</option>
+              <option value="1" selected>Last 24 hours</option>
+              <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
             </select>
@@ -977,7 +1101,7 @@
     crescRun({
       fn: 'crescGetLoginAudit',
       args: [window.sessionToken || '', {
-        days: parseInt(document.getElementById('la-days').value, 10) || 7,
+        days: parseInt(document.getElementById('la-days').value, 10) || 1,
         username: (document.getElementById('la-user').value || '').trim(),
         limit: 300
       }],
@@ -997,42 +1121,169 @@
           </div>`;
           return;
         }
-        // Failures first in the summary: the successes are the expected case
-        // and the failures are why anyone opens this screen.
-        const fails = rows.filter(r => r.event !== 'LOGIN_SUCCESS' && r.event !== 'LOGOUT' && r.event !== 'LOGIN_MFA_PASSED').length;
-        box.innerHTML =
-          `<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-             <span class="label-bright small">${rows.length} event(s) over ${res.windowDays} day(s)</span>
-             ${fails ? `<span class="badge bg-danger bg-opacity-25 text-danger">${fails} failed or blocked</span>`
-                     : '<span class="badge bg-success bg-opacity-25 text-success">No failures</span>'}
-           </div>
-           <div class="table-responsive" style="max-height:60vh;">
-             <table class="table table-sm align-middle mb-0">
-               <thead style="position:sticky;top:0;z-index:5;background:var(--bg-card);">
-                 <tr style="font-size:.72rem;text-transform:uppercase;">
-                   <th>When</th><th>User</th><th>Role</th><th>What happened</th><th>How</th><th>Detail</th>
-                 </tr>
-               </thead>
-               <tbody style="font-size:.82rem;">` +
-          rows.map(r => {
+
+        // STAFF AND PATIENTS ARE TWO DIFFERENT QUESTIONS.
+        //
+        // "Was a member of staff at a desk they should not have been at" and
+        // "is somebody working through our patient IDs" are asked by
+        // different people for different reasons, and answering both in one
+        // list of three hundred rows answers neither. The server classifies
+        // each row; an attempt against a username nobody recognises has no
+        // role to classify by and is the most interesting row on the screen,
+        // so it gets its own tab rather than being filed under a guess.
+        const tally = res.tally || {};
+        const GROUPS = [
+          { key: 'STAFF',   label: 'Staff' },
+          { key: 'PATIENT', label: 'Patients' },
+          { key: 'UNKNOWN', label: 'Unrecognised' }
+        ].filter(g => (tally[g.key] || 0) > 0);
+
+        const isFail = r => r.event !== 'LOGIN_SUCCESS' && r.event !== 'LOGOUT' &&
+                            r.event !== 'LOGIN_MFA_PASSED';
+
+        const table = list => `
+          <div class="table-responsive" style="max-height:52vh;">
+            <table class="table table-sm align-middle mb-0">
+              <thead style="position:sticky;top:0;z-index:5;background:var(--bg-card);">
+                <tr style="font-size:.72rem;text-transform:uppercase;">
+                  <th>When</th><th>User</th><th>Role</th><th>What happened</th><th>How</th><th>Detail</th>
+                </tr>
+              </thead>
+              <tbody style="font-size:.82rem;">` +
+          list.map(r => {
             const def = LA_EVENT[r.event] || [r.event, 'secondary'];
             return `<tr>
                 <td class="label-bright" style="white-space:nowrap;">${laEsc(r.at)}</td>
                 <td class="fw-semibold text-white-force">${laEsc(r.username)}</td>
-                <td class="label-bright">${laEsc(r.role)}</td>
+                <td class="label-bright">${laEsc(r.role) || '<em>unknown</em>'}</td>
                 <td><span class="badge bg-${def[1]} bg-opacity-25 text-${def[1]}">${laEsc(def[0])}</span></td>
                 <td class="label-bright">${laEsc(r.method || (r.googleAccount && r.googleAccount !== '(anonymous)' ? 'google' : ''))}</td>
                 <td class="label-bright">${laEsc(r.reason)}${r.failures ? ` <span class="text-danger">(attempt ${r.failures})</span>` : ''}</td>
               </tr>`;
           }).join('') +
-          `</tbody></table></div>
-           <div class="label-bright small mt-2">
-             The caller's IP address is not shown: Apps Script does not expose it to a web app,
-             so "signed in from where" cannot be answered from inside this deployment.
-           </div>`;
+          `</tbody></table></div>`;
+
+        const tabs = GROUPS.map((g, i) => {
+          const n = tally[g.key] || 0;
+          const bad = rows.filter(r => r.audience === g.key && isFail(r)).length;
+          return `<li class="nav-item">
+              <button class="nav-link ${i === 0 ? 'active' : ''}" data-bs-toggle="tab"
+                      data-bs-target="#la-pane-${g.key}" type="button">
+                ${g.label} <span class="badge bg-secondary bg-opacity-25">${n}</span>
+                ${bad ? `<span class="badge bg-danger bg-opacity-25 text-danger ms-1">${bad}</span>` : ''}
+              </button></li>`;
+        }).join('');
+
+        const panes = GROUPS.map((g, i) => {
+          const list = rows.filter(r => r.audience === g.key);
+          return `<div class="tab-pane fade ${i === 0 ? 'show active' : ''}" id="la-pane-${g.key}">
+              ${table(list)}</div>`;
+        }).join('');
+
+        box.innerHTML =
+          `<div class="label-bright small mb-2">${rows.length} event(s) over the last
+             ${res.windowDays === 1 ? '24 hours' : res.windowDays + ' days'}</div>
+           <ul class="nav nav-tabs mb-2" style="font-size:.82rem;">${tabs}</ul>
+           <div class="tab-content">${panes}</div>`;
       }
     });
   }
+
+  /* ══════════════════════════════════════════════════════════════════
+     ADD A MEMBER OF STAFF
+     ══════════════════════════════════════════════════════════════════ */
+
+  function asEl(id) { return document.getElementById(id); }
+
+  /** The doctor block is only relevant to a doctor. */
+  function asRoleChanged() {
+    const block = asEl('as-doctor-block');
+    if (block) block.classList.toggle('d-none', asEl('as-role').value !== 'doctor');
+  }
+  window.asRoleChanged = asRoleChanged;
+
+  function openAddStaff() {
+    const modalEl = asEl('addStaffModal');
+    ['as-name','as-username','as-email','as-specialty','as-qual','as-regno','as-password']
+      .forEach(id => { const e = asEl(id); if (e) e.value = ''; });
+    const fee = asEl('as-fee'); if (fee) fee.value = '0';
+    ['as-visiting','as-viewall'].forEach(id => { const e = asEl(id); if (e) e.checked = false; });
+    asEl('as-role').value = 'doctor';
+    asRoleChanged();
+    asEl('as-result').classList.add('d-none');
+    asEl('as-form').classList.remove('d-none');
+    asEl('as-save').classList.remove('d-none');
+    (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+  }
+  window.openAddStaff = openAddStaff;
+
+  function asCreate() {
+    const btn = asEl('as-save');
+    const role = asEl('as-role').value;
+    const payload = {
+      username:      (asEl('as-username').value || '').trim(),
+      displayName:   (asEl('as-name').value || '').trim(),
+      role:          role,
+      email:         (asEl('as-email').value || '').trim(),
+      password:      (asEl('as-password').value || '').trim(),
+      specialty:     (asEl('as-specialty').value || '').trim(),
+      qualification: (asEl('as-qual').value || '').trim(),
+      regNo:         (asEl('as-regno').value || '').trim(),
+      consultFee:    Number(asEl('as-fee').value) || 0,
+      isVisiting:    !!asEl('as-visiting').checked,
+      canViewAll:    !!asEl('as-viewall').checked
+    };
+    if (!payload.displayName || !payload.username) {
+      asEl('as-result').className = 'alert alert-warning py-2 small mb-3';
+      asEl('as-result').textContent = 'A name and a username are both needed.';
+      asEl('as-result').classList.remove('d-none');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Creating…';
+
+    crescRun({
+      fn: 'crescCreateStaffAccount',
+      args: [payload, window.sessionToken || ''],
+      key: 'crescCreateStaffAccount',
+      busy: false,
+      error: 'Could not create the account',
+      onSuccess: function (res) {
+        btn.disabled = false;
+        btn.innerHTML = 'Create the account';
+        const box = asEl('as-result');
+        box.classList.remove('d-none');
+        if (!res || !res.success) {
+          box.className = 'alert alert-danger py-2 small mb-3';
+          box.textContent = (res && res.message) || 'Failed.';
+          return;
+        }
+        // THE PASSWORD IS SHOWN ONCE. It is never stored in a readable form
+        // and cannot be looked up again — only reset. So it is displayed
+        // large enough to read aloud across a desk, and the form is hidden so
+        // the page cannot be submitted twice.
+        box.className = 'alert alert-success py-3 mb-3';
+        box.innerHTML =
+          '<div class="fw-bold mb-2">' + laEsc(payload.displayName) + ' can now sign in.</div>' +
+          '<div class="small mb-1">Username</div>' +
+          '<div class="fw-bold font-monospace mb-2" style="font-size:1.05rem;">' +
+            laEsc(res.username) + '</div>' +
+          '<div class="small mb-1">Temporary password &mdash; shown once</div>' +
+          '<div class="fw-bold font-monospace mb-2" style="font-size:1.25rem;letter-spacing:.06em;">' +
+            laEsc(res.temporaryPassword) + '</div>' +
+          (res.doctorId
+            ? '<div class="small">Doctor profile <strong>' + laEsc(res.doctorId) +
+              '</strong> created and linked.</div>'
+            : '') +
+          '<div class="small mt-2">They must change it at first sign-in. If it is ' +
+          'lost, reset it — it cannot be read back.</div>';
+        asEl('as-form').classList.add('d-none');
+        btn.classList.add('d-none');
+      }
+    });
+  }
+  window.asCreate = asCreate;
 
   // The button appears only for a role that holds admin.audit. applyRBAC
   // fetches the permissions asynchronously, so this waits for them rather
@@ -1044,6 +1295,8 @@
         clearInterval(t);
         const b = document.getElementById('dash-login-audit-btn');
         if (b && window.crescCan && window.crescCan('admin.audit')) b.classList.remove('d-none');
+        const sb = document.getElementById('dash-add-staff-btn');
+        if (sb && window.crescCan && window.crescCan('admin.users')) sb.classList.remove('d-none');
       }
     }, 250);
   })();

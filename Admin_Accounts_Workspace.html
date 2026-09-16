@@ -176,13 +176,17 @@
             <h2 class="h5 text-main mb-0 fw-bold">Master Ledger</h2>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-warning btn-sm rounded-pill px-3" onclick="AccX.lockPeriod()">
-                <i class="fas fa-lock me-1"></i> Lock Period
-            </button>
-            <!-- This button carried no onclick at all: it had been on the
-                 toolbar from the start and had never done anything. -->
+            <!-- LOCK PERIOD USED TO BE HERE.
+
+                 It froze a month's rows against editing, which is an audit
+                 control this clinic has no use for — nothing in the ledger
+                 is edited after the fact anyway — and it was one press away
+                 from being permanent. What was actually wanted at this
+                 toolbar is the range of dates to take away, so that is what
+                 is here now. See the date boxes below. -->
             <button class="btn btn-outline-secondary btn-sm rounded-pill px-3"
-                    onclick="AccX.exportLedger()" title="Download the rows currently shown, as CSV">
+                    onclick="AccX.exportLedger()"
+                    title="Download the rows currently shown, as CSV">
                 <i class="fas fa-download me-1"></i> Export
             </button>
         </div>
@@ -199,6 +203,26 @@
                placeholder="Search txn id, entity, category, mode…"
                oninput="AccX.search(this.value)">
       </div>
+
+      <!-- THE DATE RANGE. It narrows the view and therefore the export,
+           because the export takes whatever the view is showing. An
+           accountant asked for "April to June" wants those rows and no
+           others, and the alternative was exporting everything and deleting
+           rows in Excel. Either box may be left empty: from alone is
+           "everything since", to alone is "everything up to". -->
+      <div class="input-group input-group-sm" style="max-width:340px;">
+        <span class="input-group-text"><i class="fas fa-calendar-days"></i></span>
+        <input type="date" class="form-control" id="acc-ledger-from"
+               title="From this date" onchange="AccX.dateRange()">
+        <span class="input-group-text">to</span>
+        <input type="date" class="form-control" id="acc-ledger-to"
+               title="Up to and including this date" onchange="AccX.dateRange()">
+        <button class="btn btn-outline-secondary" type="button"
+                onclick="AccX.clearDateRange()" title="Clear the date range">
+          <i class="fas fa-xmark"></i>
+        </button>
+      </div>
+
       <div class="small text-muted ms-auto" id="acc-ledger-totals"></div>
     </div>
 

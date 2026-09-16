@@ -176,8 +176,60 @@ const AccX = (function () {
   }
 
   // ---------- unified ledger ----------
+  /* THE DATE RANGE, as yyyy-MM-dd strings or ''. Both ends are optional:
+     from alone means "everything since", to alone "everything up to". */
+  let LEDGER_FROM = '', LEDGER_TO = '';
+
+  /* A row's date as yyyy-MM-dd, for comparing against the two boxes.
+
+     r.ts is whatever the server formatted it as, so this reads a date out of
+     it rather than assuming a shape: dd-MMM-yyyy, yyyy-MM-dd and
+     dd/MM/yyyy all reach the same key. A row whose date cannot be read is
+     KEPT, never hidden — dropping a transaction because its timestamp is
+     oddly formatted is how money goes missing from a report. */
+  const MON = { jan:'01', feb:'02', mar:'03', apr:'04', may:'05', jun:'06',
+                jul:'07', aug:'08', sep:'09', oct:'10', nov:'11', dec:'12' };
+  function rowDateKey(row) {
+    const t = String(row.ts || '').trim();
+    if (!t) return '';
+    let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    m = t.match(/^(\d{1,2})[-\/ ]([A-Za-z]{3})[a-z]*[-\/ ](\d{4})/);
+    if (m) return m[3] + '-' + (MON[m[2].toLowerCase()] || '01') + '-' + ('0' + m[1]).slice(-2);
+    m = t.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+    if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+    return '';
+  }
+
+  function matchesDate(row) {
+    if (!LEDGER_FROM && !LEDGER_TO) return true;
+    const k = rowDateKey(row);
+    if (!k) return true;                       // unreadable date: keep it
+    if (LEDGER_FROM && k < LEDGER_FROM) return false;
+    if (LEDGER_TO && k > LEDGER_TO) return false;
+    return true;
+  }
+
+  function dateRange() {
+    LEDGER_FROM = ($('acc-ledger-from') || {}).value || '';
+    LEDGER_TO   = ($('acc-ledger-to') || {}).value || '';
+    if (LEDGER_FROM && LEDGER_TO && LEDGER_FROM > LEDGER_TO) {
+      toast('The "from" date is after the "to" date.', false);
+      return;
+    }
+    renderLedger();
+  }
+
+  function clearDateRange() {
+    const a = $('acc-ledger-from'), b = $('acc-ledger-to');
+    if (a) a.value = ''; if (b) b.value = '';
+    LEDGER_FROM = ''; LEDGER_TO = '';
+    renderLedger();
+  }
+
   function matchesFilter(row) {
     if (!matchesSearch(row)) return false;
+    if (!matchesDate(row)) return false;
     if (CURRENT_FILTER === 'ALL') return true;
     const cat = (row.category || '').toLowerCase().replace(/_/g, ' ');
     if (CURRENT_FILTER === 'OP_Consultation') return /op|ip|consult/.test(cat);
@@ -276,8 +328,13 @@ const AccX = (function () {
 
     const stamp = (window.crescDateInputValue ? window.crescDateInputValue(new Date())
                                               : new Date().toISOString().slice(0, 10));
+    // The range goes in the filename, so three exports in a morning are
+    // three distinguishable files rather than "ledger-all (2).csv".
+    const span = (LEDGER_FROM || LEDGER_TO)
+      ? '-' + (LEDGER_FROM || 'start') + '_to_' + (LEDGER_TO || 'today')
+      : '-' + stamp;
     const name = 'ledger-' + (CURRENT_FILTER === 'ALL' ? 'all' : CURRENT_FILTER.toLowerCase()) +
-                 '-' + stamp + '.csv';
+                 span + '.csv';
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const a = document.createElement('a');
     a.href = url; a.download = name;
@@ -482,26 +539,20 @@ const AccX = (function () {
       .getAllDrawerStates(window.sessionToken);
   }
 
-  function lockPeriod() {
-    if (!CURRENT_PERIOD) { toast('Open the hub first.', false); return; }
-    crescConfirm('Lock period ' + CURRENT_PERIOD + '? Expense edits in this period will be frozen permanently.',
-      { okLabel: 'Lock period' }).then(function (ok) {
-      if (!ok) return;
-      busy(true);
-      google.script.run
-        .withSuccessHandler(function (res) { busy(false); toast(res.message, !!res.success); if (res.success) load(); })
-        .withFailureHandler(function (err) { busy(false); toast(err.message || 'Server error.', false); })
-        .lockFinancialPeriod(CURRENT_PERIOD, who(), window.sessionToken);
-    });
-  }
+  /* lockPeriod() WAS HERE. It froze a month's rows against editing —
+     an audit control this clinic has no use for, one press from permanent,
+     and not what anybody came to this toolbar for. The date range above
+     replaced it. lockFinancialPeriod() remains in Accounts.gs, unreferenced
+     by any screen, so a clinic that wants period locking can put a button
+     back without the backend having to be rewritten. */
 
-  return { load, openEntry, lockPeriod, switchPage, backToHub, filter, search,
+  return { load, openEntry, switchPage, backToHub, filter, search,
+           dateRange, clearDateRange,
            exportLedger, loadReceivables, settle };
 })();
 
 function switchAccountsPage(pageId) { AccX.switchPage(pageId); }
 function filterLedger(cat) { AccX.filter(cat); }
-function lockFinancialPeriod() { AccX.lockPeriod(); }
 function showAccounts() { AccX.switchPage('workspace-accounts'); AccX.load(); }
 
 /** The Back to Hub every accounts spoke calls. */
