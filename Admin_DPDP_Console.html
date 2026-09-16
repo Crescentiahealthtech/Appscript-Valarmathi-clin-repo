@@ -63,13 +63,36 @@
 
   <div id="dp-status" class="mb-3 small fw-bold d-none"></div>
 
-  <ul class="nav nav-tabs mb-3" role="tablist">
-    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#dp-pane-requests">Requests</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-patient">A patient</a></li>
+  <!-- TWO GROUPS, BECAUSE THEY ARE TWO JOBS.
+
+       Five tabs sat in one row as equals, and only the first two are daily
+       work: somebody has asked for their data, or somebody is standing at the
+       desk asking about their own record. The other three are the clinic's
+       own housekeeping — backfilling consent for patients already on file,
+       the breach register, and the readiness check — and they are opened
+       every few weeks by one person.
+
+       Presented flat, a receptionist had to read five statutory labels to
+       find the one they wanted. Grouped, the daily pair reads first and the
+       rest is visibly a different kind of work. Nothing is removed: every
+       register is still one click away, because each of them is something the
+       Act requires the clinic to be able to produce. -->
+  <ul class="nav nav-tabs mb-3 align-items-end" role="tablist">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#dp-pane-requests">
+      <i class="fa-solid fa-inbox me-1"></i>Requests</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-patient">
+      <i class="fa-solid fa-user me-1"></i>A patient</a></li>
+
+    <li class="nav-item d-flex align-items-center px-3">
+      <span class="small" style="color: var(--text-muted); white-space: nowrap;">
+        &middot; &nbsp; set up and review
+      </span>
+    </li>
+
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-consent"
-                            onclick="dpConsentLoad()">Consent</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-breach">Breach register</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-posture">Posture</a></li>
+                            onclick="dpConsentLoad()">Consent register</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-breach">Breaches</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-posture">Readiness</a></li>
   </ul>
 
   <div class="tab-content">
