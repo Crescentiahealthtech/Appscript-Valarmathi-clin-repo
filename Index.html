@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- PINCH-ZOOM IS ALLOWED AGAIN. maximum-scale=1 with user-scalable=no
+       blocks it, and this is an application clinicians read drug names,
+       dose strings and lab values in on a phone. Blocking zoom to stop iOS
+       zooming on focus fixes the symptom by removing the control; the cause
+       is an input smaller than 16px, and that is fixed in Styles.html
+       instead. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>CRESCENTIA HEALTHTECH</title>
   
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
