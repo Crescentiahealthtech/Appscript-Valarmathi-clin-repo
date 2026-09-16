@@ -601,19 +601,78 @@ function buildTaperPlan(spec, sessionToken) {
 // penicillin. Never render "no allergy detected".
 // ============================================================================
 
-/** Brand -> generic map from the pharmacy master, plus coverage stats. */
+/**
+ * Brand -> generic map, plus coverage stats. Two sources and two keys each.
+ *
+ * TWO SOURCES: the pharmacy master first, then Drug_Dose_Reference for
+ * anything the clinic does not stock. The reference sheet already carries a
+ * Generic and a Class for every row it holds, and a drug being out of stock
+ * is no reason to stop checking what it interacts with.
+ *
+ * TWO KEYS: the brand exactly as the inventory spells it, AND its stem with
+ * the dose form and strength stripped. This is what was missing. The
+ * inventory holds "Ecosprin 75"; a prescriber types "Tab Ecosprin 75"; the
+ * interaction checker strips that down to "ecosprin" before it looks — and
+ * "ecosprin" was not a key, because the only key was "ecosprin 75". So the
+ * drug resolved to no generic, no alias, and no rule could fire on it.
+ * dref_key_() is the same normaliser the dose reference uses, so a name
+ * reaches the same row through either table.
+ */
 function rx_genericMap_() {
   var map = {}, total = 0, withGeneric = 0;
+
+  var key = function (n) {
+    return (typeof dref_key_ === 'function')
+      ? dref_key_(n)
+      : String(n || '').toLowerCase().trim();
+  };
+  // Two brands can reduce to one stem — "Dolo" and "Dolo 650" both key on
+  // "dolo" — and the two rows may spell the generic differently ("Para" on
+  // one, "Paracetamol" on the other). Dropping the second loses the better
+  // spelling and with it the duplicate-therapy match, so generics are MERGED
+  // instead. The consumers of this map all split on + , / already, so a
+  // merged value reads exactly like a combination product.
+  var put = function (brand, generic, status) {
+    var g = String(generic || '').toLowerCase().trim();
+    var write = function (k) {
+      if (!k) return;
+      var cur = map[k];
+      if (!cur) { map[k] = { generic: g, status: status }; return; }
+      if (!g) return;
+      var have = cur.generic.split(/[+,\/]/).map(function (x) { return x.trim(); });
+      g.split(/[+,\/]/).forEach(function (part) {
+        var t = part.trim();
+        if (t && have.indexOf(t) === -1) { have.push(t); }
+      });
+      cur.generic = have.filter(Boolean).join('+');
+      // In-stock wins the status: the picker uses it to say "out of stock".
+      if (status === 'ok') cur.status = 'ok';
+    };
+    var b = String(brand || '').toLowerCase().trim();
+    write(b);
+    write(key(brand));
+  };
+
   try {
-    (fetchOPDrugMaster() || []).forEach(function (d) {
+    (op_drugMaster_() || []).forEach(function (d) {
       total++;
       var g = dc_str_(d.generic);
       if (g) withGeneric++;
-      map[String(d.brand).toLowerCase()] = {
-        generic: g.toLowerCase(), status: d.status
-      };
+      put(d.brand, g, d.status);
+      // The generic itself is a name a prescriber may type.
+      if (g) put(g, g, d.status);
     });
   } catch (e) { /* non-fatal */ }
+
+  try {
+    if (typeof dref_all_ === 'function') {
+      (dref_all_().rows || []).forEach(function (r) {
+        put(r.drug, r.generic || r.drug, 'reference');
+        if (r.generic) put(r.generic, r.generic, 'reference');
+      });
+    }
+  } catch (e) { /* non-fatal */ }
+
   return { map: map, total: total, withGeneric: withGeneric };
 }
 
@@ -862,7 +921,7 @@ function suggestPaediatricDose(drugName, weightKg, ageYears, frequency, sessionT
     if (!name) return { success: true, applicable: false, message: "" };
 
     var ref = null, unit = 0, generic = "";
-    (fetchOPDrugMaster() || []).forEach(function (d) {
+    (op_drugMaster_() || []).forEach(function (d) {
       if (String(d.brand).toLowerCase() !== name) return;
       var r = String(d.refDose || "").match(/[\d.]+/);
       if (r) ref = parseFloat(r[0]);

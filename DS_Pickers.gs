@@ -120,11 +120,11 @@ function dsp_formulary_() {
     });
   };
 
-  if (typeof fetchOPDrugMaster === 'function') {
-    (fetchOPDrugMaster() || []).forEach(function (d) { push(d, 'internal'); });
+  if (typeof op_drugMaster_ === 'function') {
+    (op_drugMaster_() || []).forEach(function (d) { push(d, 'internal'); });
   }
-  if (out.length < DSP_DRUG_LIMIT && typeof fetchUniversalDrugs === 'function') {
-    (fetchUniversalDrugs() || []).forEach(function (d) {
+  if (out.length < DSP_DRUG_LIMIT && typeof op_universalDrugs_ === 'function') {
+    (op_universalDrugs_() || []).forEach(function (d) {
       if (out.length < DSP_DRUG_LIMIT) push(d, 'external');
     });
   }

@@ -46,6 +46,14 @@ function setupPackages() {
 function getPackages(sessionToken) {
   try {
     crescRequire_(sessionToken, 'billing.read');
+    return ipk_packages_();
+  } catch (e) { return { success: false, message: e.message, packages: [] }; }
+}
+
+/** THE SAME READ, WITHOUT THE PERMISSION CHECK, for hb_getBootstrap and
+ *  anything else that has already validated the caller. */
+function ipk_packages_() {
+  try {
     var sh = ipk_ss_().getSheetByName('Package_Master');
     if (!sh) return { success: true, packages: [], message: "Run setupPackages() first." };
     var d = sh.getDataRange().getValues(), out = [];

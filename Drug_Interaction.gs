@@ -227,6 +227,94 @@ function di_rules_() {
 }
 
 /**
+ * THERAPEUTIC CLASSES, SO A RULE CAN BE WRITTEN ONCE.
+ *
+ * A clinic curating the interaction sheet writes what the reference books
+ * write: "NSAID + ACE Inhibitor", "Statin + Clarithromycin", "Tramadol +
+ * SSRI". Those rules could never fire, because matching was done against the
+ * drug's own names only — "aceclofenac" is not the word "NSAID", so a rule
+ * naming the class matched nothing, and the pair that matters was missed
+ * silently. Thirty curated rules were loaded; a third of them were
+ * unreachable.
+ *
+ * Each class here is therefore added to a drug's alias list, so a rule may
+ * name either the class or the molecule and both resolve. It also gives
+ * ds_identify_() a class for the duplicate-therapy check when
+ * Drug_Dose_Reference has no row for the drug — which, on a new deployment,
+ * is every drug.
+ *
+ * Members are matched whole-word against the resolved generic, never against
+ * the brand: "Telma" must not become an ACE inhibitor because a brand name
+ * happens to contain letters.
+ */
+var DI_CLASSES = [
+  { klass: 'nsaid',
+    members: /^(ibuprofen|diclofenac|aceclofenac|naproxen|indomethacin|ketorolac|mefenamic acid|piroxicam|etoricoxib|nimesulide|flurbiprofen|ketoprofen)$/ },
+  { klass: 'ace inhibitor',
+    members: /^(enalapril|ramipril|lisinopril|perindopril|captopril|benazepril|fosinopril|quinapril|trandolapril|imidapril)$/ },
+  { klass: 'arb',
+    members: /^(telmisartan|losartan|valsartan|olmesartan|irbesartan|candesartan|azilsartan)$/ },
+  { klass: 'statin',
+    members: /^(atorvastatin|rosuvastatin|simvastatin|pravastatin|lovastatin|fluvastatin|pitavastatin)$/ },
+  { klass: 'ssri',
+    members: /^(fluoxetine|sertraline|paroxetine|citalopram|escitalopram|fluvoxamine)$/ },
+  { klass: 'snri',
+    members: /^(venlafaxine|desvenlafaxine|duloxetine|milnacipran)$/ },
+  { klass: 'proton pump inhibitor',
+    members: /^(omeprazole|esomeprazole|pantoprazole|pantaprazole|rabeprazole|lansoprazole|dexlansoprazole|dexrabeprazole)$/ },
+  { klass: 'h2 receptor blocker',
+    members: /^(ranitidine|famotidine|cimetidine|nizatidine|roxatidine)$/ },
+  { klass: 'benzodiazepine',
+    members: /^(diazepam|lorazepam|alprazolam|clonazepam|midazolam|nitrazepam|chlordiazepoxide|etizolam)$/ },
+  { klass: 'opioid',
+    members: /^(morphine|tramadol|fentanyl|codeine|oxycodone|buprenorphine|pethidine|tapentadol)$/ },
+  { klass: 'antihistamine',
+    members: /^(cetirizine|levocetirizine|loratadine|fexofenadine|chlorpheniramine|hydroxyzine|diphenhydramine|promethazine|bilastine)$/ },
+  { klass: 'macrolide',
+    members: /^(azithromycin|erythromycin|clarithromycin|roxithromycin)$/ },
+  { klass: 'fluoroquinolone',
+    members: /^(ciprofloxacin|levofloxacin|ofloxacin|moxifloxacin|norfloxacin)$/ },
+  { klass: 'sulfonylurea',
+    members: /^(glimepiride|glipizide|gliclazide|glibenclamide|glyburide)$/ },
+  { klass: 'anticoagulant',
+    members: /^(warfarin|acenocoumarol|dabigatran|rivaroxaban|apixaban|edoxaban|heparin|enoxaparin)$/ },
+  { klass: 'antiplatelet',
+    members: /^(aspirin|clopidogrel|ticagrelor|prasugrel|dipyridamole|cilostazol)$/ },
+  { klass: 'oral corticosteroid',
+    members: /^(prednisolone|prednisone|methylprednisolone|dexamethasone|deflazacort|hydrocortisone|betamethasone)$/ },
+  { klass: 'thiazide diuretic',
+    members: /^(hydrochlorothiazide|chlorthalidone|indapamide|metolazone)$/ },
+  { klass: 'loop diuretic',
+    members: /^(furosemide|torsemide|bumetanide)$/ },
+  { klass: 'potassium sparing diuretic',
+    members: /^(spironolactone|eplerenone|amiloride|triamterene)$/ },
+  { klass: 'beta blocker',
+    members: /^(propranolol|metoprolol|atenolol|bisoprolol|carvedilol|nebivolol|labetalol|sotalol)$/ },
+  { klass: 'calcium channel blocker',
+    members: /^(amlodipine|nifedipine|felodipine|diltiazem|verapamil|cilnidipine)$/ },
+  { klass: 'analgesic antipyretic',
+    members: /^(paracetamol|para|acetaminophen)$/ }
+];
+
+/**
+ * The classes a set of resolved generic names belongs to.
+ * @param {Array<string>} generics  lower-cased, already split out of a
+ *                                  combination product
+ * @return {Array<string>}
+ */
+function di_classesFor_(generics) {
+  var out = [];
+  (generics || []).forEach(function (g) {
+    var t = String(g || '').toLowerCase().trim();
+    if (!t) return;
+    DI_CLASSES.forEach(function (c) {
+      if (c.members.test(t) && out.indexOf(c.klass) === -1) out.push(c.klass);
+    });
+  });
+  return out;
+}
+
+/**
  * Every name a prescribed drug could be known by: what was typed, and its
  * Generic from Pharmacy_Inventory. "Tab Azithral 500" has to match a rule
  * written against "Azithromycin".
@@ -257,6 +345,22 @@ function di_aliases_(drugName, genericMap) {
       if (t.length >= 4 && out.indexOf(t) === -1) out.push(t);
     });
   }
+  // The therapeutic classes this drug belongs to, so a rule written as
+  // "NSAID" or "Statin" reaches it. Derived from the RESOLVED generics only,
+  // never from the typed brand.
+  var generics = out.slice(1);
+  di_classesFor_(generics).forEach(function (k) {
+    if (out.indexOf(k) === -1) out.push(k);
+    // "proton pump inhibitor" is often written "PPI", and "ACE Inhibitor"
+    // without the space. Add the short form so either spelling matches.
+    var short = { 'proton pump inhibitor': 'ppi',
+                  'h2 receptor blocker': 'h2 blocker',
+                  'oral corticosteroid': 'corticosteroid',
+                  'calcium channel blocker': 'ccb',
+                  'analgesic antipyretic': 'paracetamol' }[k];
+    if (short && out.indexOf(short) === -1) out.push(short);
+  });
+
   return out.filter(function (x, i) { return x && out.indexOf(x) === i; });
 }
 

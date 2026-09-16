@@ -26,8 +26,21 @@ var _LAB_STATUS_MACHINE = {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function getOrderableTests(sessionToken) {
+  try { crescRequire_(sessionToken, ['lab.read', 'lab.order']); }
+  catch (err) { return { success: false, message: err.message, tests: [] }; }
+  return lab_orderableTests_();
+}
+
+/**
+ * THE SAME READ, WITHOUT THE PERMISSION CHECK, for server-side callers that
+ * have already validated the user. Calling the guarded entry point with no
+ * token made crescRequire_ throw on `undefined` and the catch turn that into
+ * an empty catalogue, so the OP consult and the ward round offered no tests
+ * to order and said nothing about why. A trailing underscore keeps this
+ * unreachable from google.script.run.
+ */
+function lab_orderableTests_() {
   try {
-    crescRequire_(sessionToken, ['lab.read', 'lab.order']);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, tests: [] };
@@ -59,8 +72,15 @@ function getOrderableTests(sessionToken) {
 }
 
 function getLabCatalog(sessionToken) {
+  try { crescRequire_(sessionToken, ['lab.read', 'lab.order']); }
+  catch (err) { return { success: false, message: err.message,
+                         panels: [], individuals: [], packages: [] }; }
+  return lab_catalog_();
+}
+
+/** THE SAME READ, WITHOUT THE PERMISSION CHECK. See lab_orderableTests_. */
+function lab_catalog_() {
   try {
-    crescRequire_(sessionToken, ['lab.read', 'lab.order']);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, panels: [], individuals: [], packages: [] };
@@ -917,7 +937,7 @@ function buildResultEntrySheet(orderId, sessionToken) {
     const od=getLabOrderDetail(orderId);
     if(!od.success) return {success:false,message:od.message};
     const order=od.order;
-    const cat=getLabCatalog();
+    const cat=lab_catalog_();
     if(!cat.success) return {success:false,message:'Catalog unavailable.'};
     const panelById={},indivById={},pkgById={};
     cat.panels.forEach(function(p){panelById[p.testId]=p;});
@@ -1787,7 +1807,7 @@ function _mkRowDef(testId,pm){
     refRangeText:(String(pm.resultType||'').toUpperCase()==='NUMERIC')?('M '+_rngTxt(pm.maleRefLow,pm.maleRefHigh)+' F '+_rngTxt(pm.femaleRefLow,pm.femaleRefHigh)):''};
 }
 function _refRangesByParameter(){
-  const cat=getLabCatalog(); const out={};
+  const cat=lab_catalog_(); const out={};
   if(!cat.success) return out;
   cat.panels.forEach(function(p){(p.parameters||[]).forEach(function(pm){ out[pm.testId]={testId:p.testId,parameterName:pm.testName,unit:pm.unit||'',resultType:pm.resultType||'NUMERIC',maleRefLow:pm.maleRefLow,maleRefHigh:pm.maleRefHigh,femaleRefLow:pm.femaleRefLow,femaleRefHigh:pm.femaleRefHigh,criticalLow:pm.criticalLow,criticalHigh:pm.criticalHigh}; }); });
   cat.individuals.forEach(function(t){ out[t.testId]={testId:t.testId,parameterName:t.testName,unit:t.unit||'',resultType:t.resultType||'NUMERIC',maleRefLow:t.maleRefLow,maleRefHigh:t.maleRefHigh,femaleRefLow:t.femaleRefLow,femaleRefHigh:t.femaleRefHigh,criticalLow:t.criticalLow,criticalHigh:t.criticalHigh}; });
@@ -1855,7 +1875,7 @@ function _firstSampleId(orderId){
 }
 function _startTat(order,collectedAtStr){
   try{
-    const cat=getLabCatalog(); if(!cat.success) return;
+    const cat=lab_catalog_(); if(!cat.success) return;
     const byId={}; cat.panels.forEach(function(t){byId[t.testId]=t;}); cat.individuals.forEach(function(t){byId[t.testId]=t;}); cat.packages.forEach(function(t){byId[t.testId]=t;});
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.TAT_LOG); if(!sheet) return;
     const map=labHeaderMap(sheet); const ncols=LAB_SCHEMA.LAB_TAT_LOG.length;

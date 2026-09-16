@@ -304,6 +304,26 @@ function fetchPharmacyInventoryForOP() {
 function fetchUniversalDrugs(sessionToken) {
   try {
     crescRequire_(sessionToken, 'reference.read');
+    return op_universalDrugs_();
+  } catch (e) { return []; }
+}
+
+/**
+ * THE SAME READ, WITHOUT THE PERMISSION CHECK, for server-side callers.
+ *
+ * Every function above that assembles a screen already validated the caller
+ * before it got this far. They used to call fetchUniversalDrugs() with no
+ * argument at all, which meant crescRequire_ was handed `undefined`, threw
+ * FORBIDDEN, and the `catch` returned an empty array — so the drug list was
+ * silently empty on the discharge script, the case sheet and the ward round,
+ * and nothing anywhere said why.
+ *
+ * A trailing underscore keeps this unreachable from google.script.run, which
+ * is what makes it safe to leave unguarded: the browser can only ever arrive
+ * through the checked entry point above.
+ */
+function op_universalDrugs_() {
+  try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Drug_Master_Universal");
     if (!sheet) return [];
     const data = sheet.getDataRange().getDisplayValues();
@@ -415,6 +435,24 @@ function learnTemplates(items) {
 function fetchOPDrugMaster(sessionToken) {
   try {
     crescRequire_(sessionToken, 'reference.read');
+    return op_drugMaster_();
+  } catch (e) { return []; }
+}
+
+/**
+ * THE SAME READ, WITHOUT THE PERMISSION CHECK. See op_universalDrugs_ above
+ * for why this split exists.
+ *
+ * This one did the most damage of the pair: rx_genericMap_() is built from
+ * it, and rx_genericMap_() is what the allergy check, the duplicate-therapy
+ * check and the drug-interaction check all identify drugs through. With the
+ * map empty, every prescription reported that its drugs were "in neither
+ * Pharmacy_Inventory nor Drug_Dose_Reference" and that generic names were
+ * filled in for 0% of the inventory — while the inventory sheet in fact had
+ * a generic name on essentially every row.
+ */
+function op_drugMaster_() {
+  try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];
     const data = sheet.getDataRange().getValues();

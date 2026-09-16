@@ -868,6 +868,18 @@ function getStaffRoster(sessionToken) {
 function fetchPharmacyMasterForIP(sessionToken) {
   try {
     crescRequire_(sessionToken, 'reference.read');
+    return ipn_pharmacyMaster_();
+  } catch (e) { return []; }
+}
+
+/**
+ * THE SAME READ, WITHOUT THE PERMISSION CHECK, for getIPNotesBundle and the
+ * other assemblers that have already validated the caller. Passing no token
+ * to the guarded entry made it throw and return [], so the ward round's drug
+ * picker was empty.
+ */
+function ipn_pharmacyMaster_() {
+  try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];
@@ -1318,7 +1330,7 @@ function getIPNotesLabCatalog(sessionToken) {
   try {
     var gate = resolveIPRead_(sessionToken, null);
     if (!gate.ok) return { success: false, message: gate.message, panels: [], tests: [], packages: [] };
-    return getOPDOrderableTests();
+    return lab_opdOrderable_();
   } catch (e) {
     return { success: false, message: e.message, panels: [], tests: [], packages: [] };
   }

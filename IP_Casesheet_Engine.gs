@@ -200,9 +200,9 @@ function getIPCasesheetContext(ipNumber, sessionToken) {
     // ---- reused OP engines, each failing soft ---------------------------
     ctx.composer   = ipc_safe_(function () { return getComposerContext(selfDoctorId, sessionToken); },
                                { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {} });
-    ctx.drugs      = ipc_safe_(function () { return fetchOPDrugMaster(); }, []);
-    ctx.extDrugs   = ipc_safe_(function () { return fetchUniversalDrugs(); }, []);
-    ctx.labCatalog = ipc_safe_(function () { return getOPDOrderableTests(); },
+    ctx.drugs      = ipc_safe_(function () { return op_drugMaster_(); }, []);
+    ctx.extDrugs   = ipc_safe_(function () { return op_universalDrugs_(); }, []);
+    ctx.labCatalog = ipc_safe_(function () { return lab_opdOrderable_(); },
                                { panels: [], tests: [], packages: [] });
     ctx.templates  = ipc_safe_(function () {
                        var r = listConsultTemplates(selfDoctorId, sessionToken);

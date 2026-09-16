@@ -310,7 +310,7 @@ function hb_getBootstrap(token) {
     var packages = [];
     try {
       if (typeof getPackages === 'function') {
-        var pk = getPackages();
+        var pk = ipk_packages_();
         if (pk && pk.success) packages = pk.packages || [];
       }
     } catch (e) { packages = []; }

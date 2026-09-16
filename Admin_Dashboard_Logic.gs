@@ -341,7 +341,7 @@ function _dashRevenue_(ss, tz, todayKey, memo) {
 
   try {
     if (typeof getLabDailyCollection === 'function') {
-      var lc = getLabDailyCollection();
+      var lc = lab_dailyCollection_();
       if (lc && lc.success) out.labToday = parseFloat(lc.totalNet) || 0;
     }
   } catch (e) { /* lab module optional — degrade silently */ }
