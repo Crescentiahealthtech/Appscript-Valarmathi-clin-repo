@@ -795,67 +795,97 @@ function ppCardAntenatal(h) {
     '</div>';
 }
 
+/**
+ * THE VACCINATION CARD, AS A MOTHER READS IT.
+ *
+ * Its whole job is the next appointment, so that is the largest thing on it.
+ * Everything below is context for that one line.
+ *
+ * Doses whose date has passed are shown as had — the clinic's register now
+ * records the exceptions rather than the attendance, so an unrecorded dose on
+ * a child of this age means the child had it, not that the child missed it.
+ * A dose only reads as missed when a doctor has asked and been told so.
+ *
+ * The panel is not rendered at all above MC.IMMUN_MAX_AGE_YEARS; the server
+ * decides that (pp_wantsImmunisation_) and simply sends no immunisation
+ * object, so there is nothing here to guard.
+ */
 function ppCardImmunisation(h) {
   var im = h.immunisation;
+  if (!im || im.eligible === false) return '';
+
   var tone = function (state) {
-    return state === 'GIVEN' ? 'var(--success)'
-         : state === 'OVERDUE' ? 'var(--danger)'
+    return (state === 'GIVEN' || state === 'PRESUMED') ? 'var(--success)'
+         : state === 'MISSED' ? 'var(--danger)'
          : state === 'DUE' ? 'var(--warning)'
          : 'var(--border-color)';
   };
-  var label = { GIVEN: 'done', DUE: 'due now', OVERDUE: 'overdue', UPCOMING: '' };
+  var label = { GIVEN: 'done', PRESUMED: 'done', DUE: 'due now',
+                MISSED: 'not given', UPCOMING: '' };
 
-  // Everything already given, everything due or overdue, and the next two
-  // that are coming. The whole 27-dose schedule on one screen is a wall a
-  // parent scrolls past.
-  var shown = im.doses.filter(function (d) { return d.state !== 'UPCOMING'; });
+  // What the mother needs to act on, then the next few that are coming.
+  // The whole 27-dose schedule on one screen is a wall she scrolls past.
+  var act = im.doses.filter(function (d) {
+    return d.state === 'MISSED' || d.state === 'DUE';
+  });
   var upcoming = im.doses.filter(function (d) { return d.state === 'UPCOMING'; })
                          .sort(function (a, b) { return a.dueInDays - b.dueInDays; })
-                         .slice(0, 3);
+                         .slice(0, 4);
+  var had = im.doses.filter(function (d) { return d.had; });
 
-  var rows = shown.concat(upcoming).map(function (d) {
+  var line = function (d) {
+    var sub;
+    if (d.state === 'GIVEN')         sub = 'given ' + ppEscHtml(d.givenOnText);
+    else if (d.state === 'PRESUMED') sub = 'due ' + ppEscHtml(d.dueText) + ' · taken as given';
+    else if (d.state === 'MISSED')   sub = 'not given — ask the clinic about catching it up';
+    else sub = 'due ' + ppEscHtml(d.dueText) + (d.at ? ' · ' + ppEscHtml(d.at) : '');
+
     return '<div class="pp-imm">' +
       '<span class="pp-imm-dot" style="background:' + tone(d.state) + ';"></span>' +
       '<div class="flex-grow-1"><div class="pp-val" style="font-size:.84rem;">' +
-        ppEscHtml(d.label) + '</div>' +
-        '<div class="pp-note">' +
-          (d.state === 'GIVEN'
-            ? 'given ' + ppEscHtml(d.givenOnText)
-            : 'due ' + ppEscHtml(d.dueText) + (d.at ? ' · ' + ppEscHtml(d.at) : '')) +
-        '</div></div>' +
+        ppEscHtml(d.label) + '</div><div class="pp-note">' + sub + '</div></div>' +
       (label[d.state]
         ? '<span class="pp-pill ' +
-          (d.state === 'GIVEN' ? 'pp-ok' : d.state === 'OVERDUE' ? 'pp-bad' : 'pp-warn') +
+          (d.had ? 'pp-ok' : d.state === 'MISSED' ? 'pp-bad' : 'pp-warn') +
           '">' + label[d.state] + '</span>'
         : '') +
       '</div>';
-  }).join('');
+  };
+
+  var nextBlock = im.nextDue
+    ? '<div class="pp-tile mb-3" style="border-color:var(--accent-purple);">' +
+        '<span class="pp-lbl">Next vaccination</span>' +
+        '<span class="pp-val" style="font-size:1rem;">' +
+        ppEscHtml((im.nextDueGroup || []).map(function (d) { return d.label; }).join(', ') ||
+                  im.nextDue.label) +
+        '</span><div class="pp-note">due ' + ppEscHtml(im.nextDue.dueText) +
+        (im.nextDue.dueInDays > 0 ? ' · in ' + im.nextDue.dueInDays + ' days' : ' · due now') +
+        '</div></div>'
+    : '<div class="pp-empty mb-3">Nothing further is due on the schedule.</div>';
 
   return '<div class="pp-card">' +
     '<h6><i class="fa-solid fa-syringe" style="color:var(--success-fg);"></i> Vaccinations</h6>' +
 
-    '<div class="d-flex justify-content-between align-items-end mb-1">' +
-      '<span class="pp-lbl mb-0">Up to date</span>' +
-      '<span class="pp-val" style="font-size:.9rem;">' + im.completedOfDue + ' of ' +
-        im.totalDue + '</span>' +
-    '</div>' +
-    // The denominator is doses DUE SO FAR, not all 27. Counting a newborn as
-    // 3 of 27 is a progress bar that tells a parent their healthy baby is 11%
-    // vaccinated.
-    '<div class="pp-bar mb-1"><div style="width:' + im.percentOfDue + '%"></div></div>' +
-    '<div class="pp-note mb-3">' + ppEscHtml(im.ageText) + ' old · of the doses due ' +
-      'by now. There are ' + im.totalInSchedule + ' in the whole schedule.</div>' +
+    nextBlock +
 
-    (im.nextDue
-      ? '<div class="pp-tile mb-3"><span class="pp-lbl">Next</span>' +
-        '<span class="pp-val" style="font-size:.9rem;">' +
-        ppEscHtml(im.nextDueGroup.map(function (d) { return d.label; }).join(', ')) +
-        '</span><div class="pp-note">due ' + ppEscHtml(im.nextDue.dueText) +
-        (im.nextDue.dueInDays > 0 ? ' · in ' + im.nextDue.dueInDays + ' days' : '') +
-        '</div></div>'
-      : '<div class="pp-empty mb-3">Every dose in the schedule has been given.</div>') +
+    (act.length
+      ? '<div class="pp-lbl">To sort out</div>' + act.map(line).join('')
+      : '') +
 
-    rows +
+    (upcoming.length
+      ? '<div class="pp-lbl mt-3">Coming up</div>' + upcoming.map(line).join('')
+      : '') +
+
+    '<div class="pp-note mt-3">' + ppEscHtml(im.ageText) + ' old · ' +
+      im.hadSoFar + ' of the ' + im.dueSoFar + ' doses due by now. There are ' +
+      im.totalInSchedule + ' in the whole schedule.</div>' +
+
+    (had.length
+      ? '<details class="mt-2"><summary class="pp-note" style="cursor:pointer;">' +
+        'Doses already had (' + had.length + ')</summary>' +
+        had.map(line).join('') + '</details>'
+      : '') +
+
     '<div class="pp-note mt-2">Dates are worked out from the national ' +
       'immunisation schedule and your child\'s date of birth. Your doctor may ' +
       'advise a different date, and theirs is the one to follow.</div>' +

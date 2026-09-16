@@ -597,16 +597,22 @@ function pp_conditions_(profile, orders, bpSeries, antenatal, immunisation) {
   };
 }
 
-/** Should the immunisation panel be shown to this person at all? */
+/**
+ * Should the immunisation panel be shown to this person at all?
+ *
+ * ONE RULE NOW: is this a child. The card is a child's document and its
+ * purpose is telling a mother when her child's next vaccination falls due, so
+ * an adult opening the portal should not be offered it — there is nothing on
+ * the schedule after MC.IMMUN_MAX_AGE_YEARS for them to be told about.
+ *
+ * The previous test also asked whether any dose had been recorded, which was
+ * the wrong question in both directions: it showed the panel to an adult who
+ * happened to have one row in the register, and it hid it from a child whose
+ * doses had simply never been typed in — which, now that doses are presumed
+ * given rather than entered, is most children.
+ */
 function pp_wantsImmunisation_(view) {
-  if (!view) return false;
-  // Any dose recorded means somebody is using the card, whatever the age.
-  if (view.completedOfDue > 0) return true;
-  // Under six is the dense part of the schedule.
-  if (view.ageDays < 6 * 365) return true;
-  // Otherwise only while a dose is actually within a year.
-  return !!(view.nextDue && view.nextDue.dueInDays !== null &&
-            view.nextDue.dueInDays < 365);
+  return !!(view && view.eligible);
 }
 
 // ---------------------------------------------------------------------------
