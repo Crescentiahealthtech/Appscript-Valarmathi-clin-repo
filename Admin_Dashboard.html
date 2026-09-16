@@ -24,6 +24,13 @@
       <button id="dash-add-staff-btn" class="btn btn-sm btn-outline-success shadow-sm d-none" onclick="openAddStaff()">
         <i class="fa-solid fa-user-plus me-1"></i> Add Staff
       </button>
+      <!-- listVisitingConsultants has existed in Doctor_Visiting.gs with no
+           screen behind it. The shared visiting slot is the one login several
+           different doctors sign in on, so "who was on it on the 14th" is the
+           question its register exists to answer — and it could not be asked. -->
+      <button id="dash-visiting-btn" class="btn btn-sm btn-outline-warning shadow-sm d-none" onclick="openVisitingLog()">
+        <i class="fa-solid fa-user-doctor me-1"></i> Visiting Log
+      </button>
     </div>
   </div>
 
@@ -38,6 +45,32 @@
      It reads the tail of Audit_Log, not the whole sheet. Audit_Log is
      append-only and is the fastest-growing sheet in the project.
      ══════════════════════════════════════════════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════════════════
+     WHO HAS BEEN ON THE VISITING SLOT
+
+     The Doctors sheet carries one row marked Is_Visiting, with no name of its
+     own, because the person on it changes. Whoever signs in on that login
+     declares themselves and every note they write for the session is signed
+     with what they typed. That declaration has always been recorded — and
+     never readable, because listVisitingConsultants had no screen.
+
+     It is the register that answers "who saw this patient on the 14th" when
+     the signature says a name nobody on the payroll has.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="visitingLogModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force">
+          <i class="fa-solid fa-user-doctor me-2" style="color:var(--warning-fg);"></i>Visiting consultants
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="vl-body"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════════════════════════════════
      ADD A MEMBER OF STAFF
 
@@ -1285,6 +1318,72 @@
   }
   window.asCreate = asCreate;
 
+  /* ══════════════════ THE VISITING REGISTER ══════════════════ */
+
+  function openVisitingLog() {
+    const modalEl = document.getElementById('visitingLogModal');
+    const box = document.getElementById('vl-body');
+    box.innerHTML = '<div class="text-center label-bright py-5">' +
+      '<i class="fa-solid fa-circle-notch fa-spin me-2"></i>Reading the register…</div>';
+    (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+
+    crescRun({
+      fn: 'listVisitingConsultants',
+      args: [window.sessionToken || '', 100],
+      key: 'listVisitingConsultants',
+      busy: false,
+      error: 'Could not read the register',
+      onSuccess: function (res) {
+        if (!res || !res.success) {
+          box.innerHTML = '<div class="text-danger text-center py-5">' +
+            laEsc((res && res.message) || 'Failed.') + '</div>';
+          return;
+        }
+        const rows = res.rows || [];
+        if (!rows.length) {
+          box.innerHTML = '<div class="text-center label-bright py-5">' +
+            'Nobody has declared themselves on the visiting slot yet.<br>' +
+            '<span class="small">The slot is the shared login a locum signs in on. ' +
+            'A consultant who comes regularly is better added as their own account ' +
+            'with "Visiting consultant" ticked.</span></div>';
+          return;
+        }
+        box.innerHTML =
+          '<div class="table-responsive" style="max-height:60vh;">' +
+          '<table class="table table-sm align-middle mb-0">' +
+          '<thead style="position:sticky;top:0;z-index:5;background:var(--bg-card);">' +
+            '<tr style="font-size:.72rem;text-transform:uppercase;">' +
+              '<th>Consultant</th><th>Registration</th><th>Specialty</th>' +
+              '<th>On the slot</th><th>Until</th><th>Declared by</th>' +
+            '</tr></thead><tbody style="font-size:.82rem;">' +
+          rows.map(function (r) {
+            const live = String(r.status || '').toUpperCase() === 'ACTIVE' && !r.endedAt;
+            return '<tr>' +
+              '<td class="fw-semibold text-white-force">' + laEsc(r.name) +
+                (live ? ' <span class="badge bg-success bg-opacity-25 text-success">on now</span>' : '') +
+                (r.qualification ? '<div class="label-bright small">' + laEsc(r.qualification) + '</div>' : '') +
+              '</td>' +
+              '<td class="label-bright">' + (laEsc(r.regNo) || '<em>none given</em>') + '</td>' +
+              '<td class="label-bright">' + laEsc(r.specialty) + '</td>' +
+              '<td class="label-bright" style="white-space:nowrap;">' + laEsc(r.declaredAt) + '</td>' +
+              '<td class="label-bright" style="white-space:nowrap;">' +
+                (r.endedAt ? laEsc(r.endedAt) : '<span class="text-success">still signed in</span>') + '</td>' +
+              '<td class="label-bright">' + laEsc(r.declaredBy) + '</td>' +
+            '</tr>';
+          }).join('') +
+          '</tbody></table></div>' +
+          '<div class="label-bright small mt-2">' +
+            'Every clinical note written during one of these sessions is signed ' +
+            'with the name declared at its start. A consultant who comes ' +
+            'regularly is better given their own account — Add Staff, role ' +
+            'Doctor, with "Visiting consultant" ticked — so their work is ' +
+            'attributed without a declaration each time.' +
+          '</div>';
+      }
+    });
+  }
+  window.openVisitingLog = openVisitingLog;
+
   // The button appears only for a role that holds admin.audit. applyRBAC
   // fetches the permissions asynchronously, so this waits for them rather
   // than reading window.crescPerms before the server has answered.
@@ -1297,6 +1396,8 @@
         if (b && window.crescCan && window.crescCan('admin.audit')) b.classList.remove('d-none');
         const sb = document.getElementById('dash-add-staff-btn');
         if (sb && window.crescCan && window.crescCan('admin.users')) sb.classList.remove('d-none');
+        const vb = document.getElementById('dash-visiting-btn');
+        if (vb && window.crescCan && window.crescCan('admin.audit')) vb.classList.remove('d-none');
       }
     }, 250);
   })();
