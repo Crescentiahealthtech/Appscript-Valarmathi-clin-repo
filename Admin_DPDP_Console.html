@@ -348,31 +348,24 @@
               </div>
             </div>
 
-            <hr class="dp-rule">
-            <div class="fw-bold mb-1">The page patients are sent to</div>
-            <div class="small mb-2" style="color: var(--text-muted);">
-              The notice and the request form, reachable without a login. Print this
-              on the registration slip and in the invoice footer — s.5 requires the
-              notice at or before collection, and a form only staff can reach is a way
-              of receiving fewer requests rather than of answering them.
-            </div>
-            <pre id="dp-public-url" class="mb-2">Loading…</pre>
+            <!-- THE DEPLOYMENT URL USED TO BE PRINTED HERE.
 
-            <hr class="dp-rule">
-            <div class="fw-bold mb-1">Voice typing</div>
-            <div class="small mb-2" style="color: var(--text-muted);">
-              Dictation uses the browser's speech recognition, which in Chrome and Edge
-              sends the audio — a clinician saying a patient's history out loud — to the
-              browser vendor's speech service. One person clicking Enable on one laptop
-              is not the clinic deciding that. Decide here.
-            </div>
-            <div class="d-flex gap-2 align-items-center flex-wrap">
-              <span id="dp-voice-state" class="small fw-bold">…</span>
-              <button class="btn btn-sm btn-outline-success ms-auto"
-                      onclick="dpVoice('ALLOWED')">Allow it</button>
-              <button class="btn btn-sm btn-outline-danger"
-                      onclick="dpVoice('FORBIDDEN')">No audio leaves the building</button>
-            </div>
+                 A <pre> block showed this deployment's own /exec address with
+                 ?privacy on it, so that it could be copied onto a registration
+                 slip. It also put the script id on a screen, which is the one
+                 thing this deployment must never display: the address is the
+                 whole of the authorisation to reach the anonymous routes.
+
+                 The patient still reaches the notice and the request form the
+                 same way. What changed is that staff are given a QR and a
+                 short link to print rather than the raw address to read, and
+                 both are produced where the slip is printed. Nothing in the
+                 console renders the URL any more.
+
+                 THE VOICE-TYPING SETTING WAS ALSO HERE. Dictation is now
+                 allowed by default and there is nothing left to decide, so
+                 the panel, its two buttons and the "not decided" nag are
+                 gone. See Voice_Input.html. -->
           </div>
         </div>
         <div class="col-lg-6">
@@ -429,6 +422,37 @@
   }
 
   /**
+   * ASKS FOR A LINE OF TEXT, IN THE PAGE.
+   *
+   * Every question on this screen used to be a native prompt(). Inside an
+   * Apps Script web app that dialog is drawn by the browser chrome with
+   * "An embedded page at <hash>-script.googleusercontent.com says" above it,
+   * which puts the deployment URL on screen every time a grievance officer
+   * closes a request — on the one screen in the application whose whole
+   * subject is not leaking things.
+   *
+   * crescDialog lives in the shell (Auth.html) and is parsed before any
+   * bundle, so it is always present by the time this screen can be opened.
+   * The callback receives the string, or null if the person cancelled —
+   * note that '' and null are different answers here: '' is "nothing to add"
+   * on an optional question, null is "I did not mean to do this at all".
+   */
+  function ask(message, value, opts, done) {
+    opts = opts || {};
+    if (typeof window.crescPrompt !== 'function') {
+      // The shell is always there; if it somehow is not, say so rather than
+      // falling back to the dialog this function exists to avoid.
+      say('This screen needs the shared dialog, which has not loaded. ' +
+          'Reload the page and try again.', true);
+      return;
+    }
+    window.crescPrompt(message, value || '', {
+      title: opts.title || 'Data protection',
+      okLabel: opts.okLabel || 'Save'
+    }).then(function (answer) { done(answer); });
+  }
+
+  /**
    * One place that calls the server, so every call on this screen has a
    * failure path and every one carries the session token from its caller.
    *
@@ -472,13 +496,6 @@
       $('dp-of-email').value = o.email || '';
       $('dp-of-phone').value = o.phone || '';
 
-      // The public page is this deployment's own /exec URL with ?privacy on
-      // it, so it is read off the browser rather than typed into a setting
-      // somebody would have to remember to change.
-      var base = String(window.location.href).split('?')[0];
-      $('dp-public-url').textContent = base + '?privacy';
-
-      dpVoiceState();
     });
   };
 
@@ -598,19 +615,24 @@
   window.dpVerify = function (id) {
     var sel = $('dp-v-' + id);
     var method = sel ? sel.value : 'IN_PERSON_ID';
-    var note = prompt('Anything worth recording about how you checked? (optional)') || '';
-    call('dpdpVerifyRequester', [id, method, note, tok()], function (res) {
-      say((res && res.message) || 'Recorded.', !(res && res.success));
-      dpConsoleLoad();
+    ask('Anything worth recording about how you checked? (optional)', '',
+        { title: 'Identity check', okLabel: 'Record' }, function (note) {
+      if (note === null) return;
+      call('dpdpVerifyRequester', [id, method, note || '', tok()], function (res) {
+        say((res && res.message) || 'Recorded.', !(res && res.success));
+        dpConsoleLoad();
+      });
     });
   };
 
   window.dpClose = function (id) {
-    var outcome = prompt('What was actually done? "Closed" is not an answer to a statutory request.');
-    if (!outcome) return;
-    call('closeDPDPRequest', [id, outcome, tok()], function (res) {
-      say((res && res.message) || 'Closed.', !(res && res.success));
-      dpConsoleLoad();
+    ask('What was actually done? "Closed" is not an answer to a statutory request.', '',
+        { title: 'Close this request', okLabel: 'Close it' }, function (outcome) {
+      if (!outcome) return;
+      call('closeDPDPRequest', [id, outcome, tok()], function (res) {
+        say((res && res.message) || 'Closed.', !(res && res.success));
+        dpConsoleLoad();
+      });
     });
   };
 
@@ -688,10 +710,13 @@
 
   window.dpWithdraw = function (purpose) {
     if (!CURRENT_PATIENT) return;
-    var reason = prompt('Why are they withdrawing? (optional, but it helps)') || '';
-    call('withdrawConsent', [CURRENT_PATIENT, purpose, reason, tok()], function (res) {
-      say((res && res.message) || 'Withdrawn.', !(res && res.success));
-      dpLoadPatient();
+    ask('Why are they withdrawing? (optional, but it helps)', '',
+        { title: 'Withdraw consent', okLabel: 'Withdraw' }, function (reason) {
+      if (reason === null) return;
+      call('withdrawConsent', [CURRENT_PATIENT, purpose, reason || '', tok()], function (res) {
+        say((res && res.message) || 'Withdrawn.', !(res && res.success));
+        dpLoadPatient();
+      });
     });
   };
 
@@ -713,10 +738,13 @@
 
   window.dpRevokeNomination = function () {
     if (!CURRENT_PATIENT) return say('Look up a patient first.', true);
-    var reason = prompt('Why is it being withdrawn? (optional)') || '';
-    call('revokeNomination', [CURRENT_PATIENT, reason, tok()], function (res) {
-      say((res && res.message) || 'Withdrawn.', !(res && res.success));
-      dpLoadPatient();
+    ask('Why is it being withdrawn? (optional)', '',
+        { title: 'Withdraw nomination', okLabel: 'Withdraw' }, function (reason) {
+      if (reason === null) return;
+      call('revokeNomination', [CURRENT_PATIENT, reason || '', tok()], function (res) {
+        say((res && res.message) || 'Withdrawn.', !(res && res.success));
+        dpLoadPatient();
+      });
     });
   };
 
@@ -756,13 +784,15 @@
   };
 
   window.dpAssess = function (id, notifiable) {
-    var why = prompt(notifiable
-      ? 'Why is this notifiable? (this goes on the record)'
-      : 'Why is this NOT notifiable? This is the one you will be asked to justify.');
-    if (!why) return;
-    call('dpdpAssessBreach', [id, notifiable, why, tok()], function (res) {
-      say((res && res.message) || 'Recorded.', !(res && res.success));
-      dpConsoleLoad();
+    ask(notifiable
+          ? 'Why is this notifiable? (this goes on the record)'
+          : 'Why is this NOT notifiable? This is the one you will be asked to justify.',
+        '', { title: 'Assess this breach', okLabel: 'Record it' }, function (why) {
+      if (!why) return;
+      call('dpdpAssessBreach', [id, notifiable, why, tok()], function (res) {
+        say((res && res.message) || 'Recorded.', !(res && res.success));
+        dpConsoleLoad();
+      });
     });
   };
 
@@ -790,25 +820,6 @@
       dpConsoleLoad();
     });
   };
-
-  window.dpVoice = function (policy) {
-    call('dpdpSetVoicePolicy', [policy, tok()], function (res) {
-      say((res && res.message) || 'Saved.', !(res && res.success));
-      dpVoiceState();
-    });
-  };
-
-  function dpVoiceState() {
-    call('dpdpVoicePolicy', [tok()], function (res) {
-      var el = $('dp-voice-state');
-      if (!el) return;
-      if (!res) { el.textContent = 'unknown'; return; }
-      el.textContent = res.policy === 'FORBIDDEN' ? 'Off for the whole clinic'
-                     : res.policy === 'ALLOWED'   ? 'Allowed, and each person is asked once'
-                     : 'NOT DECIDED — the readiness check will keep saying so';
-      el.className = 'small fw-bold ' + (res.decided ? '' : 'dp-overdue');
-    });
-  }
 
   // ══ s.6: the consent tab ════════════════════════════════════════════════
   var CONSENT_PURPOSES = [];
