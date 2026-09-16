@@ -676,6 +676,72 @@ function rx_genericMap_() {
   return { map: map, total: total, withGeneric: withGeneric };
 }
 
+/**
+ * THE GENERIC NAME FOR A PRESCRIBED DRUG, FOR PRINTING.
+ *
+ * A prescription that names only a brand is a prescription that cannot be
+ * dispensed against anything else, cannot be checked by a pharmacist who
+ * stocks a different manufacturer, and cannot be read at all by the next
+ * doctor if the brand is local. Every Indian prescribing standard asks for
+ * the generic, and its absence on a printed script is a medico-legal
+ * exposure, not a formatting preference.
+ *
+ * Resolved at PRINT time rather than stored, deliberately: the meds JSON on
+ * every encounter already written has no generic in it, and resolving here
+ * means a reprint of a two-year-old consultation gains the generic too.
+ *
+ * Returns '' when the drug is not in either table, or when the typed name
+ * ALREADY contains the generic — "Tab Paracetamol 500" needs no "(paracetamol)"
+ * after it, and printing one would make the line harder to read, not safer.
+ *
+ * @param {string} drugName   the name as the doctor typed it
+ * @param {Object} [gm]       a cached rx_genericMap_(); built if omitted
+ * @return {string} the generic, in the case the inventory records it
+ */
+function rx_genericFor_(drugName, gm) {
+  var typed = dc_str_(drugName);
+  if (!typed) return '';
+  try {
+    gm = gm || rx_genericMap_();
+    if (!gm || !gm.map) return '';
+
+    var lower = typed.toLowerCase();
+    var key = (typeof dref_key_ === 'function') ? dref_key_(typed) : lower;
+    var entry = gm.map[lower] || gm.map[key];
+    if (!entry || !entry.generic) return '';
+
+    // A combination product's generics are stored joined; each is checked
+    // against the typed name separately, so "Tab Amoxicillin + Clavulanic
+    // Acid" is recognised as already naming both.
+    var parts = String(entry.generic).split(/[+,\/]/)
+      .map(function (p) { return p.trim(); })
+      .filter(function (p) { return p.length >= 3; });
+    if (!parts.length) return '';
+
+    // Drop a part that is contained in another part of the same set. Stem
+    // keys merge the generics of every brand that reduces to them, and a
+    // sheet typed by hand has "Dolo" spelt "Para" beside "Dolo 650" spelt
+    // "Paracetamol" — which would otherwise print "Para + Paracetamol" on a
+    // prescription. The longer spelling is the one to keep.
+    parts = parts.filter(function (p, i) {
+      return !parts.some(function (q, j) {
+        return j !== i && q.length > p.length && q.indexOf(p) > -1;
+      });
+    });
+
+    var already = parts.every(function (p) { return lower.indexOf(p) > -1; });
+    if (already) return '';
+
+    // Title case, because it prints beside a brand and an all-lower generic
+    // under a capitalised brand reads as an afterthought.
+    return parts.map(function (p) {
+      return p.replace(/\b[a-z]/g, function (ch) { return ch.toUpperCase(); });
+    }).join(' + ');
+  } catch (e) {
+    return '';
+  }
+}
+
 /** Patient allergies as a normalised token list. */
 function getPatientAllergies(patientId, sessionToken) {
   try {

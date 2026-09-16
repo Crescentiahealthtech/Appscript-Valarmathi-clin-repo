@@ -1265,12 +1265,21 @@ function ipn_printNote_(n) {
   if (kv.length) blocks.push(ipp_kv_(kv));
 
   if (d.medOrders && d.medOrders.length) {
+    // The generic under the brand, for the same reason it prints on every
+    // other script this system produces: a brand alone cannot be dispensed
+    // against another manufacturer, and on a ward order it is the nurse at
+    // the trolley who reads it. Resolved once per note.
+    var ipnGmap = (typeof rx_genericMap_ === 'function') ? rx_genericMap_() : null;
+
     blocks.push('<div style="height:5px;"></div>' + ipp_table_(
       [{ label: "Action", cls: "ctr" }, "Drug", "Dose / Frequency", "Route"],
       d.medOrders.map(function (m) {
+        var nm = m.drugName || m.newDrugName || "";
+        var generic = dc_str_(m.generic) ||
+          ((typeof rx_genericFor_ === 'function') ? rx_genericFor_(nm, ipnGmap) : '');
         return [
           e(m.action || "NEW"),
-          e(m.drugName || m.newDrugName || ""),
+          e(nm) + (generic ? '<br><span class="muted"><em>' + e(generic) + '</em></span>' : ''),
           [e(m.dose || ""), e(m.freq || "")].filter(Boolean).join(" "),
           e(m.route || "")
         ];

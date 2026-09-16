@@ -557,16 +557,35 @@ function getOPPrescriptionHtml(encounterId, sessionToken) {
     if (!data.meds || data.meds.length === 0) {
       medsHtml = `<tr><td colspan="5" style="text-align:center; padding:15px; color:#6b7280;">No medications prescribed.</td></tr>`;
     } else {
+      // THE GENERIC NAME PRINTS UNDER THE BRAND.
+      //
+      // A script naming only a brand cannot be dispensed against another
+      // manufacturer, cannot be checked by a pharmacist who stocks a
+      // different one, and cannot be read by the next doctor if the brand is
+      // local. The map is built once for the whole prescription rather than
+      // per line — it reads two sheets.
+      const gmap = (typeof rx_genericMap_ === 'function') ? rx_genericMap_() : null;
+
       data.meds.forEach((m, i) => {
         // An IV order's rate is the order. Print it beside the volume, in the
         // dosage column, where the person setting the drip will look.
         const isIV = String(m.type || m.strength || '').toUpperCase() === 'IV';
         const dose = [esc(m.sig), isIV && m.rate ? '@ ' + esc(m.rate) : '']
           .filter(Boolean).join(' ') || '-';
+
+        // A generic stored on the line wins; otherwise it is resolved from
+        // the formulary, so reprinting an old consultation gains it too.
+        const generic = String(m.generic || '').trim() ||
+          ((typeof rx_genericFor_ === 'function')
+            ? rx_genericFor_(m.drugName, gmap) : '');
+
         medsHtml += `
           <tr style="page-break-inside: avoid;">
             <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${i + 1}</td>
-            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;"><strong>${esc(m.strength)} ${esc(m.drugName)}</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">
+              <strong>${esc(m.strength)} ${esc(m.drugName)}</strong>
+              ${generic ? `<div style="font-size:10px; color:#4b5563; font-style:italic;">${esc(generic)}</div>` : ''}
+            </td>
             <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${dose}</td>
             <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top;">${esc(m.duration) || '-'}</td>
             <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; color: #6b7280;">${esc(m.comments) || '-'}</td>
