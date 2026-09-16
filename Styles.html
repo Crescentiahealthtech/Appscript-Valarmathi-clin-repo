@@ -396,9 +396,14 @@
  }
  /* The one-line explanation some tiles carry, as <small> on the lab tiles
     and as a bare <span> on the Finance Hub's. Both, so a row mixing the two
-    still lines up. */
+    still lines up.
+
+    :not(.acc-navflag) because the Finance Hub's live-count badges are spans
+    in the same position and are pills — inline-block with a background and a
+    999px radius. Made display:block they would stretch the full width of the
+    tile and stop reading as badges. */
  .style-workspace-btn small,
- .style-workspace-btn > span,
+ .style-workspace-btn > span:not(.acc-navflag),
  .emr-module-card small {
     display: block;
     margin-top: .35rem;

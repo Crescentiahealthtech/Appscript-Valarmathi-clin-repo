@@ -135,32 +135,73 @@
         </div>
 
         <div class="col-6 col-md-4 col-xl-3">
-          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openDischargeDesk()">
-            <!-- "Discharges" collided with the clinical Discharge Desk in
-                 EMR, and staff could not tell which screen a colleague
-                 meant. This one is stage 3 of the workflow: the money. -->
-            <i class="fas fa-procedures fa-2x mb-3 text-warning"></i>
-            <h6 class="text-white fw-bold m-0">Discharge Settlement</h6>
-            <span class="acc-navflag" id="acc-flag-discharges">&mdash;</span>
-          </div>
-        </div>
-
-        <!-- This card used to be an empty clickable rectangle: the wrapper
-             was here, its body was not. It opens the running IP tabs, which
-             is the one screen that answers "what does this bed owe so far". -->
-        <div class="col-6 col-md-4 col-xl-3">
-          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openIpTab()">
-            <i class="fas fa-bed-pulse fa-2x mb-3" style="color: var(--violet-fg);"></i>
-            <h6 class="text-white fw-bold m-0">Running IP Tabs</h6>
-            <span class="text-muted" style="font-size:.72rem;">Charges accruing on the ward</span>
-          </div>
-        </div>
-
-        <div class="col-6 col-md-4 col-xl-3">
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchAccountsPage('workspace-accounts-tax')">
             <i class="fas fa-landmark fa-2x mb-3 text-light"></i>
             <h6 class="text-white fw-bold m-0">Tax &amp; Audit</h6>
             <span class="text-muted" style="font-size:.72rem;">GST &amp; compliance</span>
+          </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         ONE INPATIENT STAY, THREE STAGES
+
+         Three screens touch the same admission's money, and until now they
+         sat in a flat grid beside Payables and Tax with nothing to say which
+         came first, who was meant to be on each, or where a given patient had
+         got to. Staff opened whichever they remembered — a charge posted
+         after settlement, a bill raised twice, a stay settled while the ward
+         was still adding to it.
+
+         They are the same three screens; what is new is that the order and
+         the role are written on them, and each is hidden from a role that
+         cannot work it. The permissions were always enforced on the server
+         (billing.read, billing.write, accounts.settle); they were simply
+         invisible until the click failed.
+         ═══════════════════════════════════════════════════════════════ -->
+    <h6 class="text-muted fw-bold small text-uppercase mb-1 mt-5">One inpatient stay, three stages</h6>
+    <p class="text-muted small mb-3">
+      Left to right. A stay moves on only when the stage before it is closed.
+    </p>
+
+    <div class="row g-4 align-items-stretch">
+        <div class="col-12 col-md-4" id="card-ip-tab">
+          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openIpTab()">
+            <i class="fas fa-bed-pulse fa-2x mb-3" style="color: var(--violet-fg);"></i>
+            <h6 class="text-white fw-bold m-0">1 &middot; Running IP Tab</h6>
+            <span class="text-muted" style="font-size:.72rem;">
+              While the patient is on the ward. Charges accrue here as the
+              pharmacy, the lab and the ward post them.<br>
+              <strong class="text-white-force">Reception or accounts</strong>
+            </span>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4" id="card-ip-settle">
+          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openDischargeDesk()">
+            <!-- "Discharges" collided with the clinical Discharge Desk in
+                 EMR, and staff could not tell which screen a colleague
+                 meant. This one is the money. -->
+            <i class="fas fa-procedures fa-2x mb-3 text-warning"></i>
+            <h6 class="text-white fw-bold m-0">2 &middot; Discharge Settlement</h6>
+            <span class="text-muted" style="font-size:.72rem;">
+              Once the clinical discharge is signed. Caps the package, applies
+              the discount and the advance, and closes the tab.<br>
+              <strong class="text-white-force">Accounts only</strong>
+            </span>
+            <span class="acc-navflag mt-1" id="acc-flag-discharges">&mdash;</span>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4" id="card-ip-invoice">
+          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-billing')">
+            <i class="fas fa-file-invoice-dollar fa-2x mb-3 text-success"></i>
+            <h6 class="text-white fw-bold m-0">3 &middot; Hospital Billing</h6>
+            <span class="text-muted" style="font-size:.72rem;">
+              The invoice the patient is handed, and the receipt. Also the
+              route for an outpatient bill that never had a tab.<br>
+              <strong class="text-white-force">Reception or accounts</strong>
+            </span>
           </div>
         </div>
     </div>
