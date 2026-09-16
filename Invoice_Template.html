@@ -328,7 +328,8 @@
       String(i + 1),
       '<strong>' + E(it.drug) + '</strong>' +
         (it.generic ? '<br><span style="font-size:10px;color:#9ca3af;">' + E(it.generic) + '</span>' : ''),
-      E(it.batch) + '<br><span style="font-size:10px;color:#9ca3af;">Exp: ' + E(it.expiry) + '</span>',
+      E(it.batch),
+      E(it.expiry),
       String(it.qty),
       '₹' + it.mrp.toFixed(2),
       it.gst + '%',
@@ -388,7 +389,12 @@
       columns: [
         { label: '#', align: 'left', width: '32px' },
         { label: 'Medicine', align: 'left' },
-        { label: 'Batch / Exp', align: 'left', width: '130px' },
+        // Expiry is its own column, not a grey line tucked under the batch
+        // number. A pharmacist checking a bill against the shelf reads down
+        // one column; a patient querying a strip reads across one row. It
+        // also stops the two values running together when the row wraps.
+        { label: 'Batch', align: 'left', width: '92px' },
+        { label: 'Expiry', align: 'left', width: '82px' },
         { label: 'Qty', align: 'right', width: '50px' },
         { label: 'MRP', align: 'right', width: '80px' },
         { label: 'GST', align: 'right', width: '56px' },

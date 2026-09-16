@@ -137,7 +137,7 @@ function getInvoiceForPrint(invoiceNo, sessionToken) {
       for (var j = 1; j < id.length; j++) {
         if (String(id[j][0]).trim().toUpperCase() !== target) continue;
         items.push({ drug: String(id[j][3] || ""), generic: String(id[j][4] || ""), batch: String(id[j][5] || ""),
-          expiry: String(id[j][6] || ""), qty: parseFloat(id[j][7]) || 0, unit: String(id[j][8] || ""),
+          expiry: cresc_expiryText_(id[j][6]), qty: parseFloat(id[j][7]) || 0, unit: String(id[j][8] || ""),
           mrp: parseFloat(id[j][9]) || 0, gst: parseFloat(id[j][10]) || 0, taxable: parseFloat(id[j][11]) || 0,
           gstAmt: parseFloat(id[j][12]) || 0, lineTotal: parseFloat(id[j][13]) || 0 });
       }

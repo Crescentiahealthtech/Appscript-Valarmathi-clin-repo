@@ -86,7 +86,12 @@ function searchLabRecords(query, sessionToken) {
       var oid = String(r[oMap['OrderID']]);
       matched[oid] = {
         orderId: oid,
-        date:    String(r[oMap['CreatedAt']]||''),
+        // Formatted here, not String()'d. LAB_ORDERS.CreatedAt is a real
+        // Sheets date, and String() on one yields "Thu Jun 01 2028 00:00:00
+        // GMT+0530 (India Standard Time)". The records card splits that on
+        // spaces to stack the date over the time, so the card read "Thu"
+        // above "Jun 01 2028 00:00:00 GMT+0530 (India Standard Time)".
+        date:    cresc_formatDate_(r[oMap['CreatedAt']], 'dd-MMM-yyyy hh:mm a'),
         testNames: String(r[oMap['TestNames']]||''),
         source:  String(r[oMap['SourceModule']]||''),
         doctor:  String(r[oMap['OrderingDoctorName']]||''),

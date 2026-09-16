@@ -2229,7 +2229,7 @@ function getLabBillHtml(orderId, sessionToken) {
           balance:       Number(data[i][m['BalanceAmount']]) || 0,
           payStatus:     String(data[i][m['PaymentStatus']] || ''),
           receipt:       String(data[i][m['ReceiptNumber']] || ''),
-          billedAt:      String(data[i][m['BilledAt']] || '')
+          billedAt:      cresc_formatDate_(data[i][m['BilledAt']], 'dd-MMM-yyyy hh:mm a')
         };
         break;
       }

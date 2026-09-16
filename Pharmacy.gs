@@ -406,7 +406,7 @@ function getDisposalLog(opts) {
         disposalId: String(r[0] || ''),
         at:      Utilities.formatDate(ts, Session.getScriptTimeZone(), 'dd-MMM-yyyy HH:mm'),
         brand:   String(r[2] || ''), generic: String(r[3] || ''),
-        batch:   String(r[4] || ''), expiry:  String(r[5] || ''),
+        batch:   String(r[4] || ''), expiry:  cresc_expiryText_(r[5]),
         qty:     parseInt(r[6], 10) || 0, unit: String(r[7] || ''),
         reason:  reason, reasonLabel: PH_DISPOSAL_REASONS[reason] || reason,
         note:    String(r[9] || ''),
@@ -813,8 +813,14 @@ function processPharmacyBill(payload, sessionToken) {
       age: String(payload.age || ""), sex: String(payload.sex || ""), address: String(payload.address || ""),
       doctor: String(payload.doctor || "Self / OTC"), payMode: String(payload.payMode || "CASH"),
       txnId: String(payload.txnId || ""), payStatus: payStatus,
+      // Expiry is rendered here, once, so the invoice printed from this reply
+      // and the one reprinted later from the sheet read identically. A batch
+      // expires at the end of its printed month, so "Jun 2028" is what the
+      // pack says — not "01-Jun-2028", and certainly not the
+      // "Thu Jun 01 2028 00:00:00 GMT+0530" that String() on a Sheets date
+      // cell produces.
       items: itemRows.map(function (row) { return { drug: row[3], generic: row[4], batch: row[5],
-        expiry: row[6], qty: row[7], unit: row[8], mrp: row[9], gst: row[10],
+        expiry: cresc_expiryText_(row[6]), qty: row[7], unit: row[8], mrp: row[9], gst: row[10],
         taxable: row[11], gstAmt: row[12], lineTotal: row[13] }; }),
       gross: round2_(gross), totalGst: round2_(totalGst), discount: round2_(discount), net: net } };
   } catch (error) {
