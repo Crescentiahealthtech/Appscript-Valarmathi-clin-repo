@@ -343,25 +343,50 @@ function dsx_printSignatureBlock_(header, payload, mode, snapshotNo) {
 }
 
 /**
- * The verification block. The CODE and the URL are plain text and always
- * print; the QR is an image and is therefore the part that depends on the
- * spike. Printing only a QR would be a document nobody can verify from a
- * photocopy.
+ * The verification block.
+ *
+ * THE LINK AND THE QR ARE NOW OPT-IN, and the thing they are opting in to is
+ * a domain the clinic owns.
+ *
+ * Both used to print unconditionally, and with CRESC_PUBLIC_BASE_URL unset
+ * that meant the deployment's own script URL — the /exec address, or the
+ * …-script.googleusercontent.com one — was printed in full on a discharge
+ * summary and encoded in the QR beside it. A discharge summary is given to
+ * the patient, to an insurer and to the next hospital. The deployment URL is
+ * the whole of the authorisation to reach every anonymous route this project
+ * serves, so it must not travel on paper.
+ *
+ * The CODE still prints, always. It leaks nothing: it is a short hash of the
+ * signed content, it verifies the document against the register when
+ * somebody rings the clinic, and it is what makes a photocopy checkable.
+ *
+ * Once cresc_publicBaseUrl_() is set — a host the clinic owns, forwarding to
+ * /exec with the query string intact — the link and the QR come back
+ * automatically, naming the clinic rather than a script id. See
+ * Clinic_Profile.gs.
  */
 function dsx_verifyBlock_(header, snapshotNo) {
-  var summaryId = dsx_str_(header.Summary_ID);
-  var token = dsx_hmacSha256B64Url_(dsx_upper_(summaryId) + ':' + dsx_int_(snapshotNo));
-  var url = dsx_webAppUrl_() + '?verifyDS=' + encodeURIComponent(token);
   var code = dsx_shortHash_(header.Signed_Hash);
 
-  var img = '';
+  // '' unless the clinic has configured a host of its own.
+  var base = '';
   try {
-    var qr = DSX_QR(0, 'M');
-    qr.addData(url);
-    qr.make();
-    img = '<img src="' + qr.createDataURL(3, 2) + '" width="86" height="86" alt="">';
-  } catch (e) {
-    img = '';   // the code below still verifies the document
+    if (typeof cresc_publicBaseUrl_ === 'function') base = cresc_publicBaseUrl_() || '';
+  } catch (e) { base = ''; }
+
+  var url = '', img = '';
+  if (base) {
+    var summaryId = dsx_str_(header.Summary_ID);
+    var token = dsx_hmacSha256B64Url_(dsx_upper_(summaryId) + ':' + dsx_int_(snapshotNo));
+    url = base + '?verifyDS=' + encodeURIComponent(token);
+    try {
+      var qr = DSX_QR(0, 'M');
+      qr.addData(url);
+      qr.make();
+      img = '<img src="' + qr.createDataURL(3, 2) + '" width="86" height="86" alt="">';
+    } catch (e) {
+      img = '';   // the code below still verifies the document
+    }
   }
 
   return '<table style="width:100%;border-collapse:collapse;"><tr>' +
@@ -369,7 +394,10 @@ function dsx_verifyBlock_(header, snapshotNo) {
     '<td style="vertical-align:top;font-size:8.5pt;color:#334155;">' +
     '<div><strong>Verify this document</strong></div>' +
     '<div>Code <strong style="letter-spacing:.08em;">' + ipp_esc_(code) + '</strong></div>' +
-    '<div style="word-break:break-all;">' + ipp_esc_(url) + '</div>' +
+    (url
+      ? '<div style="word-break:break-all;">' + ipp_esc_(url) + '</div>'
+      : '<div>Quote this code to ' + ipp_esc_(cresc_clinicWebsite_() || 'the clinic') +
+        ' to confirm this document.</div>') +
     '</td></tr></table>';
 }
 

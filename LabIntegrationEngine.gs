@@ -26,8 +26,21 @@ var _LAB_STATUS_MACHINE = {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function getOrderableTests(sessionToken) {
+  try { crescRequire_(sessionToken, ['lab.read', 'lab.order']); }
+  catch (err) { return { success: false, message: err.message, tests: [] }; }
+  return lab_orderableTests_();
+}
+
+/**
+ * THE SAME READ, WITHOUT THE PERMISSION CHECK, for server-side callers that
+ * have already validated the user. Calling the guarded entry point with no
+ * token made crescRequire_ throw on `undefined` and the catch turn that into
+ * an empty catalogue, so the OP consult and the ward round offered no tests
+ * to order and said nothing about why. A trailing underscore keeps this
+ * unreachable from google.script.run.
+ */
+function lab_orderableTests_() {
   try {
-    crescRequire_(sessionToken, ['lab.read', 'lab.order']);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, tests: [] };
@@ -59,8 +72,15 @@ function getOrderableTests(sessionToken) {
 }
 
 function getLabCatalog(sessionToken) {
+  try { crescRequire_(sessionToken, ['lab.read', 'lab.order']); }
+  catch (err) { return { success: false, message: err.message,
+                         panels: [], individuals: [], packages: [] }; }
+  return lab_catalog_();
+}
+
+/** THE SAME READ, WITHOUT THE PERMISSION CHECK. See lab_orderableTests_. */
+function lab_catalog_() {
   try {
-    crescRequire_(sessionToken, ['lab.read', 'lab.order']);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, panels: [], individuals: [], packages: [] };
@@ -917,7 +937,7 @@ function buildResultEntrySheet(orderId, sessionToken) {
     const od=getLabOrderDetail(orderId);
     if(!od.success) return {success:false,message:od.message};
     const order=od.order;
-    const cat=getLabCatalog();
+    const cat=lab_catalog_();
     if(!cat.success) return {success:false,message:'Catalog unavailable.'};
     const panelById={},indivById={},pkgById={};
     cat.panels.forEach(function(p){panelById[p.testId]=p;});
@@ -1787,7 +1807,7 @@ function _mkRowDef(testId,pm){
     refRangeText:(String(pm.resultType||'').toUpperCase()==='NUMERIC')?('M '+_rngTxt(pm.maleRefLow,pm.maleRefHigh)+' F '+_rngTxt(pm.femaleRefLow,pm.femaleRefHigh)):''};
 }
 function _refRangesByParameter(){
-  const cat=getLabCatalog(); const out={};
+  const cat=lab_catalog_(); const out={};
   if(!cat.success) return out;
   cat.panels.forEach(function(p){(p.parameters||[]).forEach(function(pm){ out[pm.testId]={testId:p.testId,parameterName:pm.testName,unit:pm.unit||'',resultType:pm.resultType||'NUMERIC',maleRefLow:pm.maleRefLow,maleRefHigh:pm.maleRefHigh,femaleRefLow:pm.femaleRefLow,femaleRefHigh:pm.femaleRefHigh,criticalLow:pm.criticalLow,criticalHigh:pm.criticalHigh}; }); });
   cat.individuals.forEach(function(t){ out[t.testId]={testId:t.testId,parameterName:t.testName,unit:t.unit||'',resultType:t.resultType||'NUMERIC',maleRefLow:t.maleRefLow,maleRefHigh:t.maleRefHigh,femaleRefLow:t.femaleRefLow,femaleRefHigh:t.femaleRefHigh,criticalLow:t.criticalLow,criticalHigh:t.criticalHigh}; });
@@ -1855,7 +1875,7 @@ function _firstSampleId(orderId){
 }
 function _startTat(order,collectedAtStr){
   try{
-    const cat=getLabCatalog(); if(!cat.success) return;
+    const cat=lab_catalog_(); if(!cat.success) return;
     const byId={}; cat.panels.forEach(function(t){byId[t.testId]=t;}); cat.individuals.forEach(function(t){byId[t.testId]=t;}); cat.packages.forEach(function(t){byId[t.testId]=t;});
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.TAT_LOG); if(!sheet) return;
     const map=labHeaderMap(sheet); const ncols=LAB_SCHEMA.LAB_TAT_LOG.length;
@@ -1909,57 +1929,44 @@ function _raiseNcr(d){
   }catch(e){Logger.log('_raiseNcr failed: '+e.message); return '';}
 }
 /**
- * The authenticity block at the foot of a lab report.
+ * THE AUTHENTICITY BLOCK, REDUCED TO THE ONE THING IT MAY SAY ON PAPER.
  *
- * WHY THE OLD ONE SHOWED A BROKEN IMAGE
+ * It used to print, in the footer of every released report:
  *
- * The report asked for its QR like this:
+ *     AUTHENTICITY VERIFICATION
+ *     Scan the code, or open the link below.
+ *     Verification code 2DA0C547D7A3
+ *     https://script.google.com/macros/s/AKfycb…/exec?verifyLab=…&c=…
  *
- *   https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl=<url>
+ * — beside a QR encoding the same address. That address is this deployment's
+ * script URL, and it is handed to the patient, to whoever they show the
+ * report to, and to anyone who photographs it. The deployment URL is the
+ * whole of the authorisation to reach every anonymous route in this project,
+ * so printing it on a document that leaves the building is the one thing
+ * this system must not do. The QR was no better than the text: scanning it
+ * yields the same string.
  *
- * That is the Google Infographics API. Google deprecated it in 2012 and
- * turned it off; the host no longer serves chart images at all. So the
- * <img> could never load, on any deployment, from the day the endpoint went
- * dark — which is the empty frame beside the words "Scan QR to verify report
- * integrity" that people have been handing to patients.
+ * So the link, the QR and the code are gone. What remains is the statement
+ * that actually protects a patient — that a provisional result is
+ * provisional. A draft used to carry the words AUTHENTICITY VERIFICATION
+ * over an attestation hash of "N/A", which reads as a released report.
  *
- * It would not have worked even if the endpoint had lived. Two more
- * problems sat behind it:
- *
- *   1. THE URL WENT NOWHERE. It encoded https://valarmathi.clinic/verify —
- *      a host and a path that do not exist in this project. Scanning it
- *      reaches a domain error, not a verification.
- *
- *   2. IT CLAIMED VERIFICATION FOR UNVERIFIED REPORTS. attestationHash
- *      starts at the literal string "N/A" and only becomes a hash once a
- *      pathologist verifies. A draft printed early still carried the words
- *      AUTHENTICITY VERIFICATION and a QR — over "SHA-256: N/A".
- *
- * All three are fixed here. The QR is generated in this process by the
- * encoder already bundled in DS_QR_Lib.gs (the discharge summary has been
- * doing exactly this since it shipped), so it is a data: URI embedded in the
- * document — no external request, which also means it survives being saved
- * as a PDF and printed somewhere with no internet. It points at THIS web
- * app's own ?verifyLab= route. And an unverified report says it is
- * unverified instead of pretending.
+ * If the clinic later puts the web app behind its own domain, a printed link
+ * becomes safe again: see cresc_publicBaseUrl_() in Clinic_Profile.gs, which
+ * is the opt-in that has to be set first. Nothing here reads it, because a
+ * lab report is the document most likely to be photographed and forwarded.
  *
  * @param {string} orderId
  * @param {string} attestationHash  "N/A" until a verifier signs
  * @param {string} verifierName
  * @param {string} verifiedAt
- * @return {string} HTML for the .qr-box slot in the report footer
+ * @return {string} HTML for the footer slot
  */
 function _labVerifyBlock_(orderId, attestationHash, verifierName, verifiedAt) {
-  var esc = function (v) {
-    return String(v === null || v === undefined ? '' : v)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  };
-
   var hash = String(attestationHash || '').trim();
   var signed = hash && hash !== 'N/A';
 
-  // An unverified report gets a plain statement, no QR and no claim.
+  // An unverified report says so, plainly, and says nothing else.
   if (!signed) {
     return '<div class="qr-box">' +
       '<div style="border:1px dashed #b45309;color:#b45309;padding:8px 12px;border-radius:6px;">' +
@@ -1969,54 +1976,9 @@ function _labVerifyBlock_(orderId, attestationHash, verifierName, verifiedAt) {
       '</div></div>';
   }
 
-  var url = _labVerifyUrl_(orderId, hash);
-  var code = hash.substring(0, 12).toUpperCase();
-
-  // The QR is a convenience, never the proof: the 12-character code beside
-  // it verifies the same document typed in by hand, which is what happens
-  // when the scan fails or the page is read on paper. A failure to encode
-  // therefore drops the image and keeps everything else.
-  var img = '';
-  try {
-    if (typeof DSX_QR === 'function') {
-      var qr = DSX_QR(0, 'M');
-      qr.addData(url);
-      qr.make();
-      img = '<img src="' + qr.createDataURL(3, 2) + '" width="70" height="70" alt="Verification QR" />';
-    }
-  } catch (e) {
-    img = '';
-  }
-
-  return '<div class="qr-box">' + img +
-    '<div>' +
-      '<strong>AUTHENTICITY VERIFICATION</strong><br>' +
-      (img ? 'Scan the code, or open the link below.<br>' : 'Open the link below to verify.<br>') +
-      'Verification code <strong style="letter-spacing:.08em;">' + esc(code) + '</strong><br>' +
-      '<span style="font-family: monospace; font-size: 9px; word-break: break-all;">' + esc(url) + '</span>' +
-    '</div></div>';
-}
-
-/**
- * The verify link printed on one report.
- *
- * Built on the clinic's own host when CRESC_PUBLIC_BASE_URL is set, so a
- * report handed to a patient or another hospital carries an address that
- * names the clinic rather than a script.google.com deployment id. Unset, it
- * falls back to the /exec URL — see cresc_publicLinkBase_() in
- * Clinic_Profile.gs for what that property has to forward to.
- */
-function _labVerifyUrl_(orderId, attestationHash) {
-  var base = '';
-  try { base = ScriptApp.getService().getUrl() || ''; } catch (e) { base = ''; }
-  if (!base) {
-    try {
-      base = String(PropertiesService.getScriptProperties().getProperty('CRESC_WEBAPP_URL') || '');
-    } catch (e) { base = ''; }
-  }
-  if (typeof cresc_publicLinkBase_ === 'function') base = cresc_publicLinkBase_(base);
-  return base + '?verifyLab=' + encodeURIComponent(String(orderId || '')) +
-         '&c=' + encodeURIComponent(String(attestationHash || '').substring(0, 12));
+  // A released report needs no block at all: the signature panel beside this
+  // one already names the pathologist and the moment of release.
+  return '';
 }
 
 /**
@@ -2267,7 +2229,7 @@ function getLabBillHtml(orderId, sessionToken) {
           balance:       Number(data[i][m['BalanceAmount']]) || 0,
           payStatus:     String(data[i][m['PaymentStatus']] || ''),
           receipt:       String(data[i][m['ReceiptNumber']] || ''),
-          billedAt:      String(data[i][m['BilledAt']] || '')
+          billedAt:      cresc_formatDate_(data[i][m['BilledAt']], 'dd-MMM-yyyy hh:mm a')
         };
         break;
       }

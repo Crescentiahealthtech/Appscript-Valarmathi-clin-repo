@@ -1515,11 +1515,18 @@ function dpdpConsoleSnapshot(sessionToken) {
  * laptop is not the clinic deciding that recorded clinical speech may go to a
  * third party.
  *
- * So the clinic decides once, here, and the browser dialog can only ask
- * within that decision. Default is ALLOWED, because that is what the
- * application did before this existed and changing behaviour silently is its
- * own kind of wrong — but the readiness check names it until it has been set
- * deliberately either way.
+ * THE CLINIC HAS NOW DECIDED: dictation is allowed, and that is the default.
+ * The per-person browser dialog is gone with it — a clinician who opens the
+ * consult and presses the microphone is not being asked to make a policy
+ * decision they were never in a position to make, and being asked once per
+ * browser meant being asked again on every new machine, every cleared
+ * profile and every private window.
+ *
+ * FORBIDDEN still works and still switches dictation off everywhere, for a
+ * clinic that wants it off; it is simply no longer the thing an unset
+ * property means. The readiness check no longer raises a finding for an
+ * unset property either, because unset now means allowed, which is a
+ * decision rather than an omission.
  */
 function dpdpVoicePolicy(sessionToken) {
   try {
@@ -1529,23 +1536,26 @@ function dpdpVoicePolicy(sessionToken) {
     try {
       raw = PropertiesService.getScriptProperties().getProperty('CRESC_VOICE_POLICY') || '';
     } catch (e) {}
-    var policy = dpdp_str_(raw).toUpperCase() || 'UNSET';
+    // Unset means ALLOWED. See the note above.
+    var policy = dpdp_str_(raw).toUpperCase() || 'ALLOWED';
     return {
       success: true,
       policy: policy,
       allowed: policy !== 'FORBIDDEN',
-      decided: policy === 'ALLOWED' || policy === 'FORBIDDEN',
+      decided: true,
       message: policy === 'FORBIDDEN'
         ? 'This clinic has decided that dictated audio must not leave the building. ' +
           'Voice typing is switched off here — type the note instead.'
         : ''
     };
   } catch (err) {
-    // Fail CLOSED on an unreadable policy: a dictation feature that works when
-    // the server cannot be asked is a feature that works for someone who is
-    // not signed in.
+    // Still fail CLOSED when the SESSION cannot be resolved: a dictation
+    // feature that works when the server cannot be asked is a feature that
+    // works for someone who is not signed in. This is about the caller, not
+    // about the policy — the policy's own default is ALLOWED.
     return { success: false, policy: 'UNSET', allowed: false, decided: false,
-             message: 'Voice typing could not confirm the clinic policy, so it is off.' };
+             message: 'Voice typing could not confirm your session, so it is off. ' +
+                      'Sign in again and retry.' };
   }
 }
 
@@ -1564,8 +1574,7 @@ function dpdpSetVoicePolicy(policy, sessionToken) {
     } catch (e) {}
     return { success: true, policy: want,
              message: want === 'ALLOWED'
-               ? 'Voice typing is allowed. Each person is still asked once, in their ' +
-                 'own browser, before the first use.'
+               ? 'Voice typing is allowed, which is also the default.'
                : 'Voice typing is off for the whole clinic. No dictated audio leaves ' +
                  'the building through this application.' };
   } catch (err) {
@@ -1751,21 +1760,11 @@ function dpdpReadinessCheck() {
   } catch (e) { /* ditto */ }
 
   // --- dictation (finding M3) ---------------------------------------------
-  try {
-    var vp = '';
-    try { vp = PropertiesService.getScriptProperties().getProperty('CRESC_VOICE_POLICY') || ''; }
-    catch (e) {}
-    if (!vp) {
-      add('MEDIUM', 'Section 8(5)',
-          'No decision has been recorded about voice typing. It uses the browser’s ' +
-          'speech recognition, which in Chrome and Edge sends the audio — a ' +
-          'clinician dictating a patient’s history — to the browser vendor’s ' +
-          'speech service.',
-          'Decide, and record it: dpdpSetVoicePolicy("ALLOWED") or ' +
-          'dpdpSetVoicePolicy("FORBIDDEN"), from the Privacy console. Then say ' +
-          'which in the Consent Notice.');
-    }
-  } catch (e) { /* ditto */ }
+  // No finding any more. Dictation is allowed by default, which is a decision
+  // the clinic has taken, so an unset property is no longer an open question.
+  // dpdpSetVoicePolicy("FORBIDDEN") still turns it off everywhere. What the
+  // consent notice says about dictation is a wording question, covered by the
+  // notice-version check above rather than by a finding of its own.
 
   // --- shared links -------------------------------------------------------
   try {

@@ -49,7 +49,17 @@ var MC = {
   TZ:       'Asia/Kolkata',
 
   /** A pregnancy is closed once it is this far past the EDD with no outcome. */
-  ANC_STALE_DAYS: 60
+  ANC_STALE_DAYS: 60,
+
+  /**
+   * The immunisation card is a CHILD's document, and this is where it stops.
+   *
+   * Past this age there is nothing left on the schedule a parent is tracking,
+   * and showing an adult a vaccination card is showing them a screen that
+   * will never have anything on it. The clinic screens refuse above it and
+   * the patient app does not offer the tab at all.
+   */
+  IMMUN_MAX_AGE_YEARS: 11
 };
 
 function mc_str_(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
@@ -113,11 +123,29 @@ function mc_ancVisitSheet_() {
   ]);
 }
 
+/**
+ * The register records EXCEPTIONS, not attendance.
+ *
+ * Status is the column that makes that work. A child of one year has had
+ * their one-year vaccines — that is the assumption the schedule is built on
+ * and the assumption the mother is working from. What the clinic actually
+ * needs written down is the dose that was MISSED, which is the thing the
+ * physician establishes by asking her.
+ *
+ *   GIVEN      this dose was given, on this date, and here is who gave it
+ *   NOT_GIVEN  the physician confirmed with the mother that it was missed
+ *
+ * A dose with no row at all and a due date in the past is PRESUMED given.
+ * See mc_immunisationView_.
+ *
+ * Batch_No stays on the sheet so rows already written keep their meaning, but
+ * nothing asks for it any more.
+ */
 function mc_immunSheet_() {
   return dc_ensureSheet_(SpreadsheetApp.getActiveSpreadsheet(), MC.IMMUN, [
     'Entry_ID', 'Patient_ID', 'Vaccine_Code', 'Dose_Label',
     'Given_On', 'Batch_No', 'Site', 'Route',
-    'Given_By', 'Recorded_By', 'Recorded_At', 'Notes'
+    'Given_By', 'Recorded_By', 'Recorded_At', 'Notes', 'Status'
   ]);
 }
 
@@ -584,6 +612,33 @@ function mcRecordImmunisation(payload, sessionToken) {
     for (var i = 1; i < (data ? data.length : 0); i++) {
       if (mc_up_(data[i][m['Patient_ID']]) !== pid) continue;
       if (mc_up_(data[i][m['Vaccine_Code']]) !== code) continue;
+
+      var was = mc_up_(m['Status'] === undefined ? '' : data[i][m['Status']]) || 'GIVEN';
+      if (was === 'NOT_GIVEN') {
+        // A dose marked missed and later caught up. The row is UPDATED rather
+        // than a second one appended, so the register holds one answer per
+        // child per vaccine and the card cannot show a dose as both.
+        var upd = function (h, v) {
+          if (m[h] !== undefined) sh.getRange(i + 1, m[h] + 1).setValue(v);
+        };
+        upd('Status', 'GIVEN');
+        upd('Given_On', givenOn);
+        upd('Given_By', mc_str_(payload.givenBy) || actor.displayName || actor.username);
+        upd('Recorded_By', actor.username);
+        upd('Recorded_At', new Date());
+        upd('Notes', mc_str_(payload.notes));
+        dc_invalidate_(MC.IMMUN);
+        SpreadsheetApp.flush();
+        try {
+          logAudit_({ username: actor.username, role: actor.role },
+                    'IMMUNISATION_CAUGHT_UP', 'Patient', pid,
+                    { vaccine: code, givenOn: mc_iso_(givenOn) });
+        } catch (e) {}
+        return { success: true,
+                 message: label + ' was marked missed and is now recorded as given ' +
+                          mc_fmt_(givenOn) + '.' };
+      }
+
       return { success: false, code: 'ALREADY_GIVEN',
                message: label + ' is already recorded for ' + pid + ', given ' +
                         mc_fmt_(data[i][m['Given_On']]) + '.' };
@@ -598,6 +653,10 @@ function mcRecordImmunisation(payload, sessionToken) {
     put('Vaccine_Code', code);
     put('Dose_Label', label);
     put('Given_On', givenOn);
+    // Batch_No is still written when a caller supplies one, because the
+    // column exists and a clinic that wants it should not be prevented. The
+    // desk no longer asks: recording a batch number is stock control, and it
+    // was standing between a nurse and the one thing this register is for.
     put('Batch_No', mc_str_(payload.batchNo));
     put('Site', mc_str_(payload.site));
     put('Route', mc_str_(payload.route));
@@ -605,6 +664,7 @@ function mcRecordImmunisation(payload, sessionToken) {
     put('Recorded_By', actor.username);
     put('Recorded_At', now);
     put('Notes', mc_str_(payload.notes));
+    put('Status', 'GIVEN');
     sh.appendRow(row);
     dc_invalidate_(MC.IMMUN);
     SpreadsheetApp.flush();
@@ -617,6 +677,110 @@ function mcRecordImmunisation(payload, sessionToken) {
     } catch (e) {}
 
     return { success: true, message: label + ' recorded, given ' + mc_fmt_(givenOn) + '.' };
+  } catch (err) {
+    return { success: false,
+             message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/**
+ * FRONTEND ENTRY. Records that a dose was NOT given.
+ *
+ * This is the only write the new card really needs. Every dose whose date has
+ * passed is presumed given, so the register's job is to hold the exceptions —
+ * and an exception is established one way only: the physician asks the mother
+ * whether the child had it, and she says no.
+ *
+ * It is therefore deliberately awkward to do by accident. It wants a reason,
+ * it is attributed, and it is audited, because marking a dose missed is what
+ * puts the child back on a catch-up schedule.
+ *
+ * mcRecordImmunisation on the same vaccine afterwards turns the row back to
+ * GIVEN, which is the catch-up visit.
+ *
+ * @param {{patientId:string, vaccineCode:string, doseLabel:string,
+ *          reason:string}} payload
+ */
+function mcMarkDoseNotGiven(payload, sessionToken) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    payload = payload || {};
+    var actor = crescRequire_(sessionToken, ['emr.write', 'ward.write']);
+
+    var pid = mc_up_(payload.patientId);
+    if (!pid) return { success: false, message: 'Name the child.' };
+
+    var entry = mc_scheduleEntry_(payload.vaccineCode);
+    var code = entry ? entry.code : mc_up_(payload.vaccineCode);
+    var label = entry ? entry.label : mc_str_(payload.doseLabel) || code;
+    if (!code) return { success: false, message: 'Name the vaccine.' };
+
+    var reason = mc_str_(payload.reason);
+    if (reason.length < 3) {
+      return { success: false,
+               message: 'Say what the mother said. "Not given" with no reason is ' +
+                        'a gap in the record rather than a finding in it.' };
+    }
+
+    var now = new Date();
+    var sh = mc_immunSheet_();
+    var m = dc_headerMap_(sh);
+    var data = dc_sheetValues_(sh);
+
+    for (var i = 1; i < (data ? data.length : 0); i++) {
+      if (mc_up_(data[i][m['Patient_ID']]) !== pid) continue;
+      if (mc_up_(data[i][m['Vaccine_Code']]) !== code) continue;
+
+      var was = mc_up_(m['Status'] === undefined ? '' : data[i][m['Status']]) || 'GIVEN';
+      if (was === 'GIVEN' && mc_date_(data[i][m['Given_On']])) {
+        // A dose with a date on it was given by somebody at this clinic. That
+        // is a stronger statement than a recollection, so it is not silently
+        // overwritten — correcting it is a separate, deliberate act.
+        return { success: false, code: 'ALREADY_GIVEN',
+                 message: label + ' is recorded as given on ' +
+                          mc_fmt_(data[i][m['Given_On']]) + '. If that is wrong, ' +
+                          'correct the register rather than marking it missed.' };
+      }
+      var upd = function (h, v) {
+        if (m[h] !== undefined) sh.getRange(i + 1, m[h] + 1).setValue(v);
+      };
+      upd('Status', 'NOT_GIVEN');
+      upd('Given_On', '');
+      upd('Notes', reason);
+      upd('Recorded_By', actor.username);
+      upd('Recorded_At', now);
+      dc_invalidate_(MC.IMMUN);
+      SpreadsheetApp.flush();
+      return { success: true, message: label + ' marked as not given.' };
+    }
+
+    var row = new Array(sh.getLastColumn()).fill('');
+    var put = function (h, v) { if (m[h] !== undefined) row[m[h]] = v; };
+    put('Entry_ID', 'IMM-' + Utilities.formatDate(now, MC.TZ, 'yyMMdd-HHmmss') + '-' +
+                    Utilities.getUuid().substring(0, 4).toUpperCase());
+    put('Patient_ID', pid);
+    put('Vaccine_Code', code);
+    put('Dose_Label', label);
+    put('Status', 'NOT_GIVEN');
+    put('Notes', reason);
+    put('Recorded_By', actor.username);
+    put('Recorded_At', now);
+    sh.appendRow(row);
+    dc_invalidate_(MC.IMMUN);
+    SpreadsheetApp.flush();
+
+    try {
+      logAudit_({ username: actor.username, role: actor.role },
+                'IMMUNISATION_NOT_GIVEN', 'Patient', pid,
+                { vaccine: code, reason: reason });
+    } catch (e) {}
+
+    return { success: true,
+             message: label + ' marked as not given. It will now show on the ' +
+                      'catch-up list until it is recorded.' };
   } catch (err) {
     return { success: false,
              message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
@@ -707,11 +871,34 @@ function mc_antenatalView_(patientId) {
 }
 
 /**
- * The immunisation picture for one child. NO AUTHORISATION OF ITS OWN.
+ * THE IMMUNISATION CARD, WHICH ASSUMES THE CHILD HAS BEEN VACCINATED.
  *
- * Returns null when there is no usable date of birth: every due date on this
- * panel is computed from it, and a schedule with no anchor would show a child
- * as overdue for everything from BCG onwards.
+ * This used to work the other way round: a dose counted as given only if
+ * somebody had typed it in. That produced a card telling the mother of a
+ * healthy one-year-old that her child had had none of their vaccines, which
+ * is both wrong and the fastest way to make a card nobody believes. Every
+ * child arriving at this clinic has a history that predates this software,
+ * and demanding it be back-entered before the card says anything useful is
+ * demanding the one thing nobody has time to do.
+ *
+ * So the default is inverted. A dose whose due date has passed is PRESUMED
+ * given. It becomes NOT GIVEN only when a physician has asked the mother and
+ * recorded that it was missed — which is the conversation that actually
+ * happens, and the only part of it worth writing down.
+ *
+ *   GIVEN     recorded in the register, with a date
+ *   PRESUMED  due date passed, nothing recorded — taken as given
+ *   MISSED    a physician recorded that it was not given
+ *   DUE       due now, or within the dose's window
+ *   UPCOMING  not due yet
+ *
+ * WHAT THE CARD IS FOR. One thing: telling the mother when to come back.
+ * `nextDue` and `nextDueGroup` are the answer, and everything else on the
+ * view exists to support them.
+ *
+ * @return {Object|null} null when there is no usable date of birth, and
+ *                       `eligible:false` when the child is past the age the
+ *                       card covers
  */
 function mc_immunisationView_(patientId, dob) {
   var birth = mc_date_(dob);
@@ -720,41 +907,65 @@ function mc_immunisationView_(patientId, dob) {
   var ageDays = mc_days_(birth, new Date());
   if (ageDays === null || ageDays < 0) return null;
 
+  var ageYears = ageDays / 365.25;
+  if (ageYears >= MC.IMMUN_MAX_AGE_YEARS) {
+    return {
+      eligible: false,
+      dob: mc_iso_(birth), dobText: mc_fmt_(birth),
+      ageDays: ageDays, ageText: mc_ageText_(ageDays),
+      doses: [], nextDue: null, nextDueGroup: [], missed: [],
+      message: 'The immunisation card covers children under ' +
+               MC.IMMUN_MAX_AGE_YEARS + '. This patient is ' +
+               mc_ageText_(ageDays) + ' old.'
+    };
+  }
+
   var pid = mc_up_(patientId);
-  var given = {};
+  var recorded = {};
   try {
     var sh = mc_immunSheet_();
     var m = dc_headerMap_(sh);
     var data = dc_sheetValues_(sh);
     for (var i = 1; i < (data ? data.length : 0); i++) {
       if (mc_up_(data[i][m['Patient_ID']]) !== pid) continue;
-      given[mc_up_(data[i][m['Vaccine_Code']])] = {
+      // Rows written before Status existed are given doses: that is the only
+      // thing the register could hold at the time.
+      var st = mc_up_(m['Status'] === undefined ? '' : data[i][m['Status']]) || 'GIVEN';
+      recorded[mc_up_(data[i][m['Vaccine_Code']])] = {
+        status: (st === 'NOT_GIVEN') ? 'NOT_GIVEN' : 'GIVEN',
         on: mc_date_(data[i][m['Given_On']]),
         label: mc_str_(data[i][m['Dose_Label']]),
-        batch: mc_str_(data[i][m['Batch_No']]),
-        by: mc_str_(data[i][m['Given_By']])
+        by: mc_str_(data[i][m['Given_By']]),
+        note: mc_str_(data[i][m['Notes']])
       };
     }
-  } catch (e) { /* an unreadable register shows the schedule with nothing given */ }
+  } catch (e) { /* an unreadable register still shows the schedule */ }
 
   var doses = MC_SCHEDULE.map(function (v) {
     var due = new Date(birth.getTime() + v.dueDays * 86400000);
-    var g = given[v.code];
+    var r = recorded[v.code];
     var inDays = mc_days_(new Date(), due);
     var state;
-    if (g) state = 'GIVEN';
-    else if (inDays > 0) state = 'UPCOMING';
-    else if (-inDays <= v.window) state = 'DUE';
-    else state = 'OVERDUE';
+
+    if (r && r.status === 'NOT_GIVEN')  state = 'MISSED';
+    else if (r)                         state = 'GIVEN';
+    else if (inDays > 0)                state = 'UPCOMING';
+    else if (-inDays <= v.window)       state = 'DUE';
+    // Past its window with nothing said against it: the child had it.
+    else                                state = 'PRESUMED';
 
     return {
       code: v.code, label: v.label, at: v.at,
       due: mc_iso_(due), dueText: mc_fmt_(due),
       dueInDays: inDays,
       state: state,
-      givenOn: g ? mc_iso_(g.on) : '',
-      givenOnText: g ? mc_fmt_(g.on) : '',
-      givenBy: g ? g.by : ''
+      // Both PRESUMED and GIVEN count as had, so one flag answers "does the
+      // mother need to do anything about this dose".
+      had: (state === 'GIVEN' || state === 'PRESUMED'),
+      givenOn: (r && r.status === 'GIVEN') ? mc_iso_(r.on) : '',
+      givenOnText: (r && r.status === 'GIVEN') ? mc_fmt_(r.on) : '',
+      givenBy: (r && r.status === 'GIVEN') ? r.by : '',
+      missedNote: (r && r.status === 'NOT_GIVEN') ? r.note : ''
     };
   });
 
@@ -762,41 +973,55 @@ function mc_immunisationView_(patientId, dob) {
   // vaccine, a catch-up course. Shown, because a parent looking at this list
   // should see everything their child has had, not only the government ones.
   var extra = [];
-  Object.keys(given).forEach(function (code) {
+  Object.keys(recorded).forEach(function (code) {
     if (mc_scheduleEntry_(code)) return;
+    var r = recorded[code];
+    if (r.status !== 'GIVEN') return;
     extra.push({
-      code: code, label: given[code].label || code, at: '',
-      due: '', dueText: '', dueInDays: null, state: 'GIVEN',
-      givenOn: mc_iso_(given[code].on), givenOnText: mc_fmt_(given[code].on),
-      givenBy: given[code].by, offSchedule: true
+      code: code, label: r.label || code, at: '',
+      due: '', dueText: '', dueInDays: null, state: 'GIVEN', had: true,
+      givenOn: mc_iso_(r.on), givenOnText: mc_fmt_(r.on),
+      givenBy: r.by, offSchedule: true
     });
   });
 
-  // "Due so far" is the honest denominator. Counting a newborn as 3 of 27 is
-  // a progress bar that says a healthy baby is 11% vaccinated.
-  var dueSoFar = doses.filter(function (d) { return d.state !== 'UPCOMING'; });
-  var doneSoFar = dueSoFar.filter(function (d) { return d.state === 'GIVEN'; });
-  var next = doses.filter(function (d) { return d.state !== 'GIVEN'; })
-                  .sort(function (a, b) { return (a.dueInDays || 0) - (b.dueInDays || 0); });
-  var overdue = doses.filter(function (d) { return d.state === 'OVERDUE'; });
+  // THE NEXT APPOINTMENT. Anything still to come or still outstanding, in
+  // date order — a missed dose leads, because catching it up is the thing to
+  // do first.
+  var pending = doses.filter(function (d) {
+    return d.state === 'MISSED' || d.state === 'DUE' || d.state === 'UPCOMING';
+  }).sort(function (a, b) {
+    var rank = { MISSED: 0, DUE: 1, UPCOMING: 2 };
+    return (rank[a.state] - rank[b.state]) || (a.dueInDays - b.dueInDays);
+  });
+
+  var upcoming = doses.filter(function (d) { return d.state === 'UPCOMING' || d.state === 'DUE'; })
+                      .sort(function (a, b) { return a.dueInDays - b.dueInDays; });
+  var missed = doses.filter(function (d) { return d.state === 'MISSED'; });
 
   return {
+    eligible: true,
     dob: mc_iso_(birth),
     dobText: mc_fmt_(birth),
     ageDays: ageDays,
     ageText: mc_ageText_(ageDays),
     doses: doses.concat(extra),
-    // Ordered so the panel can show "next due" without sorting again.
-    nextDue: next.length ? next[0] : null,
-    nextDueGroup: next.filter(function (d) {
-      return next.length && d.due === next[0].due;
-    }),
-    overdue: overdue,
-    completedOfDue: doneSoFar.length,
-    totalDue: dueSoFar.length,
-    percentOfDue: dueSoFar.length
-      ? Math.round((doneSoFar.length / dueSoFar.length) * 100) : 100,
-    totalInSchedule: doses.length
+
+    // What the card exists to say. nextDueGroup is every dose sharing that
+    // date, because vaccines are given in a visit, not one at a time.
+    nextDue: upcoming.length ? upcoming[0] : null,
+    nextDueGroup: upcoming.length
+      ? upcoming.filter(function (d) { return d.due === upcoming[0].due; })
+      : [],
+    pending: pending,
+    missed: missed,
+
+    // Counts, on the same footing as the states above: everything due so far
+    // is had unless a physician said otherwise.
+    dueSoFar: doses.filter(function (d) { return d.state !== 'UPCOMING'; }).length,
+    hadSoFar: doses.filter(function (d) { return d.had; }).length,
+    totalInSchedule: MC_SCHEDULE.length,
+    message: ''
   };
 }
 
@@ -815,6 +1040,99 @@ function mc_ageText_(days) {
 // ---------------------------------------------------------------------------
 // CLINIC-SIDE READ ENDPOINTS
 // ---------------------------------------------------------------------------
+
+/**
+ * FRONTEND ENTRY. WHICH OF THE TWO CARDS THIS PATIENT ACTUALLY HAS.
+ *
+ * Neither card is for everybody, and offering both to everybody was the
+ * problem. A consult screen showed an "Antenatal" button beside a 60-year-old
+ * man and a "Vaccines" button beside his wife, so the buttons meant nothing
+ * and got ignored — which is the same as not having them.
+ *
+ * This says which apply, and MARKS the antenatal one when a pregnancy is
+ * actually open, so the button carries the fact rather than hiding it one
+ * click away.
+ *
+ *   antenatal.show   female, of an age where a pregnancy is possible, OR a
+ *                    record already exists (which settles the question)
+ *   antenatal.open   a pregnancy is open right now — the badge to show
+ *   immunisation.show  under MC.IMMUN_MAX_AGE_YEARS
+ *
+ * Deliberately cheap and deliberately not clinical: it decides what to put on
+ * a screen, not what is true about a patient.
+ *
+ * @return {{success:boolean, antenatal:Object, immunisation:Object}}
+ */
+function mcCardEligibility(patientId, sessionToken) {
+  try {
+    crescRequire_(sessionToken, ['emr.read', 'ward.read']);
+    var pid = mc_up_(patientId);
+    if (!pid) return { success: false, message: 'Name the patient.' };
+
+    var profile = null;
+    try { profile = pt_readProfile_(pid); } catch (e) { profile = null; }
+    if (!profile) return { success: false, message: 'No patient with the ID ' + pid + '.' };
+
+    var sex = mc_up_(profile.gender);
+    var female = (sex.charAt(0) === 'F');
+    var age = mc_num_(profile.age);
+
+    // Age from the date of birth where there is one, because that is the
+    // value the immunisation schedule is counted from and an Age column
+    // typed years ago is a number that has since gone wrong.
+    var birth = mc_date_(profile.dob);
+    var ageYears = null;
+    if (birth) {
+      var days = mc_days_(birth, new Date());
+      if (days !== null && days >= 0) ageYears = days / 365.25;
+    }
+    if (ageYears === null && age !== null) ageYears = age;
+
+    var anc = null;
+    try { anc = mc_openAnc_(pid); } catch (e) { anc = null; }
+
+    // Reproductive age, generously bounded. The bounds only decide whether a
+    // button is drawn; an existing record overrides them either way.
+    var couldBePregnant = female && ageYears !== null && ageYears >= 10 && ageYears <= 55;
+
+    var child = (ageYears !== null && ageYears < MC.IMMUN_MAX_AGE_YEARS);
+
+    var immNext = null;
+    if (child && birth) {
+      try {
+        var view = mc_immunisationView_(pid, profile.dob);
+        if (view && view.eligible && view.nextDue) {
+          immNext = { label: (view.nextDueGroup || []).map(function (d) { return d.label; })
+                               .join(', ') || view.nextDue.label,
+                      dueText: view.nextDue.dueText,
+                      dueInDays: view.nextDue.dueInDays,
+                      missed: view.missed.length };
+        }
+      } catch (e) { immNext = null; }
+    }
+
+    return {
+      success: true,
+      antenatal: {
+        show: !!(couldBePregnant || anc),
+        open: !!anc,
+        weeks: anc ? mc_gestation_(anc.lmp, new Date()) : null,
+        eddText: anc ? mc_fmt_(anc.edd) : ''
+      },
+      immunisation: {
+        show: !!child,
+        ageYears: ageYears === null ? null : Math.floor(ageYears),
+        next: immNext,
+        // Said once, here, so the screen does not have to know the rule.
+        whyNot: child ? '' :
+          'The immunisation card covers children under ' + MC.IMMUN_MAX_AGE_YEARS + '.'
+      }
+    };
+  } catch (err) {
+    return { success: false,
+             message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
+  }
+}
 
 /** FRONTEND ENTRY. One patient's antenatal record, for a clinician. */
 function mcGetAntenatal(patientId, sessionToken) {

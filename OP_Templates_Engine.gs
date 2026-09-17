@@ -782,7 +782,7 @@ function getDiagnosisDrugSuggestions(diagnosis, doctorId, sessionToken) {
     // ---- stock status, so a delisted drug is flagged not hidden ----------
     var stock = {};
     try {
-      (fetchOPDrugMaster() || []).forEach(function (d) {
+      (op_drugMaster_() || []).forEach(function (d) {
         stock[String(d.brand).toLowerCase()] = d.status;
       });
     } catch (e) { /* non-fatal */ }

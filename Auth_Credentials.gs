@@ -524,6 +524,235 @@ function crescAdminResetPassword(username, sessionToken) {
 }
 
 // ---------------------------------------------------------------------------
+// SECTION C2 — CREATING A STAFF ACCOUNT
+// ---------------------------------------------------------------------------
+
+/** The roles a STAFF account may hold. Everything the matrix knows, less
+ *  'patient' — see crescCreateStaffAccount for why. */
+function crescStaffRoles_() {
+  return Object.keys(CRESC_ROLE_MATRIX).filter(function (r) { return r !== 'patient'; });
+}
+
+/**
+ * WHY THIS EXISTS.
+ *
+ * Adding a doctor, a nurse or an administrator meant typing a row into the
+ * Users sheet by hand — and the password column holds a PBKDF2 digest, which
+ * cannot be typed. So a hand-added account either got a plain-text password
+ * (which AuthLogin refuses outright, as LOGIN_LEGACY_CREDENTIAL) or it got
+ * whatever the person pasted, and the only way to make it work was to run
+ * crescMigrateCredentials and reset everybody. There was no supported way to
+ * add a user at all.
+ *
+ * A doctor also needs a row on the Doctors sheet, linked by Linked_Username,
+ * or nothing attributes their consultations to them: the schedule, the
+ * signature line, the referral list and the case-sheet author all read
+ * Doctors, not Users. Creating one without the other is the half-made account
+ * that looks fine until the first prescription prints unsigned.
+ *
+ * So this does both, once, in the right order, with a hashed credential.
+ *
+ * @param {{username:string, role:string, displayName:string, email:string,
+ *          specialty:string, regNo:string, qualification:string,
+ *          consultFee:number, isVisiting:boolean, canViewAll:boolean,
+ *          password:string}} payload
+ *          password is optional; a random one is generated and returned when
+ *          it is left out. Either way the account must change it at first
+ *          sign-in.
+ * @param {string} sessionToken
+ * @return {{success:boolean, username:string, doctorId:string,
+ *           temporaryPassword:string, message:string}}
+ */
+function crescCreateStaffAccount(payload, sessionToken) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    payload = payload || {};
+    var actor = crescRequire_(sessionToken, 'admin.users');
+
+    var username = String(payload.username || '').trim();
+    var role     = String(payload.role || '').trim().toLowerCase();
+    var display  = String(payload.displayName || '').trim();
+
+    if (!username) return { success: false, message: 'Give a username.' };
+    if (!/^[A-Za-z0-9._-]{3,40}$/.test(username)) {
+      return { success: false,
+               message: 'A username may use letters, digits, dot, underscore ' +
+                        'and hyphen, and must be 3 to 40 characters. Spaces ' +
+                        'break the sign-in form.' };
+    }
+    if (!display) return { success: false, message: 'Give the person\'s name.' };
+
+    // The role has to be one the permission matrix knows, or the account
+    // signs in and can do nothing — crescRequire_ refuses every endpoint with
+    // "the role X on your account is not one this system knows", which reads
+    // as a broken system rather than a typo at creation time.
+    var known = (typeof crescRole_ === 'function') ? crescRole_(role) : role;
+    if (!known || !CRESC_ROLE_MATRIX[known]) {
+      return { success: false,
+               message: '"' + (payload.role || '') + '" is not a role this system ' +
+                        'knows. Use one of: ' + crescStaffRoles_().join(', ') + '.' };
+    }
+    // 'patient' is in the matrix but is not a staff account: a patient signs
+    // in with their patient ID against the Patients sheet, and a Users row
+    // claiming that role would be an account with portal permissions and no
+    // record behind it.
+    if (known === 'patient') {
+      return { success: false,
+               message: 'Patients are not created here. Register the patient, ' +
+                        'and the portal login is their patient ID.' };
+    }
+
+    var users = cresc_usersSheet_();
+    var udata = users.getDataRange().getValues();
+    for (var i = 1; i < udata.length; i++) {
+      if (String(udata[i][0] || '').trim().toUpperCase() === username.toUpperCase()) {
+        return { success: false, code: 'EXISTS',
+                 message: username + ' already exists. Reset its password ' +
+                          'instead of creating it again.' };
+      }
+    }
+
+    // A supplied password is held to the same policy a user's own change is;
+    // a generated one is random and long enough not to need checking.
+    var temp = String(payload.password || '').trim();
+    if (temp) {
+      var pol = crescPwdPolicy_(temp, username, display);
+      if (!pol.ok) return { success: false, message: pol.message };
+    } else {
+      temp = crescRandomPassword_(12);
+    }
+
+    // ---- the Users row ---------------------------------------------------
+    var m = dc_headerMap_(users);
+    var row = new Array(users.getLastColumn()).fill('');
+    var put = function (h, v) { if (m[h] !== undefined) row[m[h]] = v; };
+    row[0] = username;
+    row[1] = '';                       // written by cresc_writeCredential_ below
+    row[2] = known;
+    row[3] = 'ACTIVE';
+    put('Email Address', String(payload.email || '').trim());
+    put('Must_Change', 'YES');
+    users.appendRow(row);
+    var rowNo = users.getLastRow();
+
+    // Written through the same helper the reset path uses, so a created
+    // account and a reset account are stored identically — including the
+    // plain-text number format, without which Sheets reformats a digest that
+    // happens to look numeric and the stored value stops matching.
+    cresc_writeCredential_(users, rowNo, temp, true, 'Must_Change', 'Password_Updated_At');
+    SpreadsheetApp.flush();
+
+    // ---- the Doctors row, for a role that consults -----------------------
+    var doctorId = '';
+    var clinical = (known === 'doctor');
+    if (clinical) {
+      try {
+        doctorId = cresc_createDoctorRow_(username, display, payload, known);
+      } catch (e) {
+        // The login exists and works; only the clinical profile failed. Say
+        // so precisely rather than reporting the whole thing as a failure and
+        // inviting a second attempt that hits EXISTS.
+        return { success: true, username: username, doctorId: '',
+                 temporaryPassword: temp,
+                 message: 'The login for ' + username + ' was created, but the ' +
+                          'entry on the Doctors sheet was not (' + e.message +
+                          '). Add it before they consult, or their ' +
+                          'prescriptions print unattributed. Temporary ' +
+                          'password: ' + temp };
+      }
+    }
+
+    try {
+      logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                'STAFF_ACCOUNT_CREATED', 'User', username.toUpperCase(),
+                { role: known, doctorId: doctorId, visiting: !!payload.isVisiting });
+    } catch (e) {}
+
+    return {
+      success: true,
+      username: username,
+      doctorId: doctorId,
+      temporaryPassword: temp,
+      message: display + ' can sign in as "' + username + '" with the ' +
+               'temporary password ' + temp + '. It is shown once, and they ' +
+               'must change it at first sign-in.' +
+               (doctorId ? ' Doctor profile ' + doctorId + ' created.' : '')
+    };
+  } catch (err) {
+    return { success: false,
+             message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/**
+ * The Doctors row that makes a login into a clinician.
+ *
+ * Linked_Username is the join every other module uses to get from a session
+ * to a doctor, so it is the one field that must not be left blank.
+ *
+ * @return {string} the new Doctor_ID
+ */
+function cresc_createDoctorRow_(username, display, payload, role) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Doctors');
+  if (!sh) {
+    if (typeof setupDoctorsSheet === 'function') {
+      setupDoctorsSheet();
+      sh = ss.getSheetByName('Doctors');
+    }
+    if (!sh) throw new Error('there is no Doctors sheet');
+  }
+  if (typeof dc_ensureColumn_ === 'function') dc_ensureColumn_(sh, 'Is_Visiting');
+
+  var m = dc_headerMap_(sh);
+  var data = sh.getDataRange().getValues();
+
+  // Next free DOCnnn, so this never collides with the ids already in use.
+  var maxN = 0;
+  for (var i = 1; i < data.length; i++) {
+    var mm = /^DOC(\d+)$/i.exec(String(data[i][0] || '').trim());
+    if (mm) maxN = Math.max(maxN, parseInt(mm[1], 10));
+  }
+  var newId = 'DOC' + ('000' + (maxN + 1)).slice(-3);
+
+  var regNo = String(payload.regNo || '').trim();
+  var qual  = String(payload.qualification || '').trim();
+  var spec  = String(payload.specialty || '').trim();
+
+  // The signature line is what prints under a prescription. Built from what
+  // was given rather than left empty, because an empty one prints a blank
+  // where the registration number belongs.
+  var sigParts = [display];
+  if (qual) sigParts.push(qual);
+  if (spec) sigParts.push(spec);
+  if (regNo) sigParts.push('Reg. No. ' + regNo);
+  var signature = sigParts.join(', ');
+
+  var row = new Array(sh.getLastColumn()).fill('');
+  var put = function (h, v) { if (m[h] !== undefined) row[m[h]] = v; };
+  row[0] = newId;
+  put('Doctor_ID', newId);
+  put('Tenant_ID', (typeof getTenantId_ === 'function') ? getTenantId_() : '');
+  put('Display_Name', display);
+  put('Specialty', spec);
+  put('Reg_No', regNo);
+  put('Signature_Line', signature);
+  put('Linked_Username', username);
+  put('Status', 'ACTIVE');
+  put('Can_View_All', payload.canViewAll ? 'TRUE' : 'FALSE');
+  put('Default_Consult_Fee', Number(payload.consultFee) || 0);
+  put('Is_Visiting', payload.isVisiting ? 'TRUE' : 'FALSE');
+
+  sh.appendRow(row);
+  if (typeof dc_invalidate_ === 'function') dc_invalidate_('Doctors');
+  SpreadsheetApp.flush();
+  return newId;
+}
+
+// ---------------------------------------------------------------------------
 // SECTION D — THE MIGRATION
 // ---------------------------------------------------------------------------
 

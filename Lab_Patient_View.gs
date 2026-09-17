@@ -97,7 +97,7 @@ function lpv_resultsFor_(pid, limit) {
       if (!oid || byOrder[oid]) return;
       byOrder[oid] = {
         orderId: oid,
-        date: String(r[oMap['CreatedAt']] || ''),
+        date: cresc_formatDate_(r[oMap['CreatedAt']], 'dd-MMM-yyyy'),
         testNames: String(r[oMap['TestNames']] || ''),
         doctor: String(r[oMap['OrderingDoctorName']] || ''),
         source: String(r[oMap['SourceModule']] || ''),

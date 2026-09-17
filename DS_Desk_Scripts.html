@@ -144,6 +144,29 @@ var DS_VITAL_FIELDS = ['bpMmHg', 'pulsePerMin', 'spo2Percent', 'temperature',
 var DS_DATE_FIELDS = ['date', 'followUpDate', 'nextReviewDate', 'reviewDate',
                       'dateOfDeath', 'transferDate'];
 
+/* Fields that hold a YES/NO and must be a checkbox, not a text box.
+
+   "Follow-up not required" was a free-text input, while the validator that
+   reads it says 'tick "follow-up not required"' and only accepts the literal
+   strings TRUE or YES. So the one way to satisfy the rule was to type the
+   word TRUE into a box labelled "Not required", and anything a clinician
+   would naturally write there — "not required", "nil", "no" — left the
+   summary failing validation with no indication why.
+
+   The stored value stays the string 'TRUE' or '', so the validator, the
+   print layout and the snapshot diff are all untouched. */
+var DS_BOOL_FIELDS = ['notRequired'];
+
+function dsFieldIsBool(sectionKey, field) {
+  return DS_BOOL_FIELDS.indexOf(field) > -1;
+}
+
+/** The stored string read as a tick. */
+function dsBoolOn(v) {
+  var t = String(v === null || v === undefined ? '' : v).trim().toUpperCase();
+  return t === 'TRUE' || t === 'YES' || t === 'Y' || t === '1';
+}
+
 function dsFieldIsDate(sectionKey, field) {
   if (DS_DATE_FIELDS.indexOf(field) === -1) return false;
   // 'date' is generic enough to appear on a section where it is NOT a
@@ -1143,6 +1166,29 @@ function dsRenderFields(key, sec, readOnly) {
         return '<div class="ds-vital' + wide + '">' + label +
                '<div>' + dsEscML(c[f]) + '</div></div>';
       }
+
+      // BLOOD PRESSURE IS TWO NUMBERS, so it is two boxes.
+      //
+      // It is stored as the one string "120/80", because that is what the
+      // printed document shows and what dsx_vitalFields_ assembles from the
+      // ward's Sys_BP and Dia_BP columns. Only the EDITOR is split: typing
+      // over a diastolic used to mean retyping the systolic and the slash
+      // with it, and a BP typed as "120 80" or "120-80" reached the document
+      // exactly as typed.
+      if (f === 'bpMmHg') {
+        var half = dsSplitBp(c[f]);
+        return '<div class="ds-vital ds-vital-wide">' + label +
+          '<div class="d-flex align-items-center gap-1">' +
+            '<input type="text" inputmode="numeric" placeholder="Sys" ' +
+              'style="min-width:0" data-ds-bp="' + dsEsc(key) + '|sys" ' +
+              'value="' + dsEsc(half.sys) + '">' +
+            '<span class="ds-muted">/</span>' +
+            '<input type="text" inputmode="numeric" placeholder="Dia" ' +
+              'style="min-width:0" data-ds-bp="' + dsEsc(key) + '|dia" ' +
+              'value="' + dsEsc(half.dia) + '">' +
+          '</div></div>';
+      }
+
       return '<div class="ds-vital' + wide + '">' + label +
              '<input type="text" data-ds-field="' + dsEsc(key) + '|' + dsEsc(f) +
              '" value="' + dsEsc(c[f]) + '"></div>';
@@ -1181,6 +1227,26 @@ function dsRenderFields(key, sec, readOnly) {
              ' value="' + dsEsc(iso) + '">' + strayNote + '</div>';
     }
 
+    // A yes/no is a checkbox. See DS_BOOL_FIELDS.
+    if (dsFieldIsBool(key, f)) {
+      var on = dsBoolOn(val);
+      if (readOnly) {
+        return '<div class="' + col + '"><div class="ds-muted">' + dsEsc(label) + '</div>' +
+               '<div>' + (on ? 'Yes' : 'No') + '</div></div>';
+      }
+      return '<div class="' + col + '">' +
+             '<label class="ds-muted d-block mb-1">&nbsp;</label>' +
+             '<div class="form-check">' +
+               '<input class="form-check-input" type="checkbox" ' +
+               'id="dsbool-' + dsEsc(key) + '-' + dsEsc(f) + '" ' +
+               'data-ds-bool="' + dsEsc(key) + '|' + dsEsc(f) + '"' +
+               (on ? ' checked' : '') + '>' +
+               '<label class="form-check-label" style="font-size:.86rem" ' +
+               'for="dsbool-' + dsEsc(key) + '-' + dsEsc(f) + '">' +
+               dsEsc(label) + '</label>' +
+             '</div></div>';
+    }
+
     // Advice fields draw on the clinic's advice phrase library, the same one
     // the OP and IP consults prescribe advice from.
     var pickAttr = phraseSource ? ' data-ds-pick="' + dsEsc(phraseSource) + '"' : '';
@@ -1191,6 +1257,17 @@ function dsRenderFields(key, sec, readOnly) {
   }).join('') + '</div>') : '';
 
   return strip + body;
+}
+
+/** "120/80", "120 80", "120-80" -> {sys:'120', dia:'80'} */
+function dsSplitBp(v) {
+  var s = String(v === null || v === undefined ? '' : v).trim();
+  if (!s) return { sys: '', dia: '' };
+  var m = s.match(/^\s*([0-9]{2,3})\s*[\/\-\s]\s*([0-9]{2,3})\s*$/);
+  if (m) return { sys: m[1], dia: m[2] };
+  // Anything else (a single number, "unrecordable") goes in the systolic box
+  // rather than being thrown away, so the clinician can see and correct it.
+  return { sys: s, dia: '' };
 }
 
 /** "Cold \u2014 2 days" -> {condition:'Cold', duration:'2 days'} */
@@ -1360,6 +1437,33 @@ function dsWireSectionInputs(wrap) {
     // `input` on every browser — some only fire `change` when the picker
     // closes. Both are bound; write() is idempotent.
     if (el.type === 'date') el.addEventListener('change', write);
+  });
+
+  // The two BP boxes write back the one "120/80" string the document stores.
+  // Either box alone writes just that number, so a half-entered BP is visibly
+  // half-entered rather than silently becoming "120/".
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-bp]'), function (el) {
+    el.addEventListener('input', function () {
+      var secKey = el.getAttribute('data-ds-bp').split('|')[0];
+      var box = el.closest('.ds-vital');
+      var sys = box.querySelector('[data-ds-bp$="|sys"]');
+      var dia = box.querySelector('[data-ds-bp$="|dia"]');
+      var a = sys ? sys.value.trim() : '';
+      var b = dia ? dia.value.trim() : '';
+      DSState.payload.sections[secKey].content.bpMmHg =
+        (a && b) ? (a + '/' + b) : (a || b);
+      mark(secKey);
+    });
+  });
+
+  // A checkbox writes 'TRUE' or '', which is exactly what the validator and
+  // the print layout already read.
+  Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-bool]'), function (el) {
+    el.addEventListener('change', function () {
+      var parts = el.getAttribute('data-ds-bool').split('|');
+      DSState.payload.sections[parts[0]].content[parts[1]] = el.checked ? 'TRUE' : '';
+      mark(parts[0]);
+    });
   });
 
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-listitem]'), function (el) {

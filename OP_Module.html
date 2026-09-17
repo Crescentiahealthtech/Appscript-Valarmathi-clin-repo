@@ -520,17 +520,24 @@
                         visit was going in as a free-text progress note and a
                         vaccination was going on the parent's paper card, so
                         neither could be trended, reminded from, or shown to
-                        the patient. See Maternal_Child.gs. -->
-                   <div class="d-flex gap-2 mt-3">
-                     <button class="btn btn-sm btn-outline-info flex-fill" type="button"
-                             onclick="opOpenCard('anc')"
+                        the patient. See Maternal_Child.gs.
+
+                        NEITHER IS FOR EVERY PATIENT, so neither is drawn for
+                        every patient. opRefreshCards() asks the server which
+                        apply when a patient is loaded and hides the other.
+                        The antenatal button also carries the gestation when a
+                        pregnancy is open, so the fact is on the screen rather
+                        than one click behind it. -->
+                   <div class="d-flex gap-2 mt-3 d-none" id="op-mc-cards">
+                     <button class="btn btn-sm btn-outline-info flex-fill d-none" type="button"
+                             id="op-card-anc" onclick="opOpenCard('anc')"
                              title="Antenatal card — LMP, EDD, this visit, next visit">
-                       <i class="fa-solid fa-baby-carriage me-1"></i>Antenatal
+                       <i class="fa-solid fa-baby-carriage me-1"></i><span id="op-card-anc-text">Antenatal</span>
                      </button>
-                     <button class="btn btn-sm btn-outline-success flex-fill" type="button"
-                             onclick="opOpenCard('imm')"
+                     <button class="btn btn-sm btn-outline-success flex-fill d-none" type="button"
+                             id="op-card-imm" onclick="opOpenCard('imm')"
                              title="Immunisation card — the national schedule and what is given">
-                       <i class="fa-solid fa-syringe me-1"></i>Vaccines
+                       <i class="fa-solid fa-syringe me-1"></i><span id="op-card-imm-text">Vaccines</span>
                      </button>
                    </div>
                </div>
@@ -1541,6 +1548,7 @@ function doSearchEMRPatient(pId, isSwitch) {
 
         loadAllergies(pId);
         loadLastVisit(pId);
+        opRefreshCards(pId);
         runSafetyCheck();
     }).withFailureHandler(function (err) {
         document.getElementById('hd-pat-name').innerText = "Search Failed";
@@ -2366,6 +2374,82 @@ function applyAssistAdvice() {
  * bundle, because the ward and the patient screens want the same two cards
  * and they are separate bundles.
  */
+/**
+ * Shows the antenatal and immunisation buttons only where they mean
+ * something, and marks the antenatal one when a pregnancy is open.
+ *
+ * A failure hides both rather than guessing: a button that opens a card the
+ * patient cannot have is worse than no button, and this is decoration on a
+ * consult screen, not something worth an error message over.
+ */
+function opRefreshCards(pId) {
+  var host = document.getElementById('op-mc-cards');
+  var anc  = document.getElementById('op-card-anc');
+  var imm  = document.getElementById('op-card-imm');
+  if (!host || !anc || !imm) return;
+
+  var hideAll = function () {
+    host.classList.add('d-none');
+    anc.classList.add('d-none');
+    imm.classList.add('d-none');
+  };
+  hideAll();
+  if (!pId) return;
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) return;
+
+      if (res.antenatal && res.antenatal.show) {
+        anc.classList.remove('d-none');
+        var txt = document.getElementById('op-card-anc-text');
+        if (res.antenatal.open) {
+          // An open pregnancy is a fact the consult should not have to be
+          // asked for. It goes on the button.
+          anc.className = 'btn btn-sm btn-info flex-fill fw-bold';
+          if (txt) {
+            txt.textContent = res.antenatal.weeks
+              ? ('Antenatal · ' + res.antenatal.weeks.text)
+              : 'Antenatal · open';
+          }
+          anc.title = 'Pregnancy open' +
+            (res.antenatal.eddText ? ' · EDD ' + res.antenatal.eddText : '');
+        } else {
+          anc.className = 'btn btn-sm btn-outline-info flex-fill';
+          if (txt) txt.textContent = 'Antenatal';
+          anc.title = 'Antenatal card — LMP, EDD, this visit, next visit';
+        }
+      }
+
+      if (res.immunisation && res.immunisation.show) {
+        imm.classList.remove('d-none');
+        var itxt = document.getElementById('op-card-imm-text');
+        var nx = res.immunisation.next;
+        if (nx && nx.missed) {
+          imm.className = 'btn btn-sm btn-danger flex-fill fw-bold';
+          if (itxt) itxt.textContent = 'Vaccines · ' + nx.missed + ' to catch up';
+          imm.title = 'Doses recorded as not given';
+        } else if (nx && nx.dueInDays <= 0) {
+          imm.className = 'btn btn-sm btn-warning flex-fill fw-bold';
+          if (itxt) itxt.textContent = 'Vaccines · due now';
+          imm.title = nx.label + ' due ' + nx.dueText;
+        } else {
+          imm.className = 'btn btn-sm btn-outline-success flex-fill';
+          if (itxt) itxt.textContent = 'Vaccines';
+          imm.title = nx ? (nx.label + ' due ' + nx.dueText)
+                         : 'Immunisation card — the national schedule';
+        }
+      }
+
+      if (!anc.classList.contains('d-none') || !imm.classList.contains('d-none')) {
+        host.classList.remove('d-none');
+      }
+    })
+    .withFailureHandler(hideAll)
+    .mcCardEligibility(pId, window.sessionToken);
+}
+window.opRefreshCards = opRefreshCards;
+
 function opOpenCard(mode) {
   var pid = opCurrentPatientId();
   if (!pid) { opToast('Open a patient first.', 'warn'); return; }

@@ -133,9 +133,26 @@ function dpdp_keyDigest_(key) {
     Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(key)));
 }
 
-/** The published web app URL, or '' when the script has never been deployed. */
+/**
+ * The base a document-delivery link is built on.
+ *
+ * The clinic's own host first, when CRESC_PUBLIC_BASE_URL is set, so the link
+ * a patient receives on WhatsApp names the clinic rather than a script id.
+ * This route is the FALLBACK — the normal one is a Drive link, above — and it
+ * is reached only when Drive refuses to publish the file. A private link sent
+ * to one patient is not the same exposure as a URL printed on a document that
+ * travels, but it is still the deployment address, so the clinic's host wins
+ * wherever it exists.
+ *
+ * @return {string} '' when neither is available
+ */
 function dpdp_webAppUrl_() {
-  try { return ScriptApp.getService().getUrl() || ''; } catch (e) { return ''; }
+  var u = '';
+  try { u = ScriptApp.getService().getUrl() || ''; } catch (e) { u = ''; }
+  try {
+    if (typeof cresc_publicLinkBase_ === 'function') return cresc_publicLinkBase_(u) || u;
+  } catch (e) { /* fall through to the deployment URL */ }
+  return u;
 }
 
 /**

@@ -247,23 +247,24 @@
   }
 
   // ------------------------------------------------------------------
-  // CONSENT
+  // THE CLINIC POLICY — AND NOTHING ELSE
   //
-  // Chrome's speech recognition sends the audio to Google to transcribe.
-  // Clinical dictation is personal data under the DPDP Act, so this is
-  // said BEFORE the first use, in the words of what actually happens, and
-  // the answer is remembered per browser. A clinic that does not want it
-  // simply never says yes.
+  // Dictation is allowed by default. It used to be gated twice: once by the
+  // clinic policy, and again by a per-browser confirm() the clinician had to
+  // answer before the first use. The second gate is gone.
+  //
+  // It asked the wrong person the wrong question. A clinician pressing the
+  // microphone in the middle of a consultation is not in a position to decide
+  // whether recorded clinical speech may go to a browser vendor, and being
+  // asked "once" meant being asked again on every new machine, every cleared
+  // profile and every private window — so the answer it collected was a
+  // reflex, not a decision. It was also a native confirm(), which the browser
+  // renders with the deployment's origin above it.
+  //
+  // The clinic's decision remains, and FORBIDDEN still switches dictation off
+  // everywhere. See dpdpVoicePolicy().
   // ------------------------------------------------------------------
-  /**
-   * The clinic's decision, fetched once and remembered for the page.
-   *
-   * The per-browser dialog below asks the PERSON. This asks the CLINIC, and
-   * it is deliberately the outer of the two: one clinician clicking Enable on
-   * one laptop is not the clinic deciding that recorded clinical speech may
-   * be sent to a third party. A clinic that has said FORBIDDEN never gets the
-   * dialog at all. See dpdpVoicePolicy() and finding M3.
-   */
+  /** The clinic's decision, fetched once and remembered for the page. */
   var policy = null;          // null = not asked yet
   function withPolicy(then) {
     if (policy) { then(policy); return; }
@@ -291,27 +292,8 @@
         }
         return;
       }
-      askThisBrowser(then);
-    });
-  }
-
-  function askThisBrowser(then) {
-    if (store(CONSENT_KEY) === 'yes') { then(); return; }
-    var message =
-      'Voice typing uses your browser’s speech recognition. In Chrome and Edge ' +
-      'that means the audio is sent to the browser vendor’s speech service to be ' +
-      'turned into text — the same way dictation works on any website.\n\n' +
-      'You will be dictating patient information. Do not use it where someone ' +
-      'nearby should not hear the note, and do not use it if your clinic’s ' +
-      'policy does not allow audio to leave the building.\n\n' +
-      'Enable voice typing in this browser?';
-    if (typeof window.crescConfirm === 'function') {
-      window.crescConfirm(message, { title: 'Voice typing', okLabel: 'Enable' })
-        .then(function (ok) { if (ok) { store(CONSENT_KEY, 'yes'); then(); } });
-    } else if (window.confirm(message)) {
-      store(CONSENT_KEY, 'yes');
       then();
-    }
+    });
   }
 
   function stop() {
@@ -458,6 +440,8 @@
     setLanguage: function (lang) { store(LANG_KEY, String(lang || 'en-IN')); },
     language: function () { return store(LANG_KEY) || 'en-IN'; },
     /** Clears the stored consent, so the notice is shown again. */
+    // Kept so anything that learned the name still works, and so a browser
+    // carrying the old per-person flag can be cleared of it.
     forgetConsent: function () { try { localStorage.removeItem(CONSENT_KEY); } catch (e) {} }
   };
 })();

@@ -660,6 +660,15 @@ function dc_normaliseTeamRole_(raw) {
 /** The role list for a picker, as { value, label } pairs. */
 function getIPTeamRoles(sessionToken) {
   crescRequire_(sessionToken, 'ward.read');
+  return dc_teamRoles_();
+}
+
+/**
+ * THE SAME FIXED LIST, WITHOUT THE PERMISSION CHECK. It is a constant, not a
+ * record, but the guarded entry still threw when a server-side assembler
+ * called it with no token — which left the care-team role dropdown empty.
+ */
+function dc_teamRoles_() {
   return DC_TEAM_ROLES.filter(function (r) { return r !== "PRIMARY"; })
     .map(function (r) {
       return { value: r, label: r.toLowerCase().replace(/_/g, " ")

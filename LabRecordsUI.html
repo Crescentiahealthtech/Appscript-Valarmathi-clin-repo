@@ -36,6 +36,56 @@
 .lx-rtable th { color:var(--text-muted);font-weight:500;font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;padding:7px 8px;background:var(--bg-input); }
 .lx-rtable th:first-child{border-radius:8px 0 0 8px;} .lx-rtable th:last-child{border-radius:0 8px 8px 0;}
 .lx-rtable td { padding:7px 8px;border-bottom:1px solid var(--border-color);font-size:.83rem;vertical-align:middle;color:var(--text-main); }
+/* -------------------------------------------------------------------------
+   A RESULT ROW A CLINICIAN CAN READ AT A GLANCE.
+
+   The listing was a flat grid of five cells — parameter, value, unit,
+   reference, and a bare letter H or L in the last column. Everything a
+   reading actually means had to be worked out by the reader: is 6.4 high
+   for this analyte, how high, and is it higher than last time. On a phone
+   the reference column truncated, so even the comparison was gone.
+
+   Three things are added, and nothing is taken away:
+     · the flag as a worded badge with a direction, not a letter
+     · a bar showing where the value sits inside its reference range
+     · the previous value for the same analyte, with the direction of travel
+   ------------------------------------------------------------------------- */
+.lx-flag { display:inline-flex; align-items:center; gap:4px; font-size:.68rem;
+           font-weight:700; padding:2px 7px; border-radius:999px;
+           text-transform:uppercase; letter-spacing:.3px; white-space:nowrap; }
+.lx-flag-N { background:var(--success-bg); color:var(--success-fg); }
+.lx-flag-H { background:var(--warning-bg); color:var(--warning-fg); }
+.lx-flag-L { background:var(--blue-bg);    color:var(--blue-fg); }
+.lx-flag-C { background:var(--danger-bg);  color:var(--danger-fg); }
+
+/* The range bar. Grey rail, green band for the reference interval, and a
+   marker where this value fell. Absent when the range is not two numbers,
+   which is most qualitative results. */
+.lx-range { position:relative; height:6px; border-radius:3px;
+            background:var(--bg-input); margin-top:5px; min-width:80px; }
+.lx-range-band { position:absolute; top:0; bottom:0; border-radius:3px;
+                 background:var(--success-bg); }
+.lx-range-dot { position:absolute; top:-3px; width:12px; height:12px;
+                border-radius:50%; border:2px solid var(--bg-card);
+                transform:translateX(-50%); }
+.lx-trend { font-size:.7rem; color:var(--text-muted); white-space:nowrap; }
+.lx-trend i { font-size:.62rem; }
+
+/* The condition chips. */
+.lx-chip { cursor:pointer; user-select:none; font-size:.72rem; font-weight:600;
+           padding:4px 11px; border-radius:999px; white-space:nowrap;
+           border:1px solid var(--border-color); color:var(--text-muted);
+           background:transparent; transition:.15s; }
+.lx-chip:hover { border-color:var(--accent-purple); color:var(--text-main); }
+.lx-chip.on { background:var(--accent-purple); border-color:var(--accent-purple);
+              color:var(--text-on-accent); }
+
+@media (max-width: 767.98px) {
+  /* The reference column is the first thing to go on a phone; the bar and
+     the badge carry the same information in less room. */
+  .lx-rtable th:nth-child(4), .lx-rtable td:nth-child(4) { display:none; }
+}
+
 .lx-f-C { color:var(--danger-fg);font-weight:800; } 
 .lx-f-H { color:var(--warning-fg);font-weight:600; }
 .lx-f-L { color:var(--blue-fg);font-weight:600; } 
@@ -95,16 +145,23 @@ var LabRecordsApp = (function () {
         '</div>' : '';
       
       // Chronological Lab Reports List
-      $('lr-results').innerHTML = head + res.records.map(function(rec, i){
+      $('lr-results').innerHTML = head + lxChipBar() + res.records.map(function(rec, i){
         
         var rows = rec.results.map(function(r){
-          var isNormal = (r.flag === 'N' || r.flag === '');
+          var flag = String(r.flag || 'N').toUpperCase();
+          if (flag === '') flag = 'N';
+          var isNormal = (flag === 'N');
           var rowClass = isNormal ? 'lab-row-normal' : 'lab-row-abnormal';
-          return '<tr class="'+rowClass+'"><td class="text-white-force">'+esc(r.parameterName)+'</td>'+
-            '<td class="lx-f-'+esc(r.flag||'N')+'">'+esc(r.value)+'</td>'+
+          var panels = lxPanelsFor(r.parameterName).join(' ');
+
+          return '<tr class="'+rowClass+'" data-lx-panels="'+esc(panels)+'">'+
+            '<td class="text-white-force">'+esc(r.parameterName)+'</td>'+
+            '<td class="lx-f-'+esc(flag)+'" style="font-weight:700;">'+esc(r.value)+
+              lxRangeBar(r.value, r.refRangeText, flag)+'</td>'+
             '<td class="label-bright">'+esc(r.unit)+'</td>'+
             '<td class="label-bright" style="font-size:.74rem;">'+esc(r.refRangeText||'—')+'</td>'+
-            '<td class="text-center lx-f-'+esc(r.flag)+'">'+esc(r.flag)+'</td></tr>';
+            '<td class="text-center">'+lxFlagBadge(flag)+
+              lxTrend(r.parameterName, r.value, i, res.records)+'</td></tr>';
         }).join('');
 
         rows += '<tr class="lab-all-normal-msg" style="display:none;"><td colspan="5" class="text-center py-4" style="background:var(--success-bg);"><i class="fa-solid fa-check-circle fa-2x mb-2" style="color:var(--success-fg);"></i><br><span class="text-white-force fw-semibold">Great News!</span><br><span class="label-bright small">All parameters in this report are within normal biological limits.</span></td></tr>';
@@ -180,24 +237,212 @@ var LabRecordsApp = (function () {
     }).searchLabRecords(q, window.sessionToken);
   }
 
-  // --- FRONTEND LOGIC ---
-  function toggleAbnormals() {
-    var isChecked = $('abnormal-toggle').checked;
-    var tables = document.querySelectorAll('.lx-rtable');
-    
-    tables.forEach(table => {
-      var normals = table.querySelectorAll('.lab-row-normal');
-      var abnormals = table.querySelectorAll('.lab-row-abnormal');
-      var msgRow = table.querySelector('.lab-all-normal-msg');
+  /* ═════════════════════════════════════════════════════════════════════
+     READING A RESULT
 
-      if (isChecked) {
-        normals.forEach(r => r.style.display = 'none');
-        if (abnormals.length === 0 && msgRow) msgRow.style.display = '';
-      } else {
-        normals.forEach(r => r.style.display = '');
-        if (msgRow) msgRow.style.display = 'none';
+     Four small helpers. None of them decides anything clinical: the flag is
+     the laboratory's, set at verification against that analyte's own
+     reference interval, and nothing here recomputes it. They present what is
+     already on the row.
+     ═════════════════════════════════════════════════════════════════════ */
+
+  /* CONDITION PANELS.
+
+     A patient with three years of results has a page of parameters, and a
+     doctor opening it is nearly always following ONE thread — the diabetic
+     control, the thyroid, the anaemia, the antenatal bloods. Matching is on
+     the analyte NAME, because LAB_TEST_CATALOG has no code to key on: the
+     same analyte is "HbA1c" in one clinic's catalogue and "Glycated
+     Haemoglobin" in the next, and this deployment's has been edited by hand.
+     The same reason PP.ANALYTES in Patient_Portal.gs matches on names.
+
+     A parameter can belong to several panels — creatinine to renal and to
+     diabetes — and a parameter in none is hidden only while a chip is on. */
+  var LX_PANELS = [
+    { key: 'DM',     label: 'Diabetes',
+      match: /hba1c|glycated|glycosylated|\ba1c\b|fasting (blood )?(sugar|glucose)|\bfbs\b|post.?prandial|\bppbs\b|random (blood )?(sugar|glucose)|\brbs\b|insulin|c.?peptide|urine sugar|microalbumin/i },
+    { key: 'HTN',    label: 'Hypertension',
+      match: /creatinin|urea|\begfr\b|sodium|potassium|chloride|uric acid|lipid|cholesterol|triglycerid|\bhdl\b|\bldl\b|\bvldl\b|urine protein|microalbumin/i },
+    { key: 'THY',    label: 'Thyroid',
+      match: /\btsh\b|\bt3\b|\bt4\b|free t[34]|\bft[34]\b|thyroid|anti.?tpo/i },
+    { key: 'ANAEMIA',label: 'Anaemia',
+      match: /haemoglob|hemoglob|\bhb\b|\bmcv\b|\bmch\b|\bmchc\b|\brdw\b|ferritin|iron|tibc|\bb12\b|folate|reticulo|\bpcv\b|haematocrit|hematocrit/i },
+    { key: 'RENAL',  label: 'Renal',
+      match: /creatinin|urea|\bbun\b|\begfr\b|uric acid|sodium|potassium|urine (protein|albumin)|microalbumin/i },
+    { key: 'LIVER',  label: 'Liver',
+      match: /\bsgot\b|\bsgpt\b|\bast\b|\balt\b|bilirubin|alkaline phos|\balp\b|\bggt\b|albumin|globulin|protein total|prothrombin|\binr\b/i },
+    { key: 'ANC',    label: 'Antenatal',
+      match: /haemoglob|hemoglob|blood group|\brh\b|\bvdrl\b|\bhiv\b|hbsag|\bhcv\b|urine (routine|albumin|sugar)|\bogtt\b|glucose tolerance|\btsh\b|rubella|\btorch\b/i },
+    { key: 'INFECT', label: 'Infection',
+      match: /\bcrp\b|\besr\b|procalcitonin|widal|dengue|malaria|typhoid|culture|\btlc\b|total (leucocyte|leukocyte)|neutrophil|lymphocyte|platelet/i }
+  ];
+
+  /** The panel keys one analyte belongs to. */
+  function lxPanelsFor(name) {
+    var n = String(name || '');
+
+    // "Glycated Haemoglobin" contains the word haemoglobin, so the anaemia
+    // and antenatal patterns both claimed it — and an HbA1c sitting in the
+    // anaemia panel is the kind of wrong that makes a filter untrustworthy.
+    // It is a diabetic marker and nothing else. Stated rather than solved
+    // with a lookbehind, which Safari did not support until 16.4.
+    if (/glycated|glycosylated/i.test(n)) return ['DM'];
+
+    var out = [];
+    LX_PANELS.forEach(function (p) { if (p.match.test(n)) out.push(p.key); });
+    return out;
+  }
+
+  /** The flag, as a word with a direction rather than a bare letter. */
+  function lxFlagBadge(flag) {
+    var f = String(flag || 'N').toUpperCase();
+    var spec = {
+      N: ['lx-flag-N', '', 'Normal'],
+      H: ['lx-flag-H', 'fa-arrow-up', 'High'],
+      L: ['lx-flag-L', 'fa-arrow-down', 'Low'],
+      C: ['lx-flag-C', 'fa-triangle-exclamation', 'Critical']
+    }[f] || ['lx-flag-N', '', f];
+    return '<span class="lx-flag ' + spec[0] + '">' +
+      (spec[1] ? '<i class="fa-solid ' + spec[1] + '"></i>' : '') +
+      esc(spec[2]) + '</span>';
+  }
+
+  /** The two numbers in a reference range, or null. */
+  function lxParseRange(text) {
+    var t = String(text || '').replace(/,/g, '');
+    var m = t.match(/(-?\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(-?\d+(?:\.\d+)?)/i);
+    if (m) {
+      var lo = parseFloat(m[1]), hi = parseFloat(m[2]);
+      if (isFinite(lo) && isFinite(hi) && hi > lo) return { lo: lo, hi: hi };
+    }
+    return null;
+  }
+
+  /**
+   * Where this value sits inside its reference interval.
+   *
+   * Nothing is drawn unless BOTH the value and the range are numeric — a
+   * qualitative result ("Reactive", "Nil") has no position, and inventing a
+   * bar for one would be a picture of a number that does not exist.
+   *
+   * The scale is padded by half the interval on each side, so a value
+   * outside the range still lands on the rail rather than at the very edge,
+   * and "just above" looks different from "twice the ceiling".
+   */
+  function lxRangeBar(value, refText, flag) {
+    var v = parseFloat(String(value || '').replace(/[^0-9.\-]/g, ''));
+    var r = lxParseRange(refText);
+    if (!isFinite(v) || !r) return '';
+
+    var span = r.hi - r.lo;
+    var min = r.lo - span * 0.5, max = r.hi + span * 0.5;
+    var pct = function (x) {
+      return Math.max(0, Math.min(100, ((x - min) / (max - min)) * 100));
+    };
+    var colour = flag === 'C' ? 'var(--danger-fg)'
+               : flag === 'H' ? 'var(--warning-fg)'
+               : flag === 'L' ? 'var(--blue-fg)'
+               : 'var(--success-fg)';
+    return '<div class="lx-range" title="' + esc(refText || '') + '">' +
+      '<div class="lx-range-band" style="left:' + pct(r.lo).toFixed(1) + '%;' +
+        'width:' + (pct(r.hi) - pct(r.lo)).toFixed(1) + '%;"></div>' +
+      '<div class="lx-range-dot" style="left:' + pct(v).toFixed(1) + '%;' +
+        'background:' + colour + ';"></div>' +
+    '</div>';
+  }
+
+  /**
+   * The previous value for the same analyte, and the direction of travel.
+   *
+   * records are newest first, so "previous" is the next record down that
+   * carries this parameter. A first-ever result has nothing to compare
+   * against and gets nothing — an arrow with no baseline is worse than no
+   * arrow.
+   */
+  function lxTrend(paramName, value, recIndex, records) {
+    var v = parseFloat(String(value || '').replace(/[^0-9.\-]/g, ''));
+    if (!isFinite(v) || !records) return '';
+    var want = String(paramName || '').trim().toLowerCase();
+
+    for (var i = recIndex + 1; i < records.length; i++) {
+      var list = records[i].results || [];
+      for (var j = 0; j < list.length; j++) {
+        if (String(list[j].parameterName || '').trim().toLowerCase() !== want) continue;
+        var p = parseFloat(String(list[j].value || '').replace(/[^0-9.\-]/g, ''));
+        if (!isFinite(p)) return '';
+        var d = v - p;
+        // Equal to within the precision either value was reported at.
+        if (Math.abs(d) < 1e-9) {
+          return '<div class="lx-trend">&mdash; same as ' + esc(String(list[j].value)) + '</div>';
+        }
+        var up = d > 0;
+        return '<div class="lx-trend">' +
+          '<i class="fa-solid ' + (up ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down') + '"></i> ' +
+          (up ? '+' : '') + (Math.round(d * 100) / 100) +
+          ' from ' + esc(String(list[j].value)) + '</div>';
       }
+    }
+    return '';
+  }
+
+  /* THE CHIPS. Client-side, over rows already on the page: the whole history
+     is here, and a round trip to hide rows would be a round trip to hide
+     rows. */
+  var LX_PANEL_ON = '';
+
+  function lxChipBar() {
+    return '<div class="d-flex flex-wrap gap-2 mb-3" id="lx-chips">' +
+      '<span class="lx-chip on" data-lx-panel="" onclick="LabRecordsApp.panel(\'\')">' +
+        'Everything</span>' +
+      LX_PANELS.map(function (p) {
+        return '<span class="lx-chip" data-lx-panel="' + p.key + '" ' +
+               'onclick="LabRecordsApp.panel(\'' + p.key + '\')">' + esc(p.label) + '</span>';
+      }).join('') +
+    '</div>';
+  }
+
+  /** Shows only the analytes belonging to one condition. '' shows all. */
+  function panel(key) {
+    LX_PANEL_ON = String(key || '');
+    var bar = $('lx-chips');
+    if (bar) {
+      Array.prototype.forEach.call(bar.querySelectorAll('.lx-chip'), function (c) {
+        c.classList.toggle('on', (c.getAttribute('data-lx-panel') || '') === LX_PANEL_ON);
+      });
+    }
+    applyRowFilters();
+  }
+
+  /**
+   * ONE place that decides whether a row is visible, so the condition chips
+   * and the "abnormal only" switch cannot fight each other. They used to be
+   * independent: turning the switch off re-showed every normal row including
+   * the ones a chip had just filtered out.
+   */
+  function applyRowFilters() {
+    var abnormalOnly = !!($('abnormal-toggle') && $('abnormal-toggle').checked);
+    document.querySelectorAll('.lx-rtable').forEach(function (table) {
+      var shown = 0;
+      table.querySelectorAll('tr[data-lx-panels]').forEach(function (tr) {
+        var inPanel = !LX_PANEL_ON ||
+          (' ' + (tr.getAttribute('data-lx-panels') || '') + ' ').indexOf(' ' + LX_PANEL_ON + ' ') > -1;
+        var isAbnormal = tr.classList.contains('lab-row-abnormal');
+        var visible = inPanel && (!abnormalOnly || isAbnormal);
+        tr.style.display = visible ? '' : 'none';
+        if (visible) shown++;
+      });
+      var msgRow = table.querySelector('.lab-all-normal-msg');
+      if (msgRow) msgRow.style.display = shown ? 'none' : '';
     });
+  }
+
+  // --- FRONTEND LOGIC ---
+  /* The switch no longer hides and re-shows rows by itself — it sets its
+     flag and lets applyRowFilters decide, so it cannot undo a condition
+     chip. Turning it off used to re-show every normal row, including the
+     ones a chip had just filtered out. */
+  function toggleAbnormals() {
+    applyRowFilters();
   }
 
   function printReport(orderId) {
@@ -405,6 +650,7 @@ var LabRecordsApp = (function () {
     },
     searchRecords: searchRecords,
     toggleAbnormals: toggleAbnormals,
+    panel: panel,
     printReport: printReport,
     dispatchEmail: dispatchEmail,
     dispatchWhatsApp: dispatchWhatsApp,

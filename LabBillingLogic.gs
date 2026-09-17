@@ -3,8 +3,19 @@
 // ==========================================
 
 function getLabBillingWorkspace(sessionToken) {
+  try { crescRequire_(sessionToken, 'billing.read'); }
+  catch (err) { return { success: false, message: err.message }; }
+  return lab_billingWorkspace_();
+}
+
+/**
+ * THE SAME READ, WITHOUT THE PERMISSION CHECK, for getLabDailyCollection and
+ * the admin dashboard, both of which validate the caller first and both of
+ * which used to get "success: false" from passing no token — which is why
+ * the dashboard's lab collection read as zero on days money had been taken.
+ */
+function lab_billingWorkspace_() {
   try {
-    crescRequire_(sessionToken, 'billing.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const billingSheet = ss.getSheetByName("LAB_BILLING");
     const ordersSheet = ss.getSheetByName("LAB_ORDERS");
@@ -170,9 +181,15 @@ function parseTestsForUI(jsonStr) {
 }
 
 function getLabDailyCollection(sessionToken) {
+  try { crescRequire_(sessionToken, ['billing.read', 'accounts.read']); }
+  catch (err) { return { success: false, message: err.message }; }
+  return lab_dailyCollection_();
+}
+
+/** THE SAME FIGURES, WITHOUT THE PERMISSION CHECK, for the admin dashboard. */
+function lab_dailyCollection_() {
   try {
-    crescRequire_(sessionToken, ['billing.read', 'accounts.read']);
-    const ws = getLabBillingWorkspace();
+    const ws = lab_billingWorkspace_();
     if (!ws.success) throw new Error(ws.message);
 
     let dayBills = ws.bills.filter(b => (b.tabType === 'PAID' || b.tabType === 'IP') && b.isStrictlyToday === true);

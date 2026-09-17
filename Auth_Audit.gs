@@ -240,6 +240,27 @@ function crescUnlockAccount(token, username) {
 // ---------------------------------------------------------------------------
 
 /**
+ * STAFF, PATIENT, or UNKNOWN for one audit row.
+ *
+ * The role on the row settles it wherever there is one. An attempt against a
+ * username nobody recognises has no role at all, and that row is the most
+ * interesting one on the screen, so it is not quietly filed under either —
+ * it gets its own bucket and is counted in both summaries.
+ */
+function crescAudienceOf_(role, username) {
+  var r = crescStr_(role).toLowerCase();
+  if (r === 'patient') return 'PATIENT';
+  if (r) return 'STAFF';
+
+  // No role: an unrecognised sign-in attempt. The username shape is the only
+  // evidence there is, and it is a hint rather than an answer — a patient ID
+  // in this deployment is letters followed by digits with no separator.
+  var u = crescStr_(username);
+  if (/^[A-Za-z]{2,8}\d{3,}$/.test(u)) return 'PATIENT';
+  return 'UNKNOWN';
+}
+
+/**
  * FRONTEND ENTRY. The sign-in history, newest first.
  *
  * Reads the tail of Audit_Log rather than the whole sheet. Audit_Log is
@@ -294,11 +315,18 @@ function crescGetLoginAudit(token, opts) {
         if (wantUser && user.toUpperCase() !== wantUser) continue;
         var detail = {};
         try { detail = JSON.parse(r[col['Details_JSON']] || '{}'); } catch (e) {}
+        var role = String(r[col['Actor_Role']] || '');
         rows.push({
-          at:      Utilities.formatDate(when, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'),
+          at:      Utilities.formatDate(when, Session.getScriptTimeZone(), 'dd-MMM-yyyy HH:mm:ss'),
           event:   ev,
           username: user,
-          role:    String(r[col['Actor_Role']] || ''),
+          role:    role,
+          // WHICH LIST THIS BELONGS IN. A clinic asking "who signed in" is
+          // asking one of two quite different questions — was a member of
+          // staff at a desk they should not have been at, or is a patient
+          // getting into the portal — and answering both in one list of
+          // three hundred rows answers neither.
+          audience: crescAudienceOf_(role, user),
           method:  String(detail.method || ''),
           reason:  String(detail.reason || ''),
           failures: detail.failures || 0,
@@ -308,8 +336,13 @@ function crescGetLoginAudit(token, opts) {
       cursor = from - 1;
     }
 
+    // Counted here rather than in the browser, so the tab labels are right
+    // even when the row limit truncates the list.
+    var tally = { STAFF: 0, PATIENT: 0, UNKNOWN: 0 };
+    rows.forEach(function (x) { tally[x.audience] = (tally[x.audience] || 0) + 1; });
+
     return { success: true, rows: rows, count: rows.length, scanned: scanned,
-             windowDays: days, message: '' };
+             windowDays: days, tally: tally, message: '' };
   } catch (err) {
     return { success: false, rows: [], count: 0, message: err.message };
   }

@@ -200,9 +200,9 @@ function getIPCasesheetContext(ipNumber, sessionToken) {
     // ---- reused OP engines, each failing soft ---------------------------
     ctx.composer   = ipc_safe_(function () { return getComposerContext(selfDoctorId, sessionToken); },
                                { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {} });
-    ctx.drugs      = ipc_safe_(function () { return fetchOPDrugMaster(); }, []);
-    ctx.extDrugs   = ipc_safe_(function () { return fetchUniversalDrugs(); }, []);
-    ctx.labCatalog = ipc_safe_(function () { return getOPDOrderableTests(); },
+    ctx.drugs      = ipc_safe_(function () { return op_drugMaster_(); }, []);
+    ctx.extDrugs   = ipc_safe_(function () { return op_universalDrugs_(); }, []);
+    ctx.labCatalog = ipc_safe_(function () { return lab_opdOrderable_(); },
                                { panels: [], tests: [], packages: [] });
     ctx.templates  = ipc_safe_(function () {
                        var r = listConsultTemplates(selfDoctorId, sessionToken);
@@ -635,6 +635,13 @@ function ipc_composeCasesheetHtml_(f, opts) {
   ], { narrow: true });
 
   // ---- medications ---------------------------------------------------------
+  // The generic name prints under the brand. A script naming only a brand
+  // cannot be dispensed against another manufacturer and cannot be read by
+  // the next doctor if the brand is local; on an inpatient order that is the
+  // nurse at the trolley as well. Built once for the whole sheet — it reads
+  // two sheets — and omitted where the typed name already carries it.
+  var ipcGmap = (typeof rx_genericMap_ === 'function') ? rx_genericMap_() : null;
+
   var medsTable = ipp_table_(
     [{ label: "#", cls: "ctr" }, "Drug", "Dose / Frequency", { label: "Route", cls: "ctr" }, { label: "Duration", cls: "ctr" }],
     meds.map(function (md, i) {
@@ -647,9 +654,13 @@ function ipc_composeCasesheetHtml_(f, opts) {
       var note = dc_str_(md.comment || md.instructions);
       var dose = [md.dose, md.freq || md.sig].map(dc_str_).filter(Boolean).join(" ");
       if (isIV && dc_str_(md.rate)) dose = (dose ? dose + " " : "") + "@ " + dc_str_(md.rate);
+      var generic = dc_str_(md.generic) ||
+        ((typeof rx_genericFor_ === 'function')
+          ? rx_genericFor_(md.drugName || md.name, ipcGmap) : '');
       return [
         String(i + 1),
         '<strong>' + e(name) + '</strong>' +
+          (generic ? '<br><span class="muted"><em>' + e(generic) + '</em></span>' : '') +
           (note ? '<br><span class="muted">' + e(note) + '</span>' : ''),
         e(dose),
         e(md.route || (isIV ? "IV" : "Oral")),

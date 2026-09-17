@@ -107,8 +107,10 @@ function debugDoctorSetup() {
 
   // ---- 5. Lab catalog bridge --------------------------------------------
   try {
-    var cat = getOrderableTests();
-    out.push("getOrderableTests(): success=" + cat.success +
+    // The unguarded core: this diagnostic is run from the script editor,
+    // where there is no session token to satisfy the guarded entry point.
+    var cat = lab_orderableTests_();
+    out.push("lab_orderableTests_(): success=" + cat.success +
              ", tests=" + ((cat.tests || []).length));
     if (cat.tests && cat.tests.length) {
       out.push("   sample: " + cat.tests[0].testId + " / " + cat.tests[0].testName +
@@ -117,7 +119,7 @@ function debugDoctorSetup() {
       out.push("   >>> Lab catalog empty. Run setupLabDatabase() then seedStarterCatalog().");
     }
   } catch (e) {
-    out.push("getOrderableTests() THREW: " + e.message +
+    out.push("lab_orderableTests_() THREW: " + e.message +
              "  (LabSetup.gs may not be first in file order)");
   }
 

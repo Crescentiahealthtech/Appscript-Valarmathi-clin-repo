@@ -291,36 +291,100 @@ window.CrescMC = (function () {
     var im = S.imm;
     if (!im) { body('<div class="mc-note">' + esc(msg) + '</div>'); return; }
 
-    var pill = { GIVEN: 'mc-ok', DUE: 'mc-due', OVERDUE: 'mc-late', UPCOMING: 'mc-soon' };
-    var word = { GIVEN: 'given', DUE: 'due now', OVERDUE: 'overdue', UPCOMING: 'later' };
+    // Past the age the card covers there is nothing to show and nothing to do.
+    if (im.eligible === false) {
+      body('<div class="mc-tile"><div style="font-weight:600;">' +
+           esc(im.message || 'Outside the age this card covers.') + '</div>' +
+           '<div class="mc-note mt-1">The immunisation card is a child\'s ' +
+           'document. Nothing on the schedule falls after this age, so there ' +
+           'is nothing here to keep.</div></div>');
+      return;
+    }
+
+    var pill = { GIVEN: 'mc-ok', PRESUMED: 'mc-ok', DUE: 'mc-due',
+                 MISSED: 'mc-late', UPCOMING: 'mc-soon' };
+    var word = { GIVEN: 'given', PRESUMED: 'taken as given', DUE: 'due now',
+                 MISSED: 'not given', UPCOMING: 'later' };
+
+    // THE HEADLINE. The card exists to tell the mother when to come back, so
+    // that answer is the first thing on it rather than something she has to
+    // find by reading down a list of twenty-seven rows.
+    var next = im.nextDue;
+    var group = im.nextDueGroup || [];
+    var nextHtml = next
+      ? '<div class="mc-tile mb-3" style="border-color:var(--accent-purple);">' +
+          '<div class="mc-note">Next vaccination</div>' +
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--text-main);">' +
+            esc(group.map(function (d) { return d.label; }).join(', ') || next.label) +
+          '</div>' +
+          '<div style="font-size:.85rem;color:var(--text-main);">' +
+            'due ' + esc(next.dueText) +
+            (next.at ? ' · ' + esc(next.at) : '') +
+            (next.dueInDays > 0
+              ? ' <span class="mc-note">(in ' + next.dueInDays + ' days)</span>'
+              : ' <span class="mc-pill mc-due">due now</span>') +
+          '</div>' +
+        '</div>'
+      : '<div class="mc-tile mb-3"><div class="mc-note">Nothing further is due on ' +
+        'the schedule.</div></div>';
+
+    var missedHtml = (im.missed && im.missed.length)
+      ? '<div class="mc-tile mb-3" style="border-color:var(--danger-fg);">' +
+          '<div class="mc-note">To catch up</div>' +
+          '<div style="font-size:.9rem;font-weight:600;color:var(--text-main);">' +
+            esc(im.missed.map(function (d) { return d.label; }).join(', ')) +
+          '</div></div>'
+      : '';
 
     body(
       '<div class="row g-2 mb-3">' +
         tile('Age', im.ageText) +
         tile('Date of birth', im.dobText) +
-        tile('Up to date', im.completedOfDue + ' of ' + im.totalDue) +
-        tile('Overdue', String(im.overdue.length),
-             im.overdue.length ? 'mc-late' : 'mc-ok') +
+        tile('Had so far', im.hadSoFar + ' of ' + im.dueSoFar) +
+        tile('Not given', String(im.missed.length),
+             im.missed.length ? 'mc-late' : 'mc-ok') +
       '</div>' +
-      '<div class="mc-note mb-3">Due dates are the national immunisation ' +
-        'schedule counted from the date of birth. Recording a dose is what ' +
-        'makes it show as given, here and in the parent\'s app.</div>' +
+      nextHtml + missedHtml +
+      '<div class="mc-note mb-3">Doses whose date has passed are taken as ' +
+        'given. That is what a child of this age will ordinarily have had. ' +
+        'Mark one <strong>not given</strong> only when the mother has told you ' +
+        'it was missed — that is what puts it on the catch-up list.</div>' +
 
       im.doses.map(function (d) {
+        var sub;
+        if (d.state === 'GIVEN') {
+          sub = 'given ' + esc(d.givenOnText) + (d.givenBy ? ' · ' + esc(d.givenBy) : '');
+        } else if (d.state === 'PRESUMED') {
+          sub = 'due ' + esc(d.dueText) + ' · taken as given';
+        } else if (d.state === 'MISSED') {
+          sub = 'missed' + (d.missedNote ? ' · ' + esc(d.missedNote) : '');
+        } else {
+          sub = 'due ' + esc(d.dueText) + (d.at ? ' · ' + esc(d.at) : '');
+        }
+
+        // What each row offers to do, and nothing more than that.
+        //   had it       -> say it was missed
+        //   missed/due   -> record that it has now been given
+        var actions = '';
+        if (d.state === 'PRESUMED' || d.state === 'GIVEN') {
+          if (!d.offSchedule) {
+            actions = '<button class="btn btn-sm btn-outline-danger py-0 px-2" ' +
+              'style="font-size:.7rem;" onclick="CrescMC.markNotGiven(\'' +
+              esc(d.code) + '\',\'' + esc(d.label) + '\')">Not given</button>';
+          }
+        } else if (d.state !== 'UPCOMING') {
+          actions = '<button class="btn btn-sm btn-outline-primary py-0 px-2" ' +
+            'style="font-size:.7rem;" onclick="CrescMC.giveDose(\'' +
+            esc(d.code) + '\',\'' + esc(d.label) + '\')">Record</button>';
+        }
+
         return '<div class="mc-row">' +
           '<div><div style="font-size:.84rem; font-weight:600; color:var(--text-main);">' +
             esc(d.label) + (d.offSchedule ? ' <span class="mc-note">(not in the schedule)</span>' : '') +
-            '</div><div class="mc-note">' +
-            (d.state === 'GIVEN'
-              ? 'given ' + esc(d.givenOnText) + (d.givenBy ? ' · ' + esc(d.givenBy) : '')
-              : 'due ' + esc(d.dueText) + (d.at ? ' · ' + esc(d.at) : '')) +
-            '</div></div>' +
+            '</div><div class="mc-note">' + sub + '</div></div>' +
           '<div class="d-flex align-items-center gap-2">' +
             '<span class="mc-pill ' + pill[d.state] + '">' + word[d.state] + '</span>' +
-            (d.state === 'GIVEN' ? '' :
-              '<button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.7rem;" ' +
-              'onclick="CrescMC.giveDose(\'' + esc(d.code) + '\',\'' + esc(d.label) + '\')">' +
-              'Record</button>') +
+            actions +
           '</div></div>';
       }).join('')
     );
@@ -419,22 +483,47 @@ window.CrescMC = (function () {
       });
     },
 
+    /**
+     * Records a dose as given, today.
+     *
+     * IT NO LONGER ASKS FOR A BATCH NUMBER. That prompt stood between a nurse
+     * and the one action this card is for, on every single dose, to collect a
+     * field nothing in the application reads back — batch tracking is stock
+     * control and it belongs in the pharmacy, where batches already are.
+     */
     giveDose: function (code, label) {
       if (S.busy) return;
-      var ask = (typeof window.crescPrompt === 'function')
-        ? window.crescPrompt('Batch number for ' + label + ' (leave blank if not to hand):',
-                             '', { title: 'Record ' + label, okLabel: 'Record' })
-        : Promise.resolve('');
-      ask.then(function (batch) {
-        // crescPrompt resolves null when cancelled and '' when the box was
-        // left empty and OK was pressed, so the two must not be conflated —
-        // a cancelled dialog must not record a dose.
-        if (batch === null) return;
-        call('mcRecordImmunisation', [{
-          patientId: S.pid, vaccineCode: code, doseLabel: label,
-          givenOn: today(), batchNo: batch
+      call('mcRecordImmunisation', [{
+        patientId: S.pid, vaccineCode: code, doseLabel: label,
+        givenOn: today()
+      }, window.sessionToken], function (res) {
+        say((res && res.message) || 'Could not record the dose.', !!(res && res.success));
+        if (res && res.success) loadImm();
+      });
+    },
+
+    /**
+     * Records that the mother says a dose was missed.
+     *
+     * The reason is required by the server, so this asks for it rather than
+     * sending a blank and reporting a refusal.
+     */
+    markNotGiven: function (code, label) {
+      if (S.busy) return;
+      if (typeof window.crescPrompt !== 'function') {
+        say('This screen needs the shared dialog, which has not loaded.', false);
+        return;
+      }
+      window.crescPrompt(
+        'What did the mother say about ' + label + '?\n\n' +
+        'For example: not given, child was unwell; given elsewhere, no card; refused.',
+        '', { title: label + ' — not given', okLabel: 'Mark not given' }
+      ).then(function (reason) {
+        if (!reason) return;
+        call('mcMarkDoseNotGiven', [{
+          patientId: S.pid, vaccineCode: code, doseLabel: label, reason: reason
         }, window.sessionToken], function (res) {
-          say((res && res.message) || 'Could not record the dose.', !!(res && res.success));
+          say((res && res.message) || 'Could not record that.', !!(res && res.success));
           if (res && res.success) loadImm();
         });
       });

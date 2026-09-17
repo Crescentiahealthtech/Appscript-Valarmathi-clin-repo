@@ -964,8 +964,8 @@ function getIPNotesBundle(ipNumber, sessionToken) {
       context:     ipc_safe_(function () { return getClinicalContext(ipNumber, sessionToken); }, { success: false }),
       timeline:    ipc_safe_(function () { return getIPTimeline(ipNumber, sessionToken); }, { success: true, data: [] }),
       careTeam:    ipc_safe_(function () { return getIPCareTeamPanel(ipNumber, sessionToken); }, { success: false, team: [] }),
-      drugMaster:  ipc_safe_(function () { return fetchPharmacyMasterForIP(); }, []),
-      teamRoles:   ipc_safe_(function () { return getIPTeamRoles(); }, [])
+      drugMaster:  ipc_safe_(function () { return ipn_pharmacyMaster_(); }, []),
+      teamRoles:   ipc_safe_(function () { return dc_teamRoles_(); }, [])
     };
   } catch (e) {
     return { success: false, message: "Could not open this chart: " + e.message };

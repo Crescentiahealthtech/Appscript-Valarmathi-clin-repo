@@ -94,7 +94,7 @@
     <h6 class="text-muted fw-bold small text-uppercase mb-3">Desks</h6>
 
     <div class="row g-4">
-        <div class="col-md-4 col-6">
+        <div class="col-6 col-md-4 col-xl-3">
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openAccountsDashboard()">
             <i class="fas fa-chart-pie fa-2x mb-3 text-primary"></i>
             <h6 class="text-white fw-bold m-0">Accounts Dashboard</h6>
@@ -102,7 +102,7 @@
           </div>
         </div>
 
-        <div class="col-md-4 col-6">
+        <div class="col-6 col-md-4 col-xl-3">
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchAccountsPage('workspace-accounts-ledger')">
             <i class="fas fa-book-open fa-2x mb-3 text-primary"></i>
             <h6 class="text-white fw-bold m-0">Master Ledger</h6>
@@ -110,7 +110,7 @@
           </div>
         </div>
 
-        <div class="col-md-4 col-6">
+        <div class="col-6 col-md-4 col-xl-3">
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openCashDrawer()">
             <i class="fas fa-cash-register fa-2x mb-3 text-success"></i>
             <h6 class="text-white fw-bold m-0">Cash Drawer</h6>
@@ -118,7 +118,7 @@
           </div>
         </div>
 
-        <div class="col-md-4 col-6">
+        <div class="col-6 col-md-4 col-xl-3">
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchAccountsPage('workspace-accounts-payables')">
             <i class="fas fa-file-invoice-dollar fa-2x mb-3 text-danger"></i>
             <h6 class="text-white fw-bold m-0">Payables</h6>
@@ -126,7 +126,7 @@
           </div>
         </div>
 
-        <div class="col-md-4 col-6">
+        <div class="col-6 col-md-4 col-xl-3">
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openInsurance()">
             <i class="fas fa-shield-alt fa-2x mb-3 text-info"></i>
             <h6 class="text-white fw-bold m-0">Insurance Desk</h6>
@@ -134,33 +134,74 @@
           </div>
         </div>
 
-        <div class="col-md-4 col-6">
-          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openDischargeDesk()">
-            <!-- "Discharges" collided with the clinical Discharge Desk in
-                 EMR, and staff could not tell which screen a colleague
-                 meant. This one is stage 3 of the workflow: the money. -->
-            <i class="fas fa-procedures fa-2x mb-3 text-warning"></i>
-            <h6 class="text-white fw-bold m-0">Discharge Settlement</h6>
-            <span class="acc-navflag" id="acc-flag-discharges">&mdash;</span>
-          </div>
-        </div>
-
-        <!-- This card used to be an empty clickable rectangle: the wrapper
-             was here, its body was not. It opens the running IP tabs, which
-             is the one screen that answers "what does this bed owe so far". -->
-        <div class="col-md-4 col-6">
-          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openIpTab()">
-            <i class="fas fa-bed-pulse fa-2x mb-3" style="color: var(--violet-fg);"></i>
-            <h6 class="text-white fw-bold m-0">Running IP Tabs</h6>
-            <span class="text-muted" style="font-size:.72rem;">Charges accruing on the ward</span>
-          </div>
-        </div>
-
-        <div class="col-md-4 col-6">
+        <div class="col-6 col-md-4 col-xl-3">
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchAccountsPage('workspace-accounts-tax')">
             <i class="fas fa-landmark fa-2x mb-3 text-light"></i>
             <h6 class="text-white fw-bold m-0">Tax &amp; Audit</h6>
             <span class="text-muted" style="font-size:.72rem;">GST &amp; compliance</span>
+          </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         ONE INPATIENT STAY, THREE STAGES
+
+         Three screens touch the same admission's money, and until now they
+         sat in a flat grid beside Payables and Tax with nothing to say which
+         came first, who was meant to be on each, or where a given patient had
+         got to. Staff opened whichever they remembered — a charge posted
+         after settlement, a bill raised twice, a stay settled while the ward
+         was still adding to it.
+
+         They are the same three screens; what is new is that the order and
+         the role are written on them, and each is hidden from a role that
+         cannot work it. The permissions were always enforced on the server
+         (billing.read, billing.write, accounts.settle); they were simply
+         invisible until the click failed.
+         ═══════════════════════════════════════════════════════════════ -->
+    <h6 class="text-muted fw-bold small text-uppercase mb-1 mt-5">One inpatient stay, three stages</h6>
+    <p class="text-muted small mb-3">
+      Left to right. A stay moves on only when the stage before it is closed.
+    </p>
+
+    <div class="row g-4 align-items-stretch">
+        <div class="col-12 col-md-4" id="card-ip-tab">
+          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openIpTab()">
+            <i class="fas fa-bed-pulse fa-2x mb-3" style="color: var(--violet-fg);"></i>
+            <h6 class="text-white fw-bold m-0">1 &middot; Running IP Tab</h6>
+            <span class="text-muted" style="font-size:.72rem;">
+              While the patient is on the ward. Charges accrue here as the
+              pharmacy, the lab and the ward post them.<br>
+              <strong class="text-white-force">Reception or accounts</strong>
+            </span>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4" id="card-ip-settle">
+          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openDischargeDesk()">
+            <!-- "Discharges" collided with the clinical Discharge Desk in
+                 EMR, and staff could not tell which screen a colleague
+                 meant. This one is the money. -->
+            <i class="fas fa-procedures fa-2x mb-3 text-warning"></i>
+            <h6 class="text-white fw-bold m-0">2 &middot; Discharge Settlement</h6>
+            <span class="text-muted" style="font-size:.72rem;">
+              Once the clinical discharge is signed. Caps the package, applies
+              the discount and the advance, and closes the tab.<br>
+              <strong class="text-white-force">Accounts only</strong>
+            </span>
+            <span class="acc-navflag mt-1" id="acc-flag-discharges">&mdash;</span>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-4" id="card-ip-invoice">
+          <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-billing')">
+            <i class="fas fa-file-invoice-dollar fa-2x mb-3 text-success"></i>
+            <h6 class="text-white fw-bold m-0">3 &middot; Hospital Billing</h6>
+            <span class="text-muted" style="font-size:.72rem;">
+              The invoice the patient is handed, and the receipt. Also the
+              route for an outpatient bill that never had a tab.<br>
+              <strong class="text-white-force">Reception or accounts</strong>
+            </span>
           </div>
         </div>
     </div>
@@ -176,13 +217,17 @@
             <h2 class="h5 text-main mb-0 fw-bold">Master Ledger</h2>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-outline-warning btn-sm rounded-pill px-3" onclick="AccX.lockPeriod()">
-                <i class="fas fa-lock me-1"></i> Lock Period
-            </button>
-            <!-- This button carried no onclick at all: it had been on the
-                 toolbar from the start and had never done anything. -->
+            <!-- LOCK PERIOD USED TO BE HERE.
+
+                 It froze a month's rows against editing, which is an audit
+                 control this clinic has no use for — nothing in the ledger
+                 is edited after the fact anyway — and it was one press away
+                 from being permanent. What was actually wanted at this
+                 toolbar is the range of dates to take away, so that is what
+                 is here now. See the date boxes below. -->
             <button class="btn btn-outline-secondary btn-sm rounded-pill px-3"
-                    onclick="AccX.exportLedger()" title="Download the rows currently shown, as CSV">
+                    onclick="AccX.exportLedger()"
+                    title="Download the rows currently shown, as CSV">
                 <i class="fas fa-download me-1"></i> Export
             </button>
         </div>
@@ -199,6 +244,26 @@
                placeholder="Search txn id, entity, category, mode…"
                oninput="AccX.search(this.value)">
       </div>
+
+      <!-- THE DATE RANGE. It narrows the view and therefore the export,
+           because the export takes whatever the view is showing. An
+           accountant asked for "April to June" wants those rows and no
+           others, and the alternative was exporting everything and deleting
+           rows in Excel. Either box may be left empty: from alone is
+           "everything since", to alone is "everything up to". -->
+      <div class="input-group input-group-sm" style="max-width:340px;">
+        <span class="input-group-text"><i class="fas fa-calendar-days"></i></span>
+        <input type="date" class="form-control" id="acc-ledger-from"
+               title="From this date" onchange="AccX.dateRange()">
+        <span class="input-group-text">to</span>
+        <input type="date" class="form-control" id="acc-ledger-to"
+               title="Up to and including this date" onchange="AccX.dateRange()">
+        <button class="btn btn-outline-secondary" type="button"
+                onclick="AccX.clearDateRange()" title="Clear the date range">
+          <i class="fas fa-xmark"></i>
+        </button>
+      </div>
+
       <div class="small text-muted ms-auto" id="acc-ledger-totals"></div>
     </div>
 

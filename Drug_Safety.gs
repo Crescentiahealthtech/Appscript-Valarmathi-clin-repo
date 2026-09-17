@@ -160,6 +160,18 @@ function ds_identify_(drugName, genericMap) {
   //    lookup succeeding.
   if (!generics.length && key) generics.push(key);
 
+  // d) the class, when Drug_Dose_Reference has no row to supply one. On a new
+  //    deployment that sheet is empty, so DS_CLASS_RULES — the whole
+  //    therapeutic-overlap check — could never fire on any drug. The molecule
+  //    table in Drug_Interaction.gs knows the common classes without the
+  //    clinic having to curate anything first.
+  if (!klass && typeof di_classesFor_ === "function") {
+    try {
+      var derived = di_classesFor_(generics);
+      if (derived.length) { klass = derived.join(" / "); sources.push("class table"); }
+    } catch (e) { /* the interaction file is optional */ }
+  }
+
   return { name: name, key: key, generics: generics, klass: klass,
            source: sources.join("+") || "typed" };
 }

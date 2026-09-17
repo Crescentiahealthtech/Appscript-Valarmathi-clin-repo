@@ -56,6 +56,16 @@ var CRESC_UI_PERMS = {
   'nav-tab-accounts':   'accounts.read',
   'nav-tab-privacy':    'dpdp.manage',
   'card-hosp-billing':  'billing.write',
+  // THE THREE STAGES OF ONE INPATIENT STAY, each hidden from a role that
+  // cannot work it. The server has always enforced these — billing.read to
+  // see a running tab, billing.write to post to it, accounts.settle to close
+  // it — but the tiles were visible to everybody, so the only way to learn
+  // that a receptionist may not settle a discharge was to press the tile and
+  // read a FORBIDDEN. Hidden here AND checked there; this is the label, not
+  // the lock.
+  'card-ip-tab':        'billing.read',
+  'card-ip-settle':     'accounts.settle',
+  'card-ip-invoice':    'billing.write',
   // The money panels are gated here AND on the server: the dashboard
   // payload carries no revenue figures for a clinical role, and these ids
   // keep the empty cards off their screen.

@@ -281,6 +281,57 @@ function cresc_timeText_(v, pattern) {
   return s;
 }
 
+/**
+ * A DATE, AS TEXT, WITH NO TIME ON THE END OF IT.
+ *
+ * `String(cell)` on a Sheets date cell yields
+ *
+ *     Thu Jun 01 2028 00:00:00 GMT+0530 (India Standard Time)
+ *
+ * and that string was reaching printed documents — the expiry on a pharmacy
+ * invoice was the reported case, but any column Sheets decided was a date
+ * behaves the same way. Sheets coerces on entry, so a batch expiry typed as
+ * "2028-06" becomes a real Date without anybody choosing that, and the same
+ * column can hold text on one row and a Date on the next.
+ *
+ * This formats a Date and passes text through unchanged, so both rows print
+ * the same. Use it for any value that is a date and NOT a moment: an expiry,
+ * a date of birth, a review date, a due date.
+ *
+ * @param {*} v
+ * @param {string} [pattern]  default 'dd-MMM-yyyy'
+ * @return {string}
+ */
+function cresc_dateText_(v, pattern) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date) {
+    return isNaN(v.getTime()) ? '' : cresc_formatDate_(v, pattern || 'dd-MMM-yyyy');
+  }
+  return String(v).trim();
+}
+
+/**
+ * The same, for a batch expiry, which is a MONTH and not a day.
+ *
+ * A medicine expires at the end of its printed month, so "Jun 2028" is the
+ * honest rendering and "01-Jun-2028" invents a precision the pack does not
+ * carry. Text already in yyyy-MM or MM/yyyy form passes through as typed.
+ */
+function cresc_expiryText_(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date) {
+    return isNaN(v.getTime()) ? '' : cresc_formatDate_(v, 'MMM yyyy');
+  }
+  var s = String(v).trim();
+  // "2028-06" and "2028-06-01" both read better as "Jun 2028".
+  var m = s.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
+  if (m) {
+    var d = cresc_build_(parseInt(m[1], 10), parseInt(m[2], 10), 1, 0, 0, 0);
+    if (d) return cresc_formatDate_(d, 'MMM yyyy');
+  }
+  return s;
+}
+
 /** "13-Sep-2026 05:34 PM" from a date cell and a separate time cell. */
 function cresc_dateTimeText_(dateVal, timeVal) {
   var d = cresc_formatDate_(dateVal, 'dd-MMM-yyyy');

@@ -31,9 +31,20 @@
  *   each item = { testId, testCode, testName, requiresConsent }
  */
 function getOPDOrderableTests(sessionToken) {
+  try { crescRequire_(sessionToken, ['lab.order', 'lab.read']); }
+  catch (err) { return { success: false, message: err.message,
+                         panels: [], tests: [], packages: [], total: 0 }; }
+  return lab_opdOrderable_();
+}
+
+/**
+ * THE SAME LIST, WITHOUT THE PERMISSION CHECK, for the case sheet and the
+ * ward round, which validate the user before they assemble a screen. Both
+ * used to call the guarded entry with no token and get an empty catalogue.
+ */
+function lab_opdOrderable_() {
   try {
-    crescRequire_(sessionToken, ['lab.order', 'lab.read']);
-    var res = getOrderableTests();
+    var res = lab_orderableTests_();
     if (!res || !res.success) {
       return { success: false, message: (res && res.message) || 'Catalog unavailable.',
                panels: [], tests: [], packages: [], total: 0 };
@@ -66,7 +77,7 @@ function getOPDOrderableTests(sessionToken) {
         'No active tests in the catalog. Add them under Labs > Test Catalog.'
     };
   } catch (e) {
-    return { success: false, message: 'getOPDOrderableTests: ' + e.message,
+    return { success: false, message: 'lab_opdOrderable_: ' + e.message,
              panels: [], tests: [], packages: [], total: 0 };
   }
 }

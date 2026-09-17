@@ -66,7 +66,7 @@ function getInvoiceForReturn(query, sessionToken) {
         var key = _returnAggKey_(idata[j][3], idata[j][5]);
         if (!billed[key]) {
           billed[key] = { brand: String(idata[j][3] || ""), generic: String(idata[j][4] || ""),
-            batch: String(idata[j][5] || ""), expiry: String(idata[j][6] || ""), unit: String(idata[j][8] || ""),
+            batch: String(idata[j][5] || ""), expiry: cresc_expiryText_(idata[j][6]), unit: String(idata[j][8] || ""),
             mrp: parseFloat(idata[j][9]) || 0, gst: parseFloat(idata[j][10]) || 0, billedQty: 0 };
           order.push(key);
         }
@@ -138,7 +138,7 @@ function processPharmacyReturn(payload, sessionToken) {
         if (String(idata[j][0]).trim().toUpperCase() !== target) continue;
         var bk = _returnAggKey_(idata[j][3], idata[j][5]);
         if (!billed[bk]) billed[bk] = { brand: String(idata[j][3] || ""), generic: String(idata[j][4] || ""),
-          batch: String(idata[j][5] || ""), expiry: String(idata[j][6] || ""), unit: String(idata[j][8] || ""),
+          batch: String(idata[j][5] || ""), expiry: cresc_expiryText_(idata[j][6]), unit: String(idata[j][8] || ""),
           mrp: parseFloat(idata[j][9]) || 0, gst: parseFloat(idata[j][10]) || 0, billedQty: 0 };
         billed[bk].billedQty += parseFloat(idata[j][7]) || 0;
       }

@@ -49,19 +49,19 @@
     <div id="emr-landing-menu" class="container-fluid px-0 mt-4 d-none">
         <h3 class="fw-bold mb-4 text-white">Electronic Medical Records</h3>
         <div class="row g-4">
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('op-consult')"><div class="emr-icon-wrap"><i class="fa-solid fa-stethoscope fa-2xl" style="color: var(--accent-fg);"></i></div><h5 class="text-white fw-bold mt-2">OP Consultation</h5></div></div>
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-casesheet')"><div class="emr-icon-wrap"><i class="fa-solid fa-bed-pulse fa-2xl" style="color: var(--info-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Casesheet</h5></div></div>
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-notes')"><div class="emr-icon-wrap"><i class="fa-solid fa-clipboard-user fa-2xl" style="color: var(--success-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Notes</h5></div></div>
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('records')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-medical fa-2xl" style="color: var(--warning-fg);"></i></div><h5 class="text-white fw-bold mt-2">Patient Records</h5></div></div>
+            <div class="col-6 col-md-4 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('op-consult')"><div class="emr-icon-wrap"><i class="fa-solid fa-stethoscope fa-2xl" style="color: var(--accent-fg);"></i></div><h5 class="text-white fw-bold mt-2">OP Consultation</h5></div></div>
+            <div class="col-6 col-md-4 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-casesheet')"><div class="emr-icon-wrap"><i class="fa-solid fa-bed-pulse fa-2xl" style="color: var(--info-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Casesheet</h5></div></div>
+            <div class="col-6 col-md-4 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-notes')"><div class="emr-icon-wrap"><i class="fa-solid fa-clipboard-user fa-2xl" style="color: var(--success-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Notes</h5></div></div>
+            <div class="col-6 col-md-4 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('records')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-medical fa-2xl" style="color: var(--warning-fg);"></i></div><h5 class="text-white fw-bold mt-2">Patient Records</h5></div></div>
             
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records')"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: var(--pink-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
+            <div class="col-6 col-md-4 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="openEMRWorkspace('ip-records')"><div class="emr-icon-wrap"><i class="fa-solid fa-folder-tree fa-2xl" style="color: var(--pink-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Records</h5></div></div>
 
             <!-- IP Ward and the Discharge Desk are reached from here, not from
                  the sidebar: applyRBAC() grants a nurse only the Dashboard and
                  EMR tabs, and the nurse is the ward's preparer. -->
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ip-ledger-view')"><div class="emr-icon-wrap"><i class="fa-solid fa-hospital fa-2xl" style="color: var(--violet-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Ward</h5></div></div>
+            <div class="col-6 col-md-4 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ip-ledger-view')"><div class="emr-icon-wrap"><i class="fa-solid fa-hospital fa-2xl" style="color: var(--violet-fg);"></i></div><h5 class="text-white fw-bold mt-2">IP Ward</h5></div></div>
 
-            <div class="col-md-6 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ds-desk-view')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-circle-check fa-2xl" style="color: var(--teal-fg);"></i></div><h5 class="text-white fw-bold mt-2">Discharge Desk</h5></div></div>
+            <div class="col-6 col-md-4 col-xl-3"><div class="emr-module-card p-4 text-center" onclick="switchTab('ds-desk-view')"><div class="emr-icon-wrap"><i class="fa-solid fa-file-circle-check fa-2xl" style="color: var(--teal-fg);"></i></div><h5 class="text-white fw-bold mt-2">Discharge Desk</h5></div></div>
         </div>
     </div>
     

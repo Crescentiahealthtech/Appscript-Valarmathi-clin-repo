@@ -218,6 +218,50 @@
 
 <!-- The register, so the reason codes are worth having: what left the shelf
      without being sold, and what it cost. -->
+<!-- Delete a row entered in error. See deletePharmacyBatch in Pharmacy.gs
+     for why this is separate from a write-off, and for the refusal when the
+     batch already appears on an invoice. -->
+<div class="modal fade" id="inventoryDeleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force">
+          <i class="fa-solid fa-xmark me-2 text-secondary"></i>Delete this row
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="delRowId">
+        <div class="mb-3">
+          <h6 class="text-info fw-bold mb-1" id="delDisplayBrand">Brand</h6>
+          <small class="text-secondary d-block" id="delDisplayBatch">Batch: —</small>
+          <small class="text-secondary d-block" id="delDisplayStock">In stock: —</small>
+        </div>
+        <div class="alert alert-warning py-2 px-3 small">
+          Use this only for a row that should never have existed — a duplicate,
+          a mistyped batch, stock keyed against the wrong brand.
+          <strong>Stock that was real and has left the shelf must be written
+          off instead</strong>, so its value reaches the disposal register.
+        </div>
+        <label class="custom-label-dark">Why is it being removed? <span class="text-danger">*</span></label>
+        <input type="text" class="form-control custom-input-dark" id="delReason"
+               placeholder="e.g. entered twice on 12 Sep; batch number does not exist"
+               maxlength="200">
+        <div class="form-text text-secondary">
+          The whole row is copied into the audit log before it goes, so this can
+          be read back and undone by hand.
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger fw-bold" id="btnConfirmDelete" onclick="submitDeleteRow()">
+          Delete the row
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="disposalLogModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content bg-dark border-secondary">
@@ -329,6 +373,17 @@
               <button class="btn btn-outline-danger py-1 px-2" title="Write off expired, damaged or missing stock"
                       onclick="openDiscardModal(${safeItem})" ${item.stock > 0 ? '' : 'disabled'}>
                 <i class="fa-solid fa-trash-can"></i>
+              </button>
+              <!-- DELETE IS NOT WRITE-OFF. A write-off is stock that was real
+                   and has left the shelf, and it belongs in the disposal
+                   register at its value. This removes a row that should never
+                   have existed — a duplicate, a typo, stock keyed against the
+                   wrong brand — which would otherwise have to be written off
+                   as damaged, putting money the clinic never lost into the one
+                   register whose worth is that it is true. -->
+              <button class="btn btn-outline-secondary py-1 px-2" title="Delete this row — for an entry made in error"
+                      onclick="openDeleteRowModal(${safeItem})">
+                <i class="fa-solid fa-xmark"></i>
               </button>
             </div>
           </td>
@@ -533,6 +588,48 @@
       }
     });
   }
+
+  /* ══════════════════ DELETE A ROW ENTERED IN ERROR ══════════════════ */
+
+  function openDeleteRowModal(item) {
+    document.getElementById('delRowId').value = item.rowId;
+    document.getElementById('delDisplayBrand').innerText =
+      item.brandName + (item.genericName ? '  ·  ' + item.genericName : '');
+    document.getElementById('delDisplayBatch').innerText =
+      'Batch: ' + (item.batch || '—') + '  ·  Expiry: ' + (item.expiry || '—');
+    document.getElementById('delDisplayStock').innerText =
+      'In stock: ' + item.stock + ' ' + (item.unit || '');
+    document.getElementById('delReason').value = '';
+    new bootstrap.Modal(document.getElementById('inventoryDeleteModal')).show();
+  }
+  window.openDeleteRowModal = openDeleteRowModal;
+
+  function submitDeleteRow() {
+    const btn = document.getElementById('btnConfirmDelete');
+    const reason = (document.getElementById('delReason').value || '').trim();
+    if (reason.length < 5) {
+      showToast('Reason required',
+                'Say why the row is going. It is the only record that it happened.',
+                'warning');
+      return;
+    }
+    crescRun({
+      fn: 'deletePharmacyBatch',
+      args: [{ token: phTok(), rowId: document.getElementById('delRowId').value, reason: reason }],
+      key: 'deletePharmacyBatch',
+      busy: 'Removing the row…',
+      button: btn,
+      success: 'Row removed',
+      error: 'Could not remove the row',
+      onSuccess: function (res) {
+        if (!res || !res.success) return;
+        const m = bootstrap.Modal.getInstance(document.getElementById('inventoryDeleteModal'));
+        if (m) m.hide();
+        loadPharmacyInventory();
+      }
+    });
+  }
+  window.submitDeleteRow = submitDeleteRow;
 
   /* ══════════════════ THE REGISTER ══════════════════ */
 
