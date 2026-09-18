@@ -307,19 +307,74 @@ window.CrescModules = (function () {
   }
 
   /**
+   * THE SCREEN THAT IS NOT THERE.
+   *
+   * A bundle can arrive and still leave the destination missing: a partial
+   * dropped from CRESC_BUNDLES, an editor paste that lost a file, a reply
+   * truncated on the way back. switchTab() then adds `active-section` to
+   * nothing at all, and the user is left on the screen they were already on
+   * with no indication that the click did anything — "unable to load the
+   * pharmacy billing", exactly as reported, with nothing in the interface
+   * that names a cause or offers a retry.
+   *
+   * So navigation now CHECKS that the destination exists, and says so with
+   * a button when it does not.
+   */
+  function missingScreen(tabId, bundle) {
+    var id = 'cresc-screen-missing';
+    var old = document.getElementById(id);
+    if (old) old.parentNode.removeChild(old);
+
+    var bar = document.createElement('div');
+    bar.id = id;
+    bar.className = 'alert alert-danger d-flex align-items-center gap-2 m-3';
+    bar.style.cssText = 'font-size:.9rem;';
+    bar.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span></span>';
+    bar.querySelector('span').textContent =
+      'This screen did not load. Its markup (bundle "' + bundle + '") reached the ' +
+      'browser without the section "' + tabId + '" in it, so there is nothing to show. ' +
+      'Try again; if it keeps happening, run crescVerifyBundles() from the script editor.';
+
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-outline-light ms-auto';
+    btn.textContent = 'Try again';
+    btn.onclick = function () {
+      bar.parentNode && bar.parentNode.removeChild(bar);
+      // Forget the bundle so the next navigation refetches it.
+      delete state[bundle];
+      if (typeof window.switchTab === 'function') window.switchTab(tabId);
+    };
+    bar.appendChild(btn);
+
+    var host = document.querySelector('.main-content') || document.body;
+    host.insertBefore(bar, host.firstChild);
+  }
+
+  function clearMissing() {
+    var old = document.getElementById('cresc-screen-missing');
+    if (old) old.parentNode.removeChild(old);
+  }
+
+  /**
    * Ensures the bundle behind a tab id is present, then runs `cb`.
    * `cb` runs even on failure so navigation is never left half-done; the
    * screen will simply be missing and the banner will say why.
    */
   function ensureTab(tabId, cb) {
     var bundle = TAB_BUNDLE[tabId];
+    clearMissing();
     if (!bundle || state[bundle] === 'ready') { cb(); return; }
     veil(true, bundle);
-    load(bundle, function () { veil(false); cb(); });
+    load(bundle, function (ok) {
+      veil(false);
+      if (ok && tabId && !document.getElementById(tabId)) missingScreen(tabId, bundle);
+      cb();
+    });
   }
 
   function ensureEmr(workspaceId, cb) {
     var bundle = EMR_BUNDLE[workspaceId];
+    clearMissing();
     if (!bundle || state[bundle] === 'ready') { cb(); return; }
     veil(true, bundle);
     load(bundle, function () { veil(false); cb(); });

@@ -917,17 +917,26 @@ function dsx_vitalFields_(cs) {
  */
 function dsx_splitVitalText_(text) {
   var out = { bpMmHg: '', pulsePerMin: '', spo2Percent: '', temperature: '',
-              respRatePerMin: '', otherVitals: '' };
+              respRatePerMin: '', weightKg: '', heightCm: '', otherVitals: '' };
   var rest = [];
-  dsx_str_(text).split(/\s*[·|,]\s*/).forEach(function (bit) {
+  // The separator has been "·" for a while and was "," and "|" before that;
+  // a line typed by hand also uses ";". All four split the same way, and a
+  // bit that matches nothing is kept rather than dropped.
+  dsx_str_(text).split(/\s*[·|,;]\s*/).forEach(function (bit) {
     var s = dsx_str_(bit);
     if (!s) return;
     var m;
     if ((m = /^BP\s+(.+?)(?:\s*mmHg)?$/i.exec(s)))        { out.bpMmHg = dsx_str_(m[1]); return; }
-    if ((m = /^(?:PR|Pulse|HR)\s+(.+?)(?:\s*\/min)?$/i.exec(s))) { out.pulsePerMin = dsx_str_(m[1]); return; }
-    if ((m = /^SpO2\s+(.+?)%?$/i.exec(s)))                  { out.spo2Percent = dsx_str_(m[1]); return; }
+    if ((m = /^(?:PR|Pulse|HR)\s+(.+?)(?:\s*(?:bpm|\/min))?$/i.exec(s))) { out.pulsePerMin = dsx_str_(m[1]); return; }
+    if ((m = /^SpO2\s+(.+?)\s*%?$/i.exec(s)))              { out.spo2Percent = dsx_str_(m[1]); return; }
     if ((m = /^Temp(?:erature)?\s+(.+)$/i.exec(s)))         { out.temperature = dsx_str_(m[1]); return; }
     if ((m = /^RR\s+(.+?)(?:\s*\/min)?$/i.exec(s)))         { out.respRatePerMin = dsx_str_(m[1]); return; }
+    // Weight and Height were in the admission line from the start and had
+    // nowhere to go, so they were swept into "Other" — where they read as
+    // an oddity rather than as the two measurements a paediatric dose is
+    // calculated from.
+    if ((m = /^(?:Wt|Weight)\s+(.+?)(?:\s*kgs?)?$/i.exec(s))) { out.weightKg = dsx_str_(m[1]); return; }
+    if ((m = /^(?:Ht|Height)\s+(.+?)(?:\s*cms?)?$/i.exec(s))) { out.heightCm = dsx_str_(m[1]); return; }
     rest.push(s);
   });
   out.otherVitals = rest.join(' · ');

@@ -427,11 +427,30 @@ function learnTemplates(items) {
 
 // ============================================================
 //  ADD THIS FUNCTION to your OP_Database_Engine.gs (anywhere).
-//  Reads Pharmacy_Inventory and includes optional reference-dose columns.
-//  Columns:  B Brand | C Generic | D Type | E Stock | F Unit
-//            G RefDose(mg/kg/day, optional) | H AdultDose(optional) | I Reorder(optional)
-//  F stays "Unit" to match your working fetchPharmacyMasterForIP().
+//  Reads Pharmacy_Inventory. Its columns are, and have always been:
+//
+//    A Timestamp | B Brand Name | C Generic Name | D Type | E Qty | F Unit
+//    G Batch No  | H Expiry Date | I Rack Location | J Buy Price | K MRP
+//    L GST % | M Manufacturer | N Supplier
+//
+//  THERE ARE NO DOSE COLUMNS IN IT, and there never were. This function used
+//  to read G, H and I as "RefDose (mg/kg/day)", "AdultDose" and "Reorder", so
+//  every prescribing screen in the application was handed a BATCH NUMBER as a
+//  reference dose and an EXPIRY DATE as an adult dose.
+//
+//  That was not cosmetic. crescDoseCalc() prefills mg/kg from the first
+//  number in refDose, so picking "P-500" (batch H192B12) filled in 192 mg/kg
+//  and offered 11,136 mg of paracetamol to a 58 kg patient; and
+//  suggestPaediatricDose() computed a child's dose from the same number.
+//
+//  The dose reference lives in Drug_Dose_Reference (Dose_Reference.gs), which
+//  is a clinical table with a basis, a range and ceilings. That is where
+//  refDose and adultDose now come from. The inventory supplies what the
+//  inventory knows: what the clinic stocks, and how much of it is left.
 // ============================================================
+
+/** Units at or below which a brand is flagged "low". Not a sheet column. */
+var OPDB_REORDER_LEVEL = 5;
 function fetchOPDrugMaster(sessionToken) {
   try {
     crescRequire_(sessionToken, 'reference.read');
@@ -456,30 +475,65 @@ function op_drugMaster_() {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];
     const data = sheet.getDataRange().getValues();
-    const drugs = [];
+
+    // The dose reference, keyed the same way a prescriber types a name. It is
+    // the ONLY place a mg/kg figure exists; see the note above this function.
+    let dref = null;
+    try { dref = (typeof dref_all_ === "function") ? dref_all_() : null; } catch (e) { dref = null; }
+    const refFor = function (brand, generic) {
+      if (!dref || !dref.byKey || typeof dref_key_ !== "function") return null;
+      return dref.byKey[dref_key_(brand)] || dref.byKey[dref_key_(generic)] || null;
+    };
+
+    // ONE ENTRY PER BRAND, not one per batch. Pharmacy_Inventory holds a row
+    // per received batch, so "Dolo 650" appears once for every delivery: the
+    // prescribing pickers listed it three times, each showing one batch's
+    // count, and none of them the number on the shelf.
+    const byBrand = {};
+    const order = [];
     for (let i = 1; i < data.length; i++) {
       const brand = String(data[i][1] || "").trim();
       if (!brand) continue;
-      const stock     = parseInt(data[i][4], 10) || 0;        // E
-      const unit      = String(data[i][5] || "").trim();      // F (unit)
-      const refDose   = String(data[i][6] || "").trim();      // G (optional)
-      const adultDose = String(data[i][7] || "").trim();      // H (optional)
-      const reorder   = parseInt(data[i][8], 10) || 5;        // I (optional)
-      const status = stock <= 0 ? "out" : (stock <= reorder ? "low" : "ok");
-      drugs.push({
-        brand: brand,
-        generic: String(data[i][2] || "").trim(),
-        type: String(data[i][3] || "Tab").trim(),
-        stock: stock,
-        unit: unit,
-        refDose: refDose,
-        adultDose: adultDose,
-        reorder: reorder,
-        status: status,
-        source: "INTERNAL"
-      });
+      const key = brand.toLowerCase();
+      const qty = parseInt(data[i][4], 10) || 0;              // E Qty
+      if (!byBrand[key]) {
+        byBrand[key] = {
+          brand: brand,
+          generic: String(data[i][2] || "").trim(),
+          type: String(data[i][3] || "Tab").trim(),
+          stock: 0,
+          unit: String(data[i][5] || "").trim(),              // F Unit
+          refDose: "",
+          adultDose: "",
+          reorder: OPDB_REORDER_LEVEL,
+          status: "out",
+          source: "INTERNAL"
+        };
+        order.push(key);
+      }
+      const d = byBrand[key];
+      d.stock += qty;
+      if (!d.generic) d.generic = String(data[i][2] || "").trim();
+      if (!d.unit) d.unit = String(data[i][5] || "").trim();
     }
-    return drugs;
+
+    return order.map(function (key) {
+      const d = byBrand[key];
+      const r = refFor(d.brand, d.generic);
+      if (r) {
+        // Stored as a number with its basis, because "15" means two different
+        // doses depending on whether the row says DOSE or DAY, and the
+        // consumer that only wants a figure must not have to guess.
+        if (r.usualPerKg !== null && r.usualPerKg !== undefined) {
+          d.refDose = String(r.usualPerKg);
+          d.refBasis = (r.basis === "dose") ? "dose" : "day";
+          d.maxPerKg = r.maxPerKg;
+        }
+        d.adultDose = r.adultDose || "";
+      }
+      d.status = d.stock <= 0 ? "out" : (d.stock <= d.reorder ? "low" : "ok");
+      return d;
+    });
   } catch (e) { return []; }
 }
 

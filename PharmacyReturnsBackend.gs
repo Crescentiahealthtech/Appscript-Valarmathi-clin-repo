@@ -92,10 +92,15 @@ function getInvoiceForReturn(query, sessionToken) {
 // CORE — process a return / partial or full cancellation + refund
 // ---------------------------------------------------------------------
 function processPharmacyReturn(payload, sessionToken) {
-  var lock = LockService.getScriptLock();
-  crescRequire_(sessionToken, 'pharmacy.return');
-  if (!lock.tryLock(15000)) return { success: false, message: "System busy, please retry." };
+  // Guard inside the try. Thrown out of a frontend entry point, a FORBIDDEN
+  // reaches google.script.run's FAILURE handler and is reported as a network
+  // problem; returned, it reaches the success handler where the real reason
+  // is already displayed. See processPharmacyBill in Pharmacy.gs.
+  var lock = null;
   try {
+    crescRequire_(sessionToken, 'pharmacy.return');
+    lock = LockService.getScriptLock();
+    if (!lock.tryLock(15000)) return { success: false, message: "System busy, please retry." };
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var hSheet = ss.getSheetByName(PH_SHEETS.INVOICES);
     var iSheet = ss.getSheetByName(PH_SHEETS.INVOICE_ITEMS);
@@ -233,8 +238,8 @@ function processPharmacyReturn(payload, sessionToken) {
           qty: c.qty, unit: c.unit, mrp: c.mrp, gst: c.gst, gstAmt: c.gstAmt, lineTotal: c.lineTotal, refundLine: c.refundLine }; })
       } };
   } catch (error) {
-    return { success: false, message: error.message || String(error) };
-  } finally { lock.releaseLock(); }
+    return { success: false, message: _phReason_(error) };
+  } finally { if (lock) { try { lock.releaseLock(); } catch (e) {} } }
 }
 
 

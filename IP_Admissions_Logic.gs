@@ -311,9 +311,13 @@ function getActiveIPWard(query, sessionToken) {
  * Returns { success, message, data, total, capped, cap, facets, counts }
  */
 function getIPHistory(query, sessionToken) {
-  crescRequire_(sessionToken, 'ward.read');
   var CAP = 500;
   try {
+    // Inside the try: thrown from a frontend entry point a FORBIDDEN reaches
+    // google.script.run's FAILURE handler, where every screen reports it as a
+    // connection problem. Returned, it reaches the success handler and the
+    // real sentence — "your session has expired" — is what gets shown.
+    crescRequire_(sessionToken, 'ward.read');
     var q = query || {};
     var status   = ipa_str_(q.status).toUpperCase() || 'ALL';
     var search   = ipa_str_(q.search).toLowerCase();

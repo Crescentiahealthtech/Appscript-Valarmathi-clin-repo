@@ -2938,6 +2938,10 @@ function opDrugOption(inputEl, m) {
         inputEl.dataset.generic = m.generic || '';
         inputEl.dataset.unit = m.unit || '';
         inputEl.dataset.refdose = m.refDose || '';
+        // The BASIS travels with the figure. 15 mg/kg/dose and 15 mg/kg/day
+        // are different prescriptions, and the calculator that reads
+        // data-refdose has to be told which one it has been handed.
+        inputEl.dataset.refbasis = m.refBasis || '';
         inputEl.dataset.adultdose = m.adultDose || '';
         const typeSel = inputEl.closest('tr').querySelector('.op-rx-type');
         if (typeSel && m.type) Array.from(typeSel.options).forEach(o => { if (o.value.toLowerCase() === m.type.toLowerCase()) typeSel.value = o.value; });
@@ -3383,7 +3387,8 @@ function normalizeOPDrugs(list) {
         const reorder = parseInt(d.reorder, 10) || 5;
         return {
             brand: d.brand || '', generic: d.generic || '', type: d.type || 'Tab',
-            stock: stock, unit: d.unit || '', refDose: d.refDose || '', adultDose: d.adultDose || '',
+            stock: stock, unit: d.unit || '', refDose: d.refDose || '',
+            refBasis: d.refBasis || '', adultDose: d.adultDose || '',
             status: d.status || (stock <= 0 ? 'out' : (stock <= reorder ? 'low' : 'ok')),
             source: 'INTERNAL'
         };

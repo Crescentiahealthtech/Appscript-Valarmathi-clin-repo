@@ -293,14 +293,16 @@
       <h4 style="margin-bottom: 5px;">Bill Saved Successfully!</h4>
       <div class="text-muted mb-4">Invoice No: <strong id="dh-invoice-no" style="color: var(--text-main);"></strong></div>
 
+      <div id="dh-print-note" class="alert alert-warning py-2 px-3 small d-none text-start"></div>
+
       <div class="d-grid gap-2 mb-4">
-        <button class="btn btn-success" onclick="sendPharmaWhatsApp()">
+        <button class="btn btn-success" id="dh-btn-wa" onclick="sendPharmaWhatsApp()">
           <i class="fa-brands fa-whatsapp me-2"></i> Send via WhatsApp
         </button>
-        <button class="btn btn-primary" onclick="sendPharmaEmail()">
+        <button class="btn btn-primary" id="dh-btn-mail" onclick="sendPharmaEmail()">
           <i class="fa-solid fa-envelope me-2"></i> Email Invoice
         </button>
-        <button class="btn btn-outline-secondary" onclick="printPharmaInvoice()">
+        <button class="btn btn-outline-secondary" id="dh-btn-print" onclick="printPharmaInvoice()">
           <i class="fa-solid fa-print me-2"></i> Print A4 Invoice
         </button>
       </div>
@@ -329,6 +331,33 @@
   let currentDispatchHtml = "";
 
   function newBillUuid() { return 'BILL-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); }
+
+  /**
+   * WHAT ACTUALLY WENT WRONG, instead of "Network error".
+   *
+   * Every failure handler on this desk used to say the network was down.
+   * It almost never was. google.script.run runs the FAILURE handler for an
+   * exception thrown on the SERVER too, and the commonest one at a pharmacy
+   * counter is an expired session — so a pharmacist who had been on the
+   * screen for an hour pressed Save Bill, read "Network error: please
+   * retry", retried, and read it again. Nothing ever said "sign in".
+   *
+   * The server side of this is fixed too (the permission check now sits
+   * inside the try in Pharmacy.gs, so a refusal comes back as a normal
+   * reply). This is the other half: when something really does reach the
+   * failure handler, say which of the two it was.
+   */
+  function phFailure(err, what) {
+    var raw = (err && err.message) ? String(err.message) : String(err || '');
+    var msg = raw.replace(/^FORBIDDEN:\s*/, '');
+    if (/session/i.test(msg) && /expire|invalid|sign in/i.test(msg)) {
+      return '\u26a0\ufe0f ' + what + ' failed: ' + msg +
+             ' Nothing was saved. Sign in again and repeat it.';
+    }
+    if (msg) return '\u274c ' + what + ' failed: ' + msg;
+    return '\u274c ' + what + ' failed and the server gave no reason. ' +
+           'Check the connection, then try again \u2014 nothing was saved.';
+  }
 
   function phOverlay(show, text) {
     const o = document.getElementById('ph-overlay');
@@ -386,19 +415,33 @@
       })
       .withFailureHandler(err => {
         phStock = []; phStockByBrand = {};
-        phStockProblem('Could not reach the server for the pharmacy stock' +
-          ((err && err.message) ? ': ' + err.message : '.') +
+        phStockProblem(phFailure(err, 'Reading the pharmacy stock') +
           ' The medicine search will find nothing until it loads.');
       })
       .fetchBillableStock(window.sessionToken);
   }
 
-  /** Shows or clears the one banner above the bill. '' clears it. */
+  /**
+   * Shows or clears the one banner above the bill. '' clears it.
+   *
+   * It carries a Try again button. A banner that explains why the shelf
+   * could not be read and then leaves the only remedy as "reload the whole
+   * application" costs the pharmacist the bill they were half way through.
+   */
   function phStockProblem(message) {
     const el = document.getElementById('ph-stock-problem');
     if (!el) return;
     if (!message) { el.classList.add('d-none'); el.textContent = ''; return; }
-    el.textContent = message;
+    el.textContent = '';
+    const text = document.createElement('span');
+    text.textContent = message;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm btn-outline-warning ms-2';
+    btn.textContent = 'Try again';
+    btn.onclick = fetchLivePharmacyStock;
+    el.appendChild(text);
+    el.appendChild(btn);
     el.classList.remove('d-none');
   }
 
@@ -447,7 +490,7 @@
         renderPrescriptions();
         if (!p && phPrescriptions.length === 0) crescAlert("No patient record or pending prescription found. Continue as Walk-In.");
       })
-      .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network error. Try again."); })
+      .withFailureHandler(err => { phOverlay(false); crescAlert(phFailure(err, 'The patient lookup')); })
       .getPatientBillingContext(query, window.sessionToken);
   }
 
@@ -881,9 +924,26 @@
           if (res && res.success) {
             if (res.duplicate) { crescAlert("ℹ️ " + res.message + " (Invoice " + res.invoiceNo + ")"); return; }
           
+            // THE BILL IS ALREADY SAVED BY THE TIME WE GET HERE.
+            //
+            // Everything below is the printable copy, and it used to run
+            // unguarded: one bad field in the print payload threw inside this
+            // success handler, so the dispatch panel never opened, no invoice
+            // number appeared, and the desk looked as though Save Bill had
+            // done nothing at all — while the stock had been deducted and the
+            // invoice written. The pharmacist's next move is to press Save
+            // again.
+            //
+            // So the confirmation is shown FIRST, from the reply we already
+            // hold, and the rendering is allowed to fail behind it.
+            document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
+            document.getElementById('ph-dispatch-modal').style.display = 'flex';
+            phPrintReady(false);
+
             // The letterhead is a server round trip on the first print of a
             // session (crescInvoiceWarm() below normally pays for it when the
             // desk opens), so the invoice is built through a callback.
+            try {
             buildPrintInvoiceRaw(res.print, function (rawHtml) {
               document.getElementById('ph-invoice-print').innerHTML = rawHtml;
 
@@ -899,13 +959,18 @@
                 '@media print{@page{margin:1cm;}}' +
                 '</style></head><body>' + rawHtml + '</body></html>';
 
-              document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
-              document.getElementById('ph-dispatch-modal').style.display = 'flex';
+              phPrintReady(true);
             });
+            } catch (e) {
+              phPrintReady(false, e && e.message);
+            }
 
           } else crescAlert("❌ " + ((res && res.message) || "Save failed."));
         })
-        .withFailureHandler(err => { btn.innerHTML = original; btn.disabled = false; crescAlert("❌ Network error: please retry."); })
+        .withFailureHandler(err => {
+          btn.innerHTML = original; btn.disabled = false;
+          crescAlert(phFailure(err, 'Saving the bill'));
+        })
         .processPharmacyBill(payload, window.sessionToken);
     }
   }
@@ -940,6 +1005,32 @@
   // ===================================================================
   // 4. DISPATCH HUB CONTROLLERS
   // ===================================================================
+
+  /**
+   * The bill is saved either way; this is only about the printable copy.
+   *
+   * WhatsApp, Email and Print all need `currentDispatchHtml`, and all three
+   * used to be offered whether or not it had been built. Pressing one with
+   * nothing behind it sent an empty document. They are now disabled until
+   * the invoice has rendered, and the panel says what happened instead of
+   * looking like an ordinary success.
+   */
+  function phPrintReady(ok, why) {
+    const note = document.getElementById('dh-print-note');
+    ['dh-btn-wa', 'dh-btn-mail', 'dh-btn-print'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = !ok;
+    });
+    if (!note) return;
+    if (ok) { note.classList.add('d-none'); note.textContent = ''; return; }
+    note.textContent = why
+      ? 'The bill is saved. The printable copy could not be built (' + why +
+        '), so it cannot be sent or printed from here \u2014 reprint it from ' +
+        'Dashboard & Search.'
+      : 'Preparing the printable copy\u2026';
+    note.classList.remove('d-none');
+  }
+
   
   function sendPharmaWhatsApp() {
     const invNo = document.getElementById('dh-invoice-no').innerText;
@@ -964,7 +1055,7 @@
           // The notice is on screen; the send retries itself if they agree.
         } else crescAlert("❌ Error generating PDF: " + ((res && res.message) || "Unknown error."));
       })
-      .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
+      .withFailureHandler(err => { phOverlay(false); crescAlert(phFailure(err, 'Preparing the PDF')); })
       .generateAndStorePharmacyInvoicePDF(invNo, currentDispatchHtml, window.sessionToken);
   }
 
@@ -984,7 +1075,7 @@
         if (res && res.success) crescAlert("✅ Invoice emailed successfully!");
         else crescAlert("❌ Error: " + (res.message || "Unknown error."));
       })
-      .withFailureHandler(() => { phOverlay(false); crescAlert("❌ Network Error."); })
+      .withFailureHandler(err => { phOverlay(false); crescAlert(phFailure(err, 'Emailing the invoice')); })
       .emailPharmacyInvoice(invNo, currentDispatchHtml, targetEmail, window.sessionToken);
   }
 
@@ -1082,7 +1173,10 @@
             </div>
           </div>`).join('');
       })
-      .withFailureHandler(() => { list.innerHTML = `<div class="cm-row text-danger">Network error.</div>`; })
+      .withFailureHandler(err => {
+        list.innerHTML = '<div class="cm-row text-danger"></div>';
+        list.firstChild.textContent = phFailure(err, 'Reading the credit bills');
+      })
       .getPendingCreditBills(window.sessionToken);
   }
 
@@ -1107,7 +1201,10 @@
         if (res && res.success) { rowEl.remove(); crescAlert("✅ " + res.message); }
         else { rowEl.style.opacity = '1'; crescAlert("❌ " + ((res && res.message) || "Failed.")); }
       })
-      .withFailureHandler(() => { rowEl.style.opacity = '1'; crescAlert("❌ Network error."); })
+      .withFailureHandler(err => {
+        rowEl.style.opacity = '1';
+        crescAlert(phFailure(err, 'Settling the bill'));
+      })
       .settleCreditBill({ invoiceNo: invoiceNo, payMode: mode, txnId: txn }, window.sessionToken);
   }
 

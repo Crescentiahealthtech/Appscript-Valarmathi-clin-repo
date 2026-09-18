@@ -2615,6 +2615,8 @@ function ipcDrugOption(inputEl, m) {
         inputEl.dataset.generic = m.generic || '';
         inputEl.dataset.unit = m.unit || '';
         inputEl.dataset.refdose = m.refDose || '';
+        // See the same line in OP_Module.html: the basis travels with it.
+        inputEl.dataset.refbasis = m.refBasis || '';
         inputEl.dataset.adultdose = m.adultDose || '';
         const typeSel = inputEl.closest('tr').querySelector('.ipc-rx-type');
         if (typeSel && m.type) Array.from(typeSel.options).forEach(o => { if (o.value.toLowerCase() === m.type.toLowerCase()) typeSel.value = o.value; });
@@ -2907,7 +2909,8 @@ function ipcNormalizeIPCDrugs(list) {
         const reorder = parseInt(d.reorder, 10) || 5;
         return {
             brand: d.brand || '', generic: d.generic || '', type: d.type || 'Tab',
-            stock: stock, unit: d.unit || '', refDose: d.refDose || '', adultDose: d.adultDose || '',
+            stock: stock, unit: d.unit || '', refDose: d.refDose || '',
+            refBasis: d.refBasis || '', adultDose: d.adultDose || '',
             status: d.status || (stock <= 0 ? 'out' : (stock <= reorder ? 'low' : 'ok')),
             source: 'INTERNAL'
         };

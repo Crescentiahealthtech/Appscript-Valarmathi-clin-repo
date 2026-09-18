@@ -317,15 +317,29 @@ function dsx_printSignatureBlock_(header, payload, mode, snapshotNo) {
 
   var right;
   if (signed) {
+    // WHO SIGNED IT, AND WHO ENTERED IT.
+    //
+    // `enteredBy` is set only when the person at the keyboard was not the
+    // doctor the document is signed by — an administrator entering the
+    // signature on a named doctor's authority. Where that happened the
+    // document says so in full: a reader must be able to tell the two
+    // apart, and a signature block that quietly shows only the doctor's
+    // name would be a worse record than the shared password it replaces.
+    var enteredBy = dsx_str_(sig.enteredByName) || dsx_str_(sig.enteredBy);
     right = ipp_kv_([
       ['Verified &amp; signed by', '<strong>' + ipp_esc_(sig.signerName) + '</strong>'],
       ['Qualification', ipp_esc_(sig.signerQualification)],
       ['Reg. No', ipp_esc_(sig.signerRegNo)],
       ['Signed at', ipp_esc_(dsx_fmt_(header.Signed_At, 'dd-MMM-yyyy hh:mm a'))]
-    ], { narrow: true, keepEmpty: true }) +
+    ].concat(enteredBy ? [['Entered by', ipp_esc_(enteredBy)]] : []),
+      { narrow: true, keepEmpty: true }) +
     (dsx_str_(sig.onBehalfReason)
-      ? '<div style="font-size:9pt;color:#7f1d1d;margin-top:3px;">Signed on behalf of the ' +
-        'consultant of record: ' + ipp_esc_(sig.onBehalfReason) + '</div>'
+      ? '<div style="font-size:9pt;color:#7f1d1d;margin-top:3px;">' +
+        (enteredBy
+          ? 'Entered by ' + ipp_esc_(enteredBy) + ' in the name of ' +
+            ipp_esc_(sig.signerName) + ': '
+          : 'Signed on behalf of the consultant of record: ') +
+        ipp_esc_(sig.onBehalfReason) + '</div>'
       : '');
   } else {
     right = '<div style="color:#b91c1c;font-size:10pt;font-weight:700;">Not yet signed</div>';
