@@ -94,7 +94,8 @@ var DEP_MAP = {
     "dpdpRegisterSharedFile", "dpdpExpireSharedLinks", "dpdpRetentionReport",
     "dpdpReadinessCheck", "dpdpVerifyRequester", "dpdpSubmitPublicRequest",
     "recordNomination", "getNomination", "revokeNomination", "dpdpLogRead_",
-    "dpdpSaveGrievanceOfficer", "dpdpConsoleSnapshot", "dpdpRetentionReportUI"
+    "dpdpSaveGrievanceOfficer", "dpdpConsoleSnapshot", "dpdpConsoleHousekeeping",
+    "dpdpRetentionReportUI"
   ],
   "DPDP_Documents.gs": [
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
@@ -103,7 +104,7 @@ var DEP_MAP = {
   "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
   "Deployment_Probe.gs": [
     "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
-    "RUN_deploymentEvidence"
+    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence"
   ],
   "Patient_Portal.gs": [
     "portalHome", "portalBookableDoctors", "portalDoctorSlots",

@@ -25,28 +25,64 @@
 // It stays HIGH on a clinic that fixed it months ago, which is the exact way
 // a readiness report stops being read.
 //
-// WHAT CAN ACTUALLY BE MEASURED
+// WHAT CAN ACTUALLY BE MEASURED — AND WHAT THIS FILE GOT WRONG
 //
-// Session.getActiveUser().getEmail() returns '' when the caller is not
-// identified to the script, and an email when they are. That is a direct
-// consequence of the live deployment's access mode:
+// The first version of this file reasoned:
 //
 //   ANYONE_ANONYMOUS  a visitor who has not signed in reaches doGet, and the
 //                     active user is EMPTY.
 //   ANYONE            Google requires a sign-in before doGet runs, so the
 //                     active user is an email address.
 //
-// So every page load is EVIDENCE about the live deployment. This file records
-// one row per load — a date, whether the caller was identified, and nothing
-// else — and turns the finding from a reminder into a fact:
+// The first line is true. THE SECOND IS NOT, and the clinic this runs in is
+// exactly the case where it fails.
 //
-//     "The last 340 page loads over 21 days were all signed in, so this
-//      deployment requires a Google account."
+// Session.getActiveUser().getEmail() returns '' whenever the script is not
+// permitted to learn who the caller is, and a web app deployed to EXECUTE AS
+// ME is the documented case where it is not: the script is authorised by the
+// owner, not by the visitor, so the visitor's identity is withheld unless
+// they are the owner or share the owner's Google Workspace domain. This
+// project is deployed as "executeAs": "USER_DEPLOYING" (appsscript.json) from
+// a consumer Gmail account, so EVERY visitor but the owner reads as empty
+// whether they signed in or not.
 //
-// or
+// The consequence was a permanent, unfixable CRITICAL. A clinic that had set
+// access to "Anyone with a Google account" and redeployed was still told, on
+// every page load:
 //
-//     "12 of the last 340 page loads reached the app with NO identified user.
-//      The live deployment is still ANYONE_ANONYMOUS. Most recent: 14-Sep."
+//     "17 of the last 21 page loads reached this application with NO
+//      identified user … the LIVE deployment is still ANYONE_ANONYMOUS"
+//
+// — a breach allegation, produced by the deployment being configured
+// correctly. That is worse than no check: it is a register saying the clinic
+// is leaking patient data when it is not, and it buries the findings next to
+// it that are real.
+//
+// SO THE PROBE NOW RECORDS ONE MORE BIT, AND CLAIMS LESS.
+//
+// Alongside "was the caller identified", each load records whether the
+// identified caller was somebody OTHER than the script's effective user (the
+// owner). That single boolean is what separates the two worlds:
+//
+//   • at least one load identified as a NON-OWNER  →  this deployment can
+//     resolve visitor identities, so a load that resolved to nobody really
+//     was an unidentified caller. The anonymous finding is then evidence.
+//
+//   • never  →  the deployment withholds identities from the script, which
+//     is what executeAs USER_DEPLOYING does outside a shared Workspace
+//     domain. An empty active user is then NOT EVIDENCE OF ANYTHING, and the
+//     honest answer is that this cannot be measured from inside the script.
+//
+// What it stores is still a date, three counters and a last-seen time. No
+// email, no IP, no query string.
+//
+// FOR THE CASE IT CANNOT MEASURE
+//
+// There is one authoritative test and a person has to run it: open the /exec
+// URL in a private window and see whether Google asks for a sign-in.
+// dpdpConfirmDeploymentAccess() records that answer with the date and who
+// checked, and the finding then reports what was checked and when, instead
+// of asking again for ever.
 //
 // WHAT IT DELIBERATELY DOES NOT STORE
 //
@@ -72,8 +108,14 @@ var DEP_PROBE = {
 };
 
 function dep_probeSheet_() {
+  // Other_User_Loads is the column added when the inference was corrected:
+  // loads identified as somebody who is NOT the script's effective user. It
+  // is what tells a deployment that can resolve visitors apart from one that
+  // withholds their identity. dc_ensureSheet_ adds it to an existing
+  // register, and the rows written before it simply read 0.
   return dc_ensureSheet_(SpreadsheetApp.getActiveSpreadsheet(), DEP_PROBE.SHEET, [
-    'Date', 'Identified_Loads', 'Anonymous_Loads', 'Last_Seen_At', 'Notes'
+    'Date', 'Identified_Loads', 'Anonymous_Loads', 'Other_User_Loads',
+    'Last_Seen_At', 'Notes'
   ]);
 }
 
@@ -88,18 +130,26 @@ function dep_probeSheet_() {
  */
 function depProbeRecord_() {
   try {
-    var identified = false;
-    try {
-      identified = !!String(Session.getActiveUser().getEmail() || '').trim();
-    } catch (e) {
-      // A throw here is itself the anonymous case on some configurations.
-      identified = false;
-    }
+    var active = '', effective = '';
+    try { active = String(Session.getActiveUser().getEmail() || '').trim(); }
+    catch (e) { active = ''; }          // a throw here is the unidentified case
+    try { effective = String(Session.getEffectiveUser().getEmail() || '').trim(); }
+    catch (e) { effective = ''; }
+
+    var identified = !!active;
+    // The bit the whole inference turns on: an identified caller who is NOT
+    // the account the script runs as. Only its TRUTH is kept, never the
+    // address — the register answers a question about the deployment, and
+    // recording who visited the sign-in page in order to prove the sign-in
+    // page is protected would be its own section 8 problem.
+    var otherUser = identified && effective &&
+                    active.toLowerCase() !== effective.toLowerCase();
 
     var tz = 'Asia/Kolkata';
     var now = new Date();
     var day = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
-    var bucket = day + (identified ? ':ID' : ':ANON');
+    var kind = identified ? (otherUser ? 'OTHER' : 'ID') : 'ANON';
+    var bucket = day + ':' + kind;
 
     var cache = CacheService.getScriptCache();
     var seen = cache.get('DEPPROBE_' + bucket);
@@ -111,7 +161,7 @@ function depProbeRecord_() {
     // evicted before the flush. Identified loads are the uninteresting case
     // and are flushed periodically.
     if (!identified || count === 1 || count % 25 === 0) {
-      dep_probeFlush_(day, identified, count);
+      dep_probeFlush_(day, kind, count);
     }
   } catch (e) {
     try { Logger.log('depProbeRecord_: ' + e.message); } catch (e2) {}
@@ -119,11 +169,13 @@ function depProbeRecord_() {
 }
 
 /** Writes today's counters into the register, replacing the day's row. */
-function dep_probeFlush_(day, identified, count) {
+function dep_probeFlush_(day, kind, count) {
   var sh = dep_probeSheet_();
   var m = dc_headerMap_(sh);
   var data = dc_sheetValues_(sh);
-  var col = identified ? 'Identified_Loads' : 'Anonymous_Loads';
+  var col = (kind === 'ANON') ? 'Anonymous_Loads'
+          : (kind === 'OTHER') ? 'Other_User_Loads' : 'Identified_Loads';
+  if (m[col] === undefined) col = (kind === 'ANON') ? 'Anonymous_Loads' : 'Identified_Loads';
 
   for (var i = 1; i < (data ? data.length : 0); i++) {
     if (String(data[i][m['Date']] || '').indexOf(day) !== 0 &&
@@ -154,8 +206,8 @@ function dep_probeFlush_(day, identified, count) {
  *           lastAnonymous:string, verdict:string}}
  */
 function dep_probeSummary_() {
-  var out = { days: 0, identified: 0, anonymous: 0, lastAnonymous: '',
-              verdict: 'NO_DATA' };
+  var out = { days: 0, identified: 0, anonymous: 0, otherUser: 0,
+              lastAnonymous: '', lastAnonymousMs: 0, verdict: 'NO_DATA' };
   try {
     var sh = dep_probeSheet_();
     var m = dc_headerMap_(sh);
@@ -170,22 +222,121 @@ function dep_probeSummary_() {
       out.days++;
       var id = parseInt(data[i][m['Identified_Loads']], 10) || 0;
       var an = parseInt(data[i][m['Anonymous_Loads']], 10) || 0;
-      out.identified += id;
+      var ot = (m['Other_User_Loads'] === undefined) ? 0
+             : (parseInt(data[i][m['Other_User_Loads']], 10) || 0);
+      out.identified += id + ot;      // a non-owner load is an identified one
+      out.otherUser += ot;
       out.anonymous += an;
-      if (an > 0) {
-        var when = Utilities.formatDate(d, 'Asia/Kolkata', 'dd-MMM-yyyy');
-        if (!out.lastAnonymous || when > out.lastAnonymous) out.lastAnonymous = when;
+      if (an > 0 && d.getTime() > out.lastAnonymousMs) {
+        out.lastAnonymousMs = d.getTime();
+        out.lastAnonymous = Utilities.formatDate(d, 'Asia/Kolkata', 'dd-MMM-yyyy');
       }
     }
 
-    if (!out.identified && !out.anonymous) out.verdict = 'NO_DATA';
-    else if (out.anonymous > 0) out.verdict = 'ANONYMOUS';
+    if (!out.identified && !out.anonymous) { out.verdict = 'NO_DATA'; return out; }
+
+    if (out.anonymous > 0) {
+      // THE DISTINCTION THIS FILE EXISTS TO DRAW.
+      //
+      // A load that resolved to nobody means "not signed in" only if this
+      // deployment resolves anybody at all besides the owner. Under
+      // executeAs USER_DEPLOYING on a consumer account it never does, and
+      // then an empty active user says nothing whatsoever about the access
+      // mode — see the note at the top of this file.
+      out.verdict = (out.otherUser > 0) ? 'ANONYMOUS' : 'NOT_MEASURABLE';
+      return out;
+    }
+
     // One signed-in load proves sign-in is POSSIBLE, not that it is required.
     // A week of them with none anonymous is the evidence worth reporting.
-    else if (out.days >= 7) out.verdict = 'SIGNED_IN';
-    else out.verdict = 'LOOKS_OK_EARLY';
+    out.verdict = (out.days >= 7) ? 'SIGNED_IN' : 'LOOKS_OK_EARLY';
     return out;
   } catch (e) { return out; }
+}
+
+// ---------------------------------------------------------------------------
+// THE ANSWER A PERSON HAS TO GO AND GET
+//
+// No Apps Script API reports a deployment's own access mode, and the probe
+// above can only measure it on a deployment that resolves visitor identities.
+// For every other clinic there is exactly one authoritative test, it takes
+// fifteen seconds, and a person has to run it: open the /exec URL in a
+// private window.
+//
+// So the answer is RECORDED rather than asked for again on every report.
+// What is stored is the answer, the day it was checked and who checked it —
+// an attestation, which is the ordinary instrument for a control that cannot
+// be measured automatically. It is re-asked after DEP_ATTEST_DAYS, and the
+// finding always prints the date so nobody has to trust an old one blindly.
+// ---------------------------------------------------------------------------
+
+var DEP_ATTEST_KEY = 'DEP_ACCESS_ATTESTATION';
+var DEP_ATTEST_DAYS = 180;
+
+/** The stored attestation, or null. */
+function dep_attestation_() {
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty(DEP_ATTEST_KEY);
+    if (!raw) return null;
+    var o = JSON.parse(raw);
+    if (!o || !o.mode || !o.at) return null;
+    var at = new Date(o.at);
+    if (isNaN(at.getTime())) return null;
+    o.ageDays = Math.floor((Date.now() - at.getTime()) / 86400000);
+    o.stale = o.ageDays > DEP_ATTEST_DAYS;
+    o.when = Utilities.formatDate(at, 'Asia/Kolkata', 'dd-MMM-yyyy');
+    return o;
+  } catch (e) { return null; }
+}
+
+/**
+ * FRONTEND ENTRY. Records what the private-window check actually showed.
+ *
+ * @param {string} mode  'SIGN_IN_REQUIRED' or 'ANYONE_ANONYMOUS'
+ * @param {string} sessionToken
+ * @return {{success:boolean, message:string}}
+ */
+function dpdpConfirmDeploymentAccess(mode, sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, ['dpdp.manage', 'admin.config']);
+    var m = String(mode || '').toUpperCase();
+    if (m !== 'SIGN_IN_REQUIRED' && m !== 'ANYONE_ANONYMOUS') {
+      return { success: false, message: 'Answer either "it asked me to sign in" or ' +
+                                        '"it opened without asking".' };
+    }
+    PropertiesService.getScriptProperties().setProperty(DEP_ATTEST_KEY, JSON.stringify({
+      mode: m,
+      at: new Date().toISOString(),
+      by: String((actor && (actor.displayName || actor.username)) || '')
+    }));
+
+    // An admission that the live deployment is open is a section 8(6) matter,
+    // not a setting. It opens a breach entry rather than sitting in a
+    // property where only this report would ever see it.
+    if (m === 'ANYONE_ANONYMOUS' && typeof dpdpRaiseBreach === 'function') {
+      try {
+        dpdpRaiseBreach({
+          category: 'UNAUTHORISED_ACCESS',
+          source: 'DEPLOYMENT_CHECK',
+          severity: 'UNASSESSED',
+          summary: 'The live web app deployment was confirmed by ' +
+                   ((actor && (actor.displayName || actor.username)) || 'an administrator') +
+                   ' to open without asking for a Google sign-in, so anyone holding ' +
+                   'the /exec URL could reach every endpoint with the owner\u2019s ' +
+                   'spreadsheet access. Any period it was live in that state is ' +
+                   'potentially a personal data breach and needs assessing under s.8(6).'
+        }, sessionToken);
+      } catch (e) { /* the attestation is recorded either way */ }
+    }
+
+    return { success: true, message: (m === 'SIGN_IN_REQUIRED')
+      ? 'Recorded: the live deployment asks for a Google sign-in. This will be ' +
+        're-checked in ' + DEP_ATTEST_DAYS + ' days.'
+      : 'Recorded: the live deployment opens without a sign-in. Publish a new ' +
+        'version now, then record the check again.' };
+  } catch (e) {
+    return { success: false, message: String(e.message || e).replace('FORBIDDEN: ', '') };
+  }
 }
 
 /**
@@ -201,23 +352,86 @@ function dep_probeSummary_() {
  */
 function depDeploymentFinding() {
   var p = dep_probeSummary_();
+  var att = dep_attestation_();
   var total = p.identified + p.anonymous;
 
+  // ---- an ADMITTED open deployment outranks everything below -------------
+  if (att && att.mode === 'ANYONE_ANONYMOUS' && !att.stale) {
+    return {
+      severity: 'CRITICAL',
+      text: 'The live deployment was checked on ' + att.when +
+            (att.by ? ' by ' + att.by : '') + ' and opened WITHOUT asking for a ' +
+            'Google sign-in. Anyone holding the /exec URL can load the page and ' +
+            'call every google.script.run endpoint with the owner\u2019s full ' +
+            'spreadsheet access.',
+      fix: 'Deploy > Manage deployments > edit the ACTIVE deployment > New ' +
+           'version, with access set to "Anyone with a Google account". The ' +
+           'manifest already asks for it; it takes effect only on a new version. ' +
+           'Then check the /exec URL in a private window again and record the ' +
+           'result, and assess the period it was open under s.8(6).'
+    };
+  }
+
+  // ---- measured: this deployment DOES resolve visitors, and some were not -
   if (p.verdict === 'ANONYMOUS') {
     return {
       severity: 'CRITICAL',
       text: p.anonymous + ' of the last ' + total + ' page load(s) over ' +
             p.days + ' day(s) reached this application with NO identified ' +
-            'user — most recently on ' + p.lastAnonymous + '. The LIVE ' +
-            'deployment is still ANYONE_ANONYMOUS, whatever the manifest ' +
-            'says, so anyone with the /exec URL can load the page and call ' +
-            'every google.script.run endpoint with the owner\'s full ' +
-            'spreadsheet access.',
+            'user — most recently on ' + p.lastAnonymous + '. This deployment ' +
+            'does resolve who its visitors are (' + p.otherUser + ' load(s) ' +
+            'identified as somebody other than the owner), so those were ' +
+            'genuinely unidentified callers and the live deployment is still ' +
+            'ANYONE_ANONYMOUS.',
       fix: 'Deploy > Manage deployments > edit the ACTIVE deployment > ' +
            'New version. The manifest already asks for access "ANYONE"; it ' +
            'takes effect only on a new version. Then treat the period since ' +
            'the first anonymous load as potentially breached and assess it ' +
            'under s.8(6) — dpdpRaiseBreach() opens the register entry.'
+    };
+  }
+
+  // ---- the case this file used to report as a breach ---------------------
+  if (p.verdict === 'NOT_MEASURABLE') {
+    if (att && att.mode === 'SIGN_IN_REQUIRED' && !att.stale) {
+      return {
+        severity: 'LOW',
+        text: 'This deployment runs as "execute as me", so Apps Script does not ' +
+              'tell the script who its visitors are and page loads cannot show ' +
+              'whether a sign-in was required — ' + p.anonymous + ' of ' + total +
+              ' load(s) resolved to nobody, which is the expected reading either ' +
+              'way. The private-window check was done on ' + att.when +
+              (att.by ? ' by ' + att.by : '') + ' and the deployment DID ask for ' +
+              'a Google sign-in. executeAs is still USER_DEPLOYING, so every ' +
+              'endpoint runs with the owner\u2019s spreadsheet access — that is ' +
+              'what RBAC.gs guards.',
+        fix: 'Nothing to change. Re-check after any new deployment, and in any ' +
+             'case within ' + Math.max(0, DEP_ATTEST_DAYS - att.ageDays) + ' day(s), ' +
+             'when this attestation lapses. Run crescRbacCoverage() after adding ' +
+             'any new frontend endpoint.'
+      };
+    }
+    return {
+      severity: 'MEDIUM',
+      text: 'Whether the live deployment requires a Google sign-in CANNOT BE ' +
+            'MEASURED from inside this script. It runs as "execute as me" ' +
+            '(executeAs USER_DEPLOYING), and Apps Script withholds a visitor\u2019s ' +
+            'identity from a script authorised by its owner unless they share a ' +
+            'Google Workspace domain — so all ' + p.anonymous + ' of the ' + total +
+            ' load(s) over ' + p.days + ' day(s) that resolved to nobody read ' +
+            'exactly the same whether those people signed in or not. ' +
+            'This finding previously called that a breach; it was not evidence ' +
+            'of one.' +
+            (att && att.stale
+              ? ' The last check, on ' + att.when + ', is more than ' +
+                DEP_ATTEST_DAYS + ' days old.'
+              : ''),
+      fix: 'Open the /exec URL in a private window. If Google asks you to sign ' +
+           'in, the deployment is correct — record that on the Data protection ' +
+           'screen (Readiness > "Record the deployment check") and this finding ' +
+           'settles. If it opens straight into the app, publish a new version ' +
+           'with access "Anyone with a Google account" and assess the period it ' +
+           'was open under s.8(6).'
     };
   }
 
@@ -249,20 +463,28 @@ function depDeploymentFinding() {
     };
   }
 
+  if (att && att.mode === 'SIGN_IN_REQUIRED' && !att.stale) {
+    return {
+      severity: 'LOW',
+      text: 'No page load has been observed since the probe was installed, so ' +
+            'there is nothing measured — but the private-window check was done ' +
+            'on ' + att.when + (att.by ? ' by ' + att.by : '') +
+            ' and the deployment asked for a Google sign-in.',
+      fix: 'Nothing to change. Re-check after any new deployment.'
+    };
+  }
+
   return {
-    severity: 'HIGH',
-    text: 'Nothing is known about the live deployment yet — this check ' +
-          'measures whether callers arrive identified, and no page load has ' +
-          'been observed since the probe was installed. The manifest asks ' +
-          'for access "ANYONE" and executeAs USER_DEPLOYING, but a manifest ' +
-          'only takes effect on a NEW version, so an /exec URL published ' +
-          'earlier keeps its old setting.',
-    fix: 'Open the application once and re-run this check — it will then ' +
-         'report what the live deployment actually does. Meanwhile: Deploy > ' +
-         'Manage deployments > edit > New version, then open the /exec URL ' +
-         'in a private window. If it answers without asking you to sign in, ' +
-         'the old ANYONE_ANONYMOUS deployment is still live and any period ' +
-         'it was anonymous is potentially a breach (s.8(6)).'
+    severity: 'MEDIUM',
+    text: 'Nothing is known about the live deployment yet — no page load has ' +
+          'been observed since the probe was installed, and no private-window ' +
+          'check has been recorded. The manifest asks for access "ANYONE" and ' +
+          'executeAs USER_DEPLOYING, but a manifest only takes effect on a NEW ' +
+          'version, so an /exec URL published earlier keeps its old setting.',
+    fix: 'Open the /exec URL in a private window and record what happened on ' +
+         'the Data protection screen (Readiness > "Record the deployment ' +
+         'check"). If it answers without asking you to sign in, publish a new ' +
+         'version and assess the period it was open under s.8(6).'
   };
 }
 
