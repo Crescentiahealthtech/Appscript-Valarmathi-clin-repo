@@ -108,11 +108,11 @@
   // =========================================================================
   // 1. STATE MANAGEMENT & INITIALIZATION
   // =========================================================================
-  let masterLedgerData = [];
-  let currentActivePatientId = "";
+  var masterLedgerData = [];
+  var currentActivePatientId = "";
   /** The last patient the timeline loaded, as the server sent it. */
-  let currentPatientRecord = null;
-  let currentPatientEvents = []; 
+  var currentPatientRecord = null;
+  var currentPatientEvents = []; 
 
   /* The directory used to be fetched from a DOMContentLoaded listener. This
      module is downloaded on demand now, so that event has long since fired
@@ -482,7 +482,7 @@ function buildIPDischargeBlock(ev) {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /** Cache per stay, so collapsing and re-expanding is free. */
-const MT_SUMMARY_CACHE = {};
+var MT_SUMMARY_CACHE = {};
 
 function mtReadSummary(ipNumber, key, btn) {
   const host = document.getElementById('ds-full-' + key);

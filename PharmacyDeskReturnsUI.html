@@ -172,8 +172,8 @@
   // ===================================================================
   // PHARMACY DESK — state + navigation
   // ===================================================================
-  let phrInvoice = null;            // { header, items }
-  let phrReturnUuid = null;
+  var phrInvoice = null;            // { header, items }
+  var phrReturnUuid = null;
 
   function newReturnUuid() { return 'RET-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); }
 

@@ -190,6 +190,32 @@ window.CrescModules = (function () {
    * the original order is preserved. They go on <body> rather than inside
    * the host because that is where they ran when Index.html inlined them,
    * and a few of them walk up from document.body.
+   *
+   * ───────────────────────────────────────────────────────────────────
+   * A SCRIPT THAT DOES NOT RUN USED TO LEAVE A SCREEN THAT LOOKS FINE.
+   *
+   * The markup goes in FIRST, then the scripts. If one script block fails to
+   * evaluate, its markup is already on the page — so the screen renders
+   * completely, and every inline onclick on it points at a function that was
+   * never defined. Pressing anything does nothing at all. Not the search,
+   * not Add Medicine, not even Back to Workspace, which makes no server call
+   * and cannot be blamed on the network.
+   *
+   * The commonest way to get there is a NAME COLLISION. These partials
+   * declare their state with top-level `let` and `const`, and re-declaring a
+   * lexical binding that already exists is an early error: the whole script
+   * block is discarded before a line of it runs. It only takes the same
+   * partial being present twice — a stale Index.html that still inlines it,
+   * or this bundle injected a second time.
+   *
+   * Two things are done about it here. The names themselves were changed to
+   * `var`, which may be re-declared harmlessly, so a collision is survivable
+   * rather than fatal. And a script that fails for ANY reason is now caught,
+   * attributed to the partial it came from, and reported on screen — because
+   * the browser's own console message names no file, the loader used to
+   * carry on and mark the bundle "ready", and the person at the desk was
+   * left pressing dead buttons with nothing to report but "nothing works".
+   * ───────────────────────────────────────────────────────────────────
    */
   function inject(html) {
     var tmp = document.createElement('div');
@@ -201,14 +227,73 @@ window.CrescModules = (function () {
     var target = host();
     while (tmp.firstChild) target.appendChild(tmp.firstChild);
 
+    var failures = [];
     scripts.forEach(function (old) {
       var s = document.createElement('script');
       for (var i = 0; i < old.attributes.length; i++) {
         s.setAttribute(old.attributes[i].name, old.attributes[i].value);
       }
       if (!old.src) s.text = old.textContent;
-      document.body.appendChild(s);
+
+      // An inline script's evaluation error is REPORTED, not thrown to the
+      // caller, so try/catch around appendChild does not see it. A window
+      // error listener for the duration of the insertion does — and because
+      // the insertion is synchronous, anything it hears belongs to this
+      // script and no other.
+      var caught = null;
+      var onErr = function (ev) {
+        caught = (ev && ev.error && ev.error.message) || (ev && ev.message) || 'unknown error';
+        ev.preventDefault();
+      };
+      window.addEventListener('error', onErr, true);
+      try {
+        document.body.appendChild(s);
+      } catch (e) {
+        caught = e.message;
+      } finally {
+        window.removeEventListener('error', onErr, true);
+      }
+
+      if (caught) {
+        // Set by the marker script crescGetBundle puts before each partial.
+        failures.push({ partial: window.__crescPartial || '(unnamed)', why: caught });
+      }
     });
+
+    return failures;
+  }
+
+  /**
+   * Says which screen is dead and why, with the only remedy that works.
+   *
+   * A reload is not a shrug here: the collision that causes this happens
+   * during injection, and a fresh page injects each bundle exactly once.
+   */
+  function scriptFailed(bundle, failures) {
+    var id = 'cresc-script-failed';
+    var old = document.getElementById(id);
+    if (old) old.parentNode.removeChild(old);
+
+    var bar = document.createElement('div');
+    bar.id = id;
+    bar.className = 'alert alert-danger d-flex align-items-start gap-2 m-3';
+    bar.style.cssText = 'font-size:.9rem;';
+    bar.innerHTML = '<i class="fa-solid fa-triangle-exclamation mt-1"></i><span></span>';
+    bar.querySelector('span').textContent =
+      'Part of the ' + bundle + ' screens did not start, so the buttons on ' +
+      'them will not respond: ' +
+      failures.map(function (f) { return f.partial + ' (' + f.why + ')'; }).join('; ') +
+      '. This is a fault in this deployment, not in what you were doing — ' +
+      'nothing you pressed was saved or lost.';
+
+    var btn = document.createElement('button');
+    btn.className = 'btn btn-sm btn-light ms-auto flex-shrink-0';
+    btn.textContent = 'Reload';
+    btn.onclick = function () { window.location.reload(); };
+    bar.appendChild(btn);
+
+    var host = document.querySelector('.main-content') || document.body;
+    host.insertBefore(bar, host.firstChild);
   }
 
   function settle(name, ok) {
@@ -250,7 +335,8 @@ window.CrescModules = (function () {
           return;
         }
         try {
-          inject(res.html);
+          var failures = inject(res.html);
+          if (failures && failures.length) scriptFailed(name, failures);
           settle(name, true);
         } catch (e) {
           if (window.crescDeployBanner) {
@@ -337,13 +423,18 @@ window.CrescModules = (function () {
 
     var btn = document.createElement('button');
     btn.className = 'btn btn-sm btn-outline-light ms-auto';
-    btn.textContent = 'Try again';
-    btn.onclick = function () {
-      bar.parentNode && bar.parentNode.removeChild(bar);
-      // Forget the bundle so the next navigation refetches it.
-      delete state[bundle];
-      if (typeof window.switchTab === 'function') window.switchTab(tabId);
-    };
+    btn.textContent = 'Reload';
+    // A RELOAD, NOT A RE-INJECTION.
+    //
+    // This button used to forget the bundle and navigate again, which
+    // fetched and injected the same markup a second time. That is the one
+    // thing it must not do: a second injection puts a second copy of every
+    // element into the page, so getElementById returns the FIRST — the
+    // hidden one — while the person is looking at the second, and it
+    // re-declares every top-level binding, which discards the incoming
+    // script block entirely. The remedy for a half-built page is a clean
+    // one.
+    btn.onclick = function () { window.location.reload(); };
     bar.appendChild(btn);
 
     var host = document.querySelector('.main-content') || document.body;

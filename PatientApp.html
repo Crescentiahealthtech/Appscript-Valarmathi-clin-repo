@@ -1855,7 +1855,7 @@ function fetchProfileData() {
   }).getUserProfile(loggedInUser, window.sessionToken);
 }
 
-let isEditingProfile = false;
+var isEditingProfile = false;
 function toggleEditProfile() {
   isEditingProfile = !isEditingProfile;
   document.getElementById('profile-view').classList.toggle('d-none', isEditingProfile);

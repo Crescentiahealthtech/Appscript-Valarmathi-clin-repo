@@ -910,20 +910,20 @@ function ipcSetDx(value) {
 // render with an explicit "+". The doctor's click is the act of prescribing.
 // ============================================================================
 
-let ipcCachedDrugsRich = [];
-let ipcCachedUniversalDrugs = [];
-let ipcLabMaster = { internal: [], external: [] };
-let ipcComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
-let ipcConsultTemplates = [];
-let ipcPatientAllergies = { recorded: false, raw: "", list: [] };
-let currentIPCDialTarget = null;
-let activeIpcEncounterId = "";
+var ipcCachedDrugsRich = [];
+var ipcCachedUniversalDrugs = [];
+var ipcLabMaster = { internal: [], external: [] };
+var ipcComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
+var ipcConsultTemplates = [];
+var ipcPatientAllergies = { recorded: false, raw: "", list: [] };
+var currentIPCDialTarget = null;
+var activeIpcEncounterId = "";
 /* ipcDoseTargetRow / _ipcDoseSig retired with the local calculator; the
    shared one in Dose_Calculator.html keeps its own target row. */
-let ipcTaperTargetRow = null;
-let _ipcTaperPlan = null;
-let _ipcSafetyTimer = null;
-let ipcSysDefaults = {
+var ipcTaperTargetRow = null;
+var _ipcTaperPlan = null;
+var _ipcSafetyTimer = null;
+var ipcSysDefaults = {
     cvs: 'S1S2+, No Murmur',
     rs: 'B/L NVBS, No added sounds',
     pa: 'Soft, Non-tender, No organomegaly',
@@ -1549,7 +1549,7 @@ function ipcSetDiagnosisFromHint(dx) {
 // querying ".ipc-lab-chk:checked" at save time silently drops orders the doctor
 // made before narrowing the search.
 // ============================================================================
-let ipcSelectedLabs = [];      // [{ testId, testName }]
+var ipcSelectedLabs = [];      // [{ testId, testName }]
 
 function ipcLabIsSelected(testId, testName) {
     const id = String(testId || '');
@@ -2198,7 +2198,7 @@ function ipcAssistPick(kind, id) {
 // ============================================================================
 // CONSULTING DOCTOR — required for attribution. An admin must name one.
 // ============================================================================
-let ipcDoctorList = [];
+var ipcDoctorList = [];
 
 function ipcQueueDiagnosisAssist() {
     clearTimeout(_dxAssistTimer);
@@ -2362,7 +2362,7 @@ function ipcCalcIPCBMI() {
     }
 }
 
-const ipcLabUnitsMap = {
+var ipcLabUnitsMap = {
     'Hemoglobin (Hb)': 'g/dL', 'Hb': 'g/dL', 'Creatinine': 'mg/dL', 'Urea': 'mg/dL',
     'Sodium (Na+)': 'mEq/L', 'Potassium (K+)': 'mEq/L', 'WBC Count': 'cells/mcL',
     'Platelets': 'lakhs/mcL', 'RBS': 'mg/dL', 'FBS': 'mg/dL', 'PPBS': 'mg/dL',
@@ -2842,7 +2842,7 @@ function ipcApplyTaperToRow() {
 // LABS
 // ============================================================================
 
-let ipcLabCatalog = { panels: [], tests: [], packages: [] };
+var ipcLabCatalog = { panels: [], tests: [], packages: [] };
 
 function ipcLoadIPCLabCatalog() {
     google.script.run

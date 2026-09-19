@@ -133,7 +133,7 @@
 </div>
 
 <script>
-  let pdashBills = [], pdashTotals = null, pdashRange = null;
+  var pdashBills = [], pdashTotals = null, pdashRange = null;
 
   // ===================================================================
 // PHARMACY DASHBOARD — state + navigation
@@ -181,7 +181,7 @@
     if (text) document.getElementById('pdash-overlay-text').innerText = text;
     o.style.display = show ? 'flex' : 'none';
   }
-  const pdashR2 = n => '₹' + (Math.round((n || 0) * 100) / 100).toFixed(2);
+  var pdashR2 = n => '₹' + (Math.round((n || 0) * 100) / 100).toFixed(2);
 
   function pdashToday() {
     const t = new Date().toISOString().slice(0, 10);

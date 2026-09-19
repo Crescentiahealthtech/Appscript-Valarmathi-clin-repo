@@ -995,21 +995,21 @@ function opSetDx(value) {
 // render with an explicit "+". The doctor's click is the act of prescribing.
 // ============================================================================
 
-let opCachedDrugsRich = [];
-let opCachedUniversalDrugs = [];
-let opLabMaster = { internal: [], external: [] };
-let opComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
-let opConsultTemplates = [];
-let opPatientAllergies = { recorded: false, raw: "", list: [] };
-let currentOPDialTarget = null;
-let currentOPDialMode = 'rx';
-let activeOpEncounterId = "";
+var opCachedDrugsRich = [];
+var opCachedUniversalDrugs = [];
+var opLabMaster = { internal: [], external: [] };
+var opComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
+var opConsultTemplates = [];
+var opPatientAllergies = { recorded: false, raw: "", list: [] };
+var currentOPDialTarget = null;
+var currentOPDialMode = 'rx';
+var activeOpEncounterId = "";
 /* opDoseTargetRow / _opDoseSig retired with the local calculator; the
    shared one in Dose_Calculator.html keeps its own target row. */
-let opTaperTargetRow = null;
-let _opTaperPlan = null;
-let _safetyTimer = null;
-let opSysDefaults = {
+var opTaperTargetRow = null;
+var _opTaperPlan = null;
+var _safetyTimer = null;
+var opSysDefaults = {
     cvs: 'S1S2+, No Murmur',
     rs: 'B/L NVBS, No added sounds',
     pa: 'Soft, Non-tender, No organomegaly',
@@ -1344,7 +1344,7 @@ function setDiagnosisFromHint(dx) {
 // querying ".op-lab-chk:checked" at save time silently drops orders the doctor
 // made before narrowing the search.
 // ============================================================================
-let opSelectedLabs = [];      // [{ testId, testName }]
+var opSelectedLabs = [];      // [{ testId, testName }]
 
 function opLabIsSelected(testId, testName) {
     const id = String(testId || '');
@@ -2179,7 +2179,7 @@ function assistPick(kind, id) {
 // ============================================================================
 // CONSULTING DOCTOR — required for attribution. An admin must name one.
 // ============================================================================
-let opDoctorList = [];
+var opDoctorList = [];
 
 function loadConsultDoctors() {
     const sel = document.getElementById('op-doctor-select');
@@ -2230,7 +2230,7 @@ function onConsultDoctorChanged() {
 // ============================================================================
 // ASSIST — diagnosis driven, tick and add. Never auto-prescribes.
 // ============================================================================
-let _dxAssistTimer = null;
+var _dxAssistTimer = null;
 function queueDiagnosisAssist() {
     clearTimeout(_dxAssistTimer);
     _dxAssistTimer = setTimeout(onDiagnosisChanged, 600);
@@ -2465,8 +2465,8 @@ window.opOpenCard = opOpenCard;
 // ============================================================================
 // INTERNAL REFERRAL
 // ============================================================================
-let opReferralKind = 'INTERNAL';
-let opReferralUrgency = 'ROUTINE';
+var opReferralKind = 'INTERNAL';
+var opReferralUrgency = 'ROUTINE';
 
 function setReferralKind(kind) {
     opReferralKind = (kind === 'EXTERNAL') ? 'EXTERNAL' : 'INTERNAL';
@@ -2676,7 +2676,7 @@ function calcOPBMI() {
     }
 }
 
-const opLabUnitsMap = {
+var opLabUnitsMap = {
     'Hemoglobin (Hb)': 'g/dL', 'Hb': 'g/dL', 'Creatinine': 'mg/dL', 'Urea': 'mg/dL',
     'Sodium (Na+)': 'mEq/L', 'Potassium (K+)': 'mEq/L', 'WBC Count': 'cells/mcL',
     'Platelets': 'lakhs/mcL', 'RBS': 'mg/dL', 'FBS': 'mg/dL', 'PPBS': 'mg/dL',
@@ -3320,7 +3320,7 @@ function applyTaperToRow() {
 // LABS
 // ============================================================================
 
-let opLabCatalog = { panels: [], tests: [], packages: [] };
+var opLabCatalog = { panels: [], tests: [], packages: [] };
 
 function loadOPLabCatalog() {
     google.script.run

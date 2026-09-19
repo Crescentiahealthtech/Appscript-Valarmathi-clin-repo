@@ -275,7 +275,7 @@
 </div>
 
 <script>
-  let currentInventoryData = [];
+  var currentInventoryData = [];
 
   function loadPharmacyInventory() {
     const tbody = document.getElementById('inventoryTbody');
@@ -460,13 +460,13 @@
 
   /* ══════════════════ WRITE-OFF ══════════════════ */
 
-  let DISCARD_ITEM = null;
-  let DISCARD_REASONS = null;
+  var DISCARD_ITEM = null;
+  var DISCARD_REASONS = null;
 
-  const phEsc = (v) => window.crescEsc ? window.crescEsc(v)
+  var phEsc = (v) => window.crescEsc ? window.crescEsc(v)
     : String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-  const phTok = () => window.sessionToken || '';
+  var inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  var phTok = () => window.sessionToken || '';
 
   /**
    * Reasons come from the server so the dialog cannot offer one it will

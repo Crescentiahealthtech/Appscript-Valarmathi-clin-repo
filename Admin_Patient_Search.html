@@ -55,7 +55,7 @@
 </div>
 
 <script>
-  let globalPatientDirectory = []; // Stores data locally for instant search speeds
+  var globalPatientDirectory = []; // Stores data locally for instant search speeds
 
   // 1. Core Load Function (Preserved Original Name: loadRoster)
   function loadRoster() {
@@ -137,10 +137,10 @@
   // ==========================================================================
 
   /** The patient currently in the modal, as the server last sent them. */
-  let currentProfile = null;
-  let profileEditing = false;
+  var currentProfile = null;
+  var profileEditing = false;
 
-  const PROFILE_ESC = v => String(v == null ? '' : v)
+  var PROFILE_ESC = v => String(v == null ? '' : v)
     .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /**
@@ -150,7 +150,7 @@
    * type     — how it is edited. 'select' carries its own options.
    * width    — Bootstrap column width in the 12-column grid.
    */
-  const PROFILE_FIELDS = [
+  var PROFILE_FIELDS = [
     { key: 'salutation',      label: 'Salutation',        type: 'text',  width: 2,
       placeholder: 'Mr / Mrs / Dr' },
     { key: 'name',            label: 'Name',              type: 'text',  width: 6, required: true },

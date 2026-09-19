@@ -343,8 +343,57 @@ function crescRunTabInit(tabId) {
     var fn = crescResolveFn(path);
     if (fn) {
       try { fn(); } catch (e) { /* the screen is up; its fetch reports itself */ }
+      return;
     }
+    // THE ENTRY POINT IS NOT THERE.
+    //
+    // This branch used to be nothing at all: no function, no call, no word.
+    // A screen whose script block failed to evaluate still has its markup —
+    // the loader inserts markup before it runs scripts — so the page looks
+    // completely normal, its entry point never runs, and every inline
+    // onclick on it is a dead reference. Pressing anything does nothing,
+    // including the buttons that make no server call, which is what makes
+    // it so hard to report as anything but "nothing works".
+    //
+    // Module_Loader_UI.html now catches and names the script that failed,
+    // and this is the backstop for every other way a name can go missing:
+    // a renamed function, a partial dropped from a bundle, a file pasted
+    // in half.
+    crescScreenInert(tabId, path);
   }, 0);
+}
+
+/**
+ * Says that a screen did not start, once, without covering the screen.
+ *
+ * Deliberately not a modal: the user may still be able to read what is on
+ * the page, and the honest statement is that the controls will not answer,
+ * not that the data is wrong.
+ */
+function crescScreenInert(tabId, wanted) {
+  var id = 'cresc-screen-inert';
+  var old = document.getElementById(id);
+  if (old) old.parentNode.removeChild(old);
+
+  var bar = document.createElement('div');
+  bar.id = id;
+  bar.className = 'alert alert-danger d-flex align-items-start gap-2 m-3';
+  bar.style.cssText = 'font-size:.9rem;';
+  bar.innerHTML = '<i class="fa-solid fa-triangle-exclamation mt-1"></i><span></span>';
+  bar.querySelector('span').textContent =
+    'This screen did not start: its code defines no ' + wanted + '(), so its ' +
+    'buttons will not respond. Nothing you do here will be saved. Reload the ' +
+    'page; if it keeps happening, this deployment is missing or has a stale ' +
+    'copy of the file that holds that screen.';
+
+  var btn = document.createElement('button');
+  btn.className = 'btn btn-sm btn-light ms-auto flex-shrink-0';
+  btn.textContent = 'Reload';
+  btn.onclick = function () { window.location.reload(); };
+  bar.appendChild(btn);
+
+  var host = document.querySelector('.main-content') || document.body;
+  host.insertBefore(bar, host.firstChild);
 }
 
 function routeToEMRTimeline(patientId) {

@@ -6,7 +6,7 @@
 <!-- Needs Payables.js. -->
 <!-- ===================================================================== -->
 <script>
-const AccPay = (function () {
+var AccPay = (function () {
   const $ = (id) => document.getElementById(id);
   const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
