@@ -240,9 +240,15 @@ window.CrescModules = (function () {
       // error listener for the duration of the insertion does — and because
       // the insertion is synchronous, anything it hears belongs to this
       // script and no other.
-      var caught = null;
+      //
+      // The event carries `lineno` and `colno`, and they are relative to
+      // THIS script's own text — which is the difference between "missing )
+      // after argument list", which names nothing anybody can act on, and a
+      // file, a line number and the line itself.
+      var caught = null, where = null;
       var onErr = function (ev) {
         caught = (ev && ev.error && ev.error.message) || (ev && ev.message) || 'unknown error';
+        if (ev && ev.lineno) where = { line: ev.lineno, col: ev.colno || 0 };
         ev.preventDefault();
       };
       window.addEventListener('error', onErr, true);
@@ -256,7 +262,22 @@ window.CrescModules = (function () {
 
       if (caught) {
         // Set by the marker script crescGetBundle puts before each partial.
-        failures.push({ partial: window.__crescPartial || '(unnamed)', why: caught });
+        var f = { partial: window.__crescPartial || '(unnamed)',
+                  why: String(caught).replace(/^Uncaught\s+/, '')
+                                     .replace(/^SyntaxError:\s*/, '')
+                                     .replace(/Failed to execute 'appendChild' on 'Node':\s*/, '') };
+        if (where) {
+          f.line = where.line;
+          f.col = where.col;
+          // The offending line, quoted back. Somebody looking at this file
+          // in the Apps Script editor can search for it directly, which is
+          // the whole distance between a fault report and a fix.
+          var lines = String(s.text || '').split('\n');
+          f.source = (lines[where.line - 1] || '').trim().slice(0, 120);
+        }
+        failures.push(f);
+        // The console keeps the whole thing, for anyone who opens it.
+        try { console.error('CresRx: ' + f.partial + ' did not start', f); } catch (e) {}
       }
     });
 
@@ -281,10 +302,16 @@ window.CrescModules = (function () {
     bar.innerHTML = '<i class="fa-solid fa-triangle-exclamation mt-1"></i><span></span>';
     bar.querySelector('span').textContent =
       'Part of the ' + bundle + ' screens did not start, so the buttons on ' +
-      'them will not respond: ' +
-      failures.map(function (f) { return f.partial + ' (' + f.why + ')'; }).join('; ') +
-      '. This is a fault in this deployment, not in what you were doing — ' +
-      'nothing you pressed was saved or lost.';
+      'them will not respond. ' +
+      failures.map(function (f) {
+        return f.partial +
+          (f.line ? ', line ' + f.line + ' of its <script> block' : '') +
+          ': ' + f.why +
+          (f.source ? '  —  the line reads:  ' + f.source : '');
+      }).join(' | ') +
+      '. Re-paste that file into the Apps Script editor from the repository ' +
+      'and publish a new version; the copy running here is not the one the ' +
+      'code says it should be. Nothing you pressed was saved or lost.';
 
     var btn = document.createElement('button');
     btn.className = 'btn btn-sm btn-light ms-auto flex-shrink-0';

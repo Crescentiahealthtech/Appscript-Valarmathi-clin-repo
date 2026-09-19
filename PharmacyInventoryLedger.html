@@ -365,7 +365,7 @@
               <button class="btn btn-primary py-1 px-2" title="Adjust this batch" onclick="openInventoryEditModal(${safeItem})">
                 <i class="fa-solid fa-pen"></i>
               </button>
-              <!-- Expired stock used to be taken off the shelf by opening the
+              <\!-- Expired stock used to be taken off the shelf by opening the
                    edit dialog and typing 0 over the count. That destroys the
                    quantity, the reason, the value and the actor in one save.
                    This writes it off instead, into a register that can be
@@ -374,7 +374,7 @@
                       onclick="openDiscardModal(${safeItem})" ${item.stock > 0 ? '' : 'disabled'}>
                 <i class="fa-solid fa-trash-can"></i>
               </button>
-              <!-- DELETE IS NOT WRITE-OFF. A write-off is stock that was real
+              <\!-- DELETE IS NOT WRITE-OFF. A write-off is stock that was real
                    and has left the shelf, and it belongs in the disposal
                    register at its value. This removes a row that should never
                    have existed — a duplicate, a typo, stock keyed against the

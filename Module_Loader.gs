@@ -119,27 +119,47 @@ function crescGetBundle(name) {
 }
 
 /**
- * Every partial referenced by a bundle exists, and none is claimed twice.
- * Run from the script editor after adding or renaming a UI file.
+ * Every partial referenced by a bundle exists, none is claimed twice, and
+ * HOW BIG EACH ONE IS.
+ *
+ * The sizes are the point of the second half. A file pasted into the Apps
+ * Script editor incompletely is the one fault this project cannot detect
+ * any other way: the JavaScript is broken, so the screen it belongs to
+ * renders completely and then answers nothing, and no server-side check can
+ * parse JavaScript to notice. A character count can be compared against the
+ * repository in seconds, and a half-pasted file is obvious in it.
+ *
+ * Run from the script editor after adding, renaming or re-pasting a UI file.
  */
 function crescVerifyBundles() {
-  var seen = {}, problems = [], count = 0;
+  var seen = {}, problems = [], sizes = [], count = 0;
   Object.keys(CRESC_BUNDLES).forEach(function (key) {
     CRESC_BUNDLES[key].forEach(function (f) {
       count++;
       if (seen[f]) problems.push(f + ' is in both "' + seen[f] + '" and "' + key + '".');
       seen[f] = key;
       try {
-        HtmlService.createHtmlOutputFromFile(f);
+        var content = HtmlService.createHtmlOutputFromFile(f).getContent();
+        sizes.push('  ' + key + '/' + f + '  ' + content.length);
+        // A partial with no script block at all is nearly always a
+        // truncated paste: every one of these files ends in one.
+        if (content.indexOf('<scr' + 'ipt') === -1) {
+          problems.push(f + ' (bundle "' + key + '") has no script block in it at all, ' +
+                        'which almost always means it was pasted in incomplete.');
+        }
       } catch (e) {
         problems.push(f + ' (bundle "' + key + '") does not exist.');
       }
     });
   });
-  var report = problems.length
+  var report = (problems.length
     ? 'crescVerifyBundles: ' + problems.length + ' problem(s)\n' + problems.join('\n')
     : 'crescVerifyBundles: ' + count + ' file(s) across ' +
-      Object.keys(CRESC_BUNDLES).length + ' bundle(s), all present, none duplicated.';
+      Object.keys(CRESC_BUNDLES).length + ' bundle(s), all present, none duplicated.') +
+    '\n\nCHARACTER COUNTS, to compare against the repository. A file that is ' +
+    'shorter here than there was pasted in incomplete, and a partial paste is ' +
+    'the one fault nothing on the server can detect: the code is broken, so ' +
+    'its screen renders and then answers nothing.\n' + sizes.join('\n');
   Logger.log(report);
   return { success: problems.length === 0, message: report };
 }
