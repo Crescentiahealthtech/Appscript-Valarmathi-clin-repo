@@ -1,41 +1,66 @@
 /**
  * Fetches the high-level patient directory for the Ledger view.
+ *
+ * Guard inside the try, reply wrapped — see getAvailableTimeSlots in
+ * Appointment.gs for why, and crescUnwrap in Shell_UX.html for the client
+ * half.
+ *
+ * `data` STAYS A JSON STRING, which is what this function has always
+ * returned. Handing back a live array instead would be tidier and would
+ * also change what the client receives: google.script.run serialises a Date
+ * as a Date, where JSON.parse gives the ISO string every formatter here is
+ * written against. The wrapper is the change; the payload is not.
  */
 function getMasterPatientDirectory(sessionToken) {
-  crescRequire_(sessionToken, 'patient.read');
-  // Finding M2: a read of the whole directory is never silent.
-  dpdpLogRead_(crescActor_(sessionToken), 'PatientRegister', 'ALL',
-               { endpoint: 'getMasterPatientDirectory' });
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Patients");
-  if (!sheet) return JSON.stringify([]);
+  try {
+    crescRequire_(sessionToken, 'patient.read');
+    // Finding M2: a read of the whole directory is never silent.
+    dpdpLogRead_(crescActor_(sessionToken), 'PatientRegister', 'ALL',
+                 { endpoint: 'getMasterPatientDirectory' });
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Patients");
+    if (!sheet) return { success: true, data: JSON.stringify([]),
+                         message: 'The Patients sheet is missing.' };
 
-  const data = sheet.getDataRange().getValues();
-  const result = [];
-  
-  for (let i = 1; i < data.length; i++) {
-    // Assuming: Col 0=ID, Col 2=Name, Col 3=Age, Col 4=Sex, Col 6=Mobile
-    result.push({
-      id: data[i][0] ? data[i][0].toString() : "",
-      name: data[i][2] || "Unknown",
-      age: data[i][3] || "--",
-      sex: data[i][4] || "--",
-      mobile: data[i][6] ? data[i][6].toString() : ""
-    });
+    const data = sheet.getDataRange().getValues();
+    const result = [];
+
+    for (let i = 1; i < data.length; i++) {
+      // Assuming: Col 0=ID, Col 2=Name, Col 3=Age, Col 4=Sex, Col 6=Mobile
+      result.push({
+        id: data[i][0] ? data[i][0].toString() : "",
+        name: data[i][2] || "Unknown",
+        age: data[i][3] || "--",
+        sex: data[i][4] || "--",
+        mobile: data[i][6] ? data[i][6].toString() : ""
+      });
+    }
+    // Reverse to show newest registered patients at the top of the ledger
+    return { success: true, data: JSON.stringify(result.reverse()), message: '' };
+  } catch (err) {
+    return { success: false, data: JSON.stringify([]), message: cresc_reason_(err) };
   }
-  // Reverse to show newest registered patients at the top of the ledger
-  return JSON.stringify(result.reverse());
 }
 
 /**
  * The Aggregator: Pulls OP and IP records, merges them, and sorts chronologically.
+ *
+ * Guard inside the try, reply wrapped in { success, data, message } — see
+ * getAvailableTimeSlots in Appointment.gs for why, and crescUnwrap in
+ * Shell_UX.html for the client half. `data` is the same
+ * { found, patient, events } object as before.
+ *
+ * The try also catches something the old shape could not report at all:
+ * patientId.trim() on a null id threw, and the screen said "Fetch Engine
+ * Blocked: Cannot read properties of null".
  */
 function buildLongitudinalTimeline(patientId, sessionToken) {
+  try {
   crescRequire_(sessionToken, 'emr.read');
   dpdpLogRead_(crescActor_(sessionToken), 'Patient', String(patientId || ''),
                { endpoint: 'buildLongitudinalTimeline' });
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const pIdUpper = patientId.trim().toUpperCase();
+  const pIdUpper = String(patientId || '').trim().toUpperCase();
   
   const response = {
     found: false,
@@ -152,7 +177,11 @@ function buildLongitudinalTimeline(patientId, sessionToken) {
 
   // Sort Newest First
   response.events.sort((a, b) => b.rawDateObj - a.rawDateObj);
-  return response;
+  return { success: true, data: response, message: '' };
+  } catch (err) {
+    return { success: false, message: cresc_reason_(err),
+             data: { found: false, patient: {}, events: [] } };
+  }
 }
 
 /**

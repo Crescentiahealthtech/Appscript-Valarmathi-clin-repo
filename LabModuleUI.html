@@ -401,7 +401,11 @@ var LabX = (function () {
     var timer=setTimeout(function(){ finish(); flash('Server did not respond for '+fn+'(). Check connection.', false); }, 30000);
     var runner=google.script.run
       .withSuccessHandler(function(res){ clearTimeout(timer); finish(); onOk(res); })
-      .withFailureHandler(function(err){ clearTimeout(timer); finish(); flash(fn+'() failed: '+(err&&err.message||err), false); });
+      .withFailureHandler(function(err){ clearTimeout(timer); finish();
+        // A server exception reaches here, and a FORBIDDEN is one — so the
+        // error's own sentence is worth more than the function's name.
+        flash(window.crescWhyFailed ? window.crescWhyFailed(err, fn + '()')
+                                    : (fn+'() failed: '+(err&&err.message||err)), false); });
     if(!runner[fn]){ clearTimeout(timer); finish(); flash('Backend function "'+fn+'" not found.', false); return; }
 
     /* The session token goes on the END of every call, always.
@@ -1181,7 +1185,7 @@ var LabX = (function () {
   function dispatchReport(){
     run('advanceOrderStatus',[_cur.orderId,'REPORT_DISPATCHED'],function(res){
       if(res&&res.success){ flash('Report dispatched to EMR successfully!',true); _refreshPanel(); }
-      else flash('Dispatch failed: '+(res&&res.message),false);
+      else flash('Dispatch failed: '+((res&&res.message)||'the server gave no reason.'),false);
     },'Dispatching…');
   }
 

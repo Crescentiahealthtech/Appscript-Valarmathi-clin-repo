@@ -222,11 +222,23 @@ function _phDisposalSheet_(ss) {
 }
 
 /** FRONTEND ENTRY. The reason codes, so the dialog and the server agree. */
+/**
+ * The write-off reasons, as { code, label } pairs in `data`.
+ *
+ * Guard inside the try, reply wrapped — see processPharmacyBill above. The
+ * discard dialog's failure path set the reason list to empty and carried on
+ * opening, so a refused call produced a dialog whose only mandatory field
+ * had nothing in it and no explanation anywhere.
+ */
 function getDisposalReasons(sessionToken) {
-  crescRequire_(sessionToken, 'pharmacy.read');
-  return Object.keys(PH_DISPOSAL_REASONS).map(function (k) {
-    return { code: k, label: PH_DISPOSAL_REASONS[k] };
-  });
+  try {
+    crescRequire_(sessionToken, 'pharmacy.read');
+    return { success: true, message: '', data: Object.keys(PH_DISPOSAL_REASONS).map(function (k) {
+      return { code: k, label: PH_DISPOSAL_REASONS[k] };
+    }) };
+  } catch (err) {
+    return { success: false, data: [], message: _phReason_(err) };
+  }
 }
 
 /**
@@ -1062,9 +1074,11 @@ function _nextInvoiceNo_(headerSheet, now) {
  * already explains itself.
  */
 function _phReason_(error) {
-  var msg = (error && error.message) ? String(error.message) : String(error || '');
-  if (msg.indexOf('FORBIDDEN: ') === 0) return msg.slice('FORBIDDEN: '.length);
-  return msg || 'The request could not be completed.';
+  // The same explainer every guarded endpoint now uses, kept under its
+  // pharmacy name so this file's existing call sites read unchanged.
+  return (typeof cresc_reason_ === 'function')
+    ? cresc_reason_(error)
+    : String((error && error.message) || error || '').replace(/^FORBIDDEN:\s*/, '');
 }
 
 function round2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }

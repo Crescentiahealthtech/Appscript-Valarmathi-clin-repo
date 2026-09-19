@@ -129,13 +129,38 @@
     google.script.run
       .withSuccessHandler(renderMasterLedger)
       .withFailureHandler(err => {
-         document.getElementById('emr-timeline-ledger-tbody').innerHTML = `<tr><td colspan="5" class="text-center py-4" style="color: var(--danger-fg) !important; font-weight: bold;">Error: ${err.message}</td></tr>`;
+         mtLedgerProblem(window.crescWhyFailed
+           ? window.crescWhyFailed(err, 'Reading the patient directory')
+           : ((err && err.message) || 'The directory could not be read.'));
       })
       .getMasterPatientDirectory(window.sessionToken);
   }
 
-  function renderMasterLedger(dataStr) {
-    masterLedgerData = JSON.parse(dataStr);
+  /** One place the ledger says it has nothing and why. */
+  function mtLedgerProblem(msg) {
+    const tbody = document.getElementById('emr-timeline-ledger-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4" ' +
+      'style="color: var(--danger-fg) !important; font-weight: bold;"></td></tr>';
+    tbody.querySelector('td').textContent = msg;
+  }
+
+  /**
+   * The directory now arrives wrapped, so a refusal is an answer rather than
+   * an exception thrown past this handler and reported as a transport fault.
+   * `data` is still the JSON string it always was. See crescUnwrap in
+   * Shell_UX.html.
+   */
+  function renderMasterLedger(res) {
+    const r = window.crescUnwrap ? window.crescUnwrap(res, '[]')
+                                 : { ok: true, data: res, message: '' };
+    if (!r.ok) { mtLedgerProblem(r.message); return; }
+    try {
+      masterLedgerData = JSON.parse(r.data || '[]');
+    } catch (e) {
+      mtLedgerProblem('The directory came back in a form this screen could not read.');
+      return;
+    }
     filterMasterLedger();
   }
 
@@ -176,7 +201,9 @@
     google.script.run
       .withSuccessHandler(renderTimeline)
       .withFailureHandler(err => {
-        document.getElementById('clinical-stream-container').innerHTML = `<div class="text-center mt-5" style="color: var(--danger-fg) !important; font-weight: bold;">Fetch Engine Blocked: ${err.message}</div>`;
+        mtStreamProblem(window.crescWhyFailed
+          ? window.crescWhyFailed(err, 'Compiling the history')
+          : ((err && err.message) || 'The history could not be compiled.'));
       })
       .buildLongitudinalTimeline(patientId, window.sessionToken);
   }
@@ -614,7 +641,27 @@ function buildIPCard(ev) {
   // =========================================================================
   // 6. MASTER RENDERER
   // =========================================================================
-  function renderTimeline(res) {
+  /** One place the stream says it has nothing and why. */
+  function mtStreamProblem(msg) {
+    const c = document.getElementById('clinical-stream-container');
+    if (!c) return;
+    c.innerHTML = '<div class="text-center mt-5" ' +
+      'style="color: var(--danger-fg) !important; font-weight: bold;"></div>';
+    c.querySelector('div').textContent = msg;
+  }
+
+  /**
+   * The timeline now arrives wrapped in { success, data, message }; `data`
+   * is the same { found, patient, events } object as before. A refused call
+   * used to be thrown past this handler and shown as "Fetch Engine Blocked",
+   * which named no cause and offered nothing. See crescUnwrap in
+   * Shell_UX.html.
+   */
+  function renderTimeline(reply) {
+    const r = window.crescUnwrap ? window.crescUnwrap(reply, null)
+                                 : { ok: true, data: reply, message: '' };
+    if (!r.ok) { mtStreamProblem(r.message); return; }
+    const res = r.data;
     if (!res || !res.found) {
       document.getElementById('clinical-stream-container').innerHTML = `<div class="text-center mt-4" style="color:var(--text-main); font-weight:bold;">Demographic files absent.</div>`;
       return;

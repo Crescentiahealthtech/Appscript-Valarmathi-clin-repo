@@ -40,29 +40,50 @@ function formatTimeSafely(timeVal) {
 }
 
 // 1. DOCTOR AVAILABILITY ENGINE
+//
+// THE GUARD IS INSIDE THE TRY, AND THE REPLY IS WRAPPED. Both halves matter
+// and they are the same fix; see crescUnwrap() in Shell_UX.html for the
+// client half and the reason.
+//
+// crescRequire_ THROWS on an expired session or a role without the
+// permission. Thrown out of a function the browser reached through
+// google.script.run, that lands in the FAILURE handler, where screens report
+// a connection problem — so a timed-out session was presented to the user as
+// a network fault they could do nothing about. Returned as
+// { success:false, message } it reaches the SUCCESS handler, where the real
+// sentence can be shown.
+//
+// `data` is exactly what this function used to return, so a client reading
+// it through crescUnwrap behaves identically.
 function getAvailableTimeSlots(dateStr, sessionToken) {
-  crescRequire_(sessionToken, ['appointment.read', 'portal.self']);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
-  if(!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  const standardSlots = [
-    "10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM", "11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM",
-    "12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM", "05:00 PM", "05:15 PM", "05:30 PM", "05:45 PM",
-    "06:00 PM", "06:15 PM", "06:30 PM", "06:45 PM", "07:00 PM", "07:15 PM", "07:30 PM", "07:45 PM",
-    "08:00 PM", "08:15 PM", "08:30 PM", "08:45 PM"
-  ];
+  try {
+    crescRequire_(sessionToken, ['appointment.read', 'portal.self']);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
+    if (!sheet) return { success: true, data: [], message: 'No Appointments sheet.' };
+    const data = sheet.getDataRange().getValues();
+    const standardSlots = [
+      "10:00 AM", "10:15 AM", "10:30 AM", "10:45 AM", "11:00 AM", "11:15 AM", "11:30 AM", "11:45 AM",
+      "12:00 PM", "12:15 PM", "12:30 PM", "12:45 PM", "05:00 PM", "05:15 PM", "05:30 PM", "05:45 PM",
+      "06:00 PM", "06:15 PM", "06:30 PM", "06:45 PM", "07:00 PM", "07:15 PM", "07:30 PM", "07:45 PM",
+      "08:00 PM", "08:15 PM", "08:30 PM", "08:45 PM"
+    ];
 
-  const takenSlots = [];
-  for (let i = 1; i < data.length; i++) {
-    let dObj = data[i][3];
-    let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
+    const takenSlots = [];
+    for (let i = 1; i < data.length; i++) {
+      let dObj = data[i][3];
+      let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
 
-    if (rowDate === dateStr && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') {
-      takenSlots.push(formatTimeSafely(data[i][4]));
+      if (rowDate === dateStr && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') {
+        takenSlots.push(formatTimeSafely(data[i][4]));
+      }
     }
-  }
 
-  return standardSlots.filter(slot => !takenSlots.includes(slot));
+    return { success: true,
+             data: standardSlots.filter(slot => !takenSlots.includes(slot)),
+             message: '' };
+  } catch (err) {
+    return { success: false, data: [], message: cresc_reason_(err) };
+  }
 }
 
 // Retrieves accurate schedule array for the Frontend Checkboxes
@@ -99,19 +120,34 @@ function getAppointmentsByDate(dateStr) {
 }
 
 // 2. PATIENT AUTO-FETCH DEMOGRAPHICS
+//
+// Guard inside the try, reply wrapped — see getAvailableTimeSlots above.
+//
+// This one had a second problem the wrapper settles: it returned `null` both
+// for "no such patient" and, once the guard threw, for nothing at all. The
+// booking modal showed "Patient ID not found." in both cases, so a
+// receptionist whose session had expired was told the patient did not exist.
+// A refused call is now success:false with a reason; a genuine miss is
+// success:true with data:null.
 function getPatientDemographics(patientId, sessionToken) {
-  crescRequire_(sessionToken, 'patient.read');
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
-  if (!sheet || !patientId) return null;
-  const data = sheet.getDataRange().getValues();
-  const want = patientId.toString().trim().toUpperCase();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][0] && data[i][0].toString().trim().toUpperCase() === want) {
-      // gender + sex both returned: the booking modal reads gender, the ledger reads sex
-      return { id: data[i][0], name: data[i][2], age: data[i][3], sex: data[i][4], gender: data[i][4], mobile: data[i][6] || "" };
+  try {
+    crescRequire_(sessionToken, 'patient.read');
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
+    if (!sheet || !patientId) return { success: true, data: null, message: '' };
+    const data = sheet.getDataRange().getValues();
+    const want = patientId.toString().trim().toUpperCase();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] && data[i][0].toString().trim().toUpperCase() === want) {
+        // gender + sex both returned: the booking modal reads gender, the ledger reads sex
+        return { success: true, message: '', data: {
+          id: data[i][0], name: data[i][2], age: data[i][3], sex: data[i][4],
+          gender: data[i][4], mobile: data[i][6] || "" } };
+      }
     }
+    return { success: true, data: null, message: '' };
+  } catch (err) {
+    return { success: false, data: null, message: cresc_reason_(err) };
   }
-  return null;
 }
 
 // 3. ADMIN DAILY LEDGER
