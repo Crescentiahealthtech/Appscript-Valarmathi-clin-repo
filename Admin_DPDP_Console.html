@@ -92,7 +92,8 @@
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-consent"
                             onclick="dpConsentLoad()">Consent register</a></li>
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-breach">Breaches</a></li>
-    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-posture">Readiness</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-posture"
+                            onclick="dpHousekeeping()">Readiness</a></li>
   </ul>
 
   <div class="tab-content">
@@ -395,6 +396,33 @@
           <div class="dp-card p-3 h-100">
             <div class="fw-bold mb-1">Where this deployment stands</div>
             <div id="dp-findings" class="mb-2">Loading…</div>
+
+            <!-- THE CHECK A PERSON HAS TO RUN.
+                 Apps Script cannot read its own deployment's access mode,
+                 and under "execute as me" it cannot infer it from who the
+                 callers are either — a visitor's identity is withheld from
+                 a script the owner authorised, so a signed-in clinician and
+                 an anonymous stranger look identical to it. Fifteen seconds
+                 in a private window settles it; these two buttons record
+                 the answer so nobody is asked again every time they open
+                 this screen. -->
+            <hr class="dp-rule">
+            <div class="fw-bold mb-1">Record the deployment check</div>
+            <div class="small mb-2" style="color: var(--text-muted);">
+              Open this application's <strong>/exec</strong> address in a private
+              window. Did Google ask you to sign in before the page appeared?
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-sm btn-outline-success"
+                      onclick="dpRecordDeploymentCheck(false)">
+                Yes — it asked me to sign in
+              </button>
+              <button class="btn btn-sm btn-outline-danger"
+                      onclick="dpRecordDeploymentCheck(true)">
+                No — it opened straight away
+              </button>
+            </div>
+
             <hr class="dp-rule">
             <div class="fw-bold mb-1">Scheduled jobs</div>
             <pre id="dp-triggers" class="mb-0">Loading…</pre>
@@ -498,27 +526,110 @@
   }
 
   // ── first paint ────────────────────────────────────────────────────────
+  //
+  // TWO CALLS, BECAUSE THEY TAKE DIFFERENT AMOUNTS OF TIME.
+  //
+  // This screen used to make one, and that one call ran the readiness check
+  // and a seven-day scan of the audit log before it answered. Until it did,
+  // the four counters at the top read "–", every panel read "Loading…", and
+  // there was nothing to say whether the screen was working or the session
+  // had expired. On a clinic's real data that is tens of seconds of a page
+  // that looks broken.
+  //
+  // The queue and the registers arrive first and the screen is usable. The
+  // housekeeping — readiness, the audit scan, the scheduled jobs — follows
+  // behind it and fills in the Readiness tab, with its own spinner and its
+  // own failure message, so a slow or broken check can no longer hold up
+  // the part of the screen somebody is standing at the desk waiting for.
+  var HOUSEKEEPING_DONE = false;
+
+  function spin(id, label) {
+    var el = $(id);
+    if (el) el.innerHTML = '<span class="small" style="color:var(--text-muted);">' +
+      '<i class="fa-solid fa-circle-notch fa-spin me-2"></i>' + label + '</span>';
+  }
+
   window.dpConsoleLoad = function () {
+    ['dp-k-overdue', 'dp-k-open', 'dp-k-unassessed', 'dp-k-anomalies'].forEach(function (id) {
+      if ($(id)) $(id).textContent = '·';
+    });
+    spin('dp-requests', 'Reading the request queue…');
+    spin('dp-breaches', 'Reading the breach register…');
+
     call('dpdpConsoleSnapshot', [tok()], function (res) {
-      if (!res || !res.success) { say((res && res.message) || 'Could not load.', true); return; }
+      if (!res || !res.success) {
+        say((res && res.message) || 'Could not load.', true);
+        ['dp-k-overdue', 'dp-k-open', 'dp-k-unassessed', 'dp-k-anomalies'].forEach(function (id) {
+          if ($(id)) $(id).textContent = '–';
+        });
+        $('dp-requests').innerHTML = '<div class="small" style="color:var(--text-muted);">' +
+          'Not loaded — see the message above.</div>';
+        $('dp-breaches').innerHTML = $('dp-requests').innerHTML;
+        return;
+      }
       SNAP = res;
       $('dp-k-overdue').textContent    = res.overdue || 0;
       $('dp-k-open').textContent       = (res.requests || []).filter(function (r) {
                                             return r.status === 'OPEN'; }).length;
       $('dp-k-unassessed').textContent = res.unassessed || 0;
-      $('dp-k-anomalies').textContent  = (res.anomalies || []).length;
 
       renderRequests(res.requests || []);
       renderBreaches(res.breaches || []);
-      renderFindings(res.findings || []);
-      renderAnomalies(res.anomalies || []);
-      $('dp-triggers').textContent = res.triggers || '';
 
       var o = res.officer || {};
       $('dp-of-name').value  = o.name  || '';
       $('dp-of-email').value = o.email || '';
       $('dp-of-phone').value = o.phone || '';
 
+      dpHousekeeping();
+    });
+  };
+
+  /** The slow half. Runs behind the screen, and only once per visit. */
+  function dpHousekeeping(force) {
+    if (HOUSEKEEPING_DONE && !force) return;
+    HOUSEKEEPING_DONE = true;
+    spin('dp-findings', 'Running the readiness check…');
+    spin('dp-anomalies', 'Reviewing the last seven days of the audit log…');
+    $('dp-triggers').textContent = 'Reading the scheduled jobs…';
+
+    call('dpdpConsoleHousekeeping', [tok()], function (res) {
+      if (!res || !res.success) {
+        HOUSEKEEPING_DONE = false;      // a failure must be retryable
+        var why = (res && res.message) || 'The readiness check did not answer.';
+        $('dp-findings').innerHTML = '<div class="small" style="color:var(--text-muted);">' +
+          esc(why) + '</div>';
+        $('dp-anomalies').innerHTML = $('dp-findings').innerHTML;
+        $('dp-triggers').textContent = why;
+        $('dp-k-anomalies').textContent = '–';
+        return;
+      }
+      SNAP = SNAP || {};
+      SNAP.findings = res.findings || [];
+      SNAP.anomalies = res.anomalies || [];
+      $('dp-k-anomalies').textContent = (res.anomalies || []).length;
+      renderFindings(res.findings || []);
+      renderAnomalies(res.anomalies || []);
+      $('dp-triggers').textContent = res.triggers || '';
+      if (res.message) say(res.message, true);
+    });
+  }
+  window.dpHousekeeping = dpHousekeeping;
+
+  /**
+   * THE ONE CHECK A SCRIPT CANNOT RUN FOR ITSELF.
+   *
+   * Whether the live /exec URL asks for a Google sign-in is not readable
+   * from inside Apps Script when the web app runs as "execute as me" — see
+   * the note at the top of Deployment_Probe.gs. Reporting it as a breach on
+   * that basis was wrong, and reporting nothing would be worse, so the
+   * person is asked once and the answer is recorded with the date.
+   */
+  window.dpRecordDeploymentCheck = function (open) {
+    var mode = open ? 'ANYONE_ANONYMOUS' : 'SIGN_IN_REQUIRED';
+    call('dpdpConfirmDeploymentAccess', [mode, tok()], function (res) {
+      say((res && res.message) || 'Recorded.', !(res && res.success));
+      if (res && res.success) dpHousekeeping(true);
     });
   };
 

@@ -468,18 +468,46 @@
   const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
   const phTok = () => window.sessionToken || '';
 
-  /** Reasons come from the server so the dialog cannot offer one it will refuse. */
+  /**
+   * Reasons come from the server so the dialog cannot offer one it will
+   * refuse — which means a dialog with no reasons in it cannot be submitted
+   * at all. Both failure paths used to set the list to empty and open it
+   * anyway, so the user met a mandatory dropdown with nothing in it and no
+   * word about why. The refusal now arrives as data and is shown.
+   * See crescUnwrap in Shell_UX.html.
+   */
   function loadDiscardReasons(then) {
     if (DISCARD_REASONS) { then(); return; }
+    const fill = function (list, why) {
+      DISCARD_REASONS = list || [];
+      const sel = document.getElementById('discardReason');
+      sel.innerHTML = DISCARD_REASONS.length
+        ? ('<option value="">— choose —</option>' +
+           DISCARD_REASONS.map(r => `<option value="${phEsc(r.code)}">${phEsc(r.label)}</option>`).join(''))
+        : '<option value="">— no reasons could be read —</option>';
+      if (!DISCARD_REASONS.length) {
+        // Not cached, so the next open tries again rather than inheriting
+        // an empty list for the rest of the session.
+        DISCARD_REASONS = null;
+        if (window.showToast) {
+          window.showToast('Cannot write stock off',
+            why || 'The reason list could not be read, and a write-off needs one.',
+            'error');
+        }
+      }
+      then();
+    };
     google.script.run
-      .withSuccessHandler(function (list) {
-        DISCARD_REASONS = list || [];
-        const sel = document.getElementById('discardReason');
-        sel.innerHTML = '<option value="">— choose —</option>' +
-          DISCARD_REASONS.map(r => `<option value="${phEsc(r.code)}">${phEsc(r.label)}</option>`).join('');
-        then();
+      .withSuccessHandler(function (res) {
+        const r = window.crescUnwrap ? window.crescUnwrap(res, [])
+                                     : { ok: true, data: res, message: '' };
+        fill(r.ok ? r.data : [], r.message);
       })
-      .withFailureHandler(function () { DISCARD_REASONS = []; then(); })
+      .withFailureHandler(function (err) {
+        fill([], window.crescWhyFailed
+          ? window.crescWhyFailed(err, 'Reading the reason list')
+          : ((err && err.message) || ''));
+      })
       .getDisposalReasons(window.sessionToken);
   }
 

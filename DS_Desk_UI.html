@@ -368,9 +368,20 @@
         <div id="ds-sign-soft"></div>
       </div>
 
+      <!-- WHOSE NAME THE DOCUMENT IS SIGNED IN.
+           Hidden for a doctor, who signs as themselves. Shown to an
+           administrator, who must name the doctor: a discharge summary
+           carries a registered name, and both that name and the person who
+           entered the signature print on it. -->
+      <div class="mb-3 d-none" id="ds-sign-aswrap">
+        <label class="form-label fw-semibold" for="ds-sign-as">Signed in the name of</label>
+        <select class="form-select" id="ds-sign-as"></select>
+        <div class="ds-muted mt-1" id="ds-sign-asnote"></div>
+      </div>
+
       <div class="mb-3 d-none" id="ds-sign-behalfwrap">
-        <label class="form-label fw-semibold">
-          You are not the consultant of record — reason for signing on their behalf
+        <label class="form-label fw-semibold" id="ds-sign-behalflabel" for="ds-sign-behalf">
+          If you are not the consultant of record — reason for signing on their behalf
         </label>
         <input type="text" class="form-control" id="ds-sign-behalf"
                placeholder="e.g. Consultant on leave; patient reviewed by me on the ward round">

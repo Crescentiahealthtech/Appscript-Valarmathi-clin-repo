@@ -41,7 +41,8 @@ var DSX_SIGN_FAIL_MAX = 5;
  */
 var DSX_ACTIONS = [
   'view', 'viewSigned', 'viewMedsOnly', 'initiate', 'generate', 'edit',
-  'submit', 'return', 'sign', 'amend', 'cancel', 'printDraft', 'printFinal'
+  'submit', 'return', 'sign', 'signForDoctor', 'amend', 'cancel',
+  'printDraft', 'printFinal'
 ];
 
 /**
@@ -152,6 +153,10 @@ function dsx_permissions_(actor, header) {
             (status === DSX_STATUS.GENERATED || status === DSX_STATUS.IN_PREPARATION),
     return: can('return') && status === DSX_STATUS.PENDING_SIGNATURE,
     sign: can('sign') && dsx_canSignFrom_(status, actor.cfg),
+    // Not a separate button: it tells the sign dialog to ask WHOSE name the
+    // summary is signed in. A login that is itself a doctor never needs it,
+    // whatever its role, because it already has a registered identity.
+    signForDoctor: can('signForDoctor') && !actor.doctorId,
     amend: can('amend') && status === DSX_STATUS.SIGNED,
     discardAmendment: can('amend') && status === DSX_STATUS.AMENDMENT_IN_PROGRESS,
     cancel: can('cancel') && live,
@@ -1347,22 +1352,67 @@ function ds_discardAmendment(token, summaryId, expectedRowVersion) {
  * @param {string} onBehalfReason  required when the signer is not the
  *                                 consultant of record
  */
-function ds_sign(token, summaryId, expectedRowVersion, credential, attestations, onBehalfReason) {
+function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
+                 onBehalfReason, signAsDoctorId) {
   var lock = LockService.getScriptLock();
   try {
     var actor = dsx_requireRole_(token, 'sign');
 
     // ---- 1. signer identity ------------------------------------------------
-    if (!actor.doctorId) {
-      return dsx_err_('FORBIDDEN',
-        'Your login is not linked to a doctor profile. Ask the administrator to set ' +
-        'Linked_Username in the Doctors sheet before you sign.');
+    //
+    // WHO THE DOCUMENT IS SIGNED BY, AND WHO PRESSED THE BUTTON.
+    //
+    // A discharge summary carries a named doctor with a registration number.
+    // That has always been the rule and it stays the rule. What changed is
+    // that the person AT THE KEYBOARD no longer has to be that doctor: an
+    // administrator may enter the signature in a named doctor's name, and
+    // the document then records BOTH — the doctor it is signed by, and the
+    // administrator who entered it on their authority, with a reason.
+    //
+    // This is not a loosening of the rule, it is the rule written down. A
+    // clinic where the administrator types the summary while the doctor
+    // stands beside them was previously blocked outright ("your login is not
+    // linked to a doctor profile"), which in practice means the clinic
+    // shares the doctor's password — an unattributable signature. An entry
+    // that names the administrator is strictly more accountable than one
+    // that hides them.
+    //
+    //   • the credential re-entered is the ADMINISTRATOR'S OWN. They are the
+    //     one authenticating; pretending otherwise is the thing to avoid.
+    //   • the doctor must be ACTIVE in the Doctors sheet and have a
+    //     registration number, exactly as if they signed it themselves.
+    //   • the reason is mandatory, logged, and printed on the summary.
+    var onBehalfOf = null;
+    var profile;
+
+    if (actor.doctorId) {
+      profile = dsx_doctorProfile_(actor.doctorId);
+      if (!profile) return dsx_err_('FORBIDDEN', 'Doctor profile ' + actor.doctorId + ' was not found.');
+    } else {
+      if (actor.actions.indexOf('signForDoctor') === -1) {
+        return dsx_err_('FORBIDDEN',
+          'Your login is not linked to a doctor profile. Ask the administrator to set ' +
+          'Linked_Username in the Doctors sheet before you sign.');
+      }
+      var wanted = dsx_str_(signAsDoctorId);
+      if (!wanted) {
+        return dsx_err_('VALIDATION_FAILED',
+          'Your login is not itself a doctor, so choose which doctor this summary is ' +
+          'signed by. Their name and registration number print on the document, and ' +
+          'yours is recorded beside it as the person who entered it.');
+      }
+      profile = dsx_doctorProfile_(wanted);
+      if (!profile) {
+        return dsx_err_('VALIDATION_FAILED',
+          'Doctor ' + wanted + ' is not an active entry in the Doctors sheet.');
+      }
+      onBehalfOf = { username: actor.username, name: actor.displayName, role: actor.role };
     }
-    var profile = dsx_doctorProfile_(actor.doctorId);
-    if (!profile) return dsx_err_('FORBIDDEN', 'Doctor profile ' + actor.doctorId + ' was not found.');
+
     if (!profile.regNo) {
       return dsx_err_('VALIDATION_FAILED',
-        'Your registration number is not on file. A discharge summary must carry the signing ' +
+        (onBehalfOf ? profile.name + "'s" : 'Your') + ' registration number is not on file. ' +
+        'A discharge summary must carry the signing ' +
         "doctor's registration number — ask the administrator to fill Reg_No for " +
         profile.name + ' in the Doctors sheet.');
     }
@@ -1388,7 +1438,7 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
 
     // ---- 3. consultant-of-record rule -------------------------------------
     var cor = dsx_consultantsOfRecord_(dsx_str_(header0.IP_Number));
-    var isConsultant = cor.ids.indexOf(dsx_upper_(actor.doctorId)) !== -1;
+    var isConsultant = cor.ids.indexOf(dsx_upper_(profile.doctorId)) !== -1;
     var reason = dsx_str_(onBehalfReason);
 
     if (!isConsultant) {
@@ -1398,11 +1448,22 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
       }
       if (!reason) {
         return dsx_err_('VALIDATION_FAILED',
-          'You are not the consultant of record for this admission. Give a reason for ' +
-          'signing on their behalf — it is logged and printed on the summary.');
+          profile.name + ' is not the consultant of record for this admission. Give a ' +
+          'reason for signing on their behalf — it is logged and printed on the summary.');
       }
-    } else {
+    } else if (!onBehalfOf) {
       reason = '';
+    }
+
+    // An administrator entering the signature ALWAYS states why, even when
+    // the doctor they name is the consultant of record: the question the
+    // reason answers is why this person is entering it, not who the patient
+    // belongs to.
+    if (onBehalfOf && !reason) {
+      return dsx_err_('VALIDATION_FAILED',
+        'You are entering this signature in ' + profile.name + "'s name. Say why — " +
+        'for example "signed in my presence on the ward round". It is logged and ' +
+        'printed on the summary.');
     }
 
     // ---- 4. readiness, recomputed server-side -----------------------------
@@ -1448,8 +1509,15 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
       signerName: profile.name,
       signerQualification: profile.signatureLine,
       signerRegNo: profile.regNo,
+      signerDoctorId: profile.doctorId,
       signedAt: signedAtIso,
       onBehalfReason: reason,
+      // Present ONLY when somebody other than the named doctor entered the
+      // signature. Absent on an ordinary doctor signature, so nothing about
+      // the existing document changes.
+      enteredBy: onBehalfOf ? onBehalfOf.username : '',
+      enteredByName: onBehalfOf ? onBehalfOf.name : '',
+      enteredByRole: onBehalfOf ? onBehalfOf.role : '',
       preparedBy: dsx_str_(header0.Prepared_By),
       attestations: attestations || {},
       snapshotNo: snapshotNo
@@ -1495,6 +1563,11 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
                   {
                     signerName: profile.name,
                     signerRegNo: profile.regNo,
+                    signerDoctorId: profile.doctorId,
+                    // Who pressed the button, when that is not the doctor
+                    // named on the document.
+                    enteredBy: onBehalfOf ? onBehalfOf.username : '',
+                    enteredByRole: onBehalfOf ? onBehalfOf.role : '',
                     credentialMethod: cred.method,
                     onBehalfReason: reason,
                     withoutPreparerReview: (signAction === 'SIGN_FAST'),
@@ -1511,6 +1584,7 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
       snapshotNo: snapshotNo,
       shortHash: dsx_shortHash_(contentHash),
       credential: cred.method,
+      signedInNameOf: onBehalfOf ? profile.doctorId : '',
       onBehalfReason: reason
     });
 
@@ -1539,7 +1613,8 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
     // (Phase 7 does it outside, and a PDF failure must never roll back a
     // signature).
 
-    return dsx_ok_('Signed by ' + profile.name + '.' +
+    return dsx_ok_('Signed by ' + profile.name +
+                   (onBehalfOf ? ', entered by ' + onBehalfOf.name : '') + '.' +
                    (wardNote.ok ? ''
                                 : ' NOTE: the summary could not be added to the ' +
                                   'ward record (' + wardNote.message + ') — the ' +
@@ -1564,6 +1639,52 @@ function ds_sign(token, summaryId, expectedRowVersion, credential, attestations,
 }
 
 /** Doctor master fields needed to sign and to print. */
+/**
+ * FRONTEND ENTRY. The doctors a summary can be signed in the name of.
+ *
+ * Only reached by a login that holds `signForDoctor` — an administrator. A
+ * doctor signs as themselves and never sees this list.
+ *
+ * A doctor with no registration number is LISTED AND DISABLED rather than
+ * hidden, because "Dr X is not in the list" sends somebody looking for a
+ * permission problem when the actual fault is one empty cell in the Doctors
+ * sheet, and the message says which.
+ *
+ * @return {{success:boolean, doctors:Array, message:string}}
+ */
+function ds_getSignableDoctors(token) {
+  try {
+    var actor = dsx_requireRole_(token, 'signForDoctor');
+    var sh = dsx_ss_().getSheetByName('Doctors');
+    if (!sh) return dsx_err_('VALIDATION_FAILED', 'The Doctors sheet is missing.');
+
+    var map = dsx_headerMap_(sh);
+    var last = sh.getLastRow();
+    var out = [];
+    if (last >= 2) {
+      var values = sh.getRange(2, 1, last - 1, Math.max(1, sh.getLastColumn())).getValues();
+      for (var i = 0; i < values.length; i++) {
+        var v = values[i];
+        var id = dsx_str_(v[map['Doctor_ID']]);
+        if (!id) continue;
+        if (dsx_upper_(v[map['Status']]) !== 'ACTIVE') continue;
+        var regNo = (map['Reg_No'] === undefined) ? '' : dsx_str_(v[map['Reg_No']]);
+        out.push({
+          doctorId: id,
+          name: dsx_str_(v[map['Display_Name']]) || id,
+          specialty: (map['Specialty'] === undefined) ? '' : dsx_str_(v[map['Specialty']]),
+          regNo: regNo,
+          signable: !!regNo
+        });
+      }
+    }
+    out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    return dsx_ok_('', { doctors: out, actor: actor.displayName });
+  } catch (e) {
+    return dsx_fromError_(e);
+  }
+}
+
 function dsx_doctorProfile_(doctorId) {
   var sh = dsx_ss_().getSheetByName('Doctors');
   if (!sh) return null;

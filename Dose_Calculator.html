@@ -132,6 +132,9 @@
           <label for="dc-perml">per how many ml</label>
           <input type="number" step="0.1" min="0" id="dc-perml" value="5">
         </div>
+        <!-- The strengths this drug is made in, from the reference row and
+             from the brand name. One click fills the box above. -->
+        <div class="col-12 d-none" id="dc-strengths"></div>
 
         <div class="col-6 col-md-3">
           <label for="dc-maxdose">Max per dose (mg)</label>
@@ -229,6 +232,77 @@
     return { n: rounded, text: text || String(rounded) };
   }
 
+  /**
+   * THE STRENGTH, WHICH NOBODY SHOULD HAVE TO LOOK UP.
+   *
+   * "mg per tablet" was a blank box, so the tablet count — the one number a
+   * nurse actually acts on — only appeared if somebody typed the strength
+   * first, and most people did not. The strength is already written down in
+   * two places the panel can see:
+   *
+   *   • the brand itself. "P-500", "Dolo 650", "Pan 40", "Monocef-O 200"
+   *     all state it, and that is how Indian brands are named.
+   *   • the reference row's Formulations text, e.g.
+   *     "125 mg/5 ml; 250 mg/5 ml; 500 mg tab".
+   *
+   * Both are SUGGESTIONS, offered as buttons rather than written into the
+   * box. A strength is a fact about a pack, and picking the wrong pack is
+   * exactly the error this panel exists to prevent, so the person confirms
+   * which one they are holding.
+   */
+  function strengthOptions(drugName, ref) {
+    var out = [], seen = {};
+    var add = function (mg, perMl, label) {
+      var k = mg + '/' + (perMl || 0);
+      if (seen[k] || !(mg > 0)) return;
+      seen[k] = true;
+      out.push({ mg: mg, perMl: perMl || 0, label: label });
+    };
+
+    // From the reference's formulations list.
+    String((ref && ref.formulations) || '').split(/[;,]/).forEach(function (bit) {
+      var t = bit.trim();
+      if (!t) return;
+      var liq = /(\d+(?:\.\d+)?)\s*mg\s*(?:\/|per|in)\s*(\d+(?:\.\d+)?)\s*ml/i.exec(t);
+      if (liq) { add(parseFloat(liq[1]), parseFloat(liq[2]), t); return; }
+      var solid = /(\d+(?:\.\d+)?)\s*mg/i.exec(t);
+      if (solid) add(parseFloat(solid[1]), 0, t);
+    });
+
+    // From the brand name, when the reference said nothing about it.
+    var inName = /(\d{2,4})(?:\s*mg)?\b/.exec(String(drugName || ''));
+    if (inName) add(parseFloat(inName[1]), 0, inName[1] + ' mg (from the name)');
+
+    return out;
+  }
+
+  function renderStrengths() {
+    var box = el('dc-strengths');
+    if (!box) return;
+    var form = (el('dc-form') || {}).value;
+    var ref = (ctx.ref && ctx.ref !== 'loading') ? ctx.ref : null;
+    var wantLiquid = (form === 'liq');
+    var list = strengthOptions(ctx.refFor, ref).filter(function (o) {
+      return wantLiquid ? o.perMl > 0 : o.perMl === 0;
+    });
+    if (form === 'none' || !list.length) { box.innerHTML = ''; box.classList.add('d-none'); return; }
+    box.classList.remove('d-none');
+    box.innerHTML = '<span class="dc-sub me-1">Strengths on file:</span>' +
+      list.map(function (o, i) {
+        return '<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 me-1 mb-1" ' +
+               'data-dc-strength="' + i + '">' + esc(o.label) + '</button>';
+      }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('[data-dc-strength]'), function (b) {
+      b.addEventListener('click', function () {
+        var o = list[parseInt(b.getAttribute('data-dc-strength'), 10)];
+        if (!o) return;
+        if (el('dc-strength')) el('dc-strength').value = o.mg;
+        if (o.perMl && el('dc-perml')) el('dc-perml').value = o.perMl;
+        calc();
+      });
+    });
+  }
+
   function syncFormRow() {
     var form = (el('dc-form') || {}).value;
     var lbl = el('dc-strength-lbl');
@@ -236,6 +310,7 @@
     if (lbl) lbl.textContent = (form === 'liq') ? 'mg in' : 'mg per tablet';
     if (perml) perml.hidden = (form !== 'liq');
     if (el('dc-strength')) el('dc-strength').disabled = (form === 'none');
+    renderStrengths();
   }
 
   // =====================================================================
@@ -305,19 +380,31 @@
         ? '<div class="dc-warn soft mt-2">This row has not been reviewed by the clinic yet ' +
           '(Source is still &ldquo;' + esc(r.source) + '&rdquo;). Verify against the product label.</div>'
         : '');
+
+    renderStrengths();
   }
 
-  /** Applies a reference row to the empty boxes. Never overwrites typing. */
-  function applyReference(r, force) {
+  /**
+   * Applies a reference row to the boxes.
+   *
+   * @param {Object} r          the reference row
+   * @param {boolean} force     overwrite even what the user typed
+   * @param {boolean} overSeed  overwrite the value the drug row seeded.
+   *        A seed is a guess made by another screen; the clinic's own
+   *        reference table is the authority and must displace it. What the
+   *        USER typed is never touched by either.
+   */
+  function applyReference(r, force, overSeed) {
     if (!r) return;
-    function fill(id, value) {
+    function fill(id, value, seeded) {
       var e = el(id);
       if (!e || value === null || value === undefined || value === '') return;
-      if (!force && String(e.value || '').trim() !== '') return;
+      var taken = String(e.value || '').trim() !== '';
+      if (taken && !force && !(seeded && overSeed)) return;
       e.value = value;
     }
     if (r.basis && el('dc-basis')) el('dc-basis').value = (r.basis === 'dose') ? 'dose' : 'day';
-    fill('dc-mgkg', r.usualPerKg);
+    fill('dc-mgkg', r.usualPerKg, true);
     fill('dc-maxdose', r.maxSingle);
     fill('dc-maxday', r.maxDaily);
     if (r.dosesPerDay && el('dc-freq')) {
@@ -326,7 +413,7 @@
     }
   }
 
-  function loadReference(drugName, prefill) {
+  function loadReference(drugName, prefill, overSeed) {
     var name = String(drugName || '').trim();
     ctx.refFor = name;
     ctx.ref = null;
@@ -335,7 +422,7 @@
     var key = name.toLowerCase();
     if (refCache.hasOwnProperty(key)) {
       ctx.ref = refCache[key];
-      if (prefill) applyReference(ctx.ref, false);
+      if (prefill) applyReference(ctx.ref, false, overSeed);
       renderReference();
       calc();
       return;
@@ -351,7 +438,7 @@
         // The panel may have moved to another drug while this was in flight.
         if (ctx.refFor !== name) return;
         ctx.ref = hit;
-        if (prefill) applyReference(hit, false);
+        if (prefill) applyReference(hit, false, overSeed);
         renderReference();
         calc();
       })
@@ -448,9 +535,18 @@
       var unit = ' mg/kg/' + refBasis;
 
       if (ref.maxPerKg !== null && typedInRefBasis > ref.maxPerKg * 1.001) {
+        // A warning with nothing to press is a warning that gets read past.
+        // The recorded figure is one click away, in the basis it was
+        // recorded in — which is also the basis the box is switched to, so
+        // the number and its meaning cannot come apart.
+        var suggest = (ref.usualPerKg !== null && ref.usualPerKg !== undefined)
+          ? ref.usualPerKg : ref.maxPerKg;
         lines.push('<div class="dc-warn hard">Above the recorded range for ' +
           esc(ref.drug) + ': ' + (Math.round(typedInRefBasis * 100) / 100) + unit +
-          ' against a maximum of ' + ref.maxPerKg + unit + '.</div>');
+          ' against a maximum of ' + ref.maxPerKg + unit + '. ' +
+          '<button type="button" class="btn btn-sm btn-light py-0 px-2 ms-1" ' +
+          'id="dc-use-ref" data-dc-use="' + suggest + '" data-dc-basis="' + refBasis + '">' +
+          'Use ' + suggest + unit + '</button></div>');
       } else if (ref.minPerKg !== null && typedInRefBasis < ref.minPerKg * 0.999) {
         lines.push('<div class="dc-warn soft">Below the recorded range for ' +
           esc(ref.drug) + ': ' + (Math.round(typedInRefBasis * 100) / 100) + unit +
@@ -502,6 +598,16 @@
     lines.push('<div class="dc-sub mt-2">Sig: <span class="dc-sig">' + sig + '</span></div>');
 
     out.innerHTML = lines.join('');
+
+    var useRef = el('dc-use-ref');
+    if (useRef) {
+      useRef.addEventListener('click', function () {
+        if (el('dc-basis')) el('dc-basis').value = useRef.getAttribute('data-dc-basis');
+        if (el('dc-mgkg'))  el('dc-mgkg').value  = useRef.getAttribute('data-dc-use');
+        calc();
+      });
+    }
+
     ctx.sig = sig;
     if (btn) btn.disabled = !sig;
   }
@@ -562,16 +668,44 @@
     // this one. A ceiling belonging to a different drug is worse than none.
     ['dc-maxdose', 'dc-maxday'].forEach(function (id) { if (el(id)) el(id).value = ''; });
 
-    if (nameEl && nameEl.dataset && nameEl.dataset.refdose) {
-      var n = String(nameEl.dataset.refdose).match(/[\d.]+/);
-      if (n && el('dc-mgkg')) el('dc-mgkg').value = n[0];
-    } else if (el('dc-mgkg')) {
-      el('dc-mgkg').value = '';
+    // ────────────────────────────────────────────────────────────────
+    // THE PREFILL THAT OFFERED 11,136 mg OF PARACETAMOL.
+    //
+    // This used to take the first run of digits out of the prescription
+    // row's data-refdose attribute and put it in the mg/kg box:
+    //
+    //     var n = String(nameEl.dataset.refdose).match(/[\d.]+/);
+    //
+    // data-refdose came from op_drugMaster_().refDose, which was reading
+    // Pharmacy_Inventory column G — the BATCH NUMBER. For "P-500", batch
+    // H192B12, the first digits are 192, so the box was filled with 192
+    // mg/kg/dose and a 58 kg patient was shown 11,136 mg four times a day.
+    // The reference strip immediately below said 10–15 mg/kg/dose, and the
+    // two never met, because applyReference() only fills EMPTY boxes and
+    // this had already filled it.
+    //
+    // op_drugMaster_ is fixed (OP_Database_Engine.gs), so data-refdose now
+    // carries a real figure from Drug_Dose_Reference. This side is made
+    // safe as well, because a stale page or an old deployment must not be
+    // able to put a batch code into a dose box again:
+    //
+    //   • the attribute is accepted ONLY if the whole of it is a number;
+    //   • it is marked PROVISIONAL, so the clinic's own reference row
+    //     overwrites it rather than deferring to it.
+    // ────────────────────────────────────────────────────────────────
+    var provisional = true;
+    var seed = (nameEl && nameEl.dataset) ? String(nameEl.dataset.refdose || '').trim() : '';
+    if (el('dc-mgkg')) {
+      el('dc-mgkg').value = (seed && /^\d+(\.\d+)?$/.test(seed)) ? seed : '';
+    }
+    if (nameEl && nameEl.dataset && nameEl.dataset.refbasis && el('dc-basis')) {
+      el('dc-basis').value = (nameEl.dataset.refbasis === 'dose') ? 'dose' : 'day';
     }
 
     syncFormRow();
-    // Prefills only the boxes still empty, then re-runs the arithmetic.
-    loadReference(drugName, true);
+    // The reference row WINS over the seed above, and only leaves boxes the
+    // user has typed into alone.
+    loadReference(drugName, true, provisional);
     calc();
     host.hidden = false;
   };

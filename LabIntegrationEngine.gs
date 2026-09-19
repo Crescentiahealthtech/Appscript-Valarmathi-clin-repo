@@ -502,8 +502,16 @@ function getLabOrderDetail(orderId) {
  * is the door the browser comes through.
  */
 function advanceOrderStatus(orderId, newStatus, sessionToken) {
-  crescRequire_(sessionToken, ['lab.collect', 'lab.result', 'lab.verify']);
-  return lab_setOrderStatus_(orderId, newStatus);
+  // Guard inside the try. lab_setOrderStatus_ already answers in
+  // { success, message }, so this is the one of the nine that needed no new
+  // shape — only for the refusal to arrive in the same envelope as every
+  // other answer instead of being thrown past it into the failure handler.
+  try {
+    crescRequire_(sessionToken, ['lab.collect', 'lab.result', 'lab.verify']);
+    return lab_setOrderStatus_(orderId, newStatus);
+  } catch (err) {
+    return { success: false, message: cresc_reason_(err) };
+  }
 }
 
 /** * 🔥 HARDENED: FORCED TRANSITION

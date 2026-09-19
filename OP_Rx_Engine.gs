@@ -986,26 +986,59 @@ function suggestPaediatricDose(drugName, weightKg, ageYears, frequency, sessionT
     var name = dc_str_(drugName).toLowerCase();
     if (!name) return { success: true, applicable: false, message: "" };
 
-    var ref = null, unit = 0, generic = "";
+    // THE FIGURE COMES FROM THE DOSE REFERENCE, not from the inventory.
+    //
+    // It used to be the first number in op_drugMaster_().refDose, which was
+    // Pharmacy_Inventory column G — the BATCH NUMBER. A child's dose was
+    // therefore computed from a batch code: "H192B12" gave 192 mg/kg/day.
+    // Drug_Dose_Reference is the table that states a dose, its basis and its
+    // ceilings, and it is the only one that does.
+    var refRow = null, generic = "", unit = 0;
+    try {
+      if (typeof dref_all_ === "function" && typeof dref_key_ === "function") {
+        refRow = dref_all_().byKey[dref_key_(drugName)] || null;
+      }
+    } catch (e) { refRow = null; }
+
     (op_drugMaster_() || []).forEach(function (d) {
       if (String(d.brand).toLowerCase() !== name) return;
-      var r = String(d.refDose || "").match(/[\d.]+/);
-      if (r) ref = parseFloat(r[0]);
       generic = dc_str_(d.generic);
       var u = String(d.unit || "").match(/[\d.]+/);
       if (u) unit = parseFloat(u[0]);
     });
+    if (!refRow && generic) {
+      try {
+        if (typeof dref_all_ === "function") refRow = dref_all_().byKey[dref_key_(generic)] || null;
+      } catch (e) { /* leave it null */ }
+    }
 
-    if (!ref) {
+    var ref = refRow ? refRow.usualPerKg : null;
+    if (ref === null || ref === undefined) {
       return {
         success: true, applicable: false,
-        message: "No reference dose on file for " + drugName +
-                 ". Add mg/kg/day to Pharmacy_Inventory to enable this."
+        message: "No dose reference on file for " + drugName +
+                 ". Add a row to Drug_Dose_Reference (Min/Max/Usual per kg and " +
+                 "the basis) to enable this."
       };
     }
 
-    var perDay = w * ref;
+    // The reference states whether its figure is per DAY or per DOSE.
+    // Treating one as the other is a factor-of-frequency error in a child's
+    // dose, which is the whole reason the column exists.
+    var perDay  = (refRow.basis === "dose") ? (w * ref * freq) : (w * ref);
     var perDose = perDay / freq;
+
+    // The ceilings from the same row, applied here rather than left to the
+    // reader of a suggestion.
+    var capped = "";
+    if (refRow.maxSingle !== null && refRow.maxSingle !== undefined && perDose > refRow.maxSingle) {
+      perDose = refRow.maxSingle; perDay = perDose * freq;
+      capped = " Capped at the recorded maximum of " + refRow.maxSingle + " mg per dose.";
+    }
+    if (refRow.maxDaily !== null && refRow.maxDaily !== undefined && perDay > refRow.maxDaily) {
+      perDay = refRow.maxDaily; perDose = perDay / freq;
+      capped = " Capped at the recorded maximum of " + refRow.maxDaily + " mg per day.";
+    }
 
     return {
       success: true,
@@ -1023,7 +1056,9 @@ function suggestPaediatricDose(drugName, weightKg, ageYears, frequency, sessionT
         ? (Math.round((perDose / unit) * 100) / 100) + " unit " + freqWordServer_(freq) +
           " (" + Math.round(perDose * 10) / 10 + " mg)"
         : Math.round(perDose * 10) / 10 + " mg " + freqWordServer_(freq),
-      note: "Based on " + ref + " mg/kg/day at " + w + " kg. Verify against the child's condition."
+      note: "Based on " + ref + " mg/kg/" + (refRow.basis === "dose" ? "dose" : "day") +
+            " at " + w + " kg, from Drug_Dose_Reference." + capped +
+            " Verify against the child's condition and the product label."
     };
   } catch (e) {
     return { success: false, message: "Dose calculation failed: " + e.message };

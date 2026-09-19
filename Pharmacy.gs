@@ -222,11 +222,23 @@ function _phDisposalSheet_(ss) {
 }
 
 /** FRONTEND ENTRY. The reason codes, so the dialog and the server agree. */
+/**
+ * The write-off reasons, as { code, label } pairs in `data`.
+ *
+ * Guard inside the try, reply wrapped — see processPharmacyBill above. The
+ * discard dialog's failure path set the reason list to empty and carried on
+ * opening, so a refused call produced a dialog whose only mandatory field
+ * had nothing in it and no explanation anywhere.
+ */
 function getDisposalReasons(sessionToken) {
-  crescRequire_(sessionToken, 'pharmacy.read');
-  return Object.keys(PH_DISPOSAL_REASONS).map(function (k) {
-    return { code: k, label: PH_DISPOSAL_REASONS[k] };
-  });
+  try {
+    crescRequire_(sessionToken, 'pharmacy.read');
+    return { success: true, message: '', data: Object.keys(PH_DISPOSAL_REASONS).map(function (k) {
+      return { code: k, label: PH_DISPOSAL_REASONS[k] };
+    }) };
+  } catch (err) {
+    return { success: false, data: [], message: _phReason_(err) };
+  }
 }
 
 /**
@@ -836,10 +848,23 @@ function _dedupePrescriptions_(list) {
 // =====================================================================
 
 function processPharmacyBill(payload, sessionToken) {
-  var lock = LockService.getScriptLock();
-  crescRequire_(sessionToken, 'pharmacy.dispense');
-  if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
+  // THE GUARD IS INSIDE THE TRY, and it is not a style preference.
+  //
+  // crescRequire_ THROWS on an expired session or a role without
+  // pharmacy.dispense. Thrown out of a frontend entry point, that reaches
+  // google.script.run's FAILURE handler, not its success handler — and the
+  // failure handler at this desk says "Network error: please retry." So a
+  // pharmacist whose session had timed out pressed Save Bill, was told the
+  // network was down, retried, and was told the same thing again. Nothing
+  // on screen ever mentioned signing in.
+  //
+  // Returned as { success:false, message } it lands in the success handler,
+  // where the real sentence is already displayed.
+  var lock = null;
   try {
+    crescRequire_(sessionToken, 'pharmacy.dispense');
+    lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var invSheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
     if (!invSheet) throw new Error("Inventory sheet missing.");
@@ -944,8 +969,8 @@ function processPharmacyBill(payload, sessionToken) {
         taxable: row[11], gstAmt: row[12], lineTotal: row[13] }; }),
       gross: round2_(gross), totalGst: round2_(totalGst), discount: round2_(discount), net: net } };
   } catch (error) {
-    return { success: false, message: error.message || String(error) };
-  } finally { lock.releaseLock(); }
+    return { success: false, message: _phReason_(error) };
+  } finally { if (lock) { try { lock.releaseLock(); } catch (e) {} } }
 }
 
 // =====================================================================
@@ -953,10 +978,12 @@ function processPharmacyBill(payload, sessionToken) {
 // =====================================================================
 
 function settleCreditBill(payload, sessionToken) {
-  var lock = LockService.getScriptLock();
-  crescRequire_(sessionToken, 'billing.write');
-  if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
+  // Guard inside the try — see processPharmacyBill above for why.
+  var lock = null;
   try {
+    crescRequire_(sessionToken, 'billing.write');
+    lock = LockService.getScriptLock();
+    if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVOICES);
     if (!sheet) throw new Error("Invoice ledger not found.");
@@ -976,8 +1003,8 @@ function settleCreditBill(payload, sessionToken) {
     }
     return { success: false, message: "Invoice " + target + " not found." };
   } catch (error) {
-    return { success: false, message: error.message || String(error) };
-  } finally { lock.releaseLock(); }
+    return { success: false, message: _phReason_(error) };
+  } finally { if (lock) { try { lock.releaseLock(); } catch (e) {} } }
 }
 
 // =====================================================================
@@ -1036,6 +1063,22 @@ function _nextInvoiceNo_(headerSheet, now) {
     }
   }
   return "PH" + yymm + "-" + (maxSeq + 1);
+}
+
+/**
+ * A caught error, said in a sentence the person at the counter can act on.
+ *
+ * "FORBIDDEN: your session has expired." is already the right words; the
+ * prefix is not, and it is the prefix a pharmacist reads first. Everything
+ * else is passed through unchanged — a stock shortfall or a missing sheet
+ * already explains itself.
+ */
+function _phReason_(error) {
+  // The same explainer every guarded endpoint now uses, kept under its
+  // pharmacy name so this file's existing call sites read unchanged.
+  return (typeof cresc_reason_ === 'function')
+    ? cresc_reason_(error)
+    : String((error && error.message) || error || '').replace(/^FORBIDDEN:\s*/, '');
 }
 
 function round2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }

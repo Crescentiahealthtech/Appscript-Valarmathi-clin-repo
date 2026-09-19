@@ -657,10 +657,23 @@ function dc_normaliseTeamRole_(raw) {
   return aliases[v] || "";
 }
 
-/** The role list for a picker, as { value, label } pairs. */
+/**
+ * The role list for a picker, as { value, label } pairs in `data`.
+ *
+ * Guard inside the try, reply wrapped — see getAvailableTimeSlots in
+ * Appointment.gs for why, and crescUnwrap in Shell_UX.html for the client
+ * half. Here it mattered quietly: the cross-consult dialog's failure path
+ * replaced the whole list with a single hardcoded "Cross Consult" option, so
+ * an expired session silently narrowed a clinical picker to one value with
+ * nothing on screen to say it had happened.
+ */
 function getIPTeamRoles(sessionToken) {
-  crescRequire_(sessionToken, 'ward.read');
-  return dc_teamRoles_();
+  try {
+    crescRequire_(sessionToken, 'ward.read');
+    return { success: true, data: dc_teamRoles_(), message: '' };
+  } catch (err) {
+    return { success: false, data: [], message: cresc_reason_(err) };
+  }
 }
 
 /**

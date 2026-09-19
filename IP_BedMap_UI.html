@@ -213,18 +213,38 @@
       .withSuccessHandler(window.renderBedGrid)
       .withFailureHandler(function (err) {
         if (c) c.innerHTML = '<div class="alert alert-danger">' +
-          esc((err && err.message) || 'The bed map could not be loaded.') + '</div>';
+          esc(window.crescWhyFailed
+            ? window.crescWhyFailed(err, 'Loading the bed map')
+            : ((err && err.message) || 'The bed map could not be loaded.')) + '</div>';
       })
       .getBedStatuses(window.sessionToken);
   };
 
-  window.renderBedGrid = function (dataStr) {
+  /** One place the map says it is empty and why. */
+  function bmProblem(msg) {
+    var c = el('bed-map-container');
+    if (!c) return;
+    c.innerHTML = '<div class="alert alert-danger"></div>';
+    c.querySelector('div').textContent = msg;
+  }
+
+  /**
+   * The bed list now arrives wrapped in { success, data, message }, with
+   * `data` still the JSON string it always was — so a refused read is an
+   * answer that says "your session has expired" rather than an exception
+   * thrown past this handler and shown as a failed load. A bare string from
+   * an older deployment still works. See crescUnwrap in Shell_UX.html.
+   */
+  window.renderBedGrid = function (reply) {
     var container = el('bed-map-container');
     if (!container) return;
+    var r = window.crescUnwrap ? window.crescUnwrap(reply, '[]')
+                               : { ok: true, data: reply, message: '' };
+    if (!r.ok) { bmProblem(r.message); return; }
     try {
-      globalBedData = (typeof dataStr === 'string') ? JSON.parse(dataStr) : (dataStr || []);
+      globalBedData = (typeof r.data === 'string') ? JSON.parse(r.data) : (r.data || []);
     } catch (e) {
-      container.innerHTML = '<div class="alert alert-danger">The bed map data could not be read.</div>';
+      bmProblem('The bed map data could not be read.');
       return;
     }
     paint();
@@ -377,12 +397,34 @@
     paint();
   };
 
+  // THE ANSWER USED TO BE DISCARDED. This call's success handler took no
+  // argument at all, so a `false` — the bed is not in Master_Beds —
+  // repainted the map and said nothing, and the nurse watched the bed they
+  // had just changed come back unchanged. The endpoint now answers in
+  // { success, message } and both outcomes are reported.
+  //
+  // The comment lives ABOVE the chain, not inside it: tools/rpc.js walks
+  // `google.script.run` to its terminal call by skipping whitespace, and a
+  // comment between the links stops the walk — so the check that every
+  // client call has a matching .gs function silently loses this one.
   window.bmUpdateStatus = function (bedId, newStatus) {
     google.script.run
-      .withSuccessHandler(function () { window.initBedMap(); })
+      .withSuccessHandler(function (res) {
+        var r = window.crescUnwrap ? window.crescUnwrap(res, null)
+                                   : { ok: res !== false, data: res, message: '' };
+        // A bare `false` from an older deployment is a failure, not an answer.
+        if (res === false) r = { ok: false, message: 'Bed ' + bedId +
+          ' was not found in Master_Beds, so its status was not changed.' };
+        if (!r.ok && window.showToast) {
+          window.showToast('Bed not updated', r.message, 'error');
+        }
+        window.initBedMap();
+      })
       .withFailureHandler(function (err) {
         if (window.showToast) {
-          window.showToast('Bed not updated', (err && err.message) || 'Try again.', 'error');
+          window.showToast('Bed not updated', window.crescWhyFailed
+            ? window.crescWhyFailed(err, 'Saving the bed status')
+            : ((err && err.message) || 'Try again.'), 'error');
         }
         window.initBedMap();
       })

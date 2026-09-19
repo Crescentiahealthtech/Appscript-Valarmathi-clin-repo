@@ -51,7 +51,7 @@ var DEP_MAP = {
   // crescRequire_() call depends on this file being present, so a deployment
   // missing it must be named rather than discovered one refusal at a time.
   "RBAC.gs": ["crescRequire_", "crescActor_", "crescCan_", "crescPermsFor_",
-              "crescRequireOwnRecord_", "crescGetMyPermissions",
+              "crescRequireOwnRecord_", "crescGetMyPermissions", "cresc_reason_",
               "crescRbacSelfTest", "crescRbacCoverage"],
   // Sign-in audit and lockout. AuthLogin.gs calls into these on every
   // attempt, so without this file nobody can sign in at all.
@@ -94,7 +94,8 @@ var DEP_MAP = {
     "dpdpRegisterSharedFile", "dpdpExpireSharedLinks", "dpdpRetentionReport",
     "dpdpReadinessCheck", "dpdpVerifyRequester", "dpdpSubmitPublicRequest",
     "recordNomination", "getNomination", "revokeNomination", "dpdpLogRead_",
-    "dpdpSaveGrievanceOfficer", "dpdpConsoleSnapshot", "dpdpRetentionReportUI"
+    "dpdpSaveGrievanceOfficer", "dpdpConsoleSnapshot", "dpdpConsoleHousekeeping",
+    "dpdpRetentionReportUI"
   ],
   "DPDP_Documents.gs": [
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
@@ -103,7 +104,7 @@ var DEP_MAP = {
   "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
   "Deployment_Probe.gs": [
     "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
-    "RUN_deploymentEvidence"
+    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence"
   ],
   "Patient_Portal.gs": [
     "portalHome", "portalBookableDoctors", "portalDoctorSlots",

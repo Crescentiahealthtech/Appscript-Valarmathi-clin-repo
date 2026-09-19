@@ -414,6 +414,26 @@ function crescRequire_(token, permission) {
 }
 
 /**
+ * A CAUGHT ERROR, SAID IN A SENTENCE THE USER CAN ACT ON.
+ *
+ * It lives here, beside crescRequire_, because crescRequire_ is what
+ * produces most of them. "FORBIDDEN: your session has expired. Please sign
+ * in again." is already the right words; the prefix is not, and the prefix
+ * is the first thing a receptionist reads.
+ *
+ * Every frontend entry point that catches its own guard runs its message
+ * through this, so a refusal reads the same wherever it surfaces.
+ *
+ * @param {Error|string} error
+ * @return {string}
+ */
+function cresc_reason_(error) {
+  var msg = (error && error.message) ? String(error.message) : String(error || '');
+  msg = msg.replace(/^FORBIDDEN:\s*/, '');
+  return msg || 'The request could not be completed.';
+}
+
+/**
  * A patient may only ever reach their own record.
  *
  * The portal's session username IS the patient id, so this is one comparison

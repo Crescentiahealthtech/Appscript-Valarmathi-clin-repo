@@ -289,24 +289,39 @@ function autoFetchPatient() {
     document.getElementById(id).value = '...';
   });
 
+  var clearFields = function () {
+    ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+  };
+
   google.script.run
-    .withSuccessHandler(function (data) {
+    .withSuccessHandler(function (res) {
+      // "NOT FOUND" AND "NOT ALLOWED" WERE THE SAME ANSWER HERE.
+      //
+      // getPatientDemographics returned a bare object or null, and its guard
+      // threw past this handler entirely — so an expired session produced
+      // "Could not fetch patient: <some transport noise>" and a genuine miss
+      // produced "Patient ID not found.". Now the refusal arrives as data and
+      // says which of the two it is. See crescUnwrap in Shell_UX.html.
+      var r = window.crescUnwrap ? window.crescUnwrap(res, null)
+                                 : { ok: true, data: res, message: '' };
+      if (!r.ok) { clearFields(); crescAlert(r.message); return; }
+      var data = r.data;
       if (data && data.name) {
         document.getElementById('ab-name').value = data.name;
         document.getElementById('ab-age').value  = data.age || '';
         document.getElementById('ab-sex').value  = data.gender || data.sex || '';
       } else {
-        ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
-          document.getElementById(id).value = '';
-        });
-        crescAlert('Patient ID not found.');
+        clearFields();
+        crescAlert('No patient on file with that ID.');
       }
     })
     .withFailureHandler(function (err) {
-      ['ab-name', 'ab-age', 'ab-sex'].forEach(function (id) {
-        document.getElementById(id).value = '';
-      });
-      crescAlert('Could not fetch patient: ' + err.message);
+      clearFields();
+      crescAlert(window.crescWhyFailed
+        ? window.crescWhyFailed(err, 'Looking up the patient')
+        : 'Could not fetch patient: ' + err.message);
     })
     .getPatientDemographics(pId, window.sessionToken);
 }

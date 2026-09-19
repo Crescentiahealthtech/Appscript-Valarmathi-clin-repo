@@ -1468,10 +1468,13 @@ function dpdpConsoleSnapshot(sessionToken) {
   try {
     var actor = crescRequire_(sessionToken, ['dpdp.manage', 'admin.config', 'admin.audit']);
 
+    // The FAST half only. dpdpConsoleHousekeeping() below carries the
+    // readiness check, the audit scan and the trigger list, which is what
+    // the screen used to block on.
     var out = { success: true, actor: actor.displayName || actor.username,
                 officer: dpdp_officer_(), noticeVersion: dpdp_noticeVersion_(),
                 requests: [], overdue: 0, breaches: [], unassessed: 0,
-                findings: [], anomalies: [], triggers: '', message: '' };
+                message: '' };
 
     try {
       var rq = listDPDPRequests(sessionToken, { openOnly: false });
@@ -1483,23 +1486,54 @@ function dpdpConsoleSnapshot(sessionToken) {
       if (br.success) { out.breaches = br.rows; out.unassessed = br.unassessed; }
     } catch (e) { out.message += 'Breach register unavailable. '; }
 
+    return out;
+  } catch (err) {
+    return { success: false, requests: [], breaches: [], findings: [], anomalies: [],
+             message: String(err.message || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
+/**
+ * FRONTEND ENTRY. The slow half of the console, fetched after first paint.
+ *
+ * THE SCREEN USED TO WAIT FOR ALL OF THIS BEFORE SHOWING ANYTHING. One call
+ * did five jobs: the request queue, the breach register, the full readiness
+ * check, a seven-day scan of the audit log and the trigger list. The first
+ * two are a couple of sheet reads; the last three walk most of the
+ * spreadsheet and take tens of seconds on a real clinic's data. The console
+ * painted nothing until the slowest of them finished, and the four counters
+ * at the top sat on "–" the whole time, which is what "poor loading" looks
+ * like from the desk.
+ *
+ * Now the queue and the register come back on their own and the screen is
+ * usable immediately; this runs behind it and fills the Readiness tab in.
+ * Each part still fails soft and says which one failed.
+ *
+ * @return {{success:boolean, findings:Array, anomalies:Array,
+ *           triggers:string, message:string}}
+ */
+function dpdpConsoleHousekeeping(sessionToken) {
+  try {
+    crescRequire_(sessionToken, ['dpdp.manage', 'admin.config', 'admin.audit']);
+    var out = { success: true, findings: [], anomalies: [], triggers: '', message: '' };
+
     try {
       var rd = dpdpReadinessCheck();
       if (rd && rd.findings) out.findings = rd.findings;
-    } catch (e) { out.message += 'Readiness check failed. '; }
+    } catch (e) { out.message += 'Readiness check failed (' + e.message + '). '; }
 
     try {
       var an = dpdp_anomalyScan_(7);
       out.anomalies = (an && an.findings) || [];
-    } catch (e) { out.message += 'Audit review failed. '; }
+    } catch (e) { out.message += 'Audit review failed (' + e.message + '). '; }
 
     try {
       out.triggers = (typeof dpdpTriggerStatus === 'function') ? dpdpTriggerStatus() : '';
-    } catch (e) { out.triggers = 'Could not read the trigger list.'; }
+    } catch (e) { out.triggers = 'Could not read the trigger list: ' + e.message; }
 
     return out;
   } catch (err) {
-    return { success: false, requests: [], breaches: [], findings: [], anomalies: [],
+    return { success: false, findings: [], anomalies: [], triggers: '',
              message: String(err.message || err).replace('FORBIDDEN: ', '') };
   }
 }

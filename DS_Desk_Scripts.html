@@ -64,6 +64,10 @@ var DS_IDS = Object.freeze({
   signSoft: 'ds-sign-soft',
   signBehalfWrap: 'ds-sign-behalfwrap',
   signBehalf: 'ds-sign-behalf',
+  signBehalfLabel: 'ds-sign-behalflabel',
+  signAsWrap: 'ds-sign-aswrap',
+  signAs: 'ds-sign-as',
+  signAsNote: 'ds-sign-asnote',
   signCredLabel: 'ds-sign-credlabel',
   signCred: 'ds-sign-cred',
   signAttestation: 'ds-sign-attestation',
@@ -973,7 +977,14 @@ function dsRxTypeFor(item) {
   return 'Tab';
 }
 
-/** Formulary items shaped for dsAttachPicker. */
+/**
+ * Formulary items shaped for dsAttachPicker.
+ *
+ * The GENERIC is searchable as well as the brand, so typing "paracetamol"
+ * finds Dolo and Crocin. A pharmacist substituting a stock item is looking
+ * for the molecule, and so is a doctor who remembers what they gave but not
+ * which brand the clinic carries.
+ */
 function dsDrugItems() {
   var drugs = (DSState.pickers && DSState.pickers.drugs) || [];
   return drugs.map(function (d) {
@@ -987,6 +998,23 @@ function dsDrugItems() {
       __search: d.brand + ' ' + d.generic
     };
   });
+}
+
+/**
+ * Says why a drug box is offering nothing, when it is.
+ *
+ * An autocomplete that produces no list is indistinguishable from an
+ * autocomplete that was never wired up — which is what "the medications
+ * section is not connected to the pharmacy" looks like from the desk. The
+ * formulary fails soft on the server (ds_getPickers keeps its message), so
+ * the reason exists; it was simply never shown next to the boxes it
+ * explains.
+ */
+function dsDrugPickerNote() {
+  if (!DSState.pickers) return 'Loading the pharmacy list…';
+  if (dsDrugItems().length) return '';
+  return 'The pharmacy list is not available, so these boxes are plain text. ' +
+         'Names typed here will not be matched against stock.';
 }
 
 function dsRenderSections() {
@@ -1360,11 +1388,14 @@ function dsRenderTable(key, sec, readOnly) {
     return '<th' + w + '>' + dsEsc(h) + '</th>';
   }).join('') + (readOnly ? '' : '<th style="width:4%"></th>') + '</tr>';
 
-  // The discharge script's Medicine Name autocompletes from the formulary
-  // with live pharmacy stock, the same list OP and IP prescribe from.
-  // Choosing a drug fills the type, the name and the reference dose at once,
-  // because a half-filled drug row is the thing a pharmacist rings back about.
-  var nameCol = (key === 'DISCHARGE_MEDICATIONS') ? c.columns.indexOf('Medicine Name') : -1;
+  // BOTH prescription tables autocomplete from the pharmacy formulary.
+  //
+  // "Treatment given during the stay" was left out, so the one table where a
+  // brand is most often typed from memory — days after the drug was given —
+  // had no list behind it, and the names it collected ("Azithral 500",
+  // "azithral", "T.Azithral") never matched the shelf. Both tables now offer
+  // the same list the OP consult and the ward round prescribe from.
+  var nameCol = isRx ? c.columns.indexOf('Medicine Name') : -1;
   var typeCol = isRx ? c.columns.indexOf('Type') : -1;
 
   var body = c.rows.map(function (row, ri) {
@@ -1403,7 +1434,14 @@ function dsRenderTable(key, sec, readOnly) {
         : 'Nothing recorded.') + '</div>'
     : '';
 
-  return empty + '<div class="table-responsive"><table' + (isRx ? ' class="ds-rx-table"' : '') +
+  // Why the drug boxes are offering nothing, when they are.
+  var note = (isRx && !readOnly) ? dsDrugPickerNote() : '';
+  var noteHtml = note
+    ? '<div class="ds-muted mb-2"><i class="fa-solid fa-circle-info me-1"></i>' +
+      dsEsc(note) + '</div>'
+    : '';
+
+  return empty + noteHtml + '<div class="table-responsive"><table' + (isRx ? ' class="ds-rx-table"' : '') +
          '><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
     (readOnly ? '' : '<button class="btn btn-sm btn-outline-primary mt-2" data-ds-rowadd="' +
      dsEsc(key) + '"><i class="fa-solid fa-plus me-1"></i>' +
@@ -1515,11 +1553,15 @@ function dsWireSectionInputs(wrap) {
       };
       // The brand carries the generic with it, so a pharmacist substituting
       // a stock item reads both from the one cell the script actually shows.
+      // Where the table has a Generic column of its own, it goes there
+      // instead of being parenthesised into the name.
       var generic = String(item.generic || '').toUpperCase();
       var brand = String(item.brand || '');
-      var name = (generic && brand.toUpperCase().indexOf(generic) === -1)
+      var hasGenericCol = cols.indexOf('Generic') > -1;
+      var name = (!hasGenericCol && generic && brand.toUpperCase().indexOf(generic) === -1)
         ? (brand + ' (' + generic + ')') : brand;
       set('Medicine Name', name);
+      if (hasGenericCol) set('Generic', generic);
       set('Type', dsRxTypeFor(item));
       // Only SUGGEST the reference dose: a dose already typed for this
       // patient is a decision, and picking the drug again must not undo it.
@@ -1947,8 +1989,80 @@ function dsOpenSign() {
   dsEl(DS_IDS.signCredLabel).innerHTML =
     'Authenticator code, or your password if you have not enrolled MFA';
 
+  // WHOSE NAME THE DOCUMENT IS SIGNED IN.
+  //
+  // A doctor's login already is a doctor, so this whole row stays hidden
+  // for them and nothing about their signing changes. An administrator is
+  // shown the list and must choose, because a discharge summary carries a
+  // named doctor with a registration number — there is no such thing as one
+  // signed by "the office".
+  dsPrepareSignAs();
+
   var m = dsModal(DS_IDS.modalSign);
   if (m) m.show();
+}
+
+/**
+ * Fills the "signed in the name of" picker, when the login needs one.
+ *
+ * DSState.permissions.signForDoctor is set by the server; the list is
+ * fetched once per session and cached, because it is a staff list, not a
+ * patient's record.
+ */
+function dsPrepareSignAs() {
+  var need = !!(DSState.permissions && DSState.permissions.signForDoctor);
+  dsShow(DS_IDS.signAsWrap, need);
+  if (!need) {
+    if (dsEl(DS_IDS.signAs)) dsEl(DS_IDS.signAs).value = '';
+    dsEl(DS_IDS.signBehalfLabel).textContent =
+      'If you are not the consultant of record — reason for signing on their behalf';
+    return;
+  }
+
+  dsEl(DS_IDS.signBehalfLabel).textContent =
+    'Why you are entering this signature (required)';
+  dsEl(DS_IDS.signAsNote).textContent =
+    'Your own name is recorded beside the doctor\u2019s and printed on the summary.';
+
+  var sel = dsEl(DS_IDS.signAs);
+  if (DSState.signableDoctors) { dsFillSignAs(DSState.signableDoctors); return; }
+
+  sel.innerHTML = '<option value="">Loading the doctor list…</option>';
+  var runner = dsRunner('ds_getSignableDoctors',
+    function (res) {
+      if (!res || res.success === false || !res.data) {
+        sel.innerHTML = '<option value="">The doctor list could not be read</option>';
+        dsEl(DS_IDS.signAsNote).textContent =
+          (res && res.message) || 'The Doctors sheet could not be read.';
+        return;
+      }
+      DSState.signableDoctors = res.data.doctors || [];
+      dsFillSignAs(DSState.signableDoctors);
+    },
+    function (err) {
+      sel.innerHTML = '<option value="">The doctor list could not be read</option>';
+      dsEl(DS_IDS.signAsNote).textContent =
+        'The doctor list could not be read: ' + ((err && err.message) || err);
+    });
+  if (!runner) { sel.innerHTML = '<option value="">This build has no ds_getSignableDoctors()</option>'; return; }
+  runner.ds_getSignableDoctors(dsToken());
+}
+
+function dsFillSignAs(list) {
+  var sel = dsEl(DS_IDS.signAs);
+  if (!sel) return;
+  if (!list.length) {
+    sel.innerHTML = '<option value="">No active doctor is on file</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">Choose the doctor…</option>' +
+    list.map(function (d) {
+      // A doctor with no registration number cannot appear on a discharge
+      // summary, so the option says why instead of going missing.
+      return '<option value="' + dsEsc(d.doctorId) + '"' + (d.signable ? '' : ' disabled') + '>' +
+        dsEsc(d.name) + (d.specialty ? ' — ' + dsEsc(d.specialty) : '') +
+        (d.signable ? '' : ' (no registration number on file)') + '</option>';
+    }).join('');
 }
 
 function dsSectionSummaryText(key, sec) {
@@ -1994,6 +2108,20 @@ function dsDoSign() {
     err.innerHTML = 'Enter your signing credential.';
     err.classList.remove('d-none');
     return;
+  }
+  // The server enforces both of these; catching them here saves a round
+  // trip and keeps what the user typed in the boxes.
+  if (DSState.permissions && DSState.permissions.signForDoctor) {
+    if (!dsEl(DS_IDS.signAs).value) {
+      err.innerHTML = 'Choose which doctor this summary is signed by.';
+      err.classList.remove('d-none');
+      return;
+    }
+    if (!dsEl(DS_IDS.signBehalf).value.trim()) {
+      err.innerHTML = 'Say why you are entering this signature. It is printed on the summary.';
+      err.classList.remove('d-none');
+      return;
+    }
   }
 
   var attestations = {};
@@ -2043,7 +2171,10 @@ function dsDoSign() {
     })
     .ds_sign(dsToken(), DSState.summaryId, DSState.header.rowVersion,
              { method: method, value: cred }, attestations,
-             dsEl(DS_IDS.signBehalf).value.trim());
+             dsEl(DS_IDS.signBehalf).value.trim(),
+             // Empty for a doctor signing as themselves; the server ignores
+             // it in that case and decides for itself who may use it.
+             (dsEl(DS_IDS.signAs) ? dsEl(DS_IDS.signAs).value : ''));
 }
 
 /* ---------------------------------------------------------------------

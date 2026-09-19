@@ -3670,18 +3670,40 @@ function ipn_prompt(message, value, done, opts) {
     } else {
       roleSel.innerHTML = '<option>Loading...</option>';
       google.script.run
-        .withSuccessHandler(function (roles) {
-          IPNotesModule.teamRoles = roles || [];
+        .withSuccessHandler(function (res) {
+          // A REFUSAL USED TO NARROW THIS PICKER TO ONE VALUE IN SILENCE.
+          // The failure path below replaced the whole role list with a single
+          // hardcoded option, and an expired session reached it — so the
+          // dialog offered "Cross Consult" and nothing else, with no way to
+          // tell that from a clinic that only has that one role. The refusal
+          // now arrives as data. See crescUnwrap in Shell_UX.html.
+          var r = window.crescUnwrap ? window.crescUnwrap(res, [])
+                                     : { ok: true, data: res, message: '' };
+          if (!r.ok) { _roleFallback_(roleSel, r.message); return; }
+          IPNotesModule.teamRoles = r.data || [];
           _fillRoleSelect_(roleSel, IPNotesModule.teamRoles);
         })
-        .withFailureHandler(function () {
-          roleSel.innerHTML = '<option value="CROSS_CONSULT">Cross Consult</option>';
+        .withFailureHandler(function (err) {
+          _roleFallback_(roleSel, window.crescWhyFailed
+            ? window.crescWhyFailed(err, 'Reading the role list')
+            : ((err && err.message) || ''));
         })
         .getIPTeamRoles(window.sessionToken);
     }
 
     _hideErr_('xc-error');
     _getModal_('modalIPCrossConsult').show();
+  }
+
+  /**
+   * The one option the validator is certain to accept, plus the reason the
+   * rest are missing. A picker that has quietly lost its choices is worse
+   * than one that says it has.
+   */
+  function _roleFallback_(sel, why) {
+    sel.innerHTML = '<option value="CROSS_CONSULT">Cross Consult</option>';
+    _showErr_('xc-error', 'Only one role is on offer: the list could not be read. ' +
+                          (why || ''));
   }
 
   function _fillRoleSelect_(sel, roles) {

@@ -33,8 +33,9 @@
           <button type="button" class="btn btn-outline-secondary"        data-status="ACTIVE"     onclick="setIPRecordFilter('ACTIVE', this)">Active</button>
           <button type="button" class="btn btn-outline-secondary"        data-status="DISCHARGED" onclick="setIPRecordFilter('DISCHARGED', this)">Discharged</button>
           <button type="button" class="btn btn-outline-warning"          data-status="GAPS"       onclick="setIPRecordFilter('GAPS', this)"
-                  title="Records missing a casesheet or overdue a progress note">
+                  title="Records missing a casesheet or overdue a progress note. Each gap on a row is the button that opens the screen where it gets written.">
             <i class="fa-solid fa-triangle-exclamation"></i> Needs attention
+            <span id="ip-records-gapcount" class="badge ipr-chip ms-1 d-none"></span>
           </button>
         </div>
 
@@ -308,6 +309,17 @@
 
     renderIPRecordsTable(rows);
     setText('ip-records-count', rows.length + (rows.length === IPRec.ledger.length ? '' : ' of ' + IPRec.ledger.length));
+
+    // How many records the filter would show, on the filter itself. An
+    // unlabelled warning tab is pressed once and never again; a number on
+    // it is the difference between "there is nothing here" and "there are
+    // four charts a court would ask about".
+    var gapCount = IPRec.ledger.filter(function (p) { return p.gaps && p.gaps.length; }).length;
+    var badge = document.getElementById('ip-records-gapcount');
+    if (badge) {
+      badge.textContent = gapCount;
+      badge.classList.toggle('d-none', gapCount === 0);
+    }
   }
 
   function renderIPRecordsTable(data) {
@@ -325,9 +337,29 @@
             ? '<span class="badge ipr-chip">Discharged</span>'
             : '<span class="badge ipr-chip">' + esc(p.status || '--') + '</span>');
 
+      // A FLAG YOU CAN ACT ON.
+      //
+      // "Needs attention" listed the records missing a casesheet or overdue
+      // a progress note, and then offered nothing to do about either: the
+      // two buttons on the row both opened the FILE, which is where you go
+      // to read a record, not to write the one that is absent. Somebody
+      // filtering for gaps had to note the IP number, leave the screen,
+      // find the case sheet module and search for the patient again.
+      //
+      // Each gap is now the button that fixes it, and it says which screen
+      // it will open. The badge stays a badge for a gap with no single
+      // remedy.
       var gaps = (p.gaps || []).map(function (g) {
-        return '<span class="badge bg-warning-subtle text-warning border border-warning me-1" ' +
-               'style="font-size:0.62rem;">' + esc(g) + '</span>';
+        var go = iprGapAction(g);
+        if (!go) {
+          return '<span class="badge bg-warning-subtle text-warning border border-warning me-1" ' +
+                 'style="font-size:0.62rem;">' + esc(g) + '</span>';
+        }
+        return '<button type="button" class="btn btn-sm btn-outline-warning py-0 px-2 me-1 mb-1" ' +
+               'style="font-size:0.62rem;" title="' + esc(go.title) + '" ' +
+               'data-ip-gap="' + esc(go.kind) + '" data-ip-no="' + esc(p.ipNumber) + '">' +
+               '<i class="fa-solid fa-triangle-exclamation me-1"></i>' + esc(g) +
+               ' <span style="opacity:.8">&rarr; ' + esc(go.verb) + '</span></button>';
       }).join('');
 
       var notes = p.noteCount
@@ -377,7 +409,72 @@
           viewIPRecordDetail(b.dataset.recordKey, b.dataset.openTab || 'tab-casesheet');
         });
       });
+      tbody.querySelectorAll('button[data-ip-gap]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          iprFixGap(b.dataset.ipGap, b.dataset.ipNo);
+        });
+      });
     }
+  }
+
+  /**
+   * What closes each gap ipr_gaps_() can report.
+   *
+   * The strings come from IP_Records_Logic.gs: "No casesheet", "No progress
+   * notes", "No note in 31h". Matched loosely so a change to the wording
+   * degrades to a plain badge rather than to a button that goes nowhere.
+   */
+  function iprGapAction(gap) {
+    var g = String(gap || '').toLowerCase();
+    if (g.indexOf('casesheet') > -1) {
+      return { kind: 'casesheet', verb: 'write it',
+               title: 'Open the case sheet for this admission' };
+    }
+    if (g.indexOf('note') > -1) {
+      return { kind: 'notes', verb: 'add a note',
+               title: 'Open the ward notes for this admission' };
+    }
+    return null;
+  }
+
+  /**
+   * Opens the screen that closes the gap, on this admission.
+   *
+   * Both live inside the EMR cockpit, and both are lazy bundles, so the
+   * route is: show the EMR tab, open the sub-workspace, then hand it the IP
+   * number. openEMRWorkspace is wrapped by the module loader and waits for
+   * the bundle, but the function that takes the IP number arrives WITH that
+   * bundle — so it is polled for briefly rather than called into thin air,
+   * and a deployment missing it says so instead of doing nothing.
+   */
+  function iprFixGap(kind, ipNumber) {
+    if (!ipNumber) return;
+    var workspace = (kind === 'casesheet') ? 'ip-casesheet' : 'ip-notes';
+
+    if (typeof switchTab === 'function') switchTab('tab-admin-emr');
+    if (typeof openEMRWorkspace !== 'function') {
+      if (window.showToast) window.showToast('Cannot open that screen',
+        'The EMR workspace is not available in this deployment.', 'error');
+      return;
+    }
+    openEMRWorkspace(workspace);
+
+    var tries = 0;
+    (function hand() {
+      var fn = (kind === 'casesheet')
+        ? window.ipcOpenAdmission
+        : (window.openIPNotesForIP || window.fetchIPNotesLedger);
+      if (typeof fn === 'function') {
+        try { fn(ipNumber); } catch (e) { /* the screen is up; it reports itself */ }
+        return;
+      }
+      if (++tries > 40) {          // ~6s, then say so rather than stay silent
+        if (window.showToast) window.showToast('Opened, but not on this patient',
+          'Search for ' + ipNumber + ' on this screen.', 'warning');
+        return;
+      }
+      setTimeout(hand, 150);
+    })();
   }
 
   // ---- detail ------------------------------------------------------------
@@ -463,11 +560,27 @@
     setText('ip-det-bed',    p.wardBed || '--');
     setText('ip-det-notecount', String((f.notes || []).length));
 
+    // The same gaps as on the ledger, and the same remedy: the button that
+    // opens the screen where the missing thing gets written.
     setHtml('ip-det-gaps', (f.gaps && f.gaps.length)
-      ? '<div class="alert alert-warning py-1 px-3 mb-0 d-flex align-items-center gap-2" style="font-size:0.78rem;">' +
+      ? '<div class="alert alert-warning py-1 px-3 mb-0 d-flex align-items-center gap-2 flex-wrap" style="font-size:0.78rem;">' +
         '<i class="fa-solid fa-triangle-exclamation"></i><span>Record incomplete: ' +
-        esc(f.gaps.join(' · ')) + '</span></div>'
+        esc(f.gaps.join(' · ')) + '</span>' +
+        f.gaps.map(function (g) {
+          var go = iprGapAction(g);
+          if (!go) return '';
+          return '<button type="button" class="btn btn-sm btn-warning py-0 px-2" ' +
+                 'style="font-size:0.72rem;" data-ip-gap="' + esc(go.kind) + '" ' +
+                 'data-ip-no="' + esc(p.ipNumber || '') + '">' + esc(go.verb) + '</button>';
+        }).join('') +
+        '</div>'
       : '');
+    var gapWrap = document.getElementById('ip-det-gaps');
+    if (gapWrap) {
+      gapWrap.querySelectorAll('button[data-ip-gap]').forEach(function (b) {
+        b.addEventListener('click', function () { iprFixGap(b.dataset.ipGap, b.dataset.ipNo); });
+      });
+    }
   }
 
   function renderIPRecordCasesheet(f) {

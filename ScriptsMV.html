@@ -274,6 +274,16 @@ var CRESC_TAB_INIT = {
   'pharmacy-desk-workspace':      'openPharmacyDesk',
   'pharmacy-billing-workspace':   'openPharmacyBilling',
   'pharmacy-dashboard-workspace': 'openPharmacyDashboard',
+  // THE PRIVACY CONSOLE HAD NO ENTRY HERE AT ALL.
+  //
+  // switchTab('tab-admin-dpdp') showed the markup and nothing fetched
+  // anything, so the screen opened on its own placeholders — four counters
+  // reading "–" and every panel reading "Loading…" — and stayed that way
+  // for ever. The only thing that ever populated it was the Refresh button
+  // in its top corner, which a person has to notice and press on a screen
+  // that is already claiming to be loading. That is the whole of "the
+  // privacy workspace loads poorly".
+  'tab-admin-dpdp':               'dpConsoleLoad',
   'lab-workspace-view':           'LabX.load',
   'lab-billing-workspace':        'LabBill.load',
   'workspace-lab-catalog':        'LabCatalog.init',

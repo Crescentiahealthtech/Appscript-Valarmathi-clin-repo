@@ -900,7 +900,80 @@ function dsx_getWorking_(summaryId) {
   var row = dsx_findRowByKey_(sh, 'Summary_ID', dsx_upper_(summaryId));
   if (!row) return null;
   var obj = dsx_readRow_(sh, row);
-  return { row: row, baseSnapshotNo: dsx_int_(obj.Base_Snapshot_No), payload: dsx_unpackPayload_(obj) };
+  return { row: row, baseSnapshotNo: dsx_int_(obj.Base_Snapshot_No),
+           payload: dsx_migratePayload_(dsx_unpackPayload_(obj)) };
+}
+
+// ---------------------------------------------------------------------------
+// MIGRATING A DRAFT WRITTEN BY AN EARLIER VERSION OF THE ASSEMBLER
+//
+// A summary is assembled ONCE and then stored. Everything after that — the
+// editor, the readiness check, the printer — works from the stored payload,
+// so a change to the assembler reaches the summaries generated after it and
+// no others. Two such changes had left old drafts behind:
+//
+//   1. VITALS USED TO BE ONE STRING. EXAM_ON_ADMISSION and
+//      CONDITION_AT_DISCHARGE held a single field, `vitals`, reading
+//      "BP 180/100 mmHg · PR 99/min · SpO2 99% · Temp 99 · Weight 56 kg".
+//      The desk has rendered vitals as a strip of separate boxes — with the
+//      BP split into systolic and diastolic — for some time, but only for
+//      the field NAMES the current assembler produces. On every summary
+//      generated before that, the strip never appeared: there was one wide
+//      text box with the whole line in it, and correcting a pulse meant
+//      retyping the line and keeping the separators right. That is the
+//      "vitals should have individual text boxes" report.
+//
+//   2. THE "MEDICATIONS STOPPED OR HELD" SECTION was dropped from the
+//      assembler and from the printed document, but it survives in stored
+//      drafts, and the editor renders whatever sections the payload has —
+//      so a table nobody fills in and nothing prints was still being
+//      offered to the person preparing the summary.
+//
+// Both are repaired HERE, on the way out of storage, rather than by a
+// one-off script over the sheet: a migration that runs on read cannot half
+// finish, needs no window, and is the only place every reader passes
+// through. It is idempotent, and it does not write — the repaired shape is
+// persisted by the next ordinary save.
+// ---------------------------------------------------------------------------
+
+/** Sections whose combined `vitals` line is split into separate boxes. */
+var DSX_VITAL_SECTIONS = ['EXAM_ON_ADMISSION', 'CONDITION_AT_DISCHARGE'];
+
+/** Sections removed from the document that may still sit in an old draft. */
+var DSX_RETIRED_SECTIONS = ['STOPPED_MEDICATIONS'];
+
+function dsx_migratePayload_(payload) {
+  if (!payload || !payload.sections) return payload;
+
+  DSX_RETIRED_SECTIONS.forEach(function (key) {
+    if (payload.sections[key]) delete payload.sections[key];
+  });
+
+  DSX_VITAL_SECTIONS.forEach(function (key) {
+    var sec = payload.sections[key];
+    if (!sec || sec.format !== 'FIELDS' || !sec.content) return;
+    var c = sec.content;
+    if (!c.hasOwnProperty('vitals')) return;
+
+    var split = (typeof dsx_splitVitalText_ === 'function')
+      ? dsx_splitVitalText_(c.vitals) : null;
+    if (!split) return;
+
+    // The separate boxes go FIRST, in the order a chart records them, so the
+    // strip reads the way the observation was taken. Anything already stored
+    // under one of those names is left alone — an edited field is a decision.
+    var merged = {};
+    Object.keys(split).forEach(function (f) {
+      merged[f] = (c[f] === undefined || c[f] === null || c[f] === '') ? split[f] : c[f];
+    });
+    Object.keys(c).forEach(function (f) {
+      if (f === 'vitals') return;
+      if (!merged.hasOwnProperty(f)) merged[f] = c[f];
+    });
+    sec.content = merged;
+  });
+
+  return payload;
 }
 
 /** Creates or replaces the single working row for a summary. Caller holds the lock. */
