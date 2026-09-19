@@ -320,15 +320,15 @@
   // ===================================================================
   // STATE
   // ===================================================================
-  let phRowCounter = 0;
-  let phStock = [];
-  let phStockByBrand = {};
-  let phPrescriptions = [];
-  let phBillUuid = newBillUuid();
+  var phRowCounter = 0;
+  var phStock = [];
+  var phStockByBrand = {};
+  var phPrescriptions = [];
+  var phBillUuid = newBillUuid();
   
   // Dispatch Hub State Management
-  let phPatientContact = { whatsapp: "", email: "" };
-  let currentDispatchHtml = "";
+  var phPatientContact = { whatsapp: "", email: "" };
+  var currentDispatchHtml = "";
 
   function newBillUuid() { return 'BILL-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); }
 
@@ -998,7 +998,7 @@
    * file's own call sites — and anything else that learned the old name —
    * working unchanged.
    */
-  const buildPrintInvoiceRaw = function (d, done) {
+  var buildPrintInvoiceRaw = function (d, done) {
     return window.crescPharmacyInvoiceHtml(d, done);
   };
 

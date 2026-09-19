@@ -88,6 +88,22 @@ function crescGetBundle(name) {
       // arrives half-built produces a screen with no explanation, which is
       // the hardest kind of fault to trace back to a deployment.
       try {
+        // EACH PARTIAL ANNOUNCES ITSELF, so the browser can say which file a
+        // failing script came from.
+        //
+        // A bundle reaches the browser as one string of concatenated files.
+        // When one partial's script block fails to evaluate — see the note in
+        // inject() about what does that — the browser reports an error with
+        // no file name in it, because as far as it is concerned the whole
+        // bundle is one anonymous blob. The screen then renders (its markup
+        // was inserted before the scripts ran) with every inline onclick
+        // pointing at a function that was never defined, and nothing
+        // anywhere names the file to look at.
+        //
+        // This marker is a trivial script that cannot itself fail. inject()
+        // reads it to attribute the next failure to the right partial.
+        parts.push('<script>window.__crescPartial = ' +
+                   JSON.stringify(String(files[i])) + ';<\/script>');
         parts.push(HtmlService.createHtmlOutputFromFile(files[i]).getContent());
       } catch (e) {
         return { success: false, name: key, html: '',

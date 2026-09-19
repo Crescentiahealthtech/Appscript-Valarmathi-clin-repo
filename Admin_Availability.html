@@ -115,13 +115,13 @@
 // Toggling a slot off writes a BLOCK exception for the selected date range.
 // ============================================================================
 
-const AV_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+var AV_WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-let conflictModalInstance = null;
-let isGridExpanded = false;
-let avSlotMinutes = 15;
-let avSessionRows = [];
-let avRowSeq = 0;
+var conflictModalInstance = null;
+var isGridExpanded = false;
+var avSlotMinutes = 15;
+var avSessionRows = [];
+var avRowSeq = 0;
 
 // ---------------------------------------------------------------- INIT ----
 function initAvailability() {

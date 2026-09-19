@@ -14,7 +14,7 @@
 <!--       </div></div></div>                                               -->
 <!-- ===================================================================== -->
 <script>
-const AccShift = (function () {
+var AccShift = (function () {
   const $ = (id) => document.getElementById(id);
   const num = (id) => { const el = $(id); return Number(el && el.value !== '' ? el.value : 0) || 0; };
   const inr = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });

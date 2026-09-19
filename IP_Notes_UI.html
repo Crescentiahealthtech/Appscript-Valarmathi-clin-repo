@@ -1696,7 +1696,7 @@ function ipn_prompt(message, value, done, opts) {
 }
 
   // ── MODULE STATE ─────────────────────────────────────────
-  const IPNotesModule = {
+  var IPNotesModule = {
     context: {},          // { ipNumber, patientId, name, ageSex, wardBed, doa }
     activeMeds: [],       // IP_Pharmacy_Queue data
     drugMaster: [],       // Pharmacy inventory for autocomplete
@@ -2803,7 +2803,7 @@ function ipn_prompt(message, value, done, opts) {
      'cons' -> cons-new-drug-* / cons-iv-* / cons-new-orders-container
      A consultant opinion orders drugs and investigations exactly as a ward
      round does, so it uses the same code rather than a second copy of it. */
-  const IPN_ORDER_SCOPES = {
+  var IPN_ORDER_SCOPES = {
     dr: {
       name: 'ip-new-drug-name', dose: 'ip-new-drug-dose', freq: 'ip-new-drug-freq',
       route: 'ip-new-drug-route', instructions: 'ip-new-drug-instructions',
@@ -3987,7 +3987,7 @@ function ipn_prompt(message, value, done, opts) {
   /* Which note types each printed document carries. NURSING deliberately
      excludes QUICK notes: a quick note is a scratch line by whoever was at the
      keyboard, and it is not part of the nursing file. */
-  const IPN_PRINT_SCOPES = {
+  var IPN_PRINT_SCOPES = {
     ALL:     {},
     MEDICAL: { roleTypes: ['DOCTOR', 'CONSULTANT', 'PROCEDURE'] },
     NURSING: { roleTypes: ['NURSE'] }
@@ -4152,7 +4152,7 @@ function ipn_prompt(message, value, done, opts) {
      the consultant note. The two keep SEPARATE selections: a consultant's
      orders are theirs, and must not silently ride along on the next ward
      round note. */
-  const IPN_LAB_SCOPES = {
+  var IPN_LAB_SCOPES = {
     dr:   { host: 'ipn-lab-catalog',  search: 'ipn-lab-search',
             summary: 'ipn-lab-selected',  store: 'selectedLabs' },
     cons: { host: 'cons-lab-catalog', search: 'cons-lab-search',
