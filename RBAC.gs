@@ -330,6 +330,11 @@ function crescPermsFor_(role) {
   return list.slice();
 }
 
+/** Does this role hold this permission? The whole matrix in one line. */
+function crescCan_(role, permission) {
+  return crescPermsFor_(role).indexOf(crescStr_(permission)) !== -1;
+}
+
 /** The Users column that marks an administrator as the system owner. */
 var CRESC_SUPERADMIN_HEADER = 'Super_Admin';
 
