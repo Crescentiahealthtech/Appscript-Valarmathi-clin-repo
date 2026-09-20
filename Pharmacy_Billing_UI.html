@@ -1,23 +1,57 @@
+<!-- =====================================================================
+     PHARMACY BILLING DESK &#8212; Crescentia HealthTech / CresRx
+
+     Regenerated in full after a corrupted paste of the previous version
+     left this screen rendering perfectly and answering nothing. Two things
+     about the STRUCTURE are deliberate, and both exist to stop that
+     happening again rather than to tidy anything up:
+
+     1. NOTHING IS DECLARED AT THE TOP LEVEL. Every name lives inside the
+        IIFE at the bottom, and the handful the rest of the application
+        calls are assigned onto `window` on the last lines. A partial that
+        declares `let x` at top level is discarded whole &#8212; silently, by the
+        browser, before a line of it runs &#8212; if anything else in the page
+        already has an `x`. With no top-level bindings there is nothing to
+        collide with.
+
+     2. THE BUTTONS ARE NOT WIRED WITH INLINE onclick. There is one click
+        listener on the workspace, and buttons name what they do in a
+        `data-ph` attribute. `onclick="foo()"` resolves `foo` at click time
+        against the global scope, so a script that failed to run leaves
+        twenty buttons that look normal and do nothing at all &#8212; including
+        Back, which needs no server, no session and no data, and is
+        therefore the one that proves the script never ran. Delegated
+        handlers come from the same closure as the code they call: they are
+        bound or the screen is visibly absent, with nothing in between.
+
+     Public names the rest of the application depends on, all still exported:
+       openPharmacyBilling()      ScriptsMV.html CRESC_TAB_INIT
+       fetchPatientForPharmacy()  Barcode_Router.html, after a scan
+       returnToPharmacyMenu(), clearPharmacyBill(), resetPharmacyBilling()
+       buildPrintInvoiceRaw()     kept as an alias; see the note by it
+     Element ids are unchanged, because Barcode_Router types into
+     #phSearchQuery and Cash_Drawer mounts into #ph-drawer-host.
+     ===================================================================== -->
+
 <div id="pharmacy-billing-workspace" class="page-section d-none">
 
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <button class="btn btn-outline-secondary btn-sm" onclick="returnToPharmacyMenu()">
+    <button class="btn btn-outline-secondary btn-sm" data-ph="back">
       <i class="fa-solid fa-arrow-left"></i> Back to Workspace
     </button>
     <div class="d-flex gap-2">
       <!-- The pharmacy till is counted at this counter by the person standing
            at it. Reconciling it used to mean finding an accountant or being
-           given the whole Finance Hub — see Cash_Drawer.html. -->
-      <button class="btn btn-outline-success btn-sm" id="ph-drawer-btn"
-              onclick="CrescDrawer.toggle('ph-drawer-host', 'Pharmacy', 'ph-drawer-btn')"
+           given the whole Finance Hub &#8212; see Cash_Drawer.html. -->
+      <button class="btn btn-outline-success btn-sm" id="ph-drawer-btn" data-ph="drawer"
               title="Open or close this counter's cash shift">
         <i class="fa-solid fa-cash-register"></i> Cash Drawer
       </button>
-      <button class="btn btn-outline-danger btn-sm" onclick="clearPharmacyBill()"
+      <button class="btn btn-outline-danger btn-sm" data-ph="clear"
               title="Empty this bill and start a fresh one">
         <i class="fa-solid fa-eraser"></i> Clear Bill
       </button>
-      <button class="btn btn-outline-warning btn-sm" onclick="openCreditPanel()">
+      <button class="btn btn-outline-warning btn-sm" data-ph="credit">
         <i class="fa-solid fa-file-invoice-dollar"></i> Settle Credit Bills
       </button>
     </div>
@@ -31,7 +65,7 @@
 
   <style>
     /* ========================================================= */
-    /* PHARMACY BILLING — THEME ADAPTIVE (light + dark via vars)  */
+    /* PHARMACY BILLING &#8212; THEME ADAPTIVE (light + dark via vars)  */
     /* ========================================================= */
     #pharmacy-billing-workspace .ph-label {
       font-size: 0.7rem; color: var(--text-muted); font-weight: 600;
@@ -133,9 +167,8 @@
         <div class="col-md-3">
           <label class="ph-label">Patient ID / Mobile No.</label>
           <div class="d-flex">
-            <input type="text" id="phSearchQuery" class="hd-input w-100 p-2" placeholder="Search ID or Mobile..."
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();fetchPatientForPharmacy();}">
-            <button id="phFetchBtn" class="btn btn-sm btn-primary ms-1" onclick="fetchPatientForPharmacy()">
+            <input type="text" id="phSearchQuery" class="hd-input w-100 p-2" placeholder="Search ID or Mobile...">
+            <button id="phFetchBtn" class="btn btn-sm btn-primary ms-1" data-ph="find">
               <i class="fa-solid fa-magnifying-glass"></i>
             </button>
           </div>
@@ -186,12 +219,12 @@
     </div>
 
     <div class="hd-panel mb-3" id="phRxPanel" style="display:none;">
-      <div class="hd-panel-title d-flex justify-content-between align-items-center" id="phRxHeader" onclick="toggleRxPanel()">
+      <div class="hd-panel-title d-flex justify-content-between align-items-center" id="phRxHeader" data-ph="rx-toggle">
         <span>
           <i class="fa-solid fa-chevron-down me-1" id="phRxChevron"></i>
           Pending Prescriptions <span id="phRxCount" class="text-muted" style="font-weight:400;"></span>
         </span>
-        <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); addAllPrescriptions()">
+        <button class="btn btn-sm btn-outline-primary" data-ph="rx-add-all">
           <i class="fa-solid fa-layer-group"></i> Add All to Bill
         </button>
       </div>
@@ -201,7 +234,7 @@
     <div class="hd-panel mb-3">
       <div class="hd-panel-title d-flex justify-content-between">
         <span>2. Billed Items <span class="text-muted" style="font-size:0.72rem; font-weight:400;">(batches auto-picked by earliest expiry)</span></span>
-        <button class="btn btn-sm btn-outline-success" onclick="addPharmacyRow()">+ Add Medicine</button>
+        <button class="btn btn-sm btn-outline-success" data-ph="add-row">+ Add Medicine</button>
       </div>
       <div class="table-responsive" style="overflow: visible;">
         <table class="table table-borderless ph-table mb-0" id="phBillingTable">
@@ -213,7 +246,7 @@
               <th style="width: 11%">Expiry</th>
               <th style="width: 7%">Avail.</th>
               <th style="width: 8%">Qty</th>
-              <th style="width: 10%">Rate (₹)</th>
+              <th style="width: 10%">Rate (&#8377;)</th>
               <th style="width: 7%">GST %</th>
               <th style="width: 13%">Subtotal</th>
               <th style="width: 5%"></th>
@@ -227,11 +260,11 @@
     <div class="row g-3">
       <div class="col-md-8">
         <div class="hd-panel h-100">
-          <div class="hd-panel-title">3. Payment & Actions</div>
+          <div class="hd-panel-title">3. Payment &amp; Actions</div>
           <div class="row g-3">
             <div class="col-md-6">
               <label class="ph-label">Payment Mode</label>
-              <select id="phPayMode" class="hd-input w-100 p-2 mb-2" onchange="toggleTxnID()">
+              <select id="phPayMode" class="hd-input w-100 p-2 mb-2">
                 <option value="CASH">CASH</option>
                 <option value="UPI">UPI / GPay</option>
                 <option value="CARD">CARD</option>
@@ -240,11 +273,11 @@
               <input type="text" id="phTxnId" class="hd-input w-100 p-2 d-none" placeholder="Enter UPI/Card Ref Number">
             </div>
             <div class="col-md-6 d-flex align-items-end gap-2">
-              <button id="phSaveBtn" class="btn btn-success w-100 py-3" style="font-weight: bold; font-size: 1.05rem;" onclick="savePharmacyInvoice(event)">
+              <button id="phSaveBtn" class="btn btn-success w-100 py-3" style="font-weight: bold; font-size: 1.05rem;" data-ph="save">
                 <i class="fa-solid fa-floppy-disk me-1"></i> Save Bill
               </button>
               <button id="phClearBtn" class="btn btn-outline-danger py-3 px-3" style="font-weight: bold;"
-                      onclick="clearPharmacyBill()" title="Empty this bill and start a fresh one">
+                      data-ph="clear" title="Empty this bill and start a fresh one">
                 <i class="fa-solid fa-eraser"></i>
               </button>
             </div>
@@ -255,33 +288,33 @@
         <div class="hd-panel h-100">
           <div class="d-flex justify-content-between mb-1">
             <span class="ph-money-line">Gross Amount</span>
-            <span id="phGross" class="ph-money-val">₹ 0.00</span>
+            <span id="phGross" class="ph-money-val">&#8377; 0.00</span>
           </div>
           <div class="d-flex justify-content-between mb-2">
             <span class="ph-money-line" style="font-size: 0.8rem;">Incl. Total GST</span>
-            <span id="phTotalGst" class="text-warning" style="font-size: 0.8rem;">₹ 0.00</span>
+            <span id="phTotalGst" class="text-warning" style="font-size: 0.8rem;">&#8377; 0.00</span>
           </div>
           <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="ph-money-line">Discount (₹)</span>
-            <input type="number" id="phDiscount" class="hd-input text-end p-1" style="width: 90px;" value="0" min="0" oninput="calculatePharmaTotals()">
+            <span class="ph-money-line">Discount (&#8377;)</span>
+            <input type="number" id="phDiscount" class="hd-input text-end p-1" style="width: 90px;" value="0" min="0">
           </div>
           <hr style="border-color: var(--border-color);">
           <div class="d-flex justify-content-between align-items-center">
             <span class="ph-money-line" style="font-weight: bold;">NET PAYABLE</span>
-            <span id="phNet" class="ph-total-text">₹ 0.00</span>
+            <span id="phNet" class="ph-total-text">&#8377; 0.00</span>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="ph-overlay"><div class="box"><span class="spinner-border spinner-border-sm me-2"></span><span id="ph-overlay-text">Working…</span></div></div>
+  <div id="ph-overlay"><div class="box"><span class="spinner-border spinner-border-sm me-2"></span><span id="ph-overlay-text">Working&#8230;</span></div></div>
 
   <div id="ph-credit-modal">
     <div class="cm-card">
       <div class="hd-panel-title d-flex justify-content-between align-items-center px-3 pt-3">
         <span><i class="fa-solid fa-file-invoice-dollar me-1"></i> Pending Credit Bills</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="closeCreditPanel()"><i class="fa-solid fa-xmark"></i></button>
+        <button class="btn btn-sm btn-outline-secondary" data-ph="credit-close"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div id="ph-credit-list" class="pb-2"></div>
     </div>
@@ -296,18 +329,18 @@
       <div id="dh-print-note" class="alert alert-warning py-2 px-3 small d-none text-start"></div>
 
       <div class="d-grid gap-2 mb-4">
-        <button class="btn btn-success" id="dh-btn-wa" onclick="sendPharmaWhatsApp()">
+        <button class="btn btn-success" id="dh-btn-wa" data-ph="send-wa">
           <i class="fa-brands fa-whatsapp me-2"></i> Send via WhatsApp
         </button>
-        <button class="btn btn-primary" id="dh-btn-mail" onclick="sendPharmaEmail()">
+        <button class="btn btn-primary" id="dh-btn-mail" data-ph="send-mail">
           <i class="fa-solid fa-envelope me-2"></i> Email Invoice
         </button>
-        <button class="btn btn-outline-secondary" id="dh-btn-print" onclick="printPharmaInvoice()">
+        <button class="btn btn-outline-secondary" id="dh-btn-print" data-ph="print">
           <i class="fa-solid fa-print me-2"></i> Print A4 Invoice
         </button>
       </div>
 
-      <button class="btn btn-dark w-100 py-2" style="font-weight: bold; font-size: 1.1rem;" onclick="closeDispatchHubAndReset()">
+      <button class="btn btn-dark w-100 py-2" style="font-weight: bold; font-size: 1.1rem;" data-ph="dispatch-close">
         <i class="fa-solid fa-rotate-right me-2"></i> Start New Bill
       </button>
     </div>
@@ -317,37 +350,40 @@
 </div>
 
 <script>
-  // ===================================================================
-  // STATE
-  // ===================================================================
-  var phRowCounter = 0;
-  var phStock = [];
-  var phStockByBrand = {};
-  var phPrescriptions = [];
-  var phBillUuid = newBillUuid();
-  
-  // Dispatch Hub State Management
-  var phPatientContact = { whatsapp: "", email: "" };
-  var currentDispatchHtml = "";
+(function () {
+  'use strict';
 
-  function newBillUuid() { return 'BILL-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8); }
+  // =================================================================
+  // STATE. All of it inside the closure -- see the note at the top of
+  // the file for why nothing here is declared at the top level.
+  // =================================================================
+  var rowCounter = 0;
+  var stock = [];
+  var stockByBrand = {};
+  var prescriptions = [];
+  var billUuid = newBillUuid();
+  var patientContact = { whatsapp: '', email: '' };
+  var dispatchHtml = '';
+
+  function newBillUuid() {
+    return 'BILL-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  }
+
+  function $(id) { return document.getElementById(id); }
+  function val(id) { var e = $(id); return e ? e.value : ''; }
+  function setVal(id, v) { var e = $(id); if (e) e.value = v; }
+  function root() { return $('pharmacy-billing-workspace'); }
 
   /**
    * WHAT ACTUALLY WENT WRONG, instead of "Network error".
    *
-   * Every failure handler on this desk used to say the network was down.
-   * It almost never was. google.script.run runs the FAILURE handler for an
-   * exception thrown on the SERVER too, and the commonest one at a pharmacy
-   * counter is an expired session — so a pharmacist who had been on the
-   * screen for an hour pressed Save Bill, read "Network error: please
-   * retry", retried, and read it again. Nothing ever said "sign in".
-   *
-   * The server side of this is fixed too (the permission check now sits
-   * inside the try in Pharmacy.gs, so a refusal comes back as a normal
-   * reply). This is the other half: when something really does reach the
-   * failure handler, say which of the two it was.
+   * google.script.run runs the FAILURE handler for an exception thrown on
+   * the SERVER too, and the commonest one at a pharmacy counter is an
+   * expired session -- so a pharmacist who had been on the screen for an
+   * hour pressed Save Bill, read "Network error: please retry", retried,
+   * and read it again. Nothing ever said "sign in".
    */
-  function phFailure(err, what) {
+  function failure(err, what) {
     var raw = (err && err.message) ? String(err.message) : String(err || '');
     var msg = raw.replace(/^FORBIDDEN:\s*/, '');
     if (/session/i.test(msg) && /expire|invalid|sign in/i.test(msg)) {
@@ -359,246 +395,256 @@
            'Check the connection, then try again \u2014 nothing was saved.';
   }
 
-  function phOverlay(show, text) {
-    const o = document.getElementById('ph-overlay');
+  function overlay(show, text) {
+    var o = $('ph-overlay');
     if (!o) return;
-    if (text) document.getElementById('ph-overlay-text').innerText = text;
+    if (text && $('ph-overlay-text')) $('ph-overlay-text').innerText = text;
     o.style.display = show ? 'flex' : 'none';
   }
-  function phCurrentMonthKey() { const d = new Date(); return d.getFullYear() * 12 + (d.getMonth() + 1); }
-  function phExpKey(exp) {
+
+  function currentMonthKey() { var d = new Date(); return d.getFullYear() * 12 + (d.getMonth() + 1); }
+
+  function expKey(exp) {
     if (!exp) return 999999;
-    const m = String(exp).match(/(\d{4})[-\/](\d{1,2})/);
+    var m = String(exp).match(/(\d{4})[-\/](\d{1,2})/);
     return m ? parseInt(m[1], 10) * 12 + parseInt(m[2], 10) : 999999;
   }
 
-  // ===================================================================
+  function esc(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /** crescAlert is in the shell; this never lets its absence be the fault. */
+  function say(msg) {
+    if (typeof window.crescAlert === 'function') return window.crescAlert(msg);
+    if (typeof window.showToast === 'function') return window.showToast('Pharmacy', msg, 'warning');
+    return null;
+  }
+  function ask(msg, opts) {
+    if (typeof window.crescConfirm === 'function') return window.crescConfirm(msg, opts);
+    return Promise.resolve(true);
+  }
+
+  // =================================================================
   // 0. STOCK
-  // ===================================================================
-  /**
-   * THE STOCK, AND WHAT HAPPENS WHEN IT DOES NOT ARRIVE.
-   *
-   * This used to discard the failure. Both handlers ended with phStock = [],
-   * the server's message was dropped, and nothing on screen changed — so a
-   * pharmacist typed a drug name and was told "No matching stock. Check
-   * inventory or add stock first." That sentence is wrong and unactionable
-   * for every real cause: an expired session, a role without pharmacy.read,
-   * a renamed sheet, a network drop. The desk looked broken and said nothing
-   * about why, which is the whole of "search and add bill do not work".
-   *
-   * Now the reason is kept and shown, once, above the bill.
-   */
-  function fetchLivePharmacyStock() {
-    phStockProblem('');
+  //
+  // This used to discard its failure: both handlers ended with stock = []
+  // and the server's message was dropped, so typing a drug name produced
+  // "No matching stock. Check inventory or add stock first." -- wrong and
+  // unactionable for every real cause. The reason is kept and shown once,
+  // above the bill, with a retry beside it.
+  // =================================================================
+  function fetchStock() {
+    stockProblem('');
     google.script.run
-      .withSuccessHandler(res => {
+      .withSuccessHandler(function (res) {
         if (!res || !res.success) {
-          phStock = []; phStockByBrand = {};
-          phStockProblem((res && res.message) ||
+          stock = []; stockByBrand = {};
+          stockProblem((res && res.message) ||
             'The pharmacy stock could not be read, so the medicine search has ' +
             'nothing to offer. Reload the page; if it persists, check that you ' +
             'are still signed in.');
           return;
         }
-        phStock = res.data || [];
-        phStockByBrand = {};
-        phStock.forEach(b => { const k = b.brand.toLowerCase(); (phStockByBrand[k] = phStockByBrand[k] || []).push(b); });
-        Object.keys(phStockByBrand).forEach(k => phStockByBrand[k].sort((a, b) => a.expSort - b.expSort));
+        stock = res.data || [];
+        stockByBrand = {};
+        stock.forEach(function (b) {
+          var k = String(b.brand || '').toLowerCase();
+          (stockByBrand[k] = stockByBrand[k] || []).push(b);
+        });
+        Object.keys(stockByBrand).forEach(function (k) {
+          stockByBrand[k].sort(function (a, b) { return a.expSort - b.expSort; });
+        });
 
-        // An empty shelf is a different problem from an unreadable one, and
-        // it is worth saying so before a bill is started against nothing.
-        if (!phStock.length) {
-          phStockProblem('No billable stock: every batch in Pharmacy_Inventory ' +
-            'is at zero, or the sheet is empty. Receive stock first — ' +
+        // An empty shelf is a different problem from an unreadable one.
+        if (!stock.length) {
+          stockProblem('No billable stock: every batch in Pharmacy_Inventory ' +
+            'is at zero, or the sheet is empty. Receive stock first \u2014 ' +
             'medicines can still be typed, but no batch can be assigned.');
         }
       })
-      .withFailureHandler(err => {
-        phStock = []; phStockByBrand = {};
-        phStockProblem(phFailure(err, 'Reading the pharmacy stock') +
+      .withFailureHandler(function (err) {
+        stock = []; stockByBrand = {};
+        stockProblem(failure(err, 'Reading the pharmacy stock') +
           ' The medicine search will find nothing until it loads.');
       })
       .fetchBillableStock(window.sessionToken);
   }
 
-  /**
-   * Shows or clears the one banner above the bill. '' clears it.
-   *
-   * It carries a Try again button. A banner that explains why the shelf
-   * could not be read and then leaves the only remedy as "reload the whole
-   * application" costs the pharmacist the bill they were half way through.
-   */
-  function phStockProblem(message) {
-    const el = document.getElementById('ph-stock-problem');
+  /** The one banner above the bill. '' clears it. */
+  function stockProblem(message) {
+    var el = $('ph-stock-problem');
     if (!el) return;
     if (!message) { el.classList.add('d-none'); el.textContent = ''; return; }
     el.textContent = '';
-    const text = document.createElement('span');
+    var text = document.createElement('span');
     text.textContent = message;
-    const btn = document.createElement('button');
+    var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-sm btn-outline-warning ms-2';
     btn.textContent = 'Try again';
-    btn.onclick = fetchLivePharmacyStock;
+    btn.onclick = fetchStock;
     el.appendChild(text);
     el.appendChild(btn);
     el.classList.remove('d-none');
   }
 
-  // ===================================================================
+  // =================================================================
   // 1. PATIENT + PRESCRIPTIONS
-  // ===================================================================
-  function fetchPatientForPharmacy() {
-    const query = document.getElementById('phSearchQuery').value.trim();
-    if (!query) return crescAlert("Enter a Patient ID or Mobile Number.");
+  // =================================================================
+  function findPatient() {
+    var query = String(val('phSearchQuery')).trim();
+    if (!query) return say('Enter a Patient ID or Mobile Number.');
 
     if (hasUnsavedItems()) {
-      crescConfirm("Start a new bill for this patient? The current unsaved items will be cleared.",
-        { okLabel: 'Start a new bill' })
-        .then(ok => { if (ok) fetchPatientForPharmacyGo(query); });
+      ask('Start a new bill for this patient? The current unsaved items will be cleared.',
+          { okLabel: 'Start a new bill' })
+        .then(function (ok) { if (ok) findPatientGo(query); });
       return;
     }
-    fetchPatientForPharmacyGo(query);
+    findPatientGo(query);
   }
 
-  function fetchPatientForPharmacyGo(query) {
+  function findPatientGo(query) {
     clearBillItems();
-
-    phOverlay(true, "Fetching patient & prescriptions…");
+    overlay(true, 'Fetching patient & prescriptions\u2026');
     google.script.run
-      .withSuccessHandler(res => {
-        phOverlay(false);
-        if (!res || !res.success) { crescAlert("⚠️ " + ((res && res.message) || "Lookup failed.")); return; }
-        const p = res.patient;
+      .withSuccessHandler(function (res) {
+        overlay(false);
+        if (!res || !res.success) { say('\u26a0\ufe0f ' + ((res && res.message) || 'Lookup failed.')); return; }
+        var p = res.patient;
         if (p) {
-          document.getElementById('phPatientName').value = p.name || "";
-          document.getElementById('phMobile').value = p.mobile || "";
-          document.getElementById('phAge').value = p.age || "";
-          document.getElementById('phAddress').value = p.address || "";
-          const sx = (p.sex || "").toUpperCase();
-          document.getElementById('phSex').value = sx.indexOf("F") === 0 ? "F" : (sx.indexOf("M") === 0 ? "M" : "O");
-          document.getElementById('phBillType').value = "OPD";
-          
-          // Data Automation: Holding WhatsApp/Email contact state quietly in memory
-          phPatientContact = { whatsapp: p.whatsapp || p.mobile || "", email: p.email || "" };
+          setVal('phPatientName', p.name || '');
+          setVal('phMobile', p.mobile || '');
+          setVal('phAge', p.age || '');
+          setVal('phAddress', p.address || '');
+          var sx = String(p.sex || '').toUpperCase();
+          setVal('phSex', sx.indexOf('F') === 0 ? 'F' : (sx.indexOf('M') === 0 ? 'M' : 'O'));
+          setVal('phBillType', 'OPD');
+          patientContact = { whatsapp: p.whatsapp || p.mobile || '', email: p.email || '' };
         } else {
-          ['phPatientName','phMobile','phAge','phAddress'].forEach(id => document.getElementById(id).value = "");
-          document.getElementById('phBillType').value = "WALK-IN";
-          phPatientContact = { whatsapp: "", email: "" };
+          ['phPatientName', 'phMobile', 'phAge', 'phAddress'].forEach(function (id) { setVal(id, ''); });
+          setVal('phBillType', 'WALK-IN');
+          patientContact = { whatsapp: '', email: '' };
         }
-        phPrescriptions = res.prescriptions || [];
+        prescriptions = res.prescriptions || [];
         renderPrescriptions();
-        if (!p && phPrescriptions.length === 0) crescAlert("No patient record or pending prescription found. Continue as Walk-In.");
+        if (!p && prescriptions.length === 0) {
+          say('No patient record or pending prescription found. Continue as Walk-In.');
+        }
       })
-      .withFailureHandler(err => { phOverlay(false); crescAlert(phFailure(err, 'The patient lookup')); })
+      .withFailureHandler(function (err) { overlay(false); say(failure(err, 'The patient lookup')); })
       .getPatientBillingContext(query, window.sessionToken);
   }
 
   function hasUnsavedItems() {
-    return [...document.querySelectorAll('#phBillingBody tr')]
-      .some(tr => (tr.querySelector('.drug-name').value || "").trim() !== "");
+    var rows = document.querySelectorAll('#phBillingBody tr');
+    for (var i = 0; i < rows.length; i++) {
+      var n = rows[i].querySelector('.drug-name');
+      if (n && String(n.value || '').trim() !== '') return true;
+    }
+    return false;
   }
 
   function clearBillItems() {
-    document.getElementById('phBillingBody').innerHTML = "";
-    phRowCounter = 0;
-    phBillUuid = newBillUuid();
-    document.getElementById('phDiscount').value = "0";
-    addPharmacyRow();
-    calculatePharmaTotals();
+    $('phBillingBody').innerHTML = '';
+    rowCounter = 0;
+    billUuid = newBillUuid();
+    setVal('phDiscount', '0');
+    addRow();
+    calcTotals();
   }
 
-  function toggleRxPanel() { document.getElementById('phRxPanel').classList.toggle('collapsed'); }
-
   function renderPrescriptions() {
-    const panel = document.getElementById('phRxPanel');
-    const list = document.getElementById('phRxList');
-    const count = document.getElementById('phRxCount');
-    if (phPrescriptions.length === 0) { panel.style.display = 'none'; list.innerHTML = ''; return; }
+    var panel = $('phRxPanel'), list = $('phRxList'), count = $('phRxCount');
+    if (!panel || !list) return;
+    if (prescriptions.length === 0) { panel.style.display = 'none'; list.innerHTML = ''; return; }
     panel.style.display = 'block';
     panel.classList.remove('collapsed');
-    count.innerText = `(${phPrescriptions.length})`;
-    list.innerHTML = phPrescriptions.map((rx, i) => {
-      const dose = rx.dose ? ` · ${rx.dose}` : '';
-      const instr = rx.instructions ? ` · ${rx.instructions}` : '';
-      return `
-        <div class="rx-chip">
-          <div>
-            <span class="rx-src ${rx.source}">${rx.source}</span>
-            <strong style="color:var(--text-main); margin-left:6px;">${rx.drugName}</strong>
-            <div class="rx-meta">${(rx.orderedBy || 'Doctor')}${dose}${instr} · ${rx.date || ''}</div>
-          </div>
-          <button class="btn btn-sm btn-outline-success" onclick="addPrescriptionToBill(${i})">
-            <i class="fa-solid fa-plus"></i> Add
-          </button>
-        </div>`;
+    if (count) count.innerText = '(' + prescriptions.length + ')';
+    list.innerHTML = prescriptions.map(function (rx, i) {
+      var dose = rx.dose ? ' \u00b7 ' + esc(rx.dose) : '';
+      var instr = rx.instructions ? ' \u00b7 ' + esc(rx.instructions) : '';
+      return '<div class="rx-chip">' +
+        '<div>' +
+          '<span class="rx-src ' + esc(rx.source) + '">' + esc(rx.source) + '</span>' +
+          '<strong style="color:var(--text-main); margin-left:6px;">' + esc(rx.drugName) + '</strong>' +
+          '<div class="rx-meta">' + esc(rx.orderedBy || 'Doctor') + dose + instr + ' \u00b7 ' + esc(rx.date || '') + '</div>' +
+        '</div>' +
+        '<button class="btn btn-sm btn-outline-success" data-ph="rx-add" data-ph-i="' + i + '">' +
+          '<i class="fa-solid fa-plus"></i> Add</button>' +
+      '</div>';
     }).join('');
   }
 
   function addPrescriptionToBill(i) {
-    const rx = phPrescriptions[i];
+    var rx = prescriptions[i];
     if (!rx) return null;
-    const tr = addPharmacyRow();
-    const nameInput = tr.querySelector('.drug-name');
+    var tr = addRow();
+    var nameInput = tr.querySelector('.drug-name');
     nameInput.value = rx.drugName;
     tr.dataset.rxDrug = rx.drugName;           // remember what was prescribed
 
-    const match = matchInventoryBrand(rx.drugName);
+    var match = matchInventoryBrand(rx.drugName);
     if (match) {
       nameInput.value = match;
       applyFEFO(tr, 1);
     } else {
-      // No confident stock match — DO NOT substitute. Force a manual pick.
+      // No confident stock match -- DO NOT substitute. Force a manual pick.
       nameInput.style.borderLeft = '3px solid var(--danger)';
-      nameInput.title = 'No confident stock match — pick the correct medicine from the dropdown.';
+      nameInput.title = 'No confident stock match \u2014 pick the correct medicine from the dropdown.';
       tr.dataset.unmatched = '1';
     }
     return tr;
   }
 
-  function addAllPrescriptions() {
-    phPrescriptions.forEach((_, i) => { try { addPrescriptionToBill(i); } catch (e) {} });
-  }
-
+  /**
+   * The typed text, matched against the shelf, with a confidence gate.
+   *
+   * Billing the wrong medicine is the harm here, so an ambiguous tie
+   * refuses to guess and the pharmacist picks from the list instead.
+   */
   function matchInventoryBrand(text) {
-    const raw = (text || "").toLowerCase().trim();
+    var raw = String(text || '').toLowerCase().trim();
     if (!raw) return null;
 
     // Strip a LEADING form-prefix AND a TRAILING form-word, collapse spaces.
     // "Tab Pantocid DSR Capsules" -> "pantocid dsr"
-    const FORM = "(tab|tablet|tablets|cap|capsule|capsules|syr|syrup|inj|injection|oint|ointment|gtt|drop|drops|susp|suspension|cream|gel|sol|solution|respules|sachet|iv|im)";
-    let t = raw
-      .replace(new RegExp("^" + FORM + "\\.?\\s+", "i"), "")
-      .replace(new RegExp("\\s+" + FORM + "\\.?$", "i"), "")
-      .replace(/\s+/g, " ")
+    var FORM = '(tab|tablet|tablets|cap|capsule|capsules|syr|syrup|inj|injection|oint|ointment|gtt|drop|drops|susp|suspension|cream|gel|sol|solution|respules|sachet|iv|im)';
+    var t = raw
+      .replace(new RegExp('^' + FORM + '\\.?\\s+', 'i'), '')
+      .replace(new RegExp('\\s+' + FORM + '\\.?$', 'i'), '')
+      .replace(/\s+/g, ' ')
       .trim();
     if (!t) t = raw;
 
-    const tTokens = t.split(/[\s\-]+/).filter(Boolean);
+    var tTokens = t.split(/[\s\-]+/).filter(Boolean);
+    var best = null, bestScore = 0, secondScore = 0;
 
-    // Track best AND runner-up so we can refuse to guess on an ambiguous tie.
-    let best = null, bestScore = 0, secondScore = 0;
-
-    Object.keys(phStockByBrand).forEach(bl => {
-      const brandStr = bl;                                   // already lowercase key
-      const genericStr = (phStockByBrand[bl][0].generic || "").toLowerCase();
-      let score = 0;
+    Object.keys(stockByBrand).forEach(function (bl) {
+      var brandStr = bl;                                    // already lowercase
+      var genericStr = String(stockByBrand[bl][0].generic || '').toLowerCase();
+      var score = 0;
 
       if (brandStr === t) score = 100;
       else if (genericStr === t) score = 92;
-      else if (brandStr.length >= 3 && t.includes(brandStr)) score = 84;  // full brand sits inside the typed text
-      else if (t.length >= 3 && brandStr.includes(t)) score = 80;
-      else if (t.length >= 3 && genericStr.includes(t)) score = 74;
+      else if (brandStr.length >= 3 && t.indexOf(brandStr) > -1) score = 84;
+      else if (t.length >= 3 && brandStr.indexOf(t) > -1) score = 80;
+      else if (t.length >= 3 && genericStr.indexOf(t) > -1) score = 74;
       else {
-        // SAFE token intersection: only equal tokens, or a real prefix,
-        // and BOTH tokens must be >= 3 chars. This kills "pantocid" -> "p".
-        const bTokens = brandStr.split(/[\s\-]+/).filter(Boolean);
-        let matches = 0, considered = 0;
-        tTokens.forEach(tok => {
+        // SAFE token intersection: equal tokens or a real prefix, and BOTH
+        // tokens at least 3 characters. This kills "pantocid" -> "p".
+        var bTokens = brandStr.split(/[\s\-]+/).filter(Boolean);
+        var matches = 0, considered = 0;
+        tTokens.forEach(function (tok) {
           if (tok.length < 3) return;
           considered++;
-          const hit = bTokens.some(bTok =>
-            bTok.length >= 3 && (bTok === tok || bTok.indexOf(tok) === 0 || tok.indexOf(bTok) === 0));
+          var hit = bTokens.some(function (bTok) {
+            return bTok.length >= 3 &&
+              (bTok === tok || bTok.indexOf(tok) === 0 || tok.indexOf(bTok) === 0);
+          });
           if (hit) matches++;
         });
         if (considered > 0 && matches > 0) score = 45 + Math.round((matches / considered) * 25);
@@ -608,95 +654,94 @@
       else if (score > secondScore) { secondScore = score; }
     });
 
-    // Confidence gate for a BILLING action:
-    //  - require a strong score, AND
-    //  - require a clear margin over the runner-up (no ambiguous ties).
-    if (bestScore < 80) return null;                               // weak/fuzzy -> pharmacist picks
-    if (bestScore < 100 && (bestScore - secondScore) < 8) return null;  // tie -> don't guess
-    return phStockByBrand[best][0].brand;
+    if (bestScore < 80) return null;                                  // weak \u2192 pharmacist picks
+    if (bestScore < 100 && (bestScore - secondScore) < 8) return null; // tie \u2192 do not guess
+    return stockByBrand[best][0].brand;
   }
 
-  // ===================================================================
+  // =================================================================
   // 2. ROWS + AUTOCOMPLETE
-  // ===================================================================
-  function addPharmacyRow() {
-    phRowCounter++;
-    const tbody = document.getElementById('phBillingBody');
-    const tr = document.createElement('tr');
-    tr.id = `phRow-${phRowCounter}`;
-    tr.innerHTML = `
-      <td class="s-no row-index"></td>
-      <td style="position: relative;">
-        <input type="text" class="drug-name hd-input" placeholder="Type to search stock…" oninput="handleMedicineSearch(this)" autocomplete="off">
-      </td>
-      <td><input type="text" class="batch-id" placeholder="—" readonly></td>
-      <td><input type="text" class="expiry-id" placeholder="—" readonly></td>
-      <td><input type="number" class="avail-qty text-center" readonly value="0"></td>
-      <td><input type="number" class="bill-qty text-center" value="1" min="1" oninput="calcPharmaRow(this)"></td>
-      <td><input type="number" class="rate text-end" value="0.00" step="0.01" oninput="calcPharmaRow(this)"></td>
-      <td><input type="number" class="gst-perc text-center" value="0" step="0.1" oninput="calcPharmaRow(this)"></td>
-      <td><input type="text" class="subtotal ph-subtotal text-end" readonly value="0.00"></td>
-      <td class="text-center">
-        <button class="btn btn-sm btn-outline-danger border-0 p-1" onclick="removePharmaRow('${tr.id}')"><i class="fa-solid fa-xmark"></i></button>
-      </td>`;
+  // =================================================================
+  function addRow() {
+    rowCounter++;
+    var tbody = $('phBillingBody');
+    var tr = document.createElement('tr');
+    tr.id = 'phRow-' + rowCounter;
+    tr.innerHTML =
+      '<td class="s-no row-index"></td>' +
+      '<td style="position: relative;">' +
+        '<input type="text" class="drug-name hd-input" placeholder="Type to search stock\u2026" autocomplete="off">' +
+      '</td>' +
+      '<td><input type="text" class="batch-id" placeholder="\u2014" readonly></td>' +
+      '<td><input type="text" class="expiry-id" placeholder="\u2014" readonly></td>' +
+      '<td><input type="number" class="avail-qty text-center" readonly value="0"></td>' +
+      '<td><input type="number" class="bill-qty text-center" value="1" min="1"></td>' +
+      '<td><input type="number" class="rate text-end" value="0.00" step="0.01"></td>' +
+      '<td><input type="number" class="gst-perc text-center" value="0" step="0.1"></td>' +
+      '<td><input type="text" class="subtotal ph-subtotal text-end" readonly value="0.00"></td>' +
+      '<td class="text-center">' +
+        '<button class="btn btn-sm btn-outline-danger border-0 p-1" data-ph="row-del">' +
+        '<i class="fa-solid fa-xmark"></i></button></td>';
     tbody.appendChild(tr);
-    reindexSNo();
+    reindex();
     return tr;
   }
 
-  function handleMedicineSearch(inputElem) {
+  /**
+   * The medicine search.
+   *
+   * An empty stock list falls through to the "no matches" branch below,
+   * which says WHICH of the two empties it is -- a shelf that has not been
+   * read is a different problem from a shelf with nothing on it, and
+   * telling a pharmacist to add stock when their session expired is the
+   * wrong instruction.
+   */
+  function medicineSearch(input) {
     closeAllLists();
-    const val = (inputElem.value || "").trim().toLowerCase();
+    var v = String(input.value || '').trim().toLowerCase();
+    if (v.length < 1) return;
 
-    // THE DEAD END THIS USED TO BE. The condition was
-    //     if (val.length < 1 || phStock.length === 0) return;
-    // so when the stock had not loaded — an expired session, a role without
-    // pharmacy.read, a sheet that could not be read — typing a drug name did
-    // nothing whatsoever. No list, no message, no error. The box simply
-    // never responded, which is exactly what "the billing desk does not
-    // work" looks like from the counter.
-    //
-    // An empty stock list now falls through to the "no matches" branch
-    // below, which says which of the two empties this is and points at the
-    // banner above the bill.
-    if (val.length < 1) return;
-
-    const seen = {}, matches = [];
-    (phStock || []).forEach(b => {
-      const bl = b.brand.toLowerCase(), gl = (b.generic || "").toLowerCase();
-      if ((bl.indexOf(val) > -1 || gl.indexOf(val) > -1) && !seen[bl]) {
+    var seen = {}, matches = [];
+    (stock || []).forEach(function (b) {
+      var bl = String(b.brand || '').toLowerCase();
+      var gl = String(b.generic || '').toLowerCase();
+      if ((bl.indexOf(v) > -1 || gl.indexOf(v) > -1) && !seen[bl]) {
         seen[bl] = true;
-        const batches = phStockByBrand[bl] || [];
-        matches.push({ brand: b.brand, generic: b.generic, totalQty: batches.reduce((s, x) => s + x.qty, 0), first: batches[0] });
+        var batches = stockByBrand[bl] || [];
+        matches.push({
+          brand: b.brand, generic: b.generic, first: batches[0],
+          totalQty: batches.reduce(function (s, x) { return s + x.qty; }, 0)
+        });
       }
     });
 
-    const list = document.createElement("div");
-    list.className = "autocomplete-items";
-    inputElem.parentNode.appendChild(list);
+    var list = document.createElement('div');
+    list.className = 'autocomplete-items';
+    input.parentNode.appendChild(list);
 
     if (matches.length === 0) {
-      const none = document.createElement("div");
-      none.style.cursor = "default";
-      // Two different empties. With no stock loaded at all the shelf has not
-      // been read, and telling the pharmacist to add stock is the wrong
-      // instruction; the banner above says what actually happened.
-      none.innerHTML = phStock.length
-        ? `<span class="ac-meta">Nothing in stock matches that. Check the spelling, or receive the stock first.</span>`
-        : `<span class="ac-meta">The stock list has not loaded — see the message above the bill.</span>`;
-      list.appendChild(none); return;
+      var none = document.createElement('div');
+      none.style.cursor = 'default';
+      none.innerHTML = stock.length
+        ? '<span class="ac-meta">Nothing in stock matches that. Check the spelling, or receive the stock first.</span>'
+        : '<span class="ac-meta">The stock list has not loaded \u2014 see the message above the bill.</span>';
+      list.appendChild(none);
+      return;
     }
-    matches.slice(0, 30).forEach(m => {
-      const d = document.createElement("div");
-      const flag = phExpKey(m.first.expiry) < phCurrentMonthKey()
-        ? `<span class="ph-expiry-flag ph-flag-near">EXPIRED</span>`
-        : `<span class="ph-expiry-flag ph-flag-ok">FEFO ${m.first.expiry}</span>`;
-      d.innerHTML = `
-        <span class="ac-brand">${m.brand}</span> <span class="ac-generic">${m.generic || ''}</span> ${flag}<br>
-        <span class="ac-meta">Total available: ${m.totalQty} · ₹${m.first.mrp.toFixed(2)} · Rack ${m.first.rack || '-'}</span>`;
-      d.addEventListener("click", () => {
-        const tr = inputElem.closest('tr');
-        inputElem.value = m.brand;
+
+    matches.slice(0, 30).forEach(function (m) {
+      var d = document.createElement('div');
+      var flag = expKey(m.first.expiry) < currentMonthKey()
+        ? '<span class="ph-expiry-flag ph-flag-near">EXPIRED</span>'
+        : '<span class="ph-expiry-flag ph-flag-ok">FEFO ' + esc(m.first.expiry) + '</span>';
+      d.innerHTML =
+        '<span class="ac-brand">' + esc(m.brand) + '</span> ' +
+        '<span class="ac-generic">' + esc(m.generic || '') + '</span> ' + flag + '<br>' +
+        '<span class="ac-meta">Total available: ' + m.totalQty + ' \u00b7 \u20b9' +
+        Number(m.first.mrp).toFixed(2) + ' \u00b7 Rack ' + esc(m.first.rack || '-') + '</span>';
+      d.addEventListener('click', function () {
+        var tr = input.closest('tr');
+        input.value = m.brand;
         applyFEFO(tr, parseFloat(tr.querySelector('.bill-qty').value) || 1);
         closeAllLists();
       });
@@ -704,321 +749,325 @@
     });
   }
 
-  function closeAllLists() { document.querySelectorAll('.autocomplete-items').forEach(el => el.remove()); }
-  document.addEventListener("click", e => { if (!e.target.classList || !e.target.classList.contains('drug-name')) closeAllLists(); });
+  function closeAllLists() {
+    var els = document.querySelectorAll('.autocomplete-items');
+    for (var i = 0; i < els.length; i++) els[i].remove();
+  }
 
-  function removePharmaRow(rowId) {
-    const tr = document.getElementById(rowId);
+  function removeRow(tr) {
     if (tr) { removeChildrenOf(tr); tr.remove(); }
-    reindexSNo();
-    calculatePharmaTotals();
+    reindex();
+    calcTotals();
   }
 
-  function reindexSNo() {
-    let n = 0;
-    document.querySelectorAll('#phBillingBody tr').forEach(row => {
-      const cell = row.querySelector('.row-index');
-      if (row.classList.contains('fefo-child')) cell.innerText = "↳";
+  function reindex() {
+    var n = 0;
+    var rows = document.querySelectorAll('#phBillingBody tr');
+    for (var i = 0; i < rows.length; i++) {
+      var cell = rows[i].querySelector('.row-index');
+      if (!cell) continue;
+      if (rows[i].classList.contains('fefo-child')) cell.innerText = '\u21b3';
       else { n++; cell.innerText = n; }
-    });
+    }
   }
 
-  // ===================================================================
-  // FEFO ENGINE
-  // ===================================================================
+  // =================================================================
+  // FEFO ENGINE -- first to expire, first out, across as many batches as
+  // the quantity needs. Expired batches are skipped, never dispensed.
+  // =================================================================
   function applyFEFO(parentRow, requestedQty) {
-    const brand = parentRow.querySelector('.drug-name').value.trim();
-    const batches = (phStockByBrand[brand.toLowerCase()] || []).slice();
+    var brand = String(parentRow.querySelector('.drug-name').value || '').trim();
+    var batches = (stockByBrand[brand.toLowerCase()] || []).slice();
     removeChildrenOf(parentRow);
 
     if (batches.length === 0) {
       setRowBatch(parentRow, null, requestedQty);
-      calculatePharmaTotals();
+      calcTotals();
       return;
     }
 
-    let remaining = Math.max(1, requestedQty);
-    let firstDone = false, lastNode = parentRow;
+    var remaining = Math.max(1, requestedQty);
+    var firstDone = false, lastNode = parentRow;
 
-    for (const b of batches) {
+    for (var i = 0; i < batches.length; i++) {
+      var b = batches[i];
       if (remaining <= 0) break;
-      if (phExpKey(b.expiry) < phCurrentMonthKey()) continue; 
-      const take = Math.min(remaining, b.qty);
+      if (expKey(b.expiry) < currentMonthKey()) continue;
+      var take = Math.min(remaining, b.qty);
       if (take <= 0) continue;
       if (!firstDone) { setRowBatch(parentRow, b, take); firstDone = true; }
-      else { const child = spawnChildRow(parentRow, brand, b, take); lastNode.after(child); lastNode = child; }
+      else {
+        var child = spawnChildRow(parentRow, brand, b, take);
+        lastNode.after(child);
+        lastNode = child;
+      }
       remaining -= take;
     }
 
-    if (!firstDone) { setRowBatch(parentRow, null, requestedQty); crescAlert(`⚠️ All available batches of "${brand}" are expired. Cannot dispense.`); }
-    else if (remaining > 0) crescAlert(`⚠️ Only ${requestedQty - remaining} unit(s) of "${brand}" are in stock. Billed the available quantity.`);
+    if (!firstDone) {
+      setRowBatch(parentRow, null, requestedQty);
+      say('\u26a0\ufe0f All available batches of "' + brand + '" are expired. Cannot dispense.');
+    } else if (remaining > 0) {
+      say('\u26a0\ufe0f Only ' + (requestedQty - remaining) + ' unit(s) of "' + brand +
+          '" are in stock. Billed the available quantity.');
+    }
 
-    reindexSNo();
-    calculatePharmaTotals();
+    reindex();
+    calcTotals();
   }
 
   function setRowBatch(tr, batch, qty) {
-    const batchEl = tr.querySelector('.batch-id');
-    const rateEl = tr.querySelector('.rate');
-    const gstEl = tr.querySelector('.gst-perc');
-    batchEl.value = batch ? batch.batch : "";
-    tr.querySelector('.expiry-id').value = batch ? batch.expiry : "";
+    var batchEl = tr.querySelector('.batch-id');
+    var rateEl = tr.querySelector('.rate');
+    var gstEl = tr.querySelector('.gst-perc');
+    batchEl.value = batch ? batch.batch : '';
+    tr.querySelector('.expiry-id').value = batch ? batch.expiry : '';
     tr.querySelector('.avail-qty').value = batch ? batch.qty : 0;
-    rateEl.value = batch ? batch.mrp.toFixed(2) : "0.00";
+    rateEl.value = batch ? Number(batch.mrp).toFixed(2) : '0.00';
     gstEl.value = batch ? batch.gst : 0;
     tr.querySelector('.bill-qty').value = qty;
-    tr.dataset.rowId = batch ? batch.rowId : "";
-    tr.dataset.generic = batch ? (batch.generic || "") : "";
-    tr.dataset.unit = batch ? (batch.unit || "") : "";
+    tr.dataset.rowId = batch ? batch.rowId : '';
+    tr.dataset.generic = batch ? (batch.generic || '') : '';
+    tr.dataset.unit = batch ? (batch.unit || '') : '';
     if (batch) { rateEl.setAttribute('readonly', 'readonly'); gstEl.setAttribute('readonly', 'readonly'); }
     else { rateEl.removeAttribute('readonly'); gstEl.removeAttribute('readonly'); }
     computeRowMath(tr);
   }
 
   function spawnChildRow(parentRow, brand, batch, qty) {
-    phRowCounter++;
-    const tr = document.createElement('tr');
-    tr.id = `phRow-${phRowCounter}`;
+    rowCounter++;
+    var tr = document.createElement('tr');
+    tr.id = 'phRow-' + rowCounter;
     tr.className = 'fefo-child';
     tr.dataset.parent = parentRow.id;
-    tr.innerHTML = `
-      <td class="s-no row-index"></td>
-      <td><input type="text" class="drug-name hd-input" value="${brand}" readonly></td>
-      <td><input type="text" class="batch-id" readonly></td>
-      <td><input type="text" class="expiry-id" readonly></td>
-      <td><input type="number" class="avail-qty text-center" readonly></td>
-      <td><input type="number" class="bill-qty text-center" readonly></td>
-      <td><input type="number" class="rate text-end" readonly></td>
-      <td><input type="number" class="gst-perc text-center" readonly></td>
-      <td><input type="text" class="subtotal ph-subtotal text-end" readonly value="0.00"></td>
-      <td class="text-center">
-        <button class="btn btn-sm btn-outline-danger border-0 p-1" onclick="removePharmaRow('${tr.id}')"><i class="fa-solid fa-xmark"></i></button>
-      </td>`;
+    tr.innerHTML =
+      '<td class="s-no row-index"></td>' +
+      '<td><input type="text" class="drug-name hd-input" value="' + esc(brand) + '" readonly></td>' +
+      '<td><input type="text" class="batch-id" readonly></td>' +
+      '<td><input type="text" class="expiry-id" readonly></td>' +
+      '<td><input type="number" class="avail-qty text-center" readonly></td>' +
+      '<td><input type="number" class="bill-qty text-center" readonly></td>' +
+      '<td><input type="number" class="rate text-end" readonly></td>' +
+      '<td><input type="number" class="gst-perc text-center" readonly></td>' +
+      '<td><input type="text" class="subtotal ph-subtotal text-end" readonly value="0.00"></td>' +
+      '<td class="text-center">' +
+        '<button class="btn btn-sm btn-outline-danger border-0 p-1" data-ph="row-del">' +
+        '<i class="fa-solid fa-xmark"></i></button></td>';
     setRowBatch(tr, batch, qty);
     return tr;
   }
 
-  function removeChildrenOf(parentRow) { document.querySelectorAll(`#phBillingBody tr.fefo-child[data-parent="${parentRow.id}"]`).forEach(c => c.remove()); }
+  function removeChildrenOf(parentRow) {
+    var kids = document.querySelectorAll('#phBillingBody tr.fefo-child[data-parent="' + parentRow.id + '"]');
+    for (var i = 0; i < kids.length; i++) kids[i].remove();
+  }
 
-  function calcPharmaRow(element) {
-    const tr = element.closest('tr');
+  function rowChanged(element) {
+    var tr = element.closest('tr');
+    if (!tr) return;
     if (!tr.classList.contains('fefo-child') && element.classList.contains('bill-qty')) {
-      const brand = tr.querySelector('.drug-name').value.trim();
-      if (brand && phStockByBrand[brand.toLowerCase()]) { applyFEFO(tr, parseFloat(element.value) || 1); return; }
+      var brand = String(tr.querySelector('.drug-name').value || '').trim();
+      if (brand && stockByBrand[brand.toLowerCase()]) {
+        applyFEFO(tr, parseFloat(element.value) || 1);
+        return;
+      }
     }
     computeRowMath(tr);
-    calculatePharmaTotals();
+    calcTotals();
   }
 
   function computeRowMath(tr) {
-    let qty = parseFloat(tr.querySelector('.bill-qty').value) || 0;
-    const avail = parseFloat(tr.querySelector('.avail-qty').value) || 0;
-    const rate = parseFloat(tr.querySelector('.rate').value) || 0;
-    const gstPerc = parseFloat(tr.querySelector('.gst-perc').value) || 0;
+    var qty = parseFloat(tr.querySelector('.bill-qty').value) || 0;
+    var avail = parseFloat(tr.querySelector('.avail-qty').value) || 0;
+    var rate = parseFloat(tr.querySelector('.rate').value) || 0;
+    var gstPerc = parseFloat(tr.querySelector('.gst-perc').value) || 0;
     if (avail > 0 && qty > avail) { qty = avail; tr.querySelector('.bill-qty').value = qty; }
-    const subtotal = qty * rate;
+    var subtotal = qty * rate;
     tr.querySelector('.subtotal').value = subtotal.toFixed(2);
     tr.dataset.taxAmt = subtotal - (subtotal / (1 + (gstPerc / 100)));
   }
 
-  function calculatePharmaTotals() {
-    let gross = 0, totalTax = 0;
-    document.querySelectorAll('#phBillingBody tr').forEach(tr => {
-      gross += parseFloat(tr.querySelector('.subtotal').value) || 0;
-      totalTax += parseFloat(tr.dataset.taxAmt) || 0;
-    });
-    let discount = parseFloat(document.getElementById('phDiscount').value) || 0;
-    if (discount > gross) { discount = gross; document.getElementById('phDiscount').value = gross.toFixed(2); }
-    document.getElementById('phGross').innerText = `₹ ${gross.toFixed(2)}`;
-    document.getElementById('phTotalGst').innerText = `₹ ${totalTax.toFixed(2)}`;
-    document.getElementById('phNet').innerText = `₹ ${Math.max(0, gross - discount).toFixed(2)}`;
+  function calcTotals() {
+    var gross = 0, totalTax = 0;
+    var rows = document.querySelectorAll('#phBillingBody tr');
+    for (var i = 0; i < rows.length; i++) {
+      gross += parseFloat(rows[i].querySelector('.subtotal').value) || 0;
+      totalTax += parseFloat(rows[i].dataset.taxAmt) || 0;
+    }
+    var discount = parseFloat(val('phDiscount')) || 0;
+    if (discount > gross) { discount = gross; setVal('phDiscount', gross.toFixed(2)); }
+    $('phGross').innerText = '\u20b9 ' + gross.toFixed(2);
+    $('phTotalGst').innerText = '\u20b9 ' + totalTax.toFixed(2);
+    $('phNet').innerText = '\u20b9 ' + Math.max(0, gross - discount).toFixed(2);
   }
 
   function toggleTxnID() {
-    const mode = document.getElementById('phPayMode').value;
-    const txn = document.getElementById('phTxnId');
+    var mode = val('phPayMode');
+    var txn = $('phTxnId');
+    if (!txn) return;
     if (mode === 'UPI' || mode === 'CARD') txn.classList.remove('d-none');
-    else { txn.classList.add('d-none'); txn.value = ""; }
+    else { txn.classList.add('d-none'); txn.value = ''; }
   }
 
-  // ===================================================================
-  // 3. SAVE + DIGITAL DISPATCH INTERCEPTOR
-  // ===================================================================
-  function savePharmacyInvoice(event) {
-    const btn = event.target.closest('button');
-    const original = btn.innerHTML;
+  // =================================================================
+  // 3. SAVE
+  // =================================================================
+  function saveInvoice(btn) {
+    var original = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Saving…`;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving\u2026';
 
-    const payload = {
-      billUuid: phBillUuid,
-      patientId: document.getElementById('phSearchQuery').value.trim() || "WALK-IN",
-      patientName: document.getElementById('phPatientName').value.trim(),
-      mobile: document.getElementById('phMobile').value.trim(),
-      address: document.getElementById('phAddress').value.trim(),
-      age: document.getElementById('phAge').value.trim(),
-      sex: document.getElementById('phSex').value,
-      doctor: document.getElementById('phDoctor').value,
-      billType: document.getElementById('phBillType').value,
-      payMode: document.getElementById('phPayMode').value,
-      txnId: document.getElementById('phTxnId').value.trim(),
-      discount: parseFloat(document.getElementById('phDiscount').value) || 0,
+    var payload = {
+      billUuid: billUuid,
+      patientId: String(val('phSearchQuery')).trim() || 'WALK-IN',
+      patientName: String(val('phPatientName')).trim(),
+      mobile: String(val('phMobile')).trim(),
+      address: String(val('phAddress')).trim(),
+      age: String(val('phAge')).trim(),
+      sex: val('phSex'),
+      doctor: val('phDoctor'),
+      billType: val('phBillType'),
+      payMode: val('phPayMode'),
+      txnId: String(val('phTxnId')).trim(),
+      discount: parseFloat(val('phDiscount')) || 0,
       billedItems: []
     };
 
     // Rx integrity: a line that came from a prescription must match what was
     // prescribed, unless the pharmacist knowingly substitutes.
-    let rxMismatch = null;
-    const _root = s => (s || '').toLowerCase()
-      .replace(/(tab|tablet|tablets|cap|capsule|capsules|syr|syrup|inj|injection|oint|gtt|drop|drops|susp|cream|gel|sol|solution|respules|iv|im)\.?/g, '')
-      .replace(/[^a-z0-9]/g, '');
-    document.querySelectorAll('#phBillingBody tr').forEach(tr => {
-      if (tr.classList.contains('fefo-child')) return;
-      const rxName = tr.dataset.rxDrug;
-      if (!rxName) return;
-      const billed = (tr.querySelector('.drug-name').value || '').trim();
-      if (!billed) return;
-      const a = _root(rxName), b = _root(billed);
-      if (a && b && a.indexOf(b) === -1 && b.indexOf(a) === -1) rxMismatch = { rx: rxName, billed: billed };
-    });
-    if (rxMismatch) {
-      crescConfirm('⚠️ SUBSTITUTION CHECK\n\nPrescribed: ' + rxMismatch.rx +
-        '\nBilling:   ' + rxMismatch.billed +
-        '\n\nThese look like different medicines. Continue only if this substitution is intentional.\n\nProceed?',
-        { title: 'Substitution check', okLabel: 'Substitution is intentional' })
-        .then(ok => {
+    var mismatch = null;
+    var rootName = function (s) {
+      return String(s || '').toLowerCase()
+        .replace(/(tab|tablet|tablets|cap|capsule|capsules|syr|syrup|inj|injection|oint|gtt|drop|drops|susp|cream|gel|sol|solution|respules|iv|im)\.?/g, '')
+        .replace(/[^a-z0-9]/g, '');
+    };
+    var rows = document.querySelectorAll('#phBillingBody tr');
+    for (var i = 0; i < rows.length; i++) {
+      var tr = rows[i];
+      if (tr.classList.contains('fefo-child')) continue;
+      var rxName = tr.dataset.rxDrug;
+      if (!rxName) continue;
+      var billed = String(tr.querySelector('.drug-name').value || '').trim();
+      if (!billed) continue;
+      var a = rootName(rxName), b = rootName(billed);
+      if (a && b && a.indexOf(b) === -1 && b.indexOf(a) === -1) {
+        mismatch = { rx: rxName, billed: billed };
+      }
+    }
+
+    if (mismatch) {
+      ask('\u26a0\ufe0f SUBSTITUTION CHECK\n\nPrescribed: ' + mismatch.rx +
+          '\nBilling:   ' + mismatch.billed +
+          '\n\nThese look like different medicines. Continue only if this substitution is intentional.\n\nProceed?',
+          { title: 'Substitution check', okLabel: 'Substitution is intentional' })
+        .then(function (ok) {
           if (!ok) { btn.innerHTML = original; btn.disabled = false; return; }
-          collectAndSave();
+          collectAndSave(btn, original, payload);
         });
       return;
     }
-    collectAndSave();
+    collectAndSave(btn, original, payload);
+  }
 
-    // Everything past the substitution check, so the check can answer
-    // asynchronously without duplicating the save path.
-    function collectAndSave() {
-      let invalid = false;
-      document.querySelectorAll('#phBillingBody tr').forEach(tr => {
-        const drug = tr.querySelector('.drug-name').value.trim();
-        const qty = parseFloat(tr.querySelector('.bill-qty').value) || 0;
-        const batch = tr.querySelector('.batch-id').value.trim();
-        if (drug !== "" && qty > 0) {
-          if (!batch) invalid = true;
-          payload.billedItems.push({
-            drug: drug, generic: tr.dataset.generic || "", batch: batch,
-            expiry: tr.querySelector('.expiry-id').value.trim(), unit: tr.dataset.unit || "",
-            qty: qty, rate: parseFloat(tr.querySelector('.rate').value) || 0,
-            gst: parseFloat(tr.querySelector('.gst-perc').value) || 0, rowId: tr.dataset.rowId || ""
-          });
-        }
-      });
-
-      const stop = msg => { crescAlert(msg); btn.innerHTML = original; btn.disabled = false; };
-      if (payload.billedItems.length === 0) return stop("⚠️ Add at least one valid item to bill.");
-      if (invalid) return stop("⚠️ An item has no batch selected. Pick it from the dropdown so a batch is assigned.");
-      if ((payload.payMode === 'UPI' || payload.payMode === 'CARD') && !payload.txnId) return stop("⚠️ Enter the UPI/Card reference number.");
-
-      google.script.run
-        .withSuccessHandler(res => {
-          btn.innerHTML = original; btn.disabled = false;
-          if (res && res.success) {
-            if (res.duplicate) { crescAlert("ℹ️ " + res.message + " (Invoice " + res.invoiceNo + ")"); return; }
-          
-            // THE BILL IS ALREADY SAVED BY THE TIME WE GET HERE.
-            //
-            // Everything below is the printable copy, and it used to run
-            // unguarded: one bad field in the print payload threw inside this
-            // success handler, so the dispatch panel never opened, no invoice
-            // number appeared, and the desk looked as though Save Bill had
-            // done nothing at all — while the stock had been deducted and the
-            // invoice written. The pharmacist's next move is to press Save
-            // again.
-            //
-            // So the confirmation is shown FIRST, from the reply we already
-            // hold, and the rendering is allowed to fail behind it.
-            document.getElementById('dh-invoice-no').innerText = res.invoiceNo;
-            document.getElementById('ph-dispatch-modal').style.display = 'flex';
-            phPrintReady(false);
-
-            // The letterhead is a server round trip on the first print of a
-            // session (crescInvoiceWarm() below normally pays for it when the
-            // desk opens), so the invoice is built through a callback.
-            try {
-            buildPrintInvoiceRaw(res.print, function (rawHtml) {
-              document.getElementById('ph-invoice-print').innerHTML = rawHtml;
-
-              // The document sent to the PDF and to the email. It used to be
-              // wrapped in `body{color:var(--text-main);background:var(--bg-card)}`
-              // — variables that exist only inside this tab, so the PDF and the
-              // email arrived unstyled or unreadable. Absolute values only.
-              currentDispatchHtml =
-                '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
-                '<title>Pharmacy invoice ' + (window.crescInvEsc ? crescInvEsc(res.invoiceNo) : '') + '</title>' +
-                '<style>*{box-sizing:border-box;margin:0;padding:0;}' +
-                "body{background:#ffffff;color:#111827;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:16px;}" +
-                '@media print{@page{margin:1cm;}}' +
-                '</style></head><body>' + rawHtml + '</body></html>';
-
-              phPrintReady(true);
-            });
-            } catch (e) {
-              phPrintReady(false, e && e.message);
-            }
-
-          } else crescAlert("❌ " + ((res && res.message) || "Save failed."));
-        })
-        .withFailureHandler(err => {
-          btn.innerHTML = original; btn.disabled = false;
-          crescAlert(phFailure(err, 'Saving the bill'));
-        })
-        .processPharmacyBill(payload, window.sessionToken);
+  function collectAndSave(btn, original, payload) {
+    var invalid = false;
+    var rows = document.querySelectorAll('#phBillingBody tr');
+    for (var i = 0; i < rows.length; i++) {
+      var tr = rows[i];
+      var drug = String(tr.querySelector('.drug-name').value || '').trim();
+      var qty = parseFloat(tr.querySelector('.bill-qty').value) || 0;
+      var batch = String(tr.querySelector('.batch-id').value || '').trim();
+      if (drug !== '' && qty > 0) {
+        if (!batch) invalid = true;
+        payload.billedItems.push({
+          drug: drug, generic: tr.dataset.generic || '', batch: batch,
+          expiry: String(tr.querySelector('.expiry-id').value || '').trim(),
+          unit: tr.dataset.unit || '', qty: qty,
+          rate: parseFloat(tr.querySelector('.rate').value) || 0,
+          gst: parseFloat(tr.querySelector('.gst-perc').value) || 0,
+          rowId: tr.dataset.rowId || ''
+        });
+      }
     }
+
+    var stop = function (msg) { say(msg); btn.innerHTML = original; btn.disabled = false; };
+    if (payload.billedItems.length === 0) return stop('\u26a0\ufe0f Add at least one valid item to bill.');
+    if (invalid) return stop('\u26a0\ufe0f An item has no batch selected. Pick it from the dropdown so a batch is assigned.');
+    if ((payload.payMode === 'UPI' || payload.payMode === 'CARD') && !payload.txnId) {
+      return stop('\u26a0\ufe0f Enter the UPI/Card reference number.');
+    }
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.innerHTML = original; btn.disabled = false;
+        if (!res || !res.success) { say('\u274c ' + ((res && res.message) || 'Save failed.')); return; }
+        if (res.duplicate) { say('\u2139\ufe0f ' + res.message + ' (Invoice ' + res.invoiceNo + ')'); return; }
+
+        // THE BILL IS ALREADY SAVED BY THE TIME WE GET HERE.
+        //
+        // Everything below is the printable copy, and it used to run
+        // unguarded: one bad field in the print payload threw inside this
+        // handler, so the dispatch panel never opened, no invoice number
+        // appeared, and the desk looked as though Save Bill had done nothing
+        // -- while the stock had been deducted and the invoice written. The
+        // pharmacist's next move is to press Save again.
+        //
+        // So the confirmation is shown FIRST, from the reply already in
+        // hand, and the rendering is allowed to fail behind it.
+        $('dh-invoice-no').innerText = res.invoiceNo;
+        $('ph-dispatch-modal').style.display = 'flex';
+        printReady(false);
+
+        try {
+          buildPrintInvoiceRaw(res.print, function (rawHtml) {
+            $('ph-invoice-print').innerHTML = rawHtml;
+            // The document sent to the PDF and to the email. Absolute values
+            // only: it used to inherit CSS variables that exist solely inside
+            // this tab, so the PDF and the email arrived unreadable.
+            dispatchHtml =
+              '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+              '<title>Pharmacy invoice ' + esc(res.invoiceNo) + '</title>' +
+              '<style>*{box-sizing:border-box;margin:0;padding:0;}' +
+              "body{background:#ffffff;color:#111827;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:16px;}" +
+              '@media print{@page{margin:1cm;}}' +
+              '</style></head><body>' + rawHtml + '</body></html>';
+            printReady(true);
+          });
+        } catch (e) {
+          printReady(false, e && e.message);
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.innerHTML = original; btn.disabled = false;
+        say(failure(err, 'Saving the bill'));
+      })
+      .processPharmacyBill(payload, window.sessionToken);
   }
 
   /**
-   * The pharmacy invoice renderer MOVED TO THE SHELL (Invoice_Template.html)
-   * as window.crescPharmacyInvoiceHtml.
-   *
-   * It lived here, and the Pharmacy Dashboard's reprint button called it
-   * across the partial boundary behind
-   *
-   *     if (typeof buildPrintInvoiceRaw !== 'function')
-   *         crescAlert("Invoice print template not loaded on this page.");
-   *
-   * which is the dead end a pharmacist actually hit: a message that names a
-   * template, offers nothing to do about it, and is produced by any of half a
-   * dozen unrelated conditions — the bundle half-injected, this partial's
-   * script block failing to run for any reason, the dashboard reached before
-   * the billing screen. Two partials in one bundle is not a guarantee that one
-   * can see the other's function, and the guard turned every way that could
-   * go wrong into the same unactionable sentence.
-   *
-   * The shell is parsed before any bundle and cannot be half-loaded, so in
-   * the shell the function cannot be absent. The alias below keeps this
-   * file's own call sites — and anything else that learned the old name —
-   * working unchanged.
+   * The pharmacy invoice renderer lives in the SHELL
+   * (Invoice_Template.html) as window.crescPharmacyInvoiceHtml, because the
+   * shell is parsed before any bundle and cannot be half-loaded. This alias
+   * keeps the old name working for anything that learned it.
    */
-  var buildPrintInvoiceRaw = function (d, done) {
+  function buildPrintInvoiceRaw(d, done) {
     return window.crescPharmacyInvoiceHtml(d, done);
-  };
+  }
 
-  // ===================================================================
-  // 4. DISPATCH HUB CONTROLLERS
-  // ===================================================================
+  // =================================================================
+  // 4. DISPATCH
+  // =================================================================
 
   /**
    * The bill is saved either way; this is only about the printable copy.
-   *
-   * WhatsApp, Email and Print all need `currentDispatchHtml`, and all three
-   * used to be offered whether or not it had been built. Pressing one with
-   * nothing behind it sent an empty document. They are now disabled until
-   * the invoice has rendered, and the panel says what happened instead of
-   * looking like an ordinary success.
+   * WhatsApp, Email and Print all need `dispatchHtml`, and all three used to
+   * be offered whether or not it had been built -- pressing one with nothing
+   * behind it sent an empty document.
    */
-  function phPrintReady(ok, why) {
-    const note = document.getElementById('dh-print-note');
-    ['dh-btn-wa', 'dh-btn-mail', 'dh-btn-print'].forEach(id => {
-      const b = document.getElementById(id);
+  function printReady(ok, why) {
+    var note = $('dh-print-note');
+    ['dh-btn-wa', 'dh-btn-mail', 'dh-btn-print'].forEach(function (id) {
+      var b = $(id);
       if (b) b.disabled = !ok;
     });
     if (!note) return;
@@ -1031,214 +1080,306 @@
     note.classList.remove('d-none');
   }
 
-  
-  function sendPharmaWhatsApp() {
-    const invNo = document.getElementById('dh-invoice-no').innerText;
-    if (!invNo) return;
-    crescPrompt("Confirm or edit WhatsApp number for dispatch:", phPatientContact.whatsapp,
-                { title: 'Send invoice on WhatsApp', okLabel: 'Send' })
-      .then(targetWa => { if (targetWa) sendPharmaWhatsAppGo(invNo, targetWa); });
+  function prompt_(msg, value, opts) {
+    if (typeof window.crescPrompt === 'function') return window.crescPrompt(msg, value, opts);
+    return Promise.resolve(null);
   }
 
-  function sendPharmaWhatsAppGo(invNo, targetWa) {
-    phOverlay(true, "Generating PDF & Uploading to Drive...");
+  function sendWhatsApp() {
+    var invNo = $('dh-invoice-no').innerText;
+    if (!invNo) return;
+    prompt_('Confirm or edit WhatsApp number for dispatch:', patientContact.whatsapp,
+            { title: 'Send invoice on WhatsApp', okLabel: 'Send' })
+      .then(function (target) { if (target) sendWhatsAppGo(invNo, target); });
+  }
+
+  function sendWhatsAppGo(invNo, target) {
+    overlay(true, 'Generating PDF & Uploading to Drive...');
     google.script.run
-      .withSuccessHandler(res => {
-        phOverlay(false);
+      .withSuccessHandler(function (res) {
+        overlay(false);
         if (res && res.success) {
-          const msg = encodeURIComponent(`Hello! Here is your pharmacy invoice (${invNo}) from Crescentia HealthTech. View/Download it here: ${res.link}`);
-          window.open(`https://wa.me/91${targetWa.replace(/\D/g, '')}?text=${msg}`, '_blank');
+          var msg = encodeURIComponent('Hello! Here is your pharmacy invoice (' + invNo +
+            ') from Crescentia HealthTech. View/Download it here: ' + res.link);
+          window.open('https://wa.me/91' + String(target).replace(/\D/g, '') + '?text=' + msg, '_blank');
         } else if (window.crescConsentGate &&
-                   window.crescConsentGate(res, function () {
-                     sendPharmaWhatsAppGo(invNo, targetWa);
-                   })) {
+                   window.crescConsentGate(res, function () { sendWhatsAppGo(invNo, target); })) {
           // The notice is on screen; the send retries itself if they agree.
-        } else crescAlert("❌ Error generating PDF: " + ((res && res.message) || "Unknown error."));
+        } else {
+          say('\u274c Error generating PDF: ' + ((res && res.message) || 'Unknown error.'));
+        }
       })
-      .withFailureHandler(err => { phOverlay(false); crescAlert(phFailure(err, 'Preparing the PDF')); })
-      .generateAndStorePharmacyInvoicePDF(invNo, currentDispatchHtml, window.sessionToken);
+      .withFailureHandler(function (err) { overlay(false); say(failure(err, 'Preparing the PDF')); })
+      .generateAndStorePharmacyInvoicePDF(invNo, dispatchHtml, window.sessionToken);
   }
 
-  function sendPharmaEmail() {
-    const invNo = document.getElementById('dh-invoice-no').innerText;
+  function sendEmail() {
+    var invNo = $('dh-invoice-no').innerText;
     if (!invNo) return;
-    crescPrompt("Confirm or edit Email address for dispatch:", phPatientContact.email,
-                { title: 'Email invoice', okLabel: 'Send' })
-      .then(targetEmail => { if (targetEmail) sendPharmaEmailGo(invNo, targetEmail); });
+    prompt_('Confirm or edit Email address for dispatch:', patientContact.email,
+            { title: 'Email invoice', okLabel: 'Send' })
+      .then(function (target) { if (target) sendEmailGo(invNo, target); });
   }
 
-  function sendPharmaEmailGo(invNo, targetEmail) {
-    phOverlay(true, "Generating PDF & Dispatching Email...");
+  function sendEmailGo(invNo, target) {
+    overlay(true, 'Generating PDF & Dispatching Email...');
     google.script.run
-      .withSuccessHandler(res => {
-        phOverlay(false);
-        if (res && res.success) crescAlert("✅ Invoice emailed successfully!");
-        else crescAlert("❌ Error: " + (res.message || "Unknown error."));
+      .withSuccessHandler(function (res) {
+        overlay(false);
+        if (res && res.success) say('\u2705 Invoice emailed successfully!');
+        else say('\u274c Error: ' + ((res && res.message) || 'Unknown error.'));
       })
-      .withFailureHandler(err => { phOverlay(false); crescAlert(phFailure(err, 'Emailing the invoice')); })
-      .emailPharmacyInvoice(invNo, currentDispatchHtml, targetEmail, window.sessionToken);
+      .withFailureHandler(function (err) { overlay(false); say(failure(err, 'Emailing the invoice')); })
+      .emailPharmacyInvoice(invNo, dispatchHtml, target, window.sessionToken);
   }
 
   /**
-   * Prints the invoice in its own window rather than printing the page.
-   *
-   * window.print() printed whatever the dispatch modal happened to be
-   * sitting on top of, at the mercy of one @media print rule. The shared
-   * printer carries only the invoice, and reprints without the screen.
+   * Prints in its own window rather than printing the page: window.print()
+   * printed whatever the dispatch modal happened to be sitting on top of,
+   * at the mercy of one @media print rule.
    */
-  function printPharmaInvoice() {
-    if (currentDispatchHtml && typeof crescInvoicePrintHtml === 'function') {
-      crescInvoicePrintHtml(currentDispatchHtml, 'Pharmacy invoice');
+  function printInvoice() {
+    if (dispatchHtml && typeof window.crescInvoicePrintHtml === 'function') {
+      window.crescInvoicePrintHtml(dispatchHtml, 'Pharmacy invoice');
       return;
     }
     window.print();
   }
 
-  function closeDispatchHubAndReset() {
-    document.getElementById('ph-dispatch-modal').style.display = 'none';
-    currentDispatchHtml = ""; // Clear memory cache
-    resetPharmacyBilling();
+  function closeDispatchAndReset() {
+    $('ph-dispatch-modal').style.display = 'none';
+    dispatchHtml = '';
+    resetBilling();
   }
 
-  /**
-   * The cashier's Clear.
-   *
-   * A wrong patient, an abandoned counter, a bill started against the previous
-   * customer: until now the only way out was to reload the app, which also
-   * threw away the stock cache. This empties the desk in place and confirms
-   * first whenever there is something to lose — priced lines or a patient
-   * already loaded.
-   */
-  function clearPharmacyBill() {
-    const hasPatient = ['phSearchQuery','phPatientName','phMobile','phAddress','phAge']
-      .some(id => (document.getElementById(id).value || "").trim() !== "");
-    if (!hasUnsavedItems() && !hasPatient) { clearPharmacyBillGo(); return; }
-    crescConfirm("Clear this bill?\n\nThe items and patient details on screen are discarded. Bills already saved are not affected.",
-      { okLabel: 'Clear bill' })
-      .then(ok => { if (ok) clearPharmacyBillGo(); });
+  // =================================================================
+  // 5. CLEAR + RESET
+  // =================================================================
+  function clearBill() {
+    var hasPatient = ['phSearchQuery', 'phPatientName', 'phMobile', 'phAddress', 'phAge']
+      .some(function (id) { return String(val(id) || '').trim() !== ''; });
+    if (!hasUnsavedItems() && !hasPatient) { clearBillGo(); return; }
+    ask('Clear this bill?\n\nThe items and patient details on screen are discarded. Bills already saved are not affected.',
+        { okLabel: 'Clear bill' })
+      .then(function (ok) { if (ok) clearBillGo(); });
   }
 
-  function clearPharmacyBillGo() {
-    resetPharmacyBilling();
-    const q = document.getElementById('phSearchQuery');
+  function clearBillGo() {
+    resetBilling();
+    var q = $('phSearchQuery');
     if (q) q.focus();
   }
 
-  function resetPharmacyBilling() {
-    ['phSearchQuery','phPatientName','phMobile','phAddress','phAge','phTxnId'].forEach(id => document.getElementById(id).value = "");
-    document.getElementById('phDiscount').value = "0";
-    document.getElementById('phPayMode').value = "CASH";
-    document.getElementById('phBillType').value = "WALK-IN";
-    document.getElementById('phSex').value = "M";
+  function resetBilling() {
+    ['phSearchQuery', 'phPatientName', 'phMobile', 'phAddress', 'phAge', 'phTxnId']
+      .forEach(function (id) { setVal(id, ''); });
+    setVal('phDiscount', '0');
+    setVal('phPayMode', 'CASH');
+    setVal('phBillType', 'WALK-IN');
+    setVal('phSex', 'M');
     // Left stale by every earlier reset: the next walk-in inherited the last
     // patient's prescriber, which then printed on their bill.
-    document.getElementById('phDoctor').value = "Self / OTC";
-    document.getElementById('phRxPanel').style.display = 'none';
+    setVal('phDoctor', 'Self / OTC');
+    if ($('phRxPanel')) $('phRxPanel').style.display = 'none';
     toggleTxnID();
-    document.getElementById('phBillingBody').innerHTML = "";
-    phRowCounter = 0;
-    phPrescriptions = [];
-    phBillUuid = newBillUuid();
-    phPatientContact = { whatsapp: "", email: "" };
+    $('phBillingBody').innerHTML = '';
+    rowCounter = 0;
+    prescriptions = [];
+    billUuid = newBillUuid();
+    patientContact = { whatsapp: '', email: '' };
     renderPrescriptions();
-    addPharmacyRow();
-    calculatePharmaTotals();
-    fetchLivePharmacyStock();
+    addRow();
+    calcTotals();
+    fetchStock();
   }
 
-  // ===================================================================
-  // CREDIT SETTLEMENT & NAV
-  // ===================================================================
+  // =================================================================
+  // 6. CREDIT SETTLEMENT + NAV
+  // =================================================================
   function openCreditPanel() {
-    const modal = document.getElementById('ph-credit-modal');
-    const list = document.getElementById('ph-credit-list');
+    var modal = $('ph-credit-modal'), list = $('ph-credit-list');
     modal.style.display = 'flex';
-    list.innerHTML = `<div class="cm-row"><span class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading pending credits…</span></div>`;
+    list.innerHTML = '<div class="cm-row"><span class="text-muted">' +
+      '<span class="spinner-border spinner-border-sm me-2"></span>Loading pending credits\u2026</span></div>';
     google.script.run
-      .withSuccessHandler(res => {
-        if (!res || !res.success) { list.innerHTML = `<div class="cm-row text-danger">${(res && res.message) || 'Failed to load.'}</div>`; return; }
-        if (res.data.length === 0) { list.innerHTML = `<div class="cm-row text-muted">No pending credit bills. You're all settled.</div>`; return; }
-        list.innerHTML = res.data.map(b => `
-          <div class="cm-row" id="cm-${b.invoiceNo}">
-            <div>
-              <strong>${b.invoiceNo}</strong> <span class="rx-src IP-WARD">${b.billType}</span><br>
-              <span class="rx-meta">${b.patientName || ''} (${b.patientId}) · ${b.date}</span>
-            </div>
-            <div class="d-flex align-items-center gap-2">
-              <span class="cm-net">₹ ${b.net.toFixed(2)}</span>
-              <select class="hd-input p-1" id="cm-mode-${b.invoiceNo}" style="width:90px;">
-                <option value="CASH">CASH</option><option value="UPI">UPI</option><option value="CARD">CARD</option>
-              </select>
-              <button class="btn btn-sm btn-success" onclick="settleCredit('${b.invoiceNo}')">Settle</button>
-            </div>
-          </div>`).join('');
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          list.innerHTML = '<div class="cm-row text-danger"></div>';
+          list.firstChild.textContent = (res && res.message) || 'Failed to load.';
+          return;
+        }
+        if (!res.data || res.data.length === 0) {
+          list.innerHTML = '<div class="cm-row text-muted">No pending credit bills. You\'re all settled.</div>';
+          return;
+        }
+        list.innerHTML = res.data.map(function (b) {
+          return '<div class="cm-row" id="cm-' + esc(b.invoiceNo) + '">' +
+            '<div><strong>' + esc(b.invoiceNo) + '</strong> ' +
+              '<span class="rx-src IP-WARD">' + esc(b.billType) + '</span><br>' +
+              '<span class="rx-meta">' + esc(b.patientName || '') + ' (' + esc(b.patientId) + ') \u00b7 ' +
+              esc(b.date) + '</span></div>' +
+            '<div class="d-flex align-items-center gap-2">' +
+              '<span class="cm-net">\u20b9 ' + Number(b.net).toFixed(2) + '</span>' +
+              '<select class="hd-input p-1" id="cm-mode-' + esc(b.invoiceNo) + '" style="width:90px;">' +
+                '<option value="CASH">CASH</option><option value="UPI">UPI</option>' +
+                '<option value="CARD">CARD</option></select>' +
+              '<button class="btn btn-sm btn-success" data-ph="settle" data-ph-inv="' +
+                esc(b.invoiceNo) + '">Settle</button>' +
+            '</div></div>';
+        }).join('');
       })
-      .withFailureHandler(err => {
+      .withFailureHandler(function (err) {
         list.innerHTML = '<div class="cm-row text-danger"></div>';
-        list.firstChild.textContent = phFailure(err, 'Reading the credit bills');
+        list.firstChild.textContent = failure(err, 'Reading the credit bills');
       })
       .getPendingCreditBills(window.sessionToken);
   }
 
-  function closeCreditPanel() { document.getElementById('ph-credit-modal').style.display = 'none'; }
+  function closeCreditPanel() { $('ph-credit-modal').style.display = 'none'; }
 
   function settleCredit(invoiceNo) {
-    const mode = document.getElementById('cm-mode-' + invoiceNo).value;
+    var sel = $('cm-mode-' + invoiceNo);
+    var mode = sel ? sel.value : 'CASH';
     if (mode === 'UPI' || mode === 'CARD') {
-      crescPrompt("Enter " + mode + " reference number:", '',
-                  { title: 'Settle credit bill', okLabel: 'Settle' })
-        .then(txn => { if (txn) settleCreditGo(invoiceNo, mode, txn); });
+      prompt_('Enter ' + mode + ' reference number:', '',
+              { title: 'Settle credit bill', okLabel: 'Settle' })
+        .then(function (txn) { if (txn) settleCreditGo(invoiceNo, mode, txn); });
       return;
     }
-    settleCreditGo(invoiceNo, mode, "");
+    settleCreditGo(invoiceNo, mode, '');
   }
 
   function settleCreditGo(invoiceNo, mode, txn) {
-    const rowEl = document.getElementById('cm-' + invoiceNo);
-    rowEl.style.opacity = '0.5';
+    var rowEl = $('cm-' + invoiceNo);
+    if (rowEl) rowEl.style.opacity = '0.5';
     google.script.run
-      .withSuccessHandler(res => {
-        if (res && res.success) { rowEl.remove(); crescAlert("✅ " + res.message); }
-        else { rowEl.style.opacity = '1'; crescAlert("❌ " + ((res && res.message) || "Failed.")); }
+      .withSuccessHandler(function (res) {
+        if (res && res.success) { if (rowEl) rowEl.remove(); say('\u2705 ' + res.message); }
+        else { if (rowEl) rowEl.style.opacity = '1'; say('\u274c ' + ((res && res.message) || 'Failed.')); }
       })
-      .withFailureHandler(err => {
-        rowEl.style.opacity = '1';
-        crescAlert(phFailure(err, 'Settling the bill'));
+      .withFailureHandler(function (err) {
+        if (rowEl) rowEl.style.opacity = '1';
+        say(failure(err, 'Settling the bill'));
       })
       .settleCreditBill({ invoiceNo: invoiceNo, payMode: mode, txnId: txn }, window.sessionToken);
   }
 
   function returnToPharmacyMenu() {
-    const billing = document.getElementById('pharmacy-billing-workspace');
+    var billing = root();
     if (billing) { billing.classList.add('d-none'); billing.classList.remove('active-section'); }
-    const main = document.getElementById('workspace-pharmacy');
+    var main = $('workspace-pharmacy');
     if (main) main.classList.remove('d-none');
-    if (typeof switchTab === 'function') switchTab('workspace-pharmacy');
+    if (typeof window.switchTab === 'function') window.switchTab('workspace-pharmacy');
   }
 
-  // ===================================================================
-  // INIT — on entry to the desk, not on page load.
+  // =================================================================
+  // 7. WIRING
   //
-  // This work used to run from a setTimeout 300ms after the page loaded, so
-  // a full scan of the pharmacy inventory sheet fired on EVERY page load:
-  // for a doctor who never opens Pharmacy, for a lab technician, and even
-  // while the login screen was still up and nobody had signed in. It delayed
-  // the first screen every user sees in order to warm a table most of them
-  // never open.
-  //
-  // switchTab() now calls this when the billing desk is actually opened,
-  // which is the same router-hook pattern the pharmacy desk, the lab desk
-  // and the discharge desk already use. The stock is still fetched fresh on
-  // every entry, so a pharmacist never bills against a stale count.
-  // ===================================================================
-  function openPharmacyBilling() {
-    // Fetch the letterhead now, not while a print dialog is opening.
-    if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
-    // Re-read the till if it was left showing; see CrescDrawer.onScreenOpen.
-    if (window.CrescDrawer) CrescDrawer.onScreenOpen('ph-drawer-host', 'Pharmacy');
-    fetchLivePharmacyStock();
-    const tbody = document.getElementById('phBillingBody');
-    if (tbody && tbody.children.length === 0) addPharmacyRow();
+  // One listener per event type on the workspace, dispatching on the
+  // `data-ph` attribute. See the note at the top of the file: a button
+  // wired this way is bound by the same script that defines what it does,
+  // so it cannot end up looking normal and doing nothing.
+  // =================================================================
+  var CLICK = {
+    'back':           function () { returnToPharmacyMenu(); },
+    'drawer':         function () {
+                        if (window.CrescDrawer) window.CrescDrawer.toggle('ph-drawer-host', 'Pharmacy', 'ph-drawer-btn');
+                        else say('The cash drawer is not available on this screen.');
+                      },
+    'clear':          function () { clearBill(); },
+    'credit':         function () { openCreditPanel(); },
+    'credit-close':   function () { closeCreditPanel(); },
+    'find':           function () { findPatient(); },
+    'rx-toggle':      function () { $('phRxPanel').classList.toggle('collapsed'); },
+    'rx-add-all':     function (el, ev) {
+                        ev.stopPropagation();
+                        prescriptions.forEach(function (_, i) {
+                          try { addPrescriptionToBill(i); } catch (e) { /* one bad row must not stop the rest */ }
+                        });
+                      },
+    'rx-add':         function (el) { addPrescriptionToBill(parseInt(el.getAttribute('data-ph-i'), 10)); },
+    'add-row':        function () { addRow(); },
+    'row-del':        function (el) { removeRow(el.closest('tr')); },
+    'save':           function (el) { saveInvoice(el); },
+    'settle':         function (el) { settleCredit(el.getAttribute('data-ph-inv')); },
+    'send-wa':        function () { sendWhatsApp(); },
+    'send-mail':      function () { sendEmail(); },
+    'print':          function () { printInvoice(); },
+    'dispatch-close': function () { closeDispatchAndReset(); }
+  };
+
+  function wire() {
+    var host = root();
+    if (!host || host.dataset.phWired === '1') return;
+    host.dataset.phWired = '1';
+
+    host.addEventListener('click', function (ev) {
+      var el = ev.target.closest('[data-ph]');
+      if (!el || !host.contains(el)) return;
+      var fn = CLICK[el.getAttribute('data-ph')];
+      if (!fn) return;
+      // One handler must never take the whole screen down with it.
+      try { fn(el, ev); } catch (e) {
+        say('That did not complete: ' + (e && e.message ? e.message : e));
+      }
+    });
+
+    host.addEventListener('input', function (ev) {
+      var t = ev.target;
+      if (t.classList.contains('drug-name') && !t.readOnly) { medicineSearch(t); return; }
+      if (t.classList.contains('bill-qty') || t.classList.contains('rate') ||
+          t.classList.contains('gst-perc')) { rowChanged(t); return; }
+      if (t.id === 'phDiscount') { calcTotals(); return; }
+    });
+
+    host.addEventListener('change', function (ev) {
+      if (ev.target.id === 'phPayMode') toggleTxnID();
+    });
+
+    host.addEventListener('keydown', function (ev) {
+      if (ev.target.id === 'phSearchQuery' && ev.key === 'Enter') {
+        ev.preventDefault();
+        findPatient();
+      }
+    });
+
+    // Clicking anywhere that is not a medicine box closes the suggestions.
+    document.addEventListener('click', function (ev) {
+      if (!ev.target.classList || !ev.target.classList.contains('drug-name')) closeAllLists();
+    });
   }
-  window.openPharmacyBilling = openPharmacyBilling;
+
+  // =================================================================
+  // 8. ENTRY POINT -- on entry to the desk, not on page load.
+  //
+  // This work used to run 300ms after page load, so a full scan of the
+  // pharmacy inventory fired for every user on every load, including a
+  // doctor who never opens Pharmacy and the sign-in screen itself.
+  // switchTab() calls this when the desk is actually opened.
+  // =================================================================
+  function openPharmacyBilling() {
+    wire();
+    if (typeof window.crescInvoiceWarm === 'function') window.crescInvoiceWarm();
+    if (window.CrescDrawer) window.CrescDrawer.onScreenOpen('ph-drawer-host', 'Pharmacy');
+    fetchStock();
+    var tbody = $('phBillingBody');
+    if (tbody && tbody.children.length === 0) addRow();
+    toggleTxnID();
+  }
+
+  // -----------------------------------------------------------------
+  // The public surface, and the only things on `window`.
+  // -----------------------------------------------------------------
+  window.openPharmacyBilling     = openPharmacyBilling;
+  window.fetchPatientForPharmacy = findPatient;          // Barcode_Router
+  window.returnToPharmacyMenu    = returnToPharmacyMenu;
+  window.clearPharmacyBill       = clearBill;
+  window.resetPharmacyBilling    = resetBilling;
+  window.buildPrintInvoiceRaw    = buildPrintInvoiceRaw;
+
+  // Bind now if the markup is already in the document (it is: the loader
+  // inserts markup before it runs scripts), and again on first open, which
+  // covers the case of this partial arriving before its own markup.
+  wire();
+})();
 </script>

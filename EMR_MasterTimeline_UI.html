@@ -325,7 +325,7 @@ function buildOPCard(ev) {
             <span style="border: 1px solid var(--border-hover); color: var(--text-main) !important; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-left: 10px; background-color: var(--bg-main);">${ev.apptId}</span>
           </div>
           <div class="d-flex align-items-center gap-3">
-            <!-- Nothing on this timeline was printable on its own. The whole
+            <\!-- Nothing on this timeline was printable on its own. The whole
                  file could be printed, and a prescription could be printed
                  from the consult while it was open, but "the paper from my
                  visit in March" had no route. See mtPrintOPEncounter. -->
@@ -442,7 +442,7 @@ function buildIPDischargeBlock(ev) {
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <strong style="color:${fg}; font-size:.95em;"><i class="fa-solid ${icon} me-1"></i> ${label}</strong>
         <div class="d-flex gap-2">
-          <!-- THE WHOLE SUMMARY, not its final diagnosis alone. This card used
+          <\!-- THE WHOLE SUMMARY, not its final diagnosis alone. This card used
                to carry six fields from the header — id, status, signer, hash,
                date, diagnosis — and none of the course, the medications, the
                advice or the follow-up, all of which exist signed and hashed
@@ -628,7 +628,7 @@ function buildIPCard(ev) {
              <p style="color: var(--text-main) !important; font-size: 1.05em; margin-bottom: 0; font-weight: bold;"><span style="color: var(--danger-fg); font-weight: bold; width: 110px; display:inline-block;">Diagnosis:</span> ${mtEsc(ev.diagnosis)}</p>
           </div>
 
-          <!-- The discharge summary for this stay. Until now the timeline read
+          <\!-- The discharge summary for this stay. Until now the timeline read
                a sheet nothing writes, so no inpatient episode appeared here at
                all; a signed summary is the document that closes the stay and
                belongs on the patient's record beside the consultations. -->
