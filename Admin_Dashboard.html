@@ -1,12 +1,15 @@
 <div id="tab-admin-dash" class="page-section">
 
-  <!-- ============ HEADER (preserved) ============ -->
-  <div class="d-flex justify-content-between align-items-center mb-3 mt-4 me-md-5">
+  <!-- The shared page head (.cresc-page-head in Styles.html). Same title,
+       same subtitle line, same action row as every other screen — this one
+       used an h3 with its own margins, the workspaces used h5, and the
+       patient portal used an h2 with a clock beside it. -->
+  <div class="cresc-page-head me-md-5">
     <div>
-      <h3 class="fw-bold m-0 text-white-force">Command Center</h3>
-      <small id="dash-generated" class="label-bright"></small>
+      <h1 class="cph-title">Command Center</h1>
+      <small id="dash-generated" class="cph-sub d-block"></small>
     </div>
-    <div class="d-flex gap-2">
+    <div class="cph-actions">
       <button id="dash-refresh-btn" class="btn btn-sm btn-outline-secondary shadow-sm" onclick="renderAdminDashboard(true)" title="Refresh live data">
         <i class="fa-solid fa-rotate me-1"></i> Refresh
       </button>

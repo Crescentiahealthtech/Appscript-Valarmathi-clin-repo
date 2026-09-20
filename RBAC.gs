@@ -359,55 +359,73 @@ function crescIsElevated_(username, role) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
     if (!sh || sh.getLastRow() < 2) return false;
-    crescEnsureSuperAdminColumn_(sh);
-    var m = dc_headerMap_(sh);
-    var col = m[CRESC_SUPERADMIN_HEADER];
-    if (col === undefined) return false;
+
+    // ONE read of the sheet, not two. crescActor_ calls this on every
+    // execution an administrator makes, and the ensure-column pass needs the
+    // same rows this test does, so they share them.
+    var col = cresc_superAdminColumn_(sh);
+    if (col === -1) return false;
     var data = sh.getDataRange().getValues();
+    cresc_seedFirstOwner_(sh, data, col);
+
     for (var i = 1; i < data.length; i++) {
       if (crescStr_(data[i][0]).toUpperCase() !== want) continue;
-      return /^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][col]));
+      if (/^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][col]))) return true;
+      // The row may have just been seeded by the pass above, in which case
+      // `data` is the copy taken before the write.
+      return cresc_seededRow_ === (i + 1);
     }
   } catch (e) { /* no sheet, no elevation — fail closed */ }
   return false;
 }
 
-/**
- * Adds the Super_Admin column if it is missing, and seeds the first owner.
- *
- * Idempotent, and it only ever seeds when NOBODY is marked: once a clinic
- * has an owner, this cannot appoint another.
- */
-function crescEnsureSuperAdminColumn_(sh) {
+/** The Super_Admin column index, adding the column if it is missing. */
+function cresc_superAdminColumn_(sh) {
   var m = dc_headerMap_(sh);
   if (m[CRESC_SUPERADMIN_HEADER] === undefined) {
-    if (typeof dc_ensureColumn_ !== 'function') return;
+    if (typeof dc_ensureColumn_ !== 'function') return -1;
     dc_ensureColumn_(sh, CRESC_SUPERADMIN_HEADER);
     m = dc_headerMap_(sh);
-    if (m[CRESC_SUPERADMIN_HEADER] === undefined) return;
   }
-
   var col = m[CRESC_SUPERADMIN_HEADER];
-  var data = sh.getDataRange().getValues();
-  var firstAdminRow = -1, anyMarked = false;
+  return (col === undefined) ? -1 : col;
+}
+
+/** The row this execution seeded, so the caller's stale copy can agree. */
+var cresc_seededRow_ = -1;
+
+/**
+ * Marks the first administrator as owner when NOBODY is marked.
+ *
+ * Idempotent, and it only ever fires on a sheet with no owner at all: once a
+ * clinic has one, this cannot appoint another.
+ */
+function cresc_seedFirstOwner_(sh, data, col) {
+  var firstAdminRow = -1;
   for (var i = 1; i < data.length; i++) {
     if (!crescStr_(data[i][0])) continue;
-    if (/^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][col]))) { anyMarked = true; break; }
+    if (/^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][col]))) return;   // already owned
     if (firstAdminRow === -1 && crescRole_(data[i][2]) === 'admin' &&
         crescStr_(data[i][3]).toUpperCase() !== 'INACTIVE') {
       firstAdminRow = i + 1;
     }
   }
-  if (anyMarked || firstAdminRow === -1) return;
+  if (firstAdminRow === -1) return;
   try {
     sh.getRange(firstAdminRow, col + 1).setValue('YES');
+    cresc_seededRow_ = firstAdminRow;
     if (typeof dc_invalidate_ === 'function') dc_invalidate_('Users');
   } catch (e) { /* advisory */ }
 }
 
-/** Does this role hold this permission? The whole matrix in one line. */
-function crescCan_(role, permission) {
-  return crescPermsFor_(role).indexOf(crescStr_(permission)) !== -1;
+/**
+ * The column, ensured, for callers that only need it to exist — the staff
+ * account list reads it directly afterwards.
+ */
+function crescEnsureSuperAdminColumn_(sh) {
+  var col = cresc_superAdminColumn_(sh);
+  if (col === -1) return;
+  cresc_seedFirstOwner_(sh, sh.getDataRange().getValues(), col);
 }
 
 /**

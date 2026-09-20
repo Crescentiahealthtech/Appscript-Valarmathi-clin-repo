@@ -356,8 +356,13 @@
  .form-control-sm, .form-select-sm, .btn-sm { font-size: var(--fs-sm); }
  .form-label { font-weight: var(--fw-semi); }
  .table { font-size: var(--fs-sm); }
+ /* Weight and size only. Uppercasing every table header in the application
+    from here would be a forty-module cosmetic change made by a one-line
+    rule, and it is wrong in the places that matter most: a header reading
+    "HbA1c" or "mg/dL" is not the same string shouted. Screens that want
+    uppercase headers already say so themselves. */
  .table th { font-weight: var(--fw-semi); font-size: var(--fs-xs);
-             text-transform: uppercase; letter-spacing: .03em; }
+             letter-spacing: .01em; }
  .badge { font-size: var(--fs-2xs); font-weight: var(--fw-bold); letter-spacing: .02em; }
  code, kbd, pre, samp, .font-monospace { font-family: var(--font-mono); }
 
