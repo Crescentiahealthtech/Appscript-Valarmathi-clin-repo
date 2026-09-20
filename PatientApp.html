@@ -186,13 +186,27 @@
      switchTab() running. executeUIRouting() now picks the pane for the role. -->
 <div id="tab-pat-home" class="page-section pp-wrap">
 
-  <div class="d-flex justify-content-between align-items-end mb-4">
+  <!-- The SAME head the clinical screens use (.cresc-page-head in
+       Styles.html). This screen used to set its own: an h2 for the greeting,
+       an uppercase date above it at 0.85rem, and a monospaced wall-clock the
+       size of a heading on the right. Three type sizes none of the rest of
+       the application uses, and a running clock given more visual weight
+       than the patient's own name. The date moves to the subtitle line,
+       where every other screen puts its context, and the clock goes: a
+       patient reading their record has one on the device already. -->
+  <div class="cresc-page-head">
     <div>
-      <p class="label-bright mb-1 fw-bold" style="letter-spacing: 1px; font-size: 0.85rem;" id="live-date">LOADING DATE...</p>
-      <h2 class="fw-bold m-0 text-white">Welcome, <span id="welcome-name">…</span></h2>
+      <h1 class="cph-title">Welcome, <span id="welcome-name">…</span></h1>
+      <p class="cph-sub" id="live-date">Loading…</p>
     </div>
-    <div class="text-end d-none d-md-block">
-      <h4 class="m-0 text-white fw-bold font-monospace" id="live-time">00:00:00</h4>
+    <div class="cph-actions">
+      <button class="btn btn-sm btn-outline-secondary" onclick="ppLoadHome(true)"
+              title="Read my record again">
+        <i class="fa-solid fa-rotate-right me-1"></i> Refresh
+      </button>
+      <button class="btn btn-sm btn-outline-primary fw-bold" onclick="ppGo('tab-pat-appt')">
+        <i class="fa-solid fa-calendar-plus me-1"></i> Book
+      </button>
     </div>
   </div>
 
@@ -218,11 +232,16 @@
      at a schedule.
      ══════════════════════════════════════════════════════════════════════ -->
 <div id="tab-pat-appt" class="page-section pp-wrap">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold text-white m-0">Book an appointment</h3>
-    <button class="btn btn-sm btn-outline-light fw-bold" onclick="ppGo('tab-pat-home')">
-      <i class="fa-solid fa-arrow-left"></i> Back
-    </button>
+  <div class="cresc-page-head">
+    <div>
+      <h1 class="cph-title">Book an appointment</h1>
+      <p class="cph-sub">Choose a doctor, a day and a time</p>
+    </div>
+    <div class="cph-actions">
+      <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="ppGo('tab-pat-home')">
+        <i class="fa-solid fa-arrow-left me-1"></i> Back
+      </button>
+    </div>
   </div>
 
   <div class="row g-3">
@@ -275,18 +294,21 @@
      MY RECORDS — every consultation, every admission
      ══════════════════════════════════════════════════════════════════════ -->
 <div id="tab-pat-records" class="page-section pp-wrap">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold text-white m-0">My records</h3>
-    <div class="d-flex gap-2">
+  <div class="cresc-page-head">
+    <div>
+      <h1 class="cph-title">My records</h1>
+      <p class="cph-sub">Consultations and admissions, newest first</p>
+    </div>
+    <div class="cph-actions">
       <!-- Records are cached for the session so switching tabs is instant.
            A patient who has just been seen needs a way to ask again without
            signing out. -->
       <button class="btn btn-sm btn-outline-secondary" onclick="ppLoadRecords(true)"
               title="Check for anything new">
-        <i class="fa-solid fa-rotate-right"></i>
+        <i class="fa-solid fa-rotate-right me-1"></i> Refresh
       </button>
-      <button class="btn btn-sm btn-outline-light fw-bold" onclick="ppGo('tab-pat-home')">
-        <i class="fa-solid fa-arrow-left"></i> Back
+      <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="ppGo('tab-pat-home')">
+        <i class="fa-solid fa-arrow-left me-1"></i> Back
       </button>
     </div>
   </div>
@@ -299,15 +321,18 @@
      MY REPORTS — released lab results only
      ══════════════════════════════════════════════════════════════════════ -->
 <div id="tab-pat-meds" class="page-section pp-wrap">
-  <div class="d-flex justify-content-between align-items-center mb-4">
-    <h3 class="fw-bold text-white m-0">My reports</h3>
-    <div class="d-flex gap-2">
+  <div class="cresc-page-head">
+    <div>
+      <h1 class="cph-title">My reports</h1>
+      <p class="cph-sub">Laboratory results the clinic has released</p>
+    </div>
+    <div class="cph-actions">
       <button class="btn btn-sm btn-outline-secondary" onclick="ppLoadReports(true)"
               title="Check for a new result">
-        <i class="fa-solid fa-rotate-right"></i>
+        <i class="fa-solid fa-rotate-right me-1"></i> Refresh
       </button>
-      <button class="btn btn-sm btn-outline-light fw-bold" onclick="ppGo('tab-pat-home')">
-        <i class="fa-solid fa-arrow-left"></i> Back
+      <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="ppGo('tab-pat-home')">
+        <i class="fa-solid fa-arrow-left me-1"></i> Back
       </button>
     </div>
   </div>
@@ -316,9 +341,19 @@
   </div>
 </div>
 
-<div id="tab-pat-profile" class="page-section">
-  <h3 class="fw-bold mb-3 text-white">My Profile</h3>
-  <div class="card p-4 border-secondary" style="max-width: 600px;">
+<div id="tab-pat-profile" class="page-section pp-wrap">
+  <div class="cresc-page-head">
+    <div>
+      <h1 class="cph-title">My profile</h1>
+      <p class="cph-sub">Your details, and what the clinic may do with them</p>
+    </div>
+    <div class="cph-actions">
+      <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="ppGo('tab-pat-home')">
+        <i class="fa-solid fa-arrow-left me-1"></i> Back
+      </button>
+    </div>
+  </div>
+  <div class="card p-4" style="max-width: 600px;">
     <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
       <h5 class="m-0 text-white"><i class="fa-solid fa-id-card me-2" style="color: var(--accent-fg);"></i> Patient Details</h5>
       <button id="btn-edit-profile" class="btn btn-sm text-white" style="background-color: var(--border-color);" onclick="toggleEditProfile()">Edit Profile</button>
@@ -485,6 +520,33 @@ function ppOr(v, dash) {
    ══════════════════════════════════════════════════════════════════════════ */
 
 /**
+ * The one shape every failed load on this screen takes.
+ *
+ * Four screens in this file wrote their own version of it, each a bare line
+ * of muted text with a differently-styled retry button after it, and the
+ * home screen's wording — "Your record could not be loaded" — reads to a
+ * patient as "we have lost your record" rather than "that request did not
+ * finish". One card, one voice, one button, wherever the failure happens.
+ *
+ * @param {string} message   what went wrong, in the patient's language
+ * @param {string} retryCall the onclick expression that tries again
+ */
+function ppFailCard(message, retryCall) {
+  return '<div class="pp-card">' +
+      '<div class="d-flex align-items-start gap-3">' +
+        '<i class="fa-solid fa-circle-exclamation" style="color:var(--warning-fg);"></i>' +
+        '<div>' +
+          '<div class="pp-val" style="font-size:.9rem;">Not loaded</div>' +
+          '<div class="pp-note mt-1">' + ppEscHtml(message) + '</div>' +
+          '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="' +
+            ppEscHtml(retryCall) + '">' +
+            '<i class="fa-solid fa-rotate-right me-1"></i>Try again</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+}
+
+/**
  * Loads the home payload once.
  *
  * THREE separate things ask for it on first paint — the router's tab-init
@@ -509,10 +571,16 @@ function ppLoadHome(force) {
       // google.script.run hands the SUCCESS handler null when the reply could
       // not be carried back, so null is a failure, not an answer.
       if (!res || !res.success) {
-        ppSet('pp-home-body', '<div class="pp-card"><span class="pp-note">' +
-          ppEscHtml((res && res.message) || 'Your record could not be loaded.') +
-          '</span><div class="mt-3"><button class="btn btn-sm btn-outline-light" ' +
-          'onclick="ppLoadHome(true)">Try again</button></div></div>');
+        ppSet('pp-home-body', ppFailCard(
+          (res && res.message) ||
+          // No message at all means the reply itself did not arrive — the
+          // server neither succeeded nor threw. Saying "your record could
+          // not be loaded" for that reads as "we have lost your record",
+          // which is not what happened and is the worst possible reading
+          // of it for a patient.
+          'We could not finish reading your record just now. Nothing is ' +
+          'wrong with it — please try again.',
+          'ppLoadHome(true)'));
         return;
       }
       PPState.home = res;
@@ -520,11 +588,9 @@ function ppLoadHome(force) {
     })
     .withFailureHandler(function (err) {
       PPState.homeInFlight = false;
-      ppSet('pp-home-body', '<div class="pp-card"><span class="pp-note">' +
-        'We could not reach the clinic: ' +
-        ppEscHtml((err && err.message) || err) +
-        '</span><div class="mt-3"><button class="btn btn-sm btn-outline-light" ' +
-        'onclick="ppLoadHome(true)">Try again</button></div></div>');
+      ppSet('pp-home-body', ppFailCard(
+        'We could not reach the clinic: ' + ((err && err.message) || err),
+        'ppLoadHome(true)'));
     })
     .portalHome(window.sessionToken);
 }
@@ -543,7 +609,26 @@ function ppRenderHome() {
     return '<div class="' + (cls || 'col-md-6 col-xl-4') + '">' + inner + '</div>';
   };
 
-  var html = '<div class="row g-3 mb-3">' +
+  // portalHome now reads each panel under its own guard and reports the ones
+  // it could not read, instead of letting a single unreadable panel replace
+  // the whole screen with an error. Saying which part is missing is the
+  // difference between a patient trusting what IS on the screen and not
+  // trusting any of it.
+  var html = '';
+  if (h.warnings && h.warnings.length) {
+    html += '<div class="pp-card mb-3" style="border-color:var(--warning-fg);">' +
+      '<div class="d-flex align-items-start gap-3">' +
+        '<i class="fa-solid fa-triangle-exclamation" style="color:var(--warning-fg);"></i>' +
+        '<div><div class="pp-val" style="font-size:.9rem;">Part of this page is missing</div>' +
+        '<div class="pp-note mt-1">Everything else below is up to date. ' +
+        'We could not read: ' +
+        ppEscHtml(h.warnings.map(function (w) {
+          return String(w).split(':')[0];
+        }).join(', ')) + '. Please mention this to the clinic.</div></div>' +
+      '</div></div>';
+  }
+
+  html += '<div class="row g-3 mb-3">' +
       col(ppCardAppointments(h)) +
       col(ppCardMeds(h)) +
       col(ppCardVitals(h)) +
@@ -650,7 +735,7 @@ function ppCardAppointments(h) {
           (h.review.setOn ? ' on ' + ppEscHtml(h.review.setOn) : '') +
         '</div>' +
         (h.review.date
-          ? '<button class="btn btn-sm btn-outline-light mt-2" style="font-size:.75rem;" ' +
+          ? '<button class="btn btn-sm btn-outline-secondary mt-2" style="font-size:.75rem;" ' +
             'onclick="ppBookForReview(\'' + ppEscHtml(h.review.date) + '\')">' +
             '<i class="fa-solid fa-calendar-plus me-1"></i>Book for this date</button>'
           : '') +
@@ -1450,18 +1535,17 @@ function ppLoadRecords(force) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) {
-        ppSet('pp-records', '<div class="pp-card"><span class="pp-note">' +
-          ppEscHtml((res && res.message) || 'Your records could not be loaded.') +
-          '</span></div>');
+        ppSet('pp-records', ppFailCard((res && res.message) ||
+          'We could not finish reading your records just now. Please try again.',
+          'ppLoadRecords(true)'));
         return;
       }
       PPState.records = res;
       ppRenderRecords();
     })
     .withFailureHandler(function (err) {
-      ppSet('pp-records', '<div class="pp-card"><span class="pp-note">' +
-        'We could not reach the clinic: ' + ppEscHtml((err && err.message) || err) +
-        '</span></div>');
+      ppSet('pp-records', ppFailCard(
+        'We could not reach the clinic: ' + ((err && err.message) || err), 'ppLoadRecords(true)'));
     })
     .portalRecords(window.sessionToken);
 }
@@ -1492,7 +1576,7 @@ function ppRenderRecords() {
             (a.summaryReady ? 'summary ready' : 'being prepared') + '</span>' +
         '</div>' +
         (a.summaryReady
-          ? '<button class="btn btn-sm btn-outline-light mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
+          ? '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
             '<i class="fa-solid fa-chevron-down me-1"></i>Read my discharge summary</button>' +
             '<div id="' + id + '" class="mt-3" style="display:none;">' +
               a.sections.map(function (s) {
@@ -1526,7 +1610,7 @@ function ppRenderRecords() {
           (c.meds.length ? '<span class="pp-pill pp-info">' + c.meds.length +
                            ' medicine' + (c.meds.length === 1 ? '' : 's') + '</span>' : '') +
         '</div>' +
-        '<button class="btn btn-sm btn-outline-light mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
+        '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
           '<i class="fa-solid fa-chevron-down me-1"></i>See what was recorded</button>' +
         '<div id="' + id + '" class="mt-3" style="display:none;">' +
           (bits.length ? '<div class="mb-2"><div class="pp-lbl">Vitals that day</div>' +
@@ -1591,18 +1675,17 @@ function ppLoadReports(force) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) {
-        ppSet('pp-reports', '<div class="pp-card"><span class="pp-note">' +
-          ppEscHtml((res && res.message) || 'Your reports could not be loaded.') +
-          '</span></div>');
+        ppSet('pp-reports', ppFailCard((res && res.message) ||
+          'We could not finish reading your reports just now. Please try again.',
+          'ppLoadReports(true)'));
         return;
       }
       PPState.reports = res;
       ppRenderReports();
     })
     .withFailureHandler(function (err) {
-      ppSet('pp-reports', '<div class="pp-card"><span class="pp-note">' +
-        'We could not reach the clinic: ' + ppEscHtml((err && err.message) || err) +
-        '</span></div>');
+      ppSet('pp-reports', ppFailCard(
+        'We could not reach the clinic: ' + ((err && err.message) || err), 'ppLoadReports(true)'));
     })
     .portalLabResults(window.sessionToken);
 }
@@ -1788,7 +1871,7 @@ function ppRenderReports() {
           : '<span class="pp-pill pp-ok">all normal</span>') +
       '</div>' +
       chips +
-      '<button class="btn btn-sm btn-outline-light mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
+      '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
         '<i class="fa-solid fa-chevron-down me-1"></i>' +
         (flagged.length ? 'See every value' : 'See the values') +
         ' (' + (o.results || []).length + ')</button>' +

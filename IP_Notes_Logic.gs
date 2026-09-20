@@ -380,6 +380,32 @@ function getIPTimeline(ipNumber, sessionToken) {
  * Universal note saver. Accepts any roleType:
  * DOCTOR | NURSE | CONSULTANT | PROCEDURE | QUICK | INVESTIGATION
  */
+/**
+ * The registration number behind a resolved author, where one exists.
+ *
+ * The doctor profile holds it, and the visiting slot holds whatever the
+ * person on it declared at sign-in. Neither is required — a consultant note
+ * is still a valid note without one — so this returns "" rather than failing.
+ */
+function _ipnRegNoOf_(w, sessionToken) {
+  // The shared visiting slot first: when somebody has declared themselves on
+  // it, that declaration is more specific than the Doctors row behind the
+  // login, which carries no name of its own.
+  try {
+    if (typeof dv_identityFor_ === "function") {
+      var id = dv_identityFor_(sessionToken);
+      if (id && id.regNo) return String(id.regNo);
+    }
+  } catch (e) { /* the visiting module may not be deployed here */ }
+  try {
+    if (w && w.doctorId && typeof dc_getDoctorById_ === "function") {
+      var prof = dc_getDoctorById_(w.doctorId);
+      if (prof && prof.regNo) return String(prof.regNo);
+    }
+  } catch (e) { /* a missing profile is not a reason to refuse the note */ }
+  return "";
+}
+
 function saveIPNote(payload, sessionToken) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -429,6 +455,29 @@ function saveIPNote(payload, sessionToken) {
     const flags     = String(payload.flags || "");
     const noteId    = _generateNoteId_("IPN");
     const noteData  = w.noteData;                    // filtered, not raw
+
+    // A CONSULTANT NOTE NAMES ITS CONSULTANT WITHOUT BEING ASKED TO.
+    //
+    // The form has a "Consultant Name" box and the composer refused to save
+    // until it was typed. That is a duplicate of something resolveIPWrite_
+    // has already established from the session: the doctor whose signature
+    // the note will carry. For a visiting consultant it is worse than a
+    // duplicate — the visiting slot is a shared login and the person on it
+    // declares their name and registration number when they sign in, so the
+    // one identity the note should carry is the one the box was overwriting
+    // with whatever was typed into it.
+    //
+    // Blank now means "the author", which is always right. A name typed on
+    // purpose is still kept: a note about a referral to an outside physician
+    // names that physician, and this must not overwrite it.
+    if (roleType === "CONSULTANT" && noteData &&
+        !String(noteData.consultantName || "").trim()) {
+      noteData.consultantName = w.displayName || "";
+      if (!String(noteData.consultantRegNo || "").trim()) {
+        noteData.consultantRegNo = _ipnRegNoOf_(w, sessionToken) || "";
+      }
+    }
+
     const noteDataString = JSON.stringify(noteData);
 
     // Header-driven write: the authorship columns were appended by the

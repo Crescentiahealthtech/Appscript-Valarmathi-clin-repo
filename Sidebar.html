@@ -322,10 +322,13 @@
   function applyTheme(theme) {
     const isLight = (theme === 'light');
 
-    // Scope colour transitions to the switch itself so we do not permanently
-    // add a transition to every element in the app.
-    document.body.classList.add('theme-switching');
-
+    // The switch is a token swap and nothing more. It used to add a
+    // `theme-switching` class whose stylesheet rule put a colour transition
+    // on EVERY element in the document for 300ms; on a session that has
+    // loaded several modules that is tens of thousands of animations built
+    // and torn down for one click, and it is what made the switch feel slow.
+    // The four surfaces that should ease now carry their own transition in
+    // Styles.html, so there is nothing to scope here.
     document.documentElement.classList.toggle('light-theme', isLight);
     document.body.classList.toggle('light-theme', isLight);
 
@@ -338,9 +341,13 @@
     try { localStorage.setItem('cresrx_theme', theme); } catch (e) { /* private mode */ }
 
     // Let dependants (charts, canvases) re-read the resolved token values.
-    window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme } }));
-
-    setTimeout(function () { document.body.classList.remove('theme-switching'); }, 300);
+    // Deferred by one frame so the repainters read the NEW computed values:
+    // dispatching synchronously here runs them before the class change has
+    // been styled, and every chart repainted itself in the colours of the
+    // theme being left. That is the 'colour is briefly wrong' on a switch.
+    requestAnimationFrame(function () {
+      window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme } }));
+    });
   }
   window.applyTheme = applyTheme;
 

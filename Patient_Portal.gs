@@ -472,8 +472,13 @@ function pp_lastVitals_(pid, encounters, antenatal) {
 
   if (antenatal && antenatal.lastVisit) {
     var lv = antenatal.lastVisit;
-    var lvAt = pp_date_((antenatal.trend.length
-      ? antenatal.trend[antenatal.trend.length - 1].date : ''));
+    // mc_antenatalView_ returns `trend` only when there are visits to plot, so
+    // reading .length off it unguarded threw for every pregnant patient whose
+    // record had a last visit but no plottable series - and that exception was
+    // thrown from inside portalHome, which is the whole home screen.
+    var anTrend = (antenatal && Array.isArray(antenatal.trend)) ? antenatal.trend : [];
+    var lvAt = pp_date_((anTrend.length
+      ? anTrend[anTrend.length - 1].date : ''));
     consider(lvAt, 'Antenatal visit on ' + lv.date, {
       bp: lv.bp, pulse: null, spo2: null, temp: '',
       weight: lv.weightKg, bmi: null
@@ -555,7 +560,7 @@ function pp_bpSeries_(encounters, antenatal) {
   // An antenatal patient's blood pressure is taken at every ANC visit and
   // those readings are the ones that matter; leaving them out would show a
   // pregnant woman a BP chart with most of her readings missing.
-  if (antenatal && antenatal.trend) {
+  if (antenatal && Array.isArray(antenatal.trend)) {
     antenatal.trend.forEach(function (v) {
       if (!v.sysBp || !v.diaBp) return;
       pts.push({ date: v.date, dateText: pp_fmt_(v.date, 'dd MMM yy'),
@@ -574,7 +579,7 @@ function pp_weightSeries_(encounters, antenatal) {
     pts.push({ date: e.date, dateText: pp_fmt_(e.date, 'dd MMM yy'),
                value: e.vitals.weight });
   });
-  if (antenatal && antenatal.trend) {
+  if (antenatal && Array.isArray(antenatal.trend)) {
     antenatal.trend.forEach(function (v) {
       if (!v.weightKg) return;
       pts.push({ date: v.date, dateText: pp_fmt_(v.date, 'dd MMM yy'),
@@ -671,28 +676,57 @@ function portalHome(sessionToken) {
                    { endpoint: 'portalHome', self: true });
     } catch (e) {}
 
-    var appts = pp_appointments_(pid);
-    var encounters = pp_encounters_(pid);
-    var labs = lpv_resultsFor_(pid, PP.LAB_LIMIT);
-    var orders = (labs && labs.success) ? labs.orders : [];
-
-    var antenatal = null;
-    try {
-      if (typeof mc_antenatalView_ === 'function') antenatal = mc_antenatalView_(pid);
-    } catch (e) { antenatal = null; }
-
-    var immunisation = null;
-    try {
-      if (typeof mc_immunisationView_ === 'function') {
-        var view = mc_immunisationView_(pid, profile.dob);
-        if (pp_wantsImmunisation_(view)) immunisation = view;
+    // EVERY PANEL IS FETCHED SEPARATELY AND GUARDED SEPARATELY.
+    //
+    // This screen assembles nine things out of seven sheets, and it used to
+    // assemble them in one unguarded run: a single bad row - an antenatal
+    // record with no plottable trend, a ward note whose JSON would not parse,
+    // an OP_Encounters sheet renamed on one deployment - threw, and what the
+    // patient saw was the whole home screen replaced by one sentence. The
+    // record was fine; one of nine readers was not.
+    //
+    // Each section now fails on its own. A panel that could not be read is
+    // absent and its reason is carried in `warnings`, so the patient still
+    // gets the eight that worked and the clinic can see which one did not.
+    var warnings = [];
+    var take = function (label, fn, fallback) {
+      try {
+        var v = fn();
+        return (v === undefined) ? fallback : v;
+      } catch (e) {
+        warnings.push(label + ': ' + String((e && e.message) || e));
+        return fallback;
       }
-    } catch (e) { immunisation = null; }
+    };
 
-    var bp = pp_bpSeries_(encounters, antenatal);
-    var conditions = pp_conditions_(profile, orders, bp, antenatal, immunisation);
+    var appts = take('appointments', function () { return pp_appointments_(pid); },
+                     { upcoming: [], past: [], lastVisit: '' });
+    var encounters = take('consultations', function () { return pp_encounters_(pid); }, []);
 
-    return {
+    var labs = take('lab results', function () { return lpv_resultsFor_(pid, PP.LAB_LIMIT); }, null);
+    var orders = (labs && labs.success && Array.isArray(labs.orders)) ? labs.orders : [];
+
+    var antenatal = take('antenatal card', function () {
+      return (typeof mc_antenatalView_ === 'function') ? mc_antenatalView_(pid) : null;
+    }, null);
+
+    var immunisation = take('immunisation card', function () {
+      if (typeof mc_immunisationView_ !== 'function') return null;
+      var view = mc_immunisationView_(pid, profile.dob);
+      return pp_wantsImmunisation_(view) ? view : null;
+    }, null);
+
+    var bp = take('blood-pressure trend', function () {
+      return pp_bpSeries_(encounters, antenatal);
+    }, []);
+
+    var conditions = take('condition panels', function () {
+      return pp_conditions_(profile, orders, bp, antenatal, immunisation);
+    }, { diabetes: false, diabetesStatedOnFile: false, hypertension: false,
+         hypertensionStatedOnFile: false, pregnancy: false, child: false,
+         series: { hba1c: [], fbs: [], ppbs: [], rbs: [] } });
+
+    var out = {
       success: true,
       patient: {
         id: profile.id,
@@ -705,16 +739,21 @@ function portalHome(sessionToken) {
       },
 
       appointments: {
-        upcoming: appts.upcoming,
-        past: appts.past,
+        upcoming: appts.upcoming || [],
+        past: appts.past || [],
         lastVisit: appts.lastVisit || ''
       },
-      review: pp_reviewDate_(encounters),
+      review: take('review date', function () { return pp_reviewDate_(encounters); }, null),
 
-      medications: pp_currentMeds_(pid, encounters),
+      medications: take('medicines', function () { return pp_currentMeds_(pid, encounters); },
+                        { asOf: null, source: '', prescriber: '', items: [] }),
 
-      vitals: pp_lastVitals_(pid, encounters, antenatal),
-      weightTrend: pp_weightSeries_(encounters, antenatal),
+      vitals: take('vitals', function () {
+        return pp_lastVitals_(pid, encounters, antenatal);
+      }, null),
+      weightTrend: take('weight trend', function () {
+        return pp_weightSeries_(encounters, antenatal);
+      }, []),
       bpTrend: bp,
 
       // Released results only — lpv_resultsFor_ drops drafts and anything not
@@ -739,10 +778,47 @@ function portalHome(sessionToken) {
         advice: encounters[0].advice
       } : null,
 
+      warnings: warnings,
       message: ''
     };
+
+    // THE LAST THING BETWEEN THE SERVER AND A BLANK SCREEN.
+    //
+    // google.script.run hands the SUCCESS handler `null` — with no error
+    // anywhere — when the returned value cannot be serialised. A Date nested
+    // in a sheet-derived object, a value that came back from a module this
+    // deployment has an older copy of, anything cyclic: the patient sees
+    // "Your record could not be loaded" and there is nothing in the logs.
+    // Reducing the payload to plain JSON here makes that class of failure
+    // impossible rather than intermittent.
+    return pp_serialisable_(out);
   } catch (err) {
     return pp_fail_(err);
+  }
+}
+
+/**
+ * The payload as plain JSON: strings, numbers, booleans, arrays and objects.
+ *
+ * Dates become ISO strings — every consumer in PatientApp.html either prints
+ * a pre-formatted *Text field or compares ISO strings, so nothing on the
+ * screen reads a Date off this payload. Anything that will not stringify at
+ * all is dropped rather than taking the whole reply with it.
+ */
+function pp_serialisable_(value) {
+  try {
+    return JSON.parse(JSON.stringify(value, function (k, v) {
+      if (v instanceof Date) {
+        return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, 'Asia/Kolkata', "yyyy-MM-dd'T'HH:mm:ss");
+      }
+      if (typeof v === 'function') return undefined;
+      if (typeof v === 'number' && !isFinite(v)) return null;
+      return v;
+    }));
+  } catch (e) {
+    return { success: false,
+             message: 'Your record could not be prepared for this screen (' +
+                      String((e && e.message) || e) + '). Please tell the clinic.' };
   }
 }
 

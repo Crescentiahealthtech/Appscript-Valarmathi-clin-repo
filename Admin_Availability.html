@@ -467,6 +467,28 @@ function renderSessionRows() {
     return (a.weekday - b.weekday) || (a.startTime < b.startTime ? -1 : 1);
   });
 
+  /*
+   * LABEL AND LOCATION ARE NOT ASKED FOR.
+   *
+   * Two of the seven boxes on every row were a free-text "Label" and a
+   * free-text "Location". Neither is a decision the person setting clinic
+   * hours makes: this deployment is one clinic at one address, so Location
+   * was "OPD" on every row that had ever been typed, and Label was whatever
+   * the session obviously is from the time beside it. Both were therefore
+   * two more boxes to tab through, two more ways for the same session to be
+   * spelled three ways, and nothing downstream reads either of them except
+   * to print them back.
+   *
+   * The COLUMNS stay — getDoctorSchedule and saveDoctorSchedule are
+   * unchanged, and an existing row keeps whatever it was saved with. A row
+   * the schedule engine needs a label for gets one derived from its start
+   * time, which is what a person would have typed anyway.
+   */
+  avSessionRows.forEach(function (r) {
+    if (!String(r.sessionLabel || '').trim()) r.sessionLabel = avSessionNameFor(r.startTime);
+    if (!String(r.location || '').trim()) r.location = AV_DEFAULT_LOCATION;
+  });
+
   wrap.innerHTML = avSessionRows.map(function (r) {
     const days = AV_WEEKDAYS.map(function (d, i) {
       return '<option value="' + i + '"' + (r.weekday === i ? ' selected' : '') + '>' + d + '</option>';
@@ -475,8 +497,6 @@ function renderSessionRows() {
     return '<div class="av-sess-row p-2 d-flex flex-wrap gap-2 align-items-end">' +
       '<div style="width:130px;"><label class="label-bright" style="font-size:.65rem;">Day</label>' +
         '<select class="form-select form-select-sm text-white-force" onchange="editSession(\'' + r.uid + '\',\'weekday\',this.value)">' + days + '</select></div>' +
-      '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">Label</label>' +
-        '<input class="form-control form-control-sm text-white-force" value="' + window.crescEsc(r.sessionLabel) + '" onchange="editSession(\'' + r.uid + '\',\'sessionLabel\',this.value)"></div>' +
       '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">Start</label>' +
         '<input type="time" class="form-control form-control-sm text-white-force" value="' + window.crescEsc(r.startTime) + '" onchange="editSession(\'' + r.uid + '\',\'startTime\',this.value)"></div>' +
       '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">End</label>' +
@@ -485,19 +505,28 @@ function renderSessionRows() {
         '<input type="number" min="5" max="120" class="form-control form-control-sm text-white-force" value="' + r.slotMinutes + '" onchange="editSession(\'' + r.uid + '\',\'slotMinutes\',this.value)"></div>' +
       '<div style="width:95px;"><label class="label-bright" style="font-size:.65rem;">Per slot</label>' +
         '<input type="number" min="1" max="10" class="form-control form-control-sm text-white-force" value="' + r.maxPerSlot + '" onchange="editSession(\'' + r.uid + '\',\'maxPerSlot\',this.value)"></div>' +
-      '<div style="width:110px;"><label class="label-bright" style="font-size:.65rem;">Location</label>' +
-        '<input class="form-control form-control-sm text-white-force" value="' + window.crescEsc(r.location) + '" onchange="editSession(\'' + r.uid + '\',\'location\',this.value)"></div>' +
       '<button class="btn btn-sm btn-link text-danger" title="Remove" onclick="removeSessionRow(\'' + r.uid + '\')"><i class="fa-solid fa-trash"></i></button>' +
     '</div>';
   }).join('');
 }
 
+/* The one place a session's own name is decided, now that nobody types it. */
+const AV_DEFAULT_LOCATION = 'OPD';
+function avSessionNameFor(startTime) {
+  const h = parseInt(String(startTime || '').split(':')[0], 10);
+  if (isNaN(h)) return 'CLINIC';
+  if (h < 12) return 'MORNING';
+  if (h < 16) return 'AFTERNOON';
+  return 'EVENING';
+}
+
 function addSessionRow() {
   if (!document.getElementById('avail-doctor').value) return crescAlert('Select a doctor first.');
   avSessionRows.push({
-    uid: 'r' + (avRowSeq++), weekday: 1, sessionLabel: 'CLINIC',
+    uid: 'r' + (avRowSeq++), weekday: 1,
+    sessionLabel: avSessionNameFor('10:00'),
     startTime: '10:00', endTime: '13:00',
-    slotMinutes: 15, maxPerSlot: 1, location: 'OPD'
+    slotMinutes: 15, maxPerSlot: 1, location: AV_DEFAULT_LOCATION
   });
   renderSessionRows();
 }
@@ -515,6 +544,9 @@ function editSession(uid, field, value) {
     } else {
       r[field] = value;
     }
+    // Moving a session from the morning to the evening should rename it; the
+    // name is derived from the time now, so there is nobody else to do it.
+    if (field === 'startTime') r.sessionLabel = avSessionNameFor(r.startTime);
   });
 }
 

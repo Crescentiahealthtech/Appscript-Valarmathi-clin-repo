@@ -96,6 +96,35 @@
       indigo/sky pair sat dE 12 apart even in full colour. */
    --chart-1: #6366f1;  --chart-2: #047857;  --chart-3: #d97706;
    --chart-4: #0369a1;  --chart-5: #a855f7;  --chart-6: #ef4444;
+
+   /* --- TYPE SCALE ------------------------------------------------------
+      ONE scale for the whole application. Before this, every module picked
+      its own sizes inline - .95rem here, .92rem there, 0.85rem on the label
+      beside it - so two panels built a fortnight apart read as two products.
+      The steps below are a 1.125 minor third rounded to readable values, and
+      they are TOKENS: a module that wants "the small label size" asks for
+      --fs-xs rather than inventing .68rem.
+
+      Nothing about these is theme-dependent, so they are declared once on
+      :root and never redeclared for the light theme. */
+   --font-sans:  'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+   --font-mono:  ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+   --fs-2xs:  0.68rem;   /* uppercase micro-labels, chips                 */
+   --fs-xs:   0.75rem;   /* helper text, table captions                   */
+   --fs-sm:   0.82rem;   /* dense table cells, secondary lines            */
+   --fs-base: 0.9rem;    /* body copy, form controls, buttons             */
+   --fs-md:   1rem;      /* a value read at a glance                      */
+   --fs-lg:   1.15rem;   /* card / panel title (h5, h6 on a card)         */
+   --fs-xl:   1.35rem;   /* section heading (h4)                          */
+   --fs-2xl:  1.6rem;    /* page heading (h3)                             */
+   --fs-3xl:  1.9rem;    /* the one number on a KPI tile                  */
+
+   --lh-tight: 1.25;
+   --lh-base:  1.55;
+
+   --fw-normal: 400;  --fw-medium: 500;  --fw-semi: 600;  --fw-bold: 700;
+   --fw-heavy:  800;
  }
 
  body.light-theme,
@@ -281,9 +310,87 @@
  body { 
     background-color: var(--bg-main) !important; 
     color: var(--text-main) !important; 
-    font-family: 'Inter', 'Segoe UI', sans-serif; 
+    font-family: var(--font-sans);
+    font-size: var(--fs-base);
+    line-height: var(--lh-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     height: 100vh; margin: 0; overflow: hidden; 
-    transition: background-color 0.3s ease, color 0.3s ease;
+ }
+
+ /* =========================================================
+    2a. TYPOGRAPHY — ONE SCALE, EVERY MODULE
+    ---------------------------------------------------------
+    The application is assembled from about forty HTML partials written at
+    different times, and each of them sized its own headings. Bootstrap's
+    defaults (h1 2.5rem down to h6 1rem) were left in place in some, an
+    inline font-size was used in others, and .small meant four different
+    things depending on which screen you were on. The result is the
+    unevenness this section exists to remove.
+
+    Headings, form controls, buttons and tables are all bound to the token
+    scale here, once. A module that needs something larger still says so,
+    but it now says so as a deliberate exception to a scale rather than as
+    one more independent guess.
+    ========================================================= */
+ h1, .h1 { font-size: 2.1rem;      font-weight: var(--fw-heavy); line-height: var(--lh-tight); }
+ h2, .h2 { font-size: var(--fs-2xl); font-weight: var(--fw-bold);  line-height: var(--lh-tight); }
+ h3, .h3 { font-size: var(--fs-xl);  font-weight: var(--fw-bold);  line-height: var(--lh-tight); }
+ h4, .h4 { font-size: var(--fs-lg);  font-weight: var(--fw-bold);  line-height: var(--lh-tight); }
+ h5, .h5 { font-size: var(--fs-md);  font-weight: var(--fw-semi);  line-height: var(--lh-tight); }
+ h6, .h6 { font-size: var(--fs-base);font-weight: var(--fw-semi);  line-height: var(--lh-tight); }
+
+ small, .small { font-size: var(--fs-xs); }
+
+ /* Form controls and buttons inherit the application face rather than the
+    browser's UI face. Without this, an <input> on macOS renders in San
+    Francisco beside a <div> rendering in the fallback sans — which is the
+    single most visible source of "the fonts do not match". */
+ input, select, textarea, button, .form-control, .form-select, .btn,
+ .form-label, .input-group-text, .dropdown-menu, .modal, .table {
+    font-family: var(--font-sans);
+ }
+ .form-control, .form-select, .btn, .form-label, .input-group-text {
+    font-size: var(--fs-base);
+ }
+ .form-control-sm, .form-select-sm, .btn-sm { font-size: var(--fs-sm); }
+ .form-label { font-weight: var(--fw-semi); }
+ .table { font-size: var(--fs-sm); }
+ .table th { font-weight: var(--fw-semi); font-size: var(--fs-xs);
+             text-transform: uppercase; letter-spacing: .03em; }
+ .badge { font-size: var(--fs-2xs); font-weight: var(--fw-bold); letter-spacing: .02em; }
+ code, kbd, pre, samp, .font-monospace { font-family: var(--font-mono); }
+
+ /* =========================================================
+    2b. THE PAGE HEAD — the same three lines on every screen
+    ---------------------------------------------------------
+    Title, one line of context under it, actions on the right. The admin
+    dashboard, each workspace and the patient portal all drew their own
+    version of this — h2 here, h3 there, h5 on a third, some with a rule
+    under it and some without, the gap above it different on every one. The
+    markup was near-identical every time; only the sizes drifted. One
+    component now, so a patient and a receptionist are looking at the same
+    product rather than at two applications that share a colour scheme.
+    ========================================================= */
+ .cresc-page-head {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 14px; flex-wrap: wrap;
+    margin: 1.25rem 0 1.25rem;
+    padding-bottom: .85rem;
+    border-bottom: 1px solid var(--border-color);
+ }
+ .cresc-page-head .cph-title {
+    font-size: var(--fs-2xl); font-weight: var(--fw-bold);
+    color: var(--text-main); line-height: var(--lh-tight); margin: 0;
+ }
+ .cresc-page-head .cph-sub {
+    font-size: var(--fs-xs); color: var(--text-muted);
+    margin: 3px 0 0; letter-spacing: .02em;
+ }
+ .cresc-page-head .cph-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+ @media (max-width: 575px) {
+   .cresc-page-head { margin-top: .5rem; }
+   .cresc-page-head .cph-title { font-size: var(--fs-xl); }
  }
  
  .dr-badge { position: fixed; top: 20px; right: 25px; color: var(--text-muted); font-weight: 500; z-index: 1050; background: var(--bg-card); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border-color); backdrop-filter: blur(5px);}
@@ -1011,10 +1118,35 @@
  body.light-theme input[type="datetime-local"]::-webkit-calendar-picker-indicator,
  body.light-theme input[type="month"]::-webkit-calendar-picker-indicator { filter: none; }
 
- /* 11.14 - Theme transition. Scoped to colour properties only so layout, */
- /*         transforms and existing animations are untouched.             */
- body.theme-switching, body.theme-switching * {
-    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease !important;
+ /* 11.14 - THEME SWITCH.
+    ------------------------------------------------------------------
+    This used to read `body.theme-switching *`, which installed a colour
+    transition on EVERY element in the document for 300ms. The shell keeps
+    every loaded module's markup in the page at once, so on a session that
+    has opened the ward, the consult and a billing desk that selector
+    matches tens of thousands of nodes; the browser has to build and then
+    tear down an animation for each of them, and the switch visibly stalls
+    before anything changes colour. Transitioning colour on that many
+    elements also forces a paint of the whole page on every frame.
+
+    Only the four big surfaces animate now. Everything else flips with the
+    token, which is instantaneous and is what a theme switch should look
+    like. `color-scheme` is on the root and the body in section 1, so the
+    native controls, scrollbars and form widgets flip in the same frame
+    rather than a beat later.
+    ------------------------------------------------------------------ */
+ body, .main-content, .card, .modal-content {
+    transition: background-color .18s linear, color .18s linear,
+                border-color .18s linear;
+ }
+ /* The rail also animates its WIDTH when it collapses, so it keeps its own
+    declaration rather than being folded into the rule above. */
+ .sidebar {
+    transition: width .3s ease, background-color .18s linear,
+                border-color .18s linear;
+ }
+ @media (prefers-reduced-motion: reduce) {
+   body, .main-content, .card, .modal-content, .sidebar { transition: none; }
  }
 
  /* ========================================= */

@@ -405,7 +405,12 @@
       .ip-modal-body  { padding: 20px; overflow-y: auto; max-height: 70vh; }
       .ip-modal-footer { padding: 14px 20px; border-top: 1px solid var(--ip-border-soft); display: flex; justify-content: flex-end; gap: 10px; }
 
-      .ip-form-label { font-size: 0.72rem; color: var(--text-faint); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; display: block; }
+      .ip-form-label { font-size: var(--fs-2xs); color: var(--text-faint); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; display: block; }
+      /* "optional" beside a field label. A required field is now the one
+         WITHOUT this marker, which is the way round that lets a form say
+         which two of its nine boxes actually have to be filled in. */
+      .ipn-optional { font-weight: 500; text-transform: none; letter-spacing: 0;
+                      color: var(--text-muted); opacity: .85; margin-left: 5px; }
       .ip-form-input {
         width: 100%;
         background: var(--surface) !important;
@@ -1289,9 +1294,23 @@
              it (IPC_SECTION_RBAC.CONSULTANT), the form simply never asked. -->
         <div class="ip-modal-body">
           <div class="row g-3 mb-3">
-            <div class="col-md-5">
-              <label class="ip-form-label">Consultant Name</label>
-              <input type="text" class="ip-form-input" id="cons-name" placeholder="Dr. Name">
+            <div class="col-md-3">
+              <!-- OPTIONAL. Blank means "whoever is signed in", which is the
+                   right answer for the visiting slot: the person on it has
+                   already declared their name and registration number at
+                   sign-in, and saveIPNote stamps both onto the note. Type a
+                   name here only when the opinion belongs to somebody other
+                   than the author — an outside physician's written reply. -->
+              <label class="ip-form-label">Consultant Name
+                <span class="ipn-optional">optional</span></label>
+              <input type="text" class="ip-form-input" id="cons-name"
+                     placeholder="Signed in as">
+            </div>
+            <div class="col-md-2">
+              <label class="ip-form-label">Reg. No.
+                <span class="ipn-optional">optional</span></label>
+              <input type="text" class="ip-form-input" id="cons-regno"
+                     placeholder="From sign-in">
             </div>
             <div class="col-md-4">
               <label class="ip-form-label">Specialty</label>
@@ -2023,6 +2042,37 @@ function ipn_prompt(message, value, done, opts) {
     });
   }
 
+  /**
+   * The consultant name box, filled from whoever the note will be signed as.
+   *
+   * `auto` marks a value this function put there, so choosing a different
+   * doctor replaces it while a name somebody typed on purpose is left alone.
+   */
+  function _syncConsultantName_() {
+    const el = document.getElementById('cons-name');
+    if (!el) return;
+    if (el.value && el.dataset.auto !== '1') return;
+
+    const perm = IPNotesModule.permissions || {};
+    let name = '';
+    if (perm.actsOnBehalf && IPNotesModule.actingDoctorId) {
+      const chosen = (perm.doctors || []).filter(function (d) {
+        return d.doctorId === IPNotesModule.actingDoctorId;
+      })[0];
+      if (chosen) name = String(chosen.name);
+    } else if (perm.role === 'doctor' && perm.displayName) {
+      name = String(perm.displayName);
+    }
+
+    if (name) {
+      el.value = 'Dr. ' + name.replace(/^Dr\.?\s+/i, '');
+      el.dataset.auto = '1';
+    } else if (el.dataset.auto === '1') {
+      el.value = '';
+      delete el.dataset.auto;
+    }
+  }
+
   function ipnSetActingDoctor(doctorId) {
     IPNotesModule.actingDoctorId = doctorId || '';
     // Shared with IP_Casesheet_UI: choosing a doctor once should hold for the
@@ -2034,6 +2084,11 @@ function ipn_prompt(message, value, done, opts) {
         sel.value = IPNotesModule.actingDoctorId;
       }
     });
+    // The name box used to be filled only while the consultant modal was
+    // being OPENED, so choosing the doctor after it was open - which is the
+    // order the picker sits in on the screen - left it empty, and the save
+    // was then refused for the empty box. It follows the picker now.
+    _syncConsultantName_();
     _renderAuthorIdentity_();
   }
 
@@ -3390,7 +3445,8 @@ function ipn_prompt(message, value, done, opts) {
 
     ipnResetGenExam('cons');
     ['cons-reason', 'cons-soap-text', 'cons-findings',
-     'cons-recommendations', 'cons-advice-text', 'cons-lab-search'].forEach(function (id) {
+     'cons-recommendations', 'cons-advice-text', 'cons-lab-search',
+     'cons-regno'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -3402,19 +3458,9 @@ function ipn_prompt(message, value, done, opts) {
     });
 
     // Pre-fill the consultant's own name when a doctor is composing, and the
-    // chosen doctor's name when an administrator is recording for one.
-    const perm = IPNotesModule.permissions || {};
-    const nameEl = document.getElementById('cons-name');
-    if (nameEl && !nameEl.value) {
-      if (perm.actsOnBehalf && IPNotesModule.actingDoctorId) {
-        const chosen = (perm.doctors || []).filter(function (d) {
-          return d.doctorId === IPNotesModule.actingDoctorId;
-        })[0];
-        if (chosen) nameEl.value = 'Dr. ' + String(chosen.name).replace(/^Dr\.?\s+/i, '');
-      } else if (perm.role === 'doctor' && perm.displayName) {
-        nameEl.value = 'Dr. ' + String(perm.displayName).replace(/^Dr\.?\s+/i, '');
-      }
-    }
+    // chosen doctor's name when an administrator is recording for one. The
+    // same function runs again whenever the acting doctor changes.
+    _syncConsultantName_();
 
     ipnLoadLabCatalog(function () { ipnRenderLabPicker('cons'); });
     ipnLoadAdviceTemplates();
@@ -3436,6 +3482,8 @@ function ipn_prompt(message, value, done, opts) {
 
     const noteData = {
       consultantName:  document.getElementById('cons-name').value.trim(),
+      consultantRegNo: (document.getElementById('cons-regno') || {}).value
+                         ? document.getElementById('cons-regno').value.trim() : '',
       specialty:       document.getElementById('cons-specialty').value,
       reason:          document.getElementById('cons-reason').value.trim(),
       subjectiveObjective: document.getElementById('cons-soap-text').value.trim(),
@@ -3452,7 +3500,14 @@ function ipn_prompt(message, value, done, opts) {
       investigationOrders: investigationOrders,
       adviceText:      document.getElementById('cons-advice-text').value.trim()
     };
-    if (!noteData.consultantName) { ipnToast('Enter the consultant name.', 'warn'); return; }
+    // The consultant's name is NOT required here any more. It used to be,
+    // and that is what stopped a visiting consultant recording an opinion at
+    // all: the acting-doctor picker had been set to them, the server already
+    // knew whose signature the note would carry, and the form still refused
+    // to save because a box the server ignores was empty. Blank now means
+    // "the author", and saveIPNote fills in the name and registration number
+    // from the session. What a consultant note actually needs is what it
+    // found and what it advises, which is the check below.
     if (!noteData.findings && !noteData.recommendations) {
       ipnToast('Record the findings or the recommendations before signing.', 'warn');
       return;
