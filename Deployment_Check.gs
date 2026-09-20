@@ -44,7 +44,8 @@ var DEP_MAP = {
   // (a project without the discharge module just contributes nothing), but
   // listing them means verifyDeployment() names the file when they are gone.
   "DS_Data.gs": ["dsx_latestSnapshotOfType_", "dsx_summaryIdFor_", "dsx_unpackPayload_",
-                 "dsx_upgradePayload_", "dsx_toDate_"],
+                 "dsx_upgradePayload_", "dsx_toDate_", "dsx_getHeader_",
+                 "dsx_getWorking_", "dsx_sectionIsEmpty_"],
   "Appointment.gs":          ["apt_newId_", "submitNewAppointment", "getAppointmentsByDate"],
   "Doctors_Engine.gs":       ["getTenantId_", "validateSession_", "issueSession_", "logAudit_", "getActiveDoctors"],
   // The permission matrix and the guard. Every module that carries a
@@ -52,7 +53,11 @@ var DEP_MAP = {
   // missing it must be named rather than discovered one refusal at a time.
   "RBAC.gs": ["crescRequire_", "crescActor_", "crescCan_", "crescPermsFor_",
               "crescRequireOwnRecord_", "crescGetMyPermissions", "cresc_reason_",
-              "crescRbacSelfTest", "crescRbacCoverage"],
+              "crescRbacSelfTest", "crescRbacCoverage",
+              // The system-owner flag. Auth_Credentials.gs reads it to decide
+              // who may create, disable or reset a doctor or an administrator;
+              // with this file stale, nobody can and nothing says why.
+              "crescIsElevated_", "crescEnsureSuperAdminColumn_"],
   // Sign-in audit and lockout. AuthLogin.gs calls into these on every
   // attempt, so without this file nobody can sign in at all.
   "Auth_Audit.gs": ["crescAuthAudit_", "crescAuthGuard_", "crescAuthFailed_",
@@ -102,6 +107,12 @@ var DEP_MAP = {
     "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
   ],
   "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
+  // IP Records reads the discharge summary's own sections through the
+  // discharge engine's version resolver rather than parsing DS_Snapshots
+  // itself. Optional at runtime — a deployment without the discharge module
+  // shows the admission fact and nothing else — but listing it means
+  // verifyDeployment() names the file when it is gone.
+  "DS_Workflow.gs": ["dsx_resolveRef_"],
   "Deployment_Probe.gs": [
     "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
     "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence"
@@ -109,7 +120,7 @@ var DEP_MAP = {
   "Patient_Portal.gs": [
     "portalHome", "portalBookableDoctors", "portalDoctorSlots",
     "portalBookAppointment", "portalCancelAppointment", "portalLabResults",
-    "portalRecords", "pp_me_", "pp_freeSlots_"
+    "portalRecords", "pp_me_", "pp_freeSlots_", "pp_serialisable_"
   ],
   "Maternal_Child.gs": [
     "mcSetup", "mcGetSchedule", "mcOpenAntenatal", "mcRecordAntenatalVisit",
@@ -155,7 +166,9 @@ var DEP_MAP = {
   "Auth_Credentials.gs": [
     "crescPwdEncode_", "crescPwdVerify_", "crescPwdIsHashed_", "crescPwdEquals_",
     "crescRandomPassword_", "crescChangePassword", "crescAdminResetPassword",
-    "crescCredentialStatus", "crescMigrateCredentials", "crescPwdBenchmark"
+    "crescCredentialStatus", "crescMigrateCredentials", "crescPwdBenchmark",
+    "crescCreateStaffAccount", "crescSetAccountActive", "crescListStaffAccounts",
+    "crescUserAdminScope"
   ],
   "Auth_Reset.gs": [
     "crescRequestPasswordReset", "cresc_sendResetEmail_", "cresc_resetThrottle_",

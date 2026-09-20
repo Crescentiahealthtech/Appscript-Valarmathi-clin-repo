@@ -49,16 +49,22 @@
   .pp-wrap { --pp-gap: 1rem; }
   .pp-card { background: var(--bg-card); border: 1px solid var(--border-color);
              border-radius: 14px; padding: 18px 20px; height: 100%; }
-  .pp-card h6 { font-size: .95rem; font-weight: 700; color: var(--text-main);
+  .pp-card h6 { font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-main);
                 margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
-  .pp-lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .5px;
+  .pp-lbl { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .5px;
             color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 2px; }
-  .pp-val { font-size: 1rem; font-weight: 700; color: var(--text-main); }
-  .pp-big { font-size: 1.35rem; font-weight: 800; color: var(--text-main); line-height: 1.1; }
-  .pp-note { font-size: .76rem; color: var(--text-muted); line-height: 1.5; }
-  .pp-empty { font-size: .8rem; color: var(--text-muted); line-height: 1.55;
+  /* TWO SIZES, NOT FIVE. Every call site that drew a value used .pp-val and
+     then overrode its size inline — .84rem, .85rem, .88rem, .95rem and 1rem
+     all appear, for the same kind of text, depending on which card function
+     happened to draw it. A value is either a headline figure or a line in a
+     list; those are the two. */
+  .pp-val    { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--text-main); }
+  .pp-val-sm { font-size: var(--fs-sm); }
+  .pp-big { font-size: var(--fs-xl); font-weight: var(--fw-heavy); color: var(--text-main); line-height: 1.1; }
+  .pp-note { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.5; }
+  .pp-empty { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.55;
               border: 1px dashed var(--border-color); border-radius: 10px; padding: 12px 14px; }
-  .pp-pill { font-size: .66rem; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+  .pp-pill { font-size: var(--fs-2xs); font-weight: var(--fw-bold); padding: 2px 9px; border-radius: 999px;
              text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
   .pp-ok   { background: var(--success-bg); color: var(--success-fg); }
   .pp-warn { background: var(--warning-bg); color: var(--warning-fg); }
@@ -67,6 +73,39 @@
   .pp-row  { display: flex; justify-content: space-between; align-items: center;
              gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-color); }
   .pp-row:last-child { border-bottom: 0; }
+
+  /* THE TWO CLASSES THAT REPLACE FORTY INLINE FONT SIZES.
+     The render functions below carried `style="font-size:.85rem; color:
+     var(--text-main)"` on nearly every line of detail they produced, and a
+     handful of them said .84rem, .88rem or .9rem instead — the same kind of
+     text, four sizes, depending on which function happened to draw it. One
+     class, bound to the application's scale. */
+  .pp-body { font-size: var(--fs-sm); color: var(--text-main); line-height: var(--lh-base); }
+  .pp-body-wrap { white-space: pre-wrap; }
+
+  /* The heading above a group of cards. It used to be an h6 with .text-white
+     and .fw-bold hung off it, which is the one place on these screens that
+     did not follow the type scale. */
+  .pp-sec-head { display: flex; align-items: baseline; gap: 8px;
+                 font-size: var(--fs-md); font-weight: var(--fw-bold);
+                 color: var(--text-main); margin: 0 0 10px; }
+  .pp-sec-head + .pp-sec-head { margin-top: 22px; }
+  .pp-sec-count { font-size: var(--fs-xs); font-weight: var(--fw-medium);
+                  color: var(--text-muted); }
+
+  /* Records are a single column of cards, which on a laptop leaves two thirds
+     of the screen empty and pushes the oldest entries a long way down.
+
+     GRID, NOT CSS COLUMNS. Columns would pack more tightly, but .pp-card
+     carries height:100% and a card here expands in place when "See what was
+     recorded" is pressed; in a column container both of those resolve
+     against the column box and the whole list reflows under the reader's
+     finger. A grid with align-items:start grows one cell. */
+  .pp-cardgrid > .pp-card { margin-bottom: 1rem; }
+  @media (min-width: 1200px) {
+    .pp-cardgrid { display: grid; grid-template-columns: 1fr 1fr;
+                   gap: 0 1rem; align-items: start; }
+  }
 
   /* ------------------------------------------------------------------
      MY REPORTS.
@@ -86,11 +125,11 @@
      ------------------------------------------------------------------ */
   #tab-pat-meds .ppr-head { display: flex; align-items: flex-start; gap: 10px;
                             justify-content: space-between; }
-  #tab-pat-meds .ppr-title { font-size: .95rem; font-weight: 700; color: var(--text-main);
+  #tab-pat-meds .ppr-title { font-size: var(--fs-base); font-weight: var(--fw-bold); color: var(--text-main);
                              line-height: 1.3; }
   #tab-pat-meds .ppr-flagged { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   #tab-pat-meds .ppr-chip { display: inline-flex; align-items: baseline; gap: 5px;
-                            border-radius: 9px; padding: 4px 9px; font-size: .74rem;
+                            border-radius: 9px; padding: 4px 9px; font-size: var(--fs-xs);
                             border: 1px solid transparent; white-space: nowrap; }
   #tab-pat-meds .ppr-chip b { font-weight: 800; }
   #tab-pat-meds .ppr-chip.warn { background: var(--warning-bg); color: var(--warning-fg);
@@ -101,10 +140,10 @@
                             gap: 2px 12px; padding: 9px 0;
                             border-bottom: 1px solid var(--border-color); }
   #tab-pat-meds .ppr-line:last-child { border-bottom: 0; }
-  #tab-pat-meds .ppr-name { font-size: .85rem; color: var(--text-main); }
-  #tab-pat-meds .ppr-num  { font-size: .92rem; font-weight: 700; text-align: right;
+  #tab-pat-meds .ppr-name { font-size: var(--fs-sm); color: var(--text-main); }
+  #tab-pat-meds .ppr-num  { font-size: var(--fs-base); font-weight: var(--fw-bold); text-align: right;
                             white-space: nowrap; }
-  #tab-pat-meds .ppr-sub  { font-size: .7rem; color: var(--text-muted); grid-column: 1 / -1; }
+  #tab-pat-meds .ppr-sub  { font-size: var(--fs-2xs); color: var(--text-muted); grid-column: 1 / -1; }
   #tab-pat-meds .ppr-bar  { grid-column: 1 / -1; height: 4px; border-radius: 3px;
                             background: var(--border-color); position: relative;
                             margin-top: 5px; }
@@ -114,7 +153,7 @@
                              background: var(--success-fg); opacity: .45; }
   #tab-pat-meds .ppr-search { background: var(--bg-input); color: var(--text-main);
                               border: 1px solid var(--border-color); border-radius: 10px;
-                              padding: 9px 12px; width: 100%; font-size: .85rem; }
+                              padding: 9px 12px; width: 100%; font-size: var(--fs-base); }
   #tab-pat-meds .ppr-search:focus { outline: none; border-color: var(--accent-purple); }
   /* ------------------------------------------------------------------
      THE CHART BOX EXISTS TO STOP THE CHART GROWING.
@@ -154,12 +193,12 @@
             text-align: center; cursor: pointer; background: var(--bg-card); }
   .pp-day.sel { border-color: var(--accent-purple); background: var(--accent-glow);
                 color: var(--accent-fg); }
-  .pp-day small { display: block; font-size: .64rem; text-transform: uppercase;
+  .pp-day small { display: block; font-size: var(--fs-2xs); text-transform: uppercase;
                   letter-spacing: .4px; color: var(--text-muted); }
   .pp-day.sel small { color: var(--accent-fg); }
-  .pp-day strong { font-size: 1.05rem; }
+  .pp-day strong { font-size: var(--fs-md); }
   .pp-slot { border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 6px;
-             text-align: center; font-size: .8rem; font-weight: 600; cursor: pointer;
+             text-align: center; font-size: var(--fs-sm); font-weight: var(--fw-semi); cursor: pointer;
              background: var(--bg-card); color: var(--text-main); }
   .pp-slot.sel { background: var(--accent-purple); border-color: var(--accent-purple);
                  color: #fff; }
@@ -176,7 +215,7 @@
 
   @media (max-width: 575px) {
     .pp-card { padding: 14px 15px; }
-    .pp-big { font-size: 1.2rem; }
+    .pp-big { font-size: var(--fs-lg); }
   }
 </style>
 
@@ -536,7 +575,7 @@ function ppFailCard(message, retryCall) {
       '<div class="d-flex align-items-start gap-3">' +
         '<i class="fa-solid fa-circle-exclamation" style="color:var(--warning-fg);"></i>' +
         '<div>' +
-          '<div class="pp-val" style="font-size:.9rem;">Not loaded</div>' +
+          '<div class="pp-val pp-val-sm">Not loaded</div>' +
           '<div class="pp-note mt-1">' + ppEscHtml(message) + '</div>' +
           '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="' +
             ppEscHtml(retryCall) + '">' +
@@ -619,7 +658,7 @@ function ppRenderHome() {
     html += '<div class="pp-card mb-3" style="border-color:var(--warning-fg);">' +
       '<div class="d-flex align-items-start gap-3">' +
         '<i class="fa-solid fa-triangle-exclamation" style="color:var(--warning-fg);"></i>' +
-        '<div><div class="pp-val" style="font-size:.9rem;">Part of this page is missing</div>' +
+        '<div><div class="pp-val pp-val-sm">Part of this page is missing</div>' +
         '<div class="pp-note mt-1">Everything else below is up to date. ' +
         'We could not read: ' +
         ppEscHtml(h.warnings.map(function (w) {
@@ -689,7 +728,7 @@ function ppRenderBanner(h) {
     items.map(function (it) {
       return '<div class="pp-card d-flex align-items-start gap-3" style="padding:12px 16px;">' +
         '<span class="pp-pill ' + it.tone + '"><i class="fa-solid ' + it.icon + '"></i></span>' +
-        '<span style="font-size:.85rem; color:var(--text-main);">' + it.text + '</span></div>';
+        '<span class="pp-body">' + it.text + '</span></div>';
     }).join('') + '</div>');
 }
 
@@ -705,7 +744,7 @@ function ppCardAppointments(h) {
           '<div class="pp-note">' + ppEscHtml(x.time) + ' · ' +
             ppEscHtml(x.doctorName) + '</div>' +
           '<div class="pp-note">' + ppEscHtml(x.purpose) + '</div></div>' +
-          '<button class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;"' +
+          '<button class="btn btn-sm btn-outline-secondary"' +
             ' onclick="ppCancel(\'' + ppEscHtml(x.apptId) + '\')">Cancel</button>' +
         '</div></div>';
     }).join('');
@@ -728,14 +767,14 @@ function ppCardAppointments(h) {
         '<span class="pp-lbl">' +
           (overdue ? 'Your review was due' : 'Your doctor asked you to come back on') +
         '</span>' +
-        '<span class="pp-val" style="font-size:1rem;">' +
+        '<span class="pp-val">' +
           ppEscHtml(h.review.text) + '</span>' +
         '<div class="pp-note">' +
           (h.review.setBy ? 'set by ' + ppEscHtml(h.review.setBy) : '') +
           (h.review.setOn ? ' on ' + ppEscHtml(h.review.setOn) : '') +
         '</div>' +
         (h.review.date
-          ? '<button class="btn btn-sm btn-outline-secondary mt-2" style="font-size:.75rem;" ' +
+          ? '<button class="btn btn-sm btn-outline-secondary mt-2" ' +
             'onclick="ppBookForReview(\'' + ppEscHtml(h.review.date) + '\')">' +
             '<i class="fa-solid fa-calendar-plus me-1"></i>Book for this date</button>'
           : '') +
@@ -743,7 +782,7 @@ function ppCardAppointments(h) {
   }
   if (a.lastVisit) {
     body += '<div class="pp-row"><span class="pp-lbl mb-0">Last visit</span>' +
-      '<span class="pp-val" style="font-size:.85rem;">' + ppEscHtml(a.lastVisit) + '</span></div>';
+      '<span class="pp-val pp-val-sm">' + ppEscHtml(a.lastVisit) + '</span></div>';
   }
 
   return '<div class="pp-card d-flex flex-column">' +
@@ -766,7 +805,7 @@ function ppCardMeds(h) {
   } else {
     body = m.items.map(function (x) {
       return '<div class="pp-row align-items-start">' +
-        '<div><div class="pp-val" style="font-size:.88rem;">' + ppEscHtml(x.name) + '</div>' +
+        '<div><div class="pp-val pp-val-sm">' + ppEscHtml(x.name) + '</div>' +
           (x.generic ? '<div class="pp-note">' + ppEscHtml(x.generic) + '</div>' : '') +
           (x.notes ? '<div class="pp-note">' + ppEscHtml(x.notes) + '</div>' : '') +
         '</div>' +
@@ -812,7 +851,7 @@ function ppCardVitals(h) {
       ? '<div class="row g-2">' + tiles.map(function (t) {
           return '<div class="col-4"><div class="pp-tile">' +
             '<span class="pp-lbl">' + t[0] + '</span>' +
-            '<span class="pp-val" style="font-size:.95rem;">' + ppEscHtml(t[1]) +
+            '<span class="pp-val">' + ppEscHtml(t[1]) +
             (t[2] ? '<span class="pp-note"> ' + t[2] + '</span>' : '') +
             '</span></div></div>';
         }).join('') + '</div>'
@@ -833,7 +872,7 @@ function ppCardLabs(h) {
   var body = orders.length
     ? orders.map(function (o) {
         return '<div class="pp-row align-items-start">' +
-          '<div><div class="pp-val" style="font-size:.85rem;">' +
+          '<div><div class="pp-val pp-val-sm">' +
             ppEscHtml(o.testNames || 'Investigation') + '</div>' +
             '<div class="pp-note">' + ppEscHtml(o.date) + '</div></div>' +
           (o.abnormal
@@ -867,7 +906,7 @@ function ppCardDiabetes(h) {
     return '<div class="col-4"><div class="pp-tile">' +
       '<span class="pp-lbl">' + t[0] + '</span>' +
       (t[1]
-        ? '<span class="pp-val" style="font-size:.95rem;">' + ppEscHtml(t[1].value) +
+        ? '<span class="pp-val">' + ppEscHtml(t[1].value) +
           '</span><div class="pp-note">' + ppEscHtml(t[1].dateText) + '</div>'
         : '<span class="pp-note">not tested</span>') +
       '</div></div>';
@@ -932,28 +971,28 @@ function ppCardAntenatal(h) {
 
     '<div class="row g-2 mb-3">' +
       '<div class="col-6"><div class="pp-tile"><span class="pp-lbl">You are now</span>' +
-        '<span class="pp-val" style="font-size:.95rem;">' +
+        '<span class="pp-val">' +
         ppEscHtml(a.gestationText || '—') + '</span>' +
         (a.trimester ? '<div class="pp-note">trimester ' + a.trimester + '</div>' : '') +
         '</div></div>' +
       '<div class="col-6"><div class="pp-tile"><span class="pp-lbl">Due date</span>' +
-        '<span class="pp-val" style="font-size:.95rem;">' + ppEscHtml(a.eddText || '—') +
+        '<span class="pp-val">' + ppEscHtml(a.eddText || '—') +
         '</span></div></div>' +
     '</div>' +
 
     '<div class="pp-row"><span class="pp-lbl mb-0">Next checkup</span>' + next + '</div>' +
     (a.visitCount
       ? '<div class="pp-row"><span class="pp-lbl mb-0">Checkups so far</span>' +
-        '<span class="pp-val" style="font-size:.85rem;">' + a.visitCount + '</span></div>'
+        '<span class="pp-val pp-val-sm">' + a.visitCount + '</span></div>'
       : '') +
     (a.lastVisit && a.lastVisit.fetalHeartRate
       ? '<div class="pp-row"><span class="pp-lbl mb-0">Baby\'s heartbeat</span>' +
-        '<span class="pp-val" style="font-size:.85rem;">' +
+        '<span class="pp-val pp-val-sm">' +
         ppEscHtml(a.lastVisit.fetalHeartRate) + ' /min</span></div>'
       : '') +
     (a.lastVisit && a.lastVisit.presentation
       ? '<div class="pp-row"><span class="pp-lbl mb-0">Baby\'s position</span>' +
-        '<span class="pp-val" style="font-size:.85rem;">' +
+        '<span class="pp-val pp-val-sm">' +
         ppEscHtml(a.lastVisit.presentation) + '</span></div>'
       : '') +
 
@@ -1025,7 +1064,7 @@ function ppCardImmunisation(h) {
 
     return '<div class="pp-imm">' +
       '<span class="pp-imm-dot" style="background:' + tone(d.state) + ';"></span>' +
-      '<div class="flex-grow-1"><div class="pp-val" style="font-size:.84rem;">' +
+      '<div class="flex-grow-1"><div class="pp-val pp-val-sm">' +
         ppEscHtml(d.label) + '</div><div class="pp-note">' + sub + '</div></div>' +
       (label[d.state]
         ? '<span class="pp-pill ' +
@@ -1038,7 +1077,7 @@ function ppCardImmunisation(h) {
   var nextBlock = im.nextDue
     ? '<div class="pp-tile mb-3" style="border-color:var(--accent-purple);">' +
         '<span class="pp-lbl">Next vaccination</span>' +
-        '<span class="pp-val" style="font-size:1rem;">' +
+        '<span class="pp-val">' +
         ppEscHtml((im.nextDueGroup || []).map(function (d) { return d.label; }).join(', ') ||
                   im.nextDue.label) +
         '</span><div class="pp-note">due ' + ppEscHtml(im.nextDue.dueText) +
@@ -1287,7 +1326,7 @@ function ppRenderDoctors() {
     var sel = (PPState.pick.doctorId === d.doctorId) ? ' sel' : '';
     return '<div class="pp-doc' + sel + '" onclick="ppPickDoctor(\'' +
         ppEscHtml(d.doctorId) + '\')">' +
-      '<div class="pp-val" style="font-size:.9rem;">' + ppEscHtml(d.name) + '</div>' +
+      '<div class="pp-val pp-val-sm">' + ppEscHtml(d.name) + '</div>' +
       (d.specialty ? '<div class="pp-note">' + ppEscHtml(d.specialty) + '</div>' : '') +
       // The soonest each doctor can see them, so the patient does not have to
       // click through every name to find out who is free this week.
@@ -1561,8 +1600,9 @@ function ppRenderRecords() {
   var html = '';
 
   if (r.admissions && r.admissions.length) {
-    html += '<h6 class="text-white fw-bold mb-2">Hospital stays</h6>';
-    html += r.admissions.map(function (a, i) {
+    html += '<div class="pp-sec-head">Hospital stays' +
+            '<span class="pp-sec-count">' + r.admissions.length + '</span></div>';
+    html += '<div class="pp-cardgrid">' + r.admissions.map(function (a, i) {
       var id = 'pp-adm-' + i;
       return '<div class="pp-card mb-3">' +
         '<div class="d-flex justify-content-between align-items-start gap-2">' +
@@ -1581,19 +1621,20 @@ function ppRenderRecords() {
             '<div id="' + id + '" class="mt-3" style="display:none;">' +
               a.sections.map(function (s) {
                 return '<div class="mb-3"><div class="pp-lbl">' + ppEscHtml(s.title) +
-                  '</div><div style="font-size:.85rem; color:var(--text-main); ' +
-                  'white-space:pre-wrap;">' + ppEscHtml(s.text) + '</div></div>';
+                  '</div><div class="pp-body pp-body-wrap">' +
+                  ppEscHtml(s.text) + '</div></div>';
               }).join('') +
               '<div class="pp-note">' + ppEscHtml(a.summaryNote) + '</div>' +
             '</div>'
           : '<div class="pp-note mt-3">' + ppEscHtml(a.summaryNote) + '</div>') +
         '</div>';
-    }).join('');
+    }).join('') + '</div>';
   }
 
   if (r.consultations && r.consultations.length) {
-    html += '<h6 class="text-white fw-bold mb-2 mt-4">Consultations</h6>';
-    html += r.consultations.map(function (c, i) {
+    html += '<div class="pp-sec-head">Consultations' +
+            '<span class="pp-sec-count">' + r.consultations.length + '</span></div>';
+    html += '<div class="pp-cardgrid">' + r.consultations.map(function (c, i) {
       var id = 'pp-con-' + i;
       var v = c.vitals || {};
       var bits = [];
@@ -1614,26 +1655,26 @@ function ppRenderRecords() {
           '<i class="fa-solid fa-chevron-down me-1"></i>See what was recorded</button>' +
         '<div id="' + id + '" class="mt-3" style="display:none;">' +
           (bits.length ? '<div class="mb-2"><div class="pp-lbl">Vitals that day</div>' +
-            '<div style="font-size:.85rem; color:var(--text-main);">' +
+            '<div class="pp-body">' +
             ppEscHtml(bits.join(' · ')) + '</div></div>' : '') +
           (c.complaints ? '<div class="mb-2"><div class="pp-lbl">What you came with</div>' +
-            '<div style="font-size:.85rem; color:var(--text-main); white-space:pre-wrap;">' +
+            '<div class="pp-body pp-body-wrap">' +
             ppEscHtml(c.complaints) + '</div></div>' : '') +
           (c.meds.length ? '<div class="mb-2"><div class="pp-lbl">Prescribed</div>' +
             c.meds.map(function (m) {
-              return '<div style="font-size:.85rem; color:var(--text-main);">• ' +
+              return '<div class="pp-body">• ' +
                 ppEscHtml(m.name) + (m.sig ? ' — ' + ppEscHtml(m.sig) : '') +
                 (m.days ? ' × ' + ppEscHtml(m.days) + ' days' : '') +
                 (m.notes ? ' (' + ppEscHtml(m.notes) + ')' : '') + '</div>';
             }).join('') + '</div>' : '') +
           (c.advice ? '<div class="mb-2"><div class="pp-lbl">Advice</div>' +
-            '<div style="font-size:.85rem; color:var(--text-main); white-space:pre-wrap;">' +
+            '<div class="pp-body pp-body-wrap">' +
             ppEscHtml(c.advice) + '</div></div>' : '') +
           (c.reviewDate ? '<div><div class="pp-lbl">Come back on</div>' +
-            '<div style="font-size:.85rem; color:var(--text-main);">' +
+            '<div class="pp-body">' +
             ppEscHtml(c.reviewDate) + '</div></div>' : '') +
         '</div></div>';
-    }).join('');
+    }).join('') + '</div>';
   }
 
   if (!html) {
@@ -1843,7 +1884,7 @@ function ppRenderReports() {
       return '<div class="ppr-line">' +
         '<div class="ppr-name">' + ppEscHtml(x.parameterName) + '</div>' +
         '<div class="ppr-num" style="color:' + colour + '">' +
-          ppEscHtml(x.value) + ' <span style="font-weight:500;font-size:.78rem">' +
+          ppEscHtml(x.value) + ' <span class="pp-note" style="font-weight:500;">' +
           ppEscHtml(x.unit) + '</span></div>' +
         '<div class="ppr-sub">' +
           (x.refRangeText ? 'usual range ' + ppEscHtml(x.refRangeText) : 'no usual range on file') +
@@ -2038,7 +2079,7 @@ function ppLoadPrivacy() {
           return '<div class="d-flex align-items-center gap-2 py-1">' +
             '<i class="fa-solid fa-circle-check" style="color:var(--accent-fg)"></i>' +
             '<span>' + ppEsc(p.label) + '</span>' +
-            '<span class="label-bright ms-auto" style="font-size:.7rem">part of treating you</span>' +
+            '<span class="label-bright pp-note ms-auto">part of treating you</span>' +
             '</div>';
         }
         var on = (p.state === 'GIVEN');
@@ -2048,7 +2089,7 @@ function ppLoadPrivacy() {
             ' onchange="ppSetConsent(\'' + ppEsc(p.key) + '\', this.checked)">' +
           '</div>' +
           '<span>' + ppEsc(p.label) + '</span>' +
-          '<span class="label-bright ms-auto" style="font-size:.7rem">' +
+          '<span class="label-bright pp-note ms-auto">' +
             (p.state === 'NOT_ASKED' ? 'not asked yet'
              : p.state === 'WITHDRAWN' ? 'withdrawn'
              : p.state === 'REFUSED' ? 'you said no' : 'you agreed') +
