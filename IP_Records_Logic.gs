@@ -463,6 +463,16 @@ function ipr_dischargeSummaryBlock_(ipNumber) {
                     header.Planned_Discharge_At, "dd MMM yyyy"),
     outcome: signed ? "Discharged" : ("Summary " + status.replace(/_/g, " ").toLowerCase()),
     summary: "",
+    // THE DOCUMENT ITSELF, not a link to it.
+    //
+    // This card used to carry the header row and nothing else: a date, an
+    // outcome, a diagnosis, a hash, and `summary: ""`. Everything a
+    // discharge summary is FOR - the hospital course, what was given, what
+    // the patient goes home on, what to watch for, when to come back - was
+    // in DS_Snapshots and reachable only by opening the discharge desk or
+    // printing. So the Discharge tab of a patient's record showed four
+    // fields and the ward read the summary off paper.
+    sections: ipr_dsSections_(dc_str_(header.Summary_ID), signed),
     diagnosis: finalDx || dc_str_(header.Diagnosis),
     signedBy: dc_str_(header.Signed_By),
     signerRegNo: dc_str_(header.Signer_Reg_No),
@@ -470,6 +480,70 @@ function ipr_dischargeSummaryBlock_(ipNumber) {
     versions: versions,
     pdfReady: dc_upper_(header.Pdf_Status) === "READY"
   };
+}
+
+/**
+ * Every section of a discharge summary, in the order it prints, flattened to
+ * something a read-only card can draw.
+ *
+ * WHICH VERSION. The SIGNED one when there is one — that is the document the
+ * patient was handed and the only version anybody should be reading back. A
+ * summary still being written falls back to the working draft and is marked
+ * as a draft by the caller, because a ward looking at an open admission needs
+ * to see what has been written so far.
+ *
+ * WHAT IS LEFT OUT. Empty sections, on the same rule the printed document
+ * uses — with ALLERGIES as the same exception, because a summary silent about
+ * allergies is a dangerous document and "not recorded" is the thing that has
+ * to be visible. PATIENT_BANNER is left out too: the drawer is already
+ * showing the patient it belongs to.
+ *
+ * @param {string} summaryId
+ * @param {boolean} signed  whether the header says the summary is signed
+ * @return {Array<{key, title, format, content, empty}>}
+ */
+function ipr_dsSections_(summaryId, signed) {
+  if (!summaryId) return [];
+  if (typeof dsx_resolveRef_ !== "function") return [];
+
+  var payload = null;
+  try {
+    var ref = dsx_resolveRef_(summaryId, signed ? "SIGNED" : "WORKING");
+    payload = ref && ref.payload;
+    // A summary marked signed whose snapshot cannot be read is still worth
+    // showing as a draft rather than as an empty card.
+    if (!payload && signed) {
+      var w = dsx_resolveRef_(summaryId, "WORKING");
+      payload = w && w.payload;
+    }
+  } catch (e) { return []; }
+  if (!payload || !payload.sections) return [];
+
+  var order = (typeof DSX_PRINT_ORDER !== "undefined" && DSX_PRINT_ORDER.length)
+    ? DSX_PRINT_ORDER
+    : Object.keys(payload.sections);
+
+  var out = [];
+  order.forEach(function (key) {
+    var sec = payload.sections[key];
+    if (!sec) return;
+
+    var empty = true;
+    try {
+      empty = (typeof dsx_sectionIsEmpty_ === "function")
+        ? dsx_sectionIsEmpty_(sec) : false;
+    } catch (e) { empty = false; }
+    if (empty && key !== "ALLERGIES") return;
+
+    out.push({
+      key: key,
+      title: dc_str_(sec.title) || key.replace(/_/g, " "),
+      format: dc_upper_(sec.format) || "TEXT",
+      content: sec.content,
+      empty: !!empty
+    });
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,36 +1,54 @@
 <div id="tab-admin-dpdp" class="page-section d-none">
 
 <style>
-  #tab-admin-dpdp                 { font-size: 0.85rem; }
-  #tab-admin-dpdp h3              { font-size: 1.1rem; }
+  /* Sizes come from the application's type scale (Styles.html section 2a).
+     This screen used to set its own — 0.85rem for everything, 1.1rem for the
+     heading, 0.75rem for labels — which is why it read a size smaller than
+     every screen beside it. */
+  #tab-admin-dpdp                 { font-size: var(--fs-base); }
   #tab-admin-dpdp .dp-card        { background-color: var(--bg-card);
                                     border: 1px solid var(--border-color);
                                     border-radius: 12px; }
   #tab-admin-dpdp .dp-rule        { border-top: 1px solid var(--border-color); opacity: 1; }
-  #tab-admin-dpdp label           { font-size: 0.75rem; color: var(--text-label);
-                                    font-weight: 600; margin-bottom: 4px; }
-  #tab-admin-dpdp .dp-input       { font-size: 0.85rem; padding: 0.4rem 0.6rem; }
-  #tab-admin-dpdp .dp-kpi         { font-size: 1.6rem; font-weight: 700; line-height: 1; }
-  #tab-admin-dpdp .dp-sev         { font-size: .68rem; font-weight: 700; padding: 2px 7px;
-                                    border-radius: 999px; letter-spacing: .4px; }
-  #tab-admin-dpdp .dp-CRITICAL    { background: #7f1d1d; color: #fff; }
-  #tab-admin-dpdp .dp-HIGH        { background: #b45309; color: #fff; }
-  #tab-admin-dpdp .dp-MEDIUM      { background: #1d4ed8; color: #fff; }
-  #tab-admin-dpdp .dp-LOW         { background: var(--bg-input); color: var(--text-muted); }
+  #tab-admin-dpdp label           { font-size: var(--fs-xs); color: var(--text-label);
+                                    font-weight: var(--fw-semi); margin-bottom: 4px; }
+  #tab-admin-dpdp .dp-input       { font-size: var(--fs-base); padding: 0.4rem 0.6rem; }
+  #tab-admin-dpdp .dp-kpi         { font-size: var(--fs-3xl); font-weight: var(--fw-bold);
+                                    line-height: 1; color: var(--text-main); }
+  #tab-admin-dpdp .dp-sev         { font-size: var(--fs-2xs); font-weight: var(--fw-bold);
+                                    padding: 2px 7px; border-radius: 999px;
+                                    letter-spacing: .4px; }
+  /* The severity chips were four raw hex fills with white text on them, so
+     they stayed dark-theme colours after a switch to light and sat as four
+     heavy blocks on a white page. They are triage tints now, like every
+     other status chip in the application. */
+  #tab-admin-dpdp .dp-CRITICAL    { background: var(--danger-bg);  color: var(--danger-fg); }
+  #tab-admin-dpdp .dp-HIGH        { background: var(--warning-bg); color: var(--warning-fg); }
+  #tab-admin-dpdp .dp-MEDIUM      { background: var(--info-bg);    color: var(--info-fg); }
+  #tab-admin-dpdp .dp-LOW         { background: var(--bg-input);   color: var(--text-muted); }
   #tab-admin-dpdp .dp-row         { border-bottom: 1px solid var(--border-color); }
-  #tab-admin-dpdp .dp-overdue     { color: #ef4444; font-weight: 700; }
-  #tab-admin-dpdp pre             { white-space: pre-wrap; font-size: .75rem;
+  #tab-admin-dpdp .dp-overdue     { color: var(--danger-fg); font-weight: var(--fw-bold); }
+  #tab-admin-dpdp pre             { white-space: pre-wrap; font-size: var(--fs-xs);
                                     background: var(--bg-input); padding: 12px;
                                     border-radius: 8px; color: var(--text-main); }
+
+  /* The caption that separates the daily tabs from the housekeeping ones. */
+  #tab-admin-dpdp .dp-tabgroup        { border-left: 1px solid var(--border-color); }
+  #tab-admin-dpdp .dp-tabgroup-label  { font-size: var(--fs-2xs); font-weight: var(--fw-semi);
+                                        text-transform: uppercase; letter-spacing: .06em;
+                                        color: var(--text-muted); white-space: nowrap; }
 </style>
 
-  <div class="d-flex align-items-center gap-3 mb-3 mt-4 flex-wrap">
-    <h3 class="fw-bold m-0"><i class="fa-solid fa-shield-halved me-2"></i>Data protection</h3>
-    <span class="small" style="color: var(--text-muted);">
-      Digital Personal Data Protection Act, 2023 — the registers, the clock, and what is waiting on you.
-    </span>
-    <button class="btn btn-sm ms-auto" style="border:1px solid var(--border-color);color:var(--text-main);background:transparent;"
-            onclick="dpConsoleLoad()"><i class="fa-solid fa-rotate me-1"></i>Refresh</button>
+  <div class="cresc-page-head">
+    <div>
+      <h1 class="cph-title"><i class="fa-solid fa-shield-halved me-2"></i>Data protection</h1>
+      <p class="cph-sub">Digital Personal Data Protection Act, 2023 — the registers,
+        the clock, and what is waiting on you.</p>
+    </div>
+    <div class="cph-actions">
+      <button class="btn btn-sm btn-outline-secondary" onclick="dpConsoleLoad()">
+        <i class="fa-solid fa-rotate me-1"></i>Refresh</button>
+    </div>
   </div>
 
   <!-- ══ what is waiting on somebody ══ -->
@@ -83,10 +101,14 @@
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-patient">
       <i class="fa-solid fa-user me-1"></i>A patient</a></li>
 
-    <li class="nav-item d-flex align-items-center px-3">
-      <span class="small" style="color: var(--text-muted); white-space: nowrap;">
-        &middot; &nbsp; set up and review
-      </span>
+    <!-- The divider between the daily pair above and the housekeeping below.
+         It used to be the bare string "&middot;&nbsp;set up and review" sitting
+         in the tab row at tab height, which reads as a tab that will not open
+         rather than as a heading for the three that follow — a stray bullet
+         and a sentence fragment in the middle of a row of controls. It is a
+         rule with a caption on it now, which is what it always meant. -->
+    <li class="nav-item d-flex align-items-center ms-2 ps-3 dp-tabgroup" aria-hidden="true">
+      <span class="dp-tabgroup-label">Set up and review</span>
     </li>
 
     <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#dp-pane-consent"

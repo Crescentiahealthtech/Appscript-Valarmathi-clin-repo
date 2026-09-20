@@ -9,12 +9,24 @@
    if(navLogo) navLogo.src = appLogo;
  };
 
+  /**
+   * The date line on the patient's home screen.
+   *
+   * This was a one-second interval that wrote a wall clock AND a shouted,
+   * uppercased date into the DOM every tick, for the whole life of the
+   * session, on every screen. The clock is gone from the markup — a patient
+   * reading their record has one on the device already, and it was set at
+   * heading size beside their own name — so what is left changes once a day.
+   * A minute is therefore plenty, and it costs nothing when the element is
+   * not on the current screen.
+   */
   function updateClock() {
-    const now = new Date();
-    if(document.getElementById('live-time')) document.getElementById('live-time').innerText = now.toLocaleTimeString('en-US', { hour12: false });
-    if(document.getElementById('live-date')) document.getElementById('live-date').innerText = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+    const el = document.getElementById('live-date');
+    if (!el) return;
+    el.innerText = new Date().toLocaleDateString('en-GB',
+      { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   }
-  setInterval(updateClock, 1000); updateClock();
+  setInterval(updateClock, 60000); updateClock();
 
 /* ====================================================================
    APPLY RBAC — DRAWING ONLY

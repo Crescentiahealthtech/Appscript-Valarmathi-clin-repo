@@ -170,12 +170,79 @@
       <button type="button" class="sam-item" onclick="toggleTheme(); crescCloseAccountMenu();">
         <i class="fa-solid fa-circle-half-stroke"></i> Toggle theme
       </button>
+      <!-- CHANGING YOUR OWN PASSWORD, WITHOUT SIGNING OUT.
+           crescChangePassword() has existed in Auth_Credentials.gs from the
+           start, and the only screen that reached it was the one the SERVER
+           forced open when a sign-in came back MUST_CHANGE. So a member of
+           staff who simply wanted to change their password - because they had
+           told somebody it, or read it off a note left at the desk - had no
+           way to, short of asking an administrator to reset it and hand them
+           a temporary one. Which is the opposite of what they were trying to
+           achieve. -->
+      <button type="button" class="sam-item"
+              onclick="crescCloseAccountMenu(); crescOpenChangePassword();">
+        <i class="fa-solid fa-key"></i> Change password
+      </button>
       <button type="button" class="sam-item sam-danger" onclick="crescCloseAccountMenu(); signOut();">
         <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign out
       </button>
     </div>
   </div>
   
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     CHANGE YOUR PASSWORD
+
+     In the shell rather than in a module: every role has this, including the
+     patient portal, and the rail is the one thing all of them share.
+
+     The user ID is shown but not editable. Changing SOMEBODY ELSE'S password
+     from here would be possible in principle — crescChangePassword takes the
+     current password and would accept any account whose current password you
+     could supply — but offering it as an editable box invites exactly that,
+     and there is a supported path for it (an administrator's reset) that
+     leaves an audit row saying who did it.
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="crescChangePwdModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force">
+          <i class="fa-solid fa-key me-2" style="color:var(--accent-fg);"></i>Change password
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small label-bright mb-1">User ID</label>
+          <input id="cpw-username" class="form-control form-control-sm" readonly disabled>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small label-bright mb-1">Current password</label>
+          <input id="cpw-current" type="password" class="form-control form-control-sm"
+                 autocomplete="current-password">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small label-bright mb-1">New password</label>
+          <input id="cpw-new" type="password" class="form-control form-control-sm"
+                 autocomplete="new-password">
+          <div class="form-text small label-bright">At least 10 characters.</div>
+        </div>
+        <div class="mb-1">
+          <label class="form-label small label-bright mb-1">New password again</label>
+          <input id="cpw-new2" type="password" class="form-control form-control-sm"
+                 autocomplete="new-password">
+        </div>
+        <div id="cpw-msg" class="small mt-3"></div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" id="cpw-save" class="btn btn-sm btn-primary fw-bold"
+                onclick="crescSubmitChangePassword()">Change it</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -322,10 +389,13 @@
   function applyTheme(theme) {
     const isLight = (theme === 'light');
 
-    // Scope colour transitions to the switch itself so we do not permanently
-    // add a transition to every element in the app.
-    document.body.classList.add('theme-switching');
-
+    // The switch is a token swap and nothing more. It used to add a
+    // `theme-switching` class whose stylesheet rule put a colour transition
+    // on EVERY element in the document for 300ms; on a session that has
+    // loaded several modules that is tens of thousands of animations built
+    // and torn down for one click, and it is what made the switch feel slow.
+    // The four surfaces that should ease now carry their own transition in
+    // Styles.html, so there is nothing to scope here.
     document.documentElement.classList.toggle('light-theme', isLight);
     document.body.classList.toggle('light-theme', isLight);
 
@@ -338,9 +408,13 @@
     try { localStorage.setItem('cresrx_theme', theme); } catch (e) { /* private mode */ }
 
     // Let dependants (charts, canvases) re-read the resolved token values.
-    window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme } }));
-
-    setTimeout(function () { document.body.classList.remove('theme-switching'); }, 300);
+    // Deferred by one frame so the repainters read the NEW computed values:
+    // dispatching synchronously here runs them before the class change has
+    // been styled, and every chart repainted itself in the colours of the
+    // theme being left. That is the 'colour is briefly wrong' on a switch.
+    requestAnimationFrame(function () {
+      window.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme } }));
+    });
   }
   window.applyTheme = applyTheme;
 
@@ -348,6 +422,73 @@
     applyTheme(document.body.classList.contains('light-theme') ? 'dark' : 'light');
   }
   window.toggleTheme = toggleTheme;
+
+  // 2b. Changing your own password
+  function crescOpenChangePassword() {
+    var who = window.loggedInUser || '';
+    if (!who) { crescAlert('Sign in first.'); return; }
+
+    ['cpw-current', 'cpw-new', 'cpw-new2'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    var u = document.getElementById('cpw-username');
+    if (u) u.value = who;
+    var msg = document.getElementById('cpw-msg');
+    if (msg) { msg.textContent = ''; msg.className = 'small mt-3'; }
+
+    new bootstrap.Modal(document.getElementById('crescChangePwdModal')).show();
+    setTimeout(function () {
+      var el = document.getElementById('cpw-current');
+      if (el) el.focus();
+    }, 250);
+  }
+  window.crescOpenChangePassword = crescOpenChangePassword;
+
+  function crescSubmitChangePassword() {
+    var msg = document.getElementById('cpw-msg');
+    var btn = document.getElementById('cpw-save');
+    var say = function (text, ok) {
+      if (!msg) return;
+      msg.textContent = text;
+      msg.className = 'small mt-3 ' + (ok ? 'text-success' : 'text-warning');
+    };
+
+    var who     = window.loggedInUser || '';
+    var current = document.getElementById('cpw-current').value;
+    var next    = document.getElementById('cpw-new').value;
+    var again   = document.getElementById('cpw-new2').value;
+
+    if (!current || !next)  return say('Fill in your current password and the new one.');
+    if (next !== again)     return say('The two new passwords are not the same.');
+    if (next.length < 10)   return say('Use at least 10 characters.');
+    if (next === current)   return say('The new password is the same as the old one.');
+
+    var label = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
+    btn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.innerHTML = label;
+        btn.disabled = false;
+        if (res && res.success) {
+          say('Password changed. It takes effect the next time you sign in.', true);
+          ['cpw-current', 'cpw-new', 'cpw-new2'].forEach(function (id) {
+            document.getElementById(id).value = '';
+          });
+        } else {
+          say((res && res.message) || 'The password could not be changed.');
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.innerHTML = label;
+        btn.disabled = false;
+        say('Network error: ' + ((err && err.message) || err));
+      })
+      .crescChangePassword({ username: who, currentPassword: current, newPassword: next });
+  }
+  window.crescSubmitChangePassword = crescSubmitChangePassword;
 
   // 3. Sync the icon with the theme the pre-paint bootstrap already applied.
   (function syncThemeIcon() {

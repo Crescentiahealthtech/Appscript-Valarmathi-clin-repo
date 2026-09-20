@@ -796,17 +796,120 @@
         'No discharge record. This admission is still open.</div>');
       return;
     }
+    var notice = '';
+    if (ds.source === 'admission') {
+      notice = '<div class="alert alert-secondary py-1 px-3 small mb-3">' +
+        'Taken from the admission record — no written discharge summary has been filed.</div>';
+    } else if (ds.source === 'ds' && ds.status && ds.status !== 'SIGNED') {
+      // A draft is readable here on purpose — a ward looking at an open
+      // admission needs to see what has been written so far — but it must
+      // never be mistaken for the document the patient was handed.
+      notice = '<div class="alert alert-warning py-1 px-3 small mb-3">' +
+        '<i class="fa-solid fa-pen-ruler me-1"></i>This summary is still being ' +
+        'written and has not been signed. Do not issue or act on it.</div>';
+    }
+
     setHtml('det-ds-content',
-      (ds.source === 'admission'
-        ? '<div class="alert alert-secondary py-1 px-3 small mb-3">' +
-          'Taken from the admission record — no written discharge summary has been filed.</div>'
-        : '') +
+      notice +
       '<div class="row g-0">' +
-        kv('Discharge Date',   esc(ds.date),      { cls: 'col-md-4', keepEmpty: true }) +
-        kv('Outcome',          '<span class="text-warning">' + esc(ds.outcome) + '</span>', { cls: 'col-md-4', keepEmpty: true }) +
-        kv('Final Diagnosis',  esc(ds.diagnosis), { cls: 'col-md-4' }) +
+        kv('Discharge Date',   esc(ds.date),      { cls: 'col-md-3', keepEmpty: true }) +
+        kv('Outcome',          '<span class="text-warning">' + esc(ds.outcome) + '</span>', { cls: 'col-md-3', keepEmpty: true }) +
+        kv('Final Diagnosis',  esc(ds.diagnosis), { cls: 'col-md-3' }) +
+        kv('Signed by',        esc(ds.signedBy) +
+                               (ds.signerRegNo ? ' · ' + esc(ds.signerRegNo) : ''),
+                               { cls: 'col-md-3' }) +
         kv('Summary',          escLines(ds.summary), { cls: 'col-12' }) +
-      '</div>');
+      '</div>' +
+      dsSummaryBody(ds));
+  }
+
+  /**
+   * THE DISCHARGE SUMMARY, IN FULL.
+   *
+   * This tab used to show four header fields and stop. Everything a
+   * discharge summary exists to say — the course of the stay, what was
+   * given, what the patient goes home on, the warning signs, the follow-up —
+   * lived in the discharge engine's snapshot and could only be read by
+   * opening the discharge desk or printing the document. So the one screen
+   * called "the patient's record" was the one place the record was not.
+   *
+   * It is rendered read-only and in the printed order, from whichever
+   * version the server resolved: the signed one where it exists.
+   */
+  function dsSummaryBody(ds) {
+    var secs = ds.sections || [];
+    if (!secs.length) {
+      return (ds.source === 'ds')
+        ? '<div class="text-secondary small mt-3">' +
+          'The body of this summary could not be read. Open it in the ' +
+          'discharge desk.</div>'
+        : '';
+    }
+
+    return '<div class="mt-3 pt-3 border-top border-secondary">' +
+      secs.map(function (sec) {
+        return '<div class="mb-3">' +
+            '<div class="text-info small fw-bold text-uppercase mb-1" ' +
+                 'style="letter-spacing:.04em;">' + esc(sec.title) + '</div>' +
+            dsSectionBody(sec) +
+          '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  /** One section, drawn according to the format the engine stored it in. */
+  function dsSectionBody(sec) {
+    if (sec.empty) {
+      // Only ALLERGIES reaches here — see ipr_dsSections_. "Not recorded" is
+      // the whole point of printing it empty.
+      return '<div class="small" style="color:var(--danger-fg);">NOT RECORDED</div>';
+    }
+
+    var c = sec.content;
+
+    if (sec.format === 'LIST') {
+      var items = Array.isArray(c) ? c.filter(function (i) { return s(i); }) : [];
+      if (!items.length) return '';
+      return '<ul class="small mb-0 ps-3">' +
+        items.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('') + '</ul>';
+    }
+
+    if (sec.format === 'TABLE') {
+      if (!c || !c.columns || !c.rows || !c.rows.length) return '';
+      return '<div class="table-responsive"><table class="table table-sm table-borderless mb-0">' +
+        '<thead><tr>' + c.columns.map(function (h) {
+          return '<th class="text-secondary">' + esc(h) + '</th>';
+        }).join('') + '</tr></thead><tbody>' +
+        c.rows.map(function (r) {
+          return '<tr>' + c.columns.map(function (col, i) {
+            var v = r[i] === undefined ? '' : r[i];
+            // The medicine name is what somebody reading this back is
+            // looking for, so it is the one cell set in bold — the same
+            // emphasis the printed summary gives it.
+            return /^medicine name$/i.test(col)
+              ? '<td class="fw-bold">' + esc(v) + '</td>'
+              : '<td>' + esc(v) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+
+    if (sec.format === 'FIELDS') {
+      if (!c || typeof c !== 'object') return '';
+      var pairs = Object.keys(c).filter(function (k) { return s(c[k]); });
+      if (!pairs.length) return '';
+      return '<div class="row g-0">' + pairs.map(function (k) {
+        return kv(dsHumanField(k), esc(c[k]), { cls: 'col-md-4' });
+      }).join('') + '</div>';
+    }
+
+    return '<div class="small" style="white-space:pre-wrap;">' + escLines(c) + '</div>';
+  }
+
+  /** "followUpDate" -> "Follow up date". The engine stores camelCase keys. */
+  function dsHumanField(key) {
+    return String(key || '')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/^./, function (ch) { return ch.toUpperCase(); });
   }
 
   function closeIPRecordDetail() {

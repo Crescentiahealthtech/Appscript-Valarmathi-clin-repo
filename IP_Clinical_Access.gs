@@ -125,7 +125,14 @@ var IPC_SECTION_RBAC = {
     // A consultant opinion is a clinical note, not a memo: it examines the
     // patient, orders drugs and orders investigations. The sections mirror the
     // progress note so the two read alike on the timeline and in print.
-    "doctor": ["consultantName", "specialty", "reason", "subjectiveObjective",
+    // consultantRegNo is here because a visiting consultant IS their
+    // registration number as far as the record is concerned — the visiting
+    // slot is a shared login, and the number is what distinguishes the
+    // person who wrote this note from the person who wrote yesterday's on
+    // the same account. Optional, like the name beside it: saveIPNote fills
+    // both from the resolved author when the form leaves them blank.
+    "doctor": ["consultantName", "consultantRegNo", "specialty", "reason",
+               "subjectiveObjective",
                "genExam", "sysExam", "findings", "recommendations",
                "medOrders", "investigationOrders", "adviceText", "alertText"]
   },

@@ -86,6 +86,23 @@
   #ds-editor-view .ds-picklist .ds-pickmeta { color:var(--text-muted); font-size:.72rem; }
   #ds-editor-view .ds-pickempty { color:var(--text-muted); padding:.4rem .6rem; font-size:.8rem; }
 
+  /* WHAT THE SHELF HOLDS, UNDER THE NAME THAT WAS TYPED.
+     The formulary behind the picker has always carried live counts off
+     Pharmacy_Inventory; they were visible only while the suggestion list was
+     open. A discharge script written against a drug the pharmacy cannot
+     dispense sends the patient away and back again, and until now the first
+     anyone knew of it was at the counter. */
+  .ds-stock { display:inline-block; margin-top:4px; padding:1px 7px; border-radius:999px;
+              font-size:var(--fs-2xs); font-weight:700; letter-spacing:.02em;
+              white-space:nowrap; }
+  .ds-stock-ok      { background:var(--success-bg); color:var(--success-fg); }
+  .ds-stock-low     { background:var(--warning-bg); color:var(--warning-fg); }
+  .ds-stock-out     { background:var(--danger-bg);  color:var(--danger-fg); }
+  .ds-stock-unknown { background:var(--bg-input);   color:var(--text-muted); }
+  .ds-stock-warn { border:1px solid var(--warning-fg); background:var(--warning-bg);
+                   color:var(--warning-fg); border-radius:8px; padding:7px 10px;
+                   font-size:var(--fs-xs); line-height:1.5; }
+
   .ds-panel      { background:var(--bg-card); border:1px solid var(--border-color);
                    border-radius:12px; padding:.9rem; }
   .ds-navitem    { display:flex; align-items:center; gap:.5rem; width:100%; text-align:left;

@@ -119,6 +119,7 @@ var DSState = {
   reasonHandler: null,
   diffMode: 'staff',
   pickers: null,           // ds_getPickers payload, fetched once per session
+  stockIndex: null,        // brand/generic -> formulary row, built from pickers
   pickersPending: false,
   labsOpen: true,          // the inline lab panel under INVESTIGATIONS
   labsHtml: '',            // its last fetched markup, replayed on re-render
@@ -825,15 +826,17 @@ function dsLoadPickers(after) {
     function (res) {
       DSState.pickersPending = false;
       DSState.pickers = (res && res.cc) ? res : { cc: [], hx: [], advice: [], drugs: [], fieldLabels: {} };
+      DSState.stockIndex = null;   // rebuilt on the next dsStockFor()
       if (res && res.message) dsNotice('warning', res.message);
       if (after) after();
     },
     function () {
       DSState.pickersPending = false;
       DSState.pickers = { cc: [], hx: [], advice: [], drugs: [], fieldLabels: {} };
+      DSState.stockIndex = null;
       if (after) after();
     });
-  if (!runner) { DSState.pickersPending = false; DSState.pickers = { cc: [], hx: [], advice: [], drugs: [], fieldLabels: {} }; if (after) after(); return; }
+  if (!runner) { DSState.pickersPending = false; DSState.stockIndex = null; DSState.pickers = { cc: [], hx: [], advice: [], drugs: [], fieldLabels: {} }; if (after) after(); return; }
   runner.ds_getPickers(dsToken());
 }
 
@@ -998,6 +1001,130 @@ function dsDrugItems() {
       __search: d.brand + ' ' + d.generic
     };
   });
+}
+
+/**
+ * THE PHARMACY'S ANSWER FOR ONE TYPED MEDICINE NAME.
+ *
+ * The formulary the picker offers has always carried live counts off
+ * Pharmacy_Inventory (dsp_formulary_ -> op_drugMaster_), but the count was
+ * visible for the two seconds the suggestion list was open and nowhere
+ * afterwards. Once a name was in the cell the row looked exactly like a row
+ * for a drug the clinic does not stock, so the desk could not tell - and the
+ * only place the mismatch surfaced was the counter, with the patient
+ * standing at it.
+ *
+ * Matching is on the BRAND, then the generic, against a name that may have
+ * been stored as "BRAND (GENERIC)" or picked up a "Tab." from a typist. A
+ * name that matches nothing is reported as unknown rather than as
+ * out-of-stock: those are different facts, and calling the first the second
+ * would put a red chip on every correctly-written external drug.
+ *
+ * @param {string} raw the Medicine Name cell as typed
+ * @return {{known:boolean, brand:string, stock:(number|null),
+ *           status:string}|null} null when the formulary has not loaded
+ */
+function dsStockFor(raw) {
+  var drugs = (DSState.pickers && DSState.pickers.drugs) || [];
+  if (!drugs.length) return null;
+
+  var name = String(raw || '')
+    .replace(/\(([^)]*)\)/g, ' $1 ')          // "Dolo (Paracetamol)" -> both
+    .replace(/\b(tab|cap|syp|inj|iv|oint|neb|drops)\.?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+  if (!name) return null;
+
+  if (!DSState.stockIndex) {
+    var idx = {};
+    drugs.forEach(function (d) {
+      var b = String(d.brand || '').trim().toUpperCase();
+      if (b && !idx[b]) idx[b] = d;
+      var g = String(d.generic || '').trim().toUpperCase();
+      // A generic maps to the stocked brand only when nothing is already
+      // there: the brand is what the pharmacy hands over.
+      if (g && !idx[g]) idx[g] = d;
+    });
+    DSState.stockIndex = idx;
+  }
+
+  var hit = DSState.stockIndex[name];
+  if (!hit) {
+    // The cell often reads "Dolo 650" where the shelf says "DOLO 650" or
+    // just "DOLO". Longest brand that the cell starts with wins.
+    var best = null;
+    Object.keys(DSState.stockIndex).forEach(function (k) {
+      if (name.indexOf(k) !== 0) return;
+      if (!best || k.length > best.length) best = k;
+    });
+    if (best) hit = DSState.stockIndex[best];
+  }
+  if (!hit) return { known: false, brand: '', stock: null, status: '' };
+
+  return { known: true, brand: hit.brand,
+           stock: (hit.stock === null || hit.stock === undefined) ? null : hit.stock,
+           status: String(hit.status || '') };
+}
+
+/** The chip that rides under a medicine name, saying what the shelf holds. */
+function dsStockChip(raw) {
+  if (!String(raw || '').trim()) return '';
+  var st = dsStockFor(raw);
+  if (!st) return '';
+
+  if (!st.known) {
+    return '<span class="ds-stock ds-stock-unknown" ' +
+      'title="This name does not match anything in Pharmacy_Inventory. The ' +
+      'pharmacy will have to source it or substitute.">not in the pharmacy list</span>';
+  }
+  if (st.stock === null) {
+    return '<span class="ds-stock ds-stock-unknown" ' +
+      'title="Known drug, not carried by this pharmacy.">not stocked here</span>';
+  }
+  if (st.stock <= 0) {
+    return '<span class="ds-stock ds-stock-out" ' +
+      'title="The pharmacy cannot dispense this today.">out of stock</span>';
+  }
+  if (String(st.status).toLowerCase() === 'low') {
+    return '<span class="ds-stock ds-stock-low">' + st.stock + ' left</span>';
+  }
+  return '<span class="ds-stock ds-stock-ok">' + st.stock + ' in stock</span>';
+}
+
+/**
+ * One line above a prescription table: what the pharmacy cannot fill today.
+ *
+ * A chip per row answers "is this one available". A discharge is a single
+ * event, so the question actually being asked at the desk is "can this
+ * patient collect everything before they leave", and that is a count.
+ */
+function dsStockSummary(sec) {
+  var c = (sec && sec.content) || {};
+  if (!c.columns || !c.rows || !c.rows.length) return '';
+  var i = c.columns.indexOf('Medicine Name');
+  if (i === -1) return '';
+  if (!DSState.pickers || !(DSState.pickers.drugs || []).length) return '';
+
+  var out = [], unknown = [];
+  c.rows.forEach(function (r) {
+    var nm = String(r[i] || '').trim();
+    if (!nm) return;
+    var st = dsStockFor(nm);
+    if (!st) return;
+    if (!st.known || st.stock === null) unknown.push(nm);
+    else if (st.stock <= 0) out.push(nm);
+  });
+
+  if (!out.length && !unknown.length) return '';
+  var parts = [];
+  if (out.length) parts.push('out of stock: ' + out.join(', '));
+  if (unknown.length) parts.push('not carried here: ' + unknown.join(', '));
+  return '<div class="ds-stock-warn mb-2">' +
+    '<i class="fa-solid fa-triangle-exclamation me-1"></i>' +
+    'The pharmacy cannot fill this script as written — ' +
+    dsEsc(parts.join(' · ')) + '. Substitute now, or tell the patient before ' +
+    'they go to the counter.</div>';
 }
 
 /**
@@ -1401,7 +1528,10 @@ function dsRenderTable(key, sec, readOnly) {
   var body = c.rows.map(function (row, ri) {
     var cells = c.columns.map(function (col, ci) {
       var v = row[ci] === undefined ? '' : row[ci];
-      if (readOnly) return '<td>' + dsEsc(v) + '</td>';
+      if (readOnly) {
+        return '<td>' + dsEsc(v) +
+               ((isRx && ci === nameCol) ? dsStockChip(v) : '') + '</td>';
+      }
 
       // Type is a fixed vocabulary, so it is a select rather than a box to
       // type "tablet", "TAB" and "Tab." into on three consecutive rows.
@@ -1420,7 +1550,8 @@ function dsRenderTable(key, sec, readOnly) {
              '<input type="text" data-ds-cell="' + dsEsc(key) + '|' + ri + '|' + ci + '"' +
              (isDrug ? ' data-ds-drug="' + dsEsc(key) + '|' + ri + '"' : '') +
              (isRx ? ' placeholder="' + dsEsc(col) + '"' : '') +
-             ' value="' + dsEsc(v) + '"></td>';
+             ' value="' + dsEsc(v) + '">' +
+             (isDrug ? dsStockChip(v) : '') + '</td>';
     }).join('');
     return '<tr>' + cells + (readOnly ? '' :
       '<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-ds-rowdel="' +
@@ -1434,6 +1565,9 @@ function dsRenderTable(key, sec, readOnly) {
         : 'Nothing recorded.') + '</div>'
     : '';
 
+  // What the pharmacy cannot fill, before the patient walks to the counter.
+  var stockWarn = isRx ? dsStockSummary(sec) : '';
+
   // Why the drug boxes are offering nothing, when they are.
   var note = (isRx && !readOnly) ? dsDrugPickerNote() : '';
   var noteHtml = note
@@ -1441,7 +1575,7 @@ function dsRenderTable(key, sec, readOnly) {
       dsEsc(note) + '</div>'
     : '';
 
-  return empty + noteHtml + '<div class="table-responsive"><table' + (isRx ? ' class="ds-rx-table"' : '') +
+  return empty + noteHtml + stockWarn + '<div class="table-responsive"><table' + (isRx ? ' class="ds-rx-table"' : '') +
          '><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
     (readOnly ? '' : '<button class="btn btn-sm btn-outline-primary mt-2" data-ds-rowadd="' +
      dsEsc(key) + '"><i class="fa-solid fa-plus me-1"></i>' +
@@ -1543,6 +1677,25 @@ function dsWireSectionInputs(wrap) {
   Array.prototype.forEach.call(wrap.querySelectorAll('[data-ds-drug]'), function (el) {
     var parts = el.getAttribute('data-ds-drug').split('|');
     var secKey = parts[0], ri = parseInt(parts[1], 10);
+
+    // The stock chip follows what is being typed, IN PLACE.
+    //
+    // It cannot be done by re-rendering the section: dsRenderSections()
+    // replaces the whole editor, and the suggestion list under this box
+    // would be destroyed between the mousedown that chose an item and the
+    // click that applies it. Only the chip is swapped.
+    var repaintChip = function () {
+      var cell = el.parentNode;
+      if (!cell) return;
+      var old = cell.querySelector('.ds-stock');
+      var html = dsStockChip(el.value);
+      if (!html) { if (old) old.remove(); return; }
+      var holder = document.createElement('div');
+      holder.innerHTML = html;
+      var next = holder.firstChild;
+      if (old) cell.replaceChild(next, old); else cell.appendChild(next);
+    };
+    el.addEventListener('input', repaintChip);
     dsAttachPicker(el, dsDrugItems, function (item) {
       var sec = DSState.payload.sections[secKey];
       var cols = sec.content.columns;

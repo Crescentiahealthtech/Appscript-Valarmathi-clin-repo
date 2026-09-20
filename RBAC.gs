@@ -128,6 +128,16 @@ var CRESC_PERMS = {
 
   // --- administration ---------------------------------------------------
   'admin.users':             'Create and disable staff logins',
+  // THE SECOND KEY, and the only permission an administrator does not hold.
+  //
+  // admin.users covers the accounts a clinic manager legitimately opens and
+  // closes all year: a nurse, a receptionist, a pharmacist, a lab
+  // technician. It does NOT cover the two roles that can undo that
+  // boundary. A doctor's account signs prescriptions and is attributable in
+  // law; an administrator's account can create more administrators. An
+  // account that can mint either of those is an account that can grant
+  // itself anything, so it is a separate key held by a separate role.
+  'admin.users.elevated':    'Create, disable or reset a doctor or an administrator',
   'admin.audit':             'Read the audit log',
   'admin.config':            'Change clinic configuration',
 
@@ -184,9 +194,21 @@ var CRESC_PUBLIC_BY_DESIGN = {
  */
 var CRESC_ROLE_MATRIX = {
 
-  // The system owner. '*' is expanded by crescPermsFor_(), so a permission
-  // added to CRESC_PERMS is granted to admin automatically and to nobody else
-  // — new capability, closed by default.
+  // The clinic's administrator. '*' is expanded by crescPermsFor_() to every
+  // permission EXCEPT those in CRESC_ELEVATED_PERMS, so a capability added to
+  // CRESC_PERMS is granted here automatically — new capability, closed by
+  // default — while the key that creates more administrators is not.
+  //
+  // THERE IS NO SEPARATE 'superadmin' ROLE, and that is deliberate. This
+  // project has about twenty-five `role === 'admin'` comparisons scattered
+  // through the clinical, billing and appointment modules — the appointment
+  // status writers, the barcode action map, the ward's acts-on-behalf list,
+  // the template scopes. A new role string would have been refused by every
+  // one of them, so the system owner would have signed in and found they
+  // could do LESS than the administrators they are meant to be above.
+  // Elevation is therefore a property of the ACCOUNT, not a different role:
+  // see crescIsElevated_ below. The owner is an administrator, with one
+  // extra key.
   admin: ['*'],
 
   doctor: [
@@ -264,7 +286,13 @@ var CRESC_ROLE_ALIAS = {
   'lab_tech':     'lab',
   'technician':   'lab',
   'administrator':'admin',
-  'sysadmin':     'admin'
+  'sysadmin':     'admin',
+  // A Users row spelled with any of these means an administrator whose
+  // Super_Admin flag should be set; see crescIsElevated_.
+  'superadmin':   'admin',
+  'super-admin':  'admin',
+  'super_admin':  'admin',
+  'owner':        'admin'
 };
 
 
@@ -281,17 +309,128 @@ function crescRole_(raw) {
   return CRESC_ROLE_ALIAS[r] || r;
 }
 
+/**
+ * Permissions no wildcard reaches — only a role that names them, or '**'.
+ *
+ * Kept as a list rather than as an absence from admin's grant so that the
+ * rule survives the next permission somebody adds: a new key is ordinary and
+ * flows to admin through '*' unless it is deliberately put here.
+ */
+var CRESC_ELEVATED_PERMS = ['admin.users.elevated'];
+
 /** Every permission a role holds, with admin's '*' expanded. */
 function crescPermsFor_(role) {
   var list = CRESC_ROLE_MATRIX[crescRole_(role)];
   if (!list) return [];
-  if (list.length === 1 && list[0] === '*') return Object.keys(CRESC_PERMS);
+  if (list.length === 1 && list[0] === '*') {
+    return Object.keys(CRESC_PERMS).filter(function (p) {
+      return CRESC_ELEVATED_PERMS.indexOf(p) === -1;
+    });
+  }
   return list.slice();
 }
 
 /** Does this role hold this permission? The whole matrix in one line. */
 function crescCan_(role, permission) {
   return crescPermsFor_(role).indexOf(crescStr_(permission)) !== -1;
+}
+
+/** The Users column that marks an administrator as the system owner. */
+var CRESC_SUPERADMIN_HEADER = 'Super_Admin';
+
+/**
+ * IS THIS ACCOUNT THE SYSTEM OWNER?
+ *
+ * YES / TRUE / 1 / Y in the Super_Admin column of the Users sheet, on an
+ * account whose role is already admin. Anything else, including a missing
+ * column, is no — the flag has to be set deliberately and nothing grants it
+ * by accident.
+ *
+ * BOOTSTRAP. With the column absent or empty on every row, nobody is
+ * elevated and the elevated endpoints refuse everybody. That is the safe
+ * direction, but it is also a clinic locked out of adding its first doctor,
+ * so crescEnsureSuperAdminColumn_() marks the FIRST administrator on the
+ * sheet when no one is marked at all. One owner, chosen by the order the
+ * accounts were created in, and visible on the sheet afterwards.
+ *
+ * @param {string} username
+ * @param {string} role  the canonical role, already through crescRole_
+ * @return {boolean}
+ */
+function crescIsElevated_(username, role) {
+  if (crescRole_(role) !== 'admin') return false;
+  var want = crescStr_(username).toUpperCase();
+  if (!want) return false;
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
+    if (!sh || sh.getLastRow() < 2) return false;
+
+    // ONE read of the sheet, not two. crescActor_ calls this on every
+    // execution an administrator makes, and the ensure-column pass needs the
+    // same rows this test does, so they share them.
+    var col = cresc_superAdminColumn_(sh);
+    if (col === -1) return false;
+    var data = sh.getDataRange().getValues();
+    cresc_seedFirstOwner_(sh, data, col);
+
+    for (var i = 1; i < data.length; i++) {
+      if (crescStr_(data[i][0]).toUpperCase() !== want) continue;
+      if (/^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][col]))) return true;
+      // The row may have just been seeded by the pass above, in which case
+      // `data` is the copy taken before the write.
+      return cresc_seededRow_ === (i + 1);
+    }
+  } catch (e) { /* no sheet, no elevation — fail closed */ }
+  return false;
+}
+
+/** The Super_Admin column index, adding the column if it is missing. */
+function cresc_superAdminColumn_(sh) {
+  var m = dc_headerMap_(sh);
+  if (m[CRESC_SUPERADMIN_HEADER] === undefined) {
+    if (typeof dc_ensureColumn_ !== 'function') return -1;
+    dc_ensureColumn_(sh, CRESC_SUPERADMIN_HEADER);
+    m = dc_headerMap_(sh);
+  }
+  var col = m[CRESC_SUPERADMIN_HEADER];
+  return (col === undefined) ? -1 : col;
+}
+
+/** The row this execution seeded, so the caller's stale copy can agree. */
+var cresc_seededRow_ = -1;
+
+/**
+ * Marks the first administrator as owner when NOBODY is marked.
+ *
+ * Idempotent, and it only ever fires on a sheet with no owner at all: once a
+ * clinic has one, this cannot appoint another.
+ */
+function cresc_seedFirstOwner_(sh, data, col) {
+  var firstAdminRow = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (!crescStr_(data[i][0])) continue;
+    if (/^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][col]))) return;   // already owned
+    if (firstAdminRow === -1 && crescRole_(data[i][2]) === 'admin' &&
+        crescStr_(data[i][3]).toUpperCase() !== 'INACTIVE') {
+      firstAdminRow = i + 1;
+    }
+  }
+  if (firstAdminRow === -1) return;
+  try {
+    sh.getRange(firstAdminRow, col + 1).setValue('YES');
+    cresc_seededRow_ = firstAdminRow;
+    if (typeof dc_invalidate_ === 'function') dc_invalidate_('Users');
+  } catch (e) { /* advisory */ }
+}
+
+/**
+ * The column, ensured, for callers that only need it to exist — the staff
+ * account list reads it directly afterwards.
+ */
+function crescEnsureSuperAdminColumn_(sh) {
+  var col = cresc_superAdminColumn_(sh);
+  if (col === -1) return;
+  cresc_seedFirstOwner_(sh, sh.getDataRange().getValues(), col);
 }
 
 /**
@@ -348,14 +487,30 @@ function crescActor_(token) {
   if (!sess) return CRESC_CURRENT_ACTOR || null;
 
   var role = crescRole_(sess.role);
+  var perms = crescPermsFor_(role);
+
+  // The owner's one extra key. Resolved here, once per execution, so every
+  // crescRequire_('admin.users.elevated') downstream is answered from the
+  // same lookup rather than re-reading the Users sheet per endpoint.
+  var elevated = false;
+  if (role === 'admin') {
+    elevated = crescIsElevated_(sess.username, role);
+    if (elevated) {
+      CRESC_ELEVATED_PERMS.forEach(function (p) {
+        if (perms.indexOf(p) === -1) perms.push(p);
+      });
+    }
+  }
+
   var actor = {
     username:    crescStr_(sess.username),
     role:        role,
     rawRole:     crescStr_(sess.role),
+    elevated:    elevated,
     doctorId:    crescStr_(sess.doctorId),
     displayName: (typeof dc_sessionName_ === 'function')
                    ? dc_sessionName_(sess) : crescStr_(sess.username),
-    permissions: crescPermsFor_(role)
+    permissions: perms
   };
   CRESC_CURRENT_ACTOR = actor;
   return actor;
