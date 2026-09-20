@@ -481,6 +481,15 @@ function crescAdminResetPassword(username, sessionToken) {
     var want = String(username || '').trim();
     if (!want) return { success: false, message: 'Name the account to reset.' };
 
+    // Resetting a password is handing somebody the account. It is gated the
+    // same way creating the account is, or the boundary would be one
+    // "forgotten password" away from meaningless.
+    var targetRole = cresc_roleOfAccount_(want);
+    if (cresc_roleIsElevated_(targetRole) &&
+        actor.permissions.indexOf('admin.users.elevated') === -1) {
+      return cresc_elevationRefusal_('reset the password of', targetRole);
+    }
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var temp = crescRandomPassword_(12);
 
@@ -531,6 +540,51 @@ function crescAdminResetPassword(username, sessionToken) {
  *  'patient' — see crescCreateStaffAccount for why. */
 function crescStaffRoles_() {
   return Object.keys(CRESC_ROLE_MATRIX).filter(function (r) { return r !== 'patient'; });
+}
+
+/**
+ * THE TWO ROLES THAT NEED THE SECOND KEY.
+ *
+ * A doctor's account signs prescriptions and is attributable to a named,
+ * registered person in law. An administrator's account can create more
+ * administrators. Creating, disabling or resetting either of those is
+ * admin.users.elevated; everything else — nurse, receptionist, pharmacist,
+ * lab technician, accountant — is ordinary admin.users, which is the day-to-
+ * day work a clinic manager does and should not need the owner for.
+ */
+var CRESC_ELEVATED_ROLES = ['doctor', 'admin'];
+
+function cresc_roleIsElevated_(role) {
+  return CRESC_ELEVATED_ROLES.indexOf(String(role || '').toLowerCase()) !== -1;
+}
+
+/** The canonical role on an existing Users row, or '' if there is no row. */
+function cresc_roleOfAccount_(username) {
+  try {
+    var sh = cresc_usersSheet_();
+    var data = sh.getDataRange().getValues();
+    var want = String(username || '').trim().toUpperCase();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim().toUpperCase() === want) {
+        return (typeof crescRole_ === 'function')
+          ? crescRole_(data[i][2]) : String(data[i][2] || '').toLowerCase();
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
+/**
+ * The refusal an ordinary administrator gets when they reach for one of the
+ * two elevated roles. It names what is needed and who has it, because
+ * "access denied" sends somebody to the wrong person for help.
+ */
+function cresc_elevationRefusal_(what, role) {
+  return { success: false, code: 'ELEVATION_REQUIRED',
+           message: 'Only the system owner may ' + what + ' a ' +
+                    (role === 'admin' ? 'administrator' : role) + '. ' +
+                    'Staff, pharmacy, lab and accounts accounts are yours to ' +
+                    'manage; doctors and administrators are not.' };
 }
 
 /**
@@ -601,6 +655,14 @@ function crescCreateStaffAccount(payload, sessionToken) {
       return { success: false,
                message: 'Patients are not created here. Register the patient, ' +
                         'and the portal login is their patient ID.' };
+    }
+
+    // THE SECOND GATE. crescRequire_ above established that the caller may
+    // manage staff accounts at all; this establishes whether they may create
+    // one of the two roles that can undo that boundary.
+    if (cresc_roleIsElevated_(known) &&
+        actor.permissions.indexOf('admin.users.elevated') === -1) {
+      return cresc_elevationRefusal_('create', known);
     }
 
     var users = cresc_usersSheet_();
@@ -684,6 +746,193 @@ function crescCreateStaffAccount(payload, sessionToken) {
              message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
   } finally {
     try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/**
+ * FRONTEND ENTRY. Switch a staff account off, or back on.
+ *
+ * WHY THERE IS NO DELETE. A Users row is the only thing that connects an
+ * audit entry, a signed note, a dispensed bill and a verified lab result back
+ * to a person. Deleting the row does not remove any of that work; it removes
+ * the ability to say whose it was. "Removing" a member of staff is therefore
+ * always this: the account is marked INACTIVE, AuthLogin refuses it at the
+ * door, and everything they did stays attributable.
+ *
+ * WHO MAY. admin.users for the everyday roles. A doctor's or an
+ * administrator's account takes admin.users.elevated, on the same reasoning
+ * as creating one: disabling the clinic's other administrators is how a
+ * compromised administrator account becomes the only administrator account.
+ *
+ * NOBODY MAY DISABLE THEMSELVES. An owner who switches off their own login
+ * has locked the clinic out of its own user management with no way back in
+ * through the application.
+ *
+ * @param {string} username
+ * @param {boolean} active
+ * @param {string} sessionToken
+ * @return {{success:boolean, message:string, code?:string}}
+ */
+function crescSetAccountActive(username, active, sessionToken) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    var actor = crescRequire_(sessionToken, 'admin.users');
+
+    var want = String(username || '').trim();
+    if (!want) return { success: false, message: 'Name the account.' };
+    var on = (active === true || String(active).toUpperCase() === 'TRUE');
+
+    if (want.toUpperCase() === String(actor.username || '').toUpperCase()) {
+      return { success: false,
+               message: 'You cannot switch your own account off. Ask another ' +
+                        'administrator, so there is always somebody who can ' +
+                        'switch it back on.' };
+    }
+
+    var targetRole = cresc_roleOfAccount_(want);
+    if (!targetRole) return { success: false, message: 'No account with the ID ' + want + '.' };
+    if (cresc_roleIsElevated_(targetRole) &&
+        actor.permissions.indexOf('admin.users.elevated') === -1) {
+      return cresc_elevationRefusal_(on ? 'switch on' : 'switch off', targetRole);
+    }
+
+    var users = cresc_usersSheet_();
+    var data = users.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0] || '').trim().toUpperCase() !== want.toUpperCase()) continue;
+
+      // Column D (index 3) is Status on every deployment of this sheet, and
+      // AuthLogin reads it by the same index.
+      var now = on ? 'ACTIVE' : 'INACTIVE';
+      if (String(data[i][3] || '').trim().toUpperCase() === now) {
+        return { success: true, message: want + ' is already ' + now.toLowerCase() + '.' };
+      }
+      users.getRange(i + 1, 4).setValue(now);
+      SpreadsheetApp.flush();
+      if (typeof dc_invalidate_ === 'function') dc_invalidate_('Users');
+
+      try {
+        crescAuthAudit_(on ? CRESC_AUTH_EVENTS.ACCOUNT_ENABLED
+                           : CRESC_AUTH_EVENTS.ACCOUNT_DISABLED,
+                        want, targetRole, { by: actor.username });
+      } catch (e) {}
+      try {
+        logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                  on ? 'STAFF_ACCOUNT_ENABLED' : 'STAFF_ACCOUNT_DISABLED',
+                  'User', want.toUpperCase(), { role: targetRole });
+      } catch (e) {}
+
+      return { success: true,
+               message: on
+                 ? want + ' can sign in again.'
+                 : want + ' can no longer sign in. Everything they recorded ' +
+                          'stays on the record in their name.' };
+    }
+    return { success: false, message: 'No account with the ID ' + want + '.' };
+  } catch (err) {
+    return { success: false,
+             message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/**
+ * FRONTEND ENTRY. The staff accounts, for the screen that manages them.
+ *
+ * NO CREDENTIAL MATERIAL LEAVES THIS FUNCTION — not the digest, not its
+ * length, not its salt. What comes back is who exists, what they are, whether
+ * they can sign in, and whether their password is still the temporary one
+ * somebody read out to them, which is the only question about a password this
+ * screen has any business asking.
+ *
+ * Patients are not here. A patient's login lives on the Patients sheet and is
+ * managed by registering and de-registering the patient, not by a staff list.
+ *
+ * @param {string} sessionToken
+ * @return {{success:boolean, elevated:boolean, accounts:Array, message:string}}
+ */
+function crescListStaffAccounts(sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, 'admin.users');
+    var elevated = actor.permissions.indexOf('admin.users.elevated') !== -1;
+
+    var sh = cresc_usersSheet_();
+    crescEnsureSuperAdminColumn_(sh);
+    var m = dc_headerMap_(sh);
+    var data = sh.getDataRange().getValues();
+    var superCol = m[CRESC_SUPERADMIN_HEADER];
+    var mustCol  = m['Must_Change'];
+    var emailCol = m['Email Address'];
+    var stampCol = m['Password_Updated_At'];
+
+    var out = [];
+    for (var i = 1; i < data.length; i++) {
+      var username = String(data[i][0] || '').trim();
+      if (!username) continue;
+      var role = (typeof crescRole_ === 'function')
+        ? crescRole_(data[i][2]) : String(data[i][2] || '').toLowerCase();
+      var isSuper = (superCol !== undefined) &&
+                    /^(YES|TRUE|1|Y)$/i.test(String(data[i][superCol] || '').trim());
+
+      out.push({
+        username: username,
+        role: role,
+        active: String(data[i][3] || '').trim().toUpperCase() !== 'INACTIVE',
+        superAdmin: isSuper,
+        email: (emailCol !== undefined) ? String(data[i][emailCol] || '').trim() : '',
+        mustChange: (mustCol !== undefined) &&
+                    /^(YES|TRUE|1|Y)$/i.test(String(data[i][mustCol] || '').trim()),
+        passwordChangedAt: (stampCol !== undefined && data[i][stampCol])
+          ? Utilities.formatDate(new Date(data[i][stampCol]),
+                                 Session.getScriptTimeZone(), 'dd MMM yyyy')
+          : '',
+        // Whether THIS caller may act on THIS row, so the list can grey out
+        // what it cannot change rather than offering buttons that refuse.
+        manageable: (elevated || !cresc_roleIsElevated_(role)) &&
+                    username.toUpperCase() !== String(actor.username || '').toUpperCase(),
+        isSelf: username.toUpperCase() === String(actor.username || '').toUpperCase()
+      });
+    }
+
+    out.sort(function (a, b) {
+      return (a.active === b.active) ? a.username.localeCompare(b.username)
+                                     : (a.active ? -1 : 1);
+    });
+    return { success: true, elevated: elevated, accounts: out, message: '' };
+  } catch (err) {
+    return { success: false, elevated: false, accounts: [],
+             message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
+  }
+}
+
+/**
+ * FRONTEND ENTRY. Who am I allowed to manage, and am I the owner?
+ *
+ * The Add Staff form asks this before it draws its Role list, so an ordinary
+ * administrator is not offered Doctor and Administrator and then refused at
+ * the save. An affordance, not a gate — crescCreateStaffAccount decides.
+ *
+ * @return {{success:boolean, elevated:boolean, roles:Array<string>,
+ *           elevatedRoles:Array<string>}}
+ */
+function crescUserAdminScope(sessionToken) {
+  try {
+    var actor = crescRequire_(sessionToken, 'admin.users');
+    var elevated = actor.permissions.indexOf('admin.users.elevated') !== -1;
+    return {
+      success: true,
+      elevated: elevated,
+      username: actor.username,
+      roles: crescStaffRoles_().filter(function (r) {
+        return elevated || !cresc_roleIsElevated_(r);
+      }),
+      elevatedRoles: CRESC_ELEVATED_ROLES.slice()
+    };
+  } catch (err) {
+    return { success: false, elevated: false, roles: [], elevatedRoles: [],
+             message: String((err && err.message) || err).replace('FORBIDDEN: ', '') };
   }
 }
 

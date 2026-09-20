@@ -24,6 +24,13 @@
       <button id="dash-add-staff-btn" class="btn btn-sm btn-outline-success shadow-sm d-none" onclick="openAddStaff()">
         <i class="fa-solid fa-user-plus me-1"></i> Add Staff
       </button>
+      <!-- Adding an account was supported and REMOVING one was not, so a
+           member of staff who left kept a working login until somebody
+           edited the Users sheet by hand. Same permission as Add Staff;
+           crescPaintRBAC does not know this id, so it is hidden here. -->
+      <button id="dash-staff-list-btn" class="btn btn-sm btn-outline-secondary shadow-sm d-none" onclick="openStaffAccounts()">
+        <i class="fa-solid fa-users-gear me-1"></i> Staff Accounts
+      </button>
       <!-- listVisitingConsultants has existed in Doctor_Visiting.gs with no
            screen behind it. The shared visiting slot is the one login several
            different doctors sign in on, so "who was on it on the 14th" is the
@@ -118,6 +125,10 @@
                 <option value="accountant">Accountant</option>
                 <option value="admin">Administrator</option>
               </select>
+              <!-- Filled by asApplyScope() when the signed-in administrator
+                   is not the system owner: Doctor and Administrator are
+                   hidden, and this says who to ask. -->
+              <div id="as-role-note" class="form-text small label-bright d-none"></div>
             </div>
             <div class="col-md-6">
               <label class="form-label small label-bright mb-1">Email (optional)</label>
@@ -179,6 +190,51 @@
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
         <button type="button" id="as-save" class="btn btn-sm btn-success fw-bold" onclick="asCreate()">
           Create the account
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     STAFF ACCOUNTS
+
+     Who can sign in, and who can stop them.
+
+     NOTHING IS DELETED HERE, and there is no button that would. A Users row
+     is the only thing connecting an audit entry, a signed note, a dispensed
+     bill and a verified lab result back to a person; deleting it does not
+     remove that work, it removes the ability to say whose it was. So a
+     member of staff who leaves is switched OFF — AuthLogin refuses the
+     account at the door and everything they recorded stays in their name.
+
+     Doctors and administrators are greyed out for anyone but the system
+     owner. See crescIsElevated_ in RBAC.gs for why that boundary exists and
+     why it is a property of the account rather than a separate role.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="staffAccountsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force">
+          <i class="fa-solid fa-users-gear me-2" style="color:var(--info-fg);"></i>Staff accounts
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="sa-note" class="small label-bright mb-3"></div>
+        <div id="sa-msg" class="d-none mb-3"></div>
+        <div id="sa-list">
+          <div class="text-center py-4 label-bright">
+            <i class="fa-solid fa-spinner fa-spin me-2"></i>Loading…
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-sm btn-outline-success fw-bold"
+                onclick="openAddStaff()">
+          <i class="fa-solid fa-user-plus me-1"></i> Add someone
         </button>
       </div>
     </div>
@@ -1235,6 +1291,47 @@
   }
   window.asRoleChanged = asRoleChanged;
 
+  /**
+   * WHICH ROLES THIS ADMINISTRATOR MAY CREATE.
+   *
+   * Doctor and Administrator take admin.users.elevated, which only the
+   * system owner holds (crescIsElevated_ in RBAC.gs). Asking the server
+   * first means an ordinary administrator is not offered the two options
+   * that will be refused at the save — and, more usefully, the form says
+   * WHY they are missing instead of leaving somebody to wonder whether the
+   * list is broken.
+   *
+   * The server decides either way: crescCreateStaffAccount re-checks. This
+   * is the affordance, not the gate.
+   */
+  function asApplyScope(scope) {
+    const sel = asEl('as-role');
+    if (!sel) return;
+    const elevated = !!(scope && scope.elevated);
+    const blocked = (scope && scope.elevatedRoles) || ['doctor', 'admin'];
+
+    Array.prototype.forEach.call(sel.options, function (opt) {
+      const restricted = blocked.indexOf(opt.value) !== -1;
+      opt.hidden = restricted && !elevated;
+      opt.disabled = opt.hidden;
+    });
+
+    // The default was Doctor, which is the one an ordinary administrator may
+    // not create — so the form opened on a role it would refuse.
+    if (sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].hidden) {
+      sel.value = elevated ? 'doctor' : 'nurse';
+    }
+
+    const note = asEl('as-role-note');
+    if (note) {
+      note.classList.toggle('d-none', elevated);
+      note.textContent = elevated ? '' :
+        'Doctors and administrators are added by the system owner. ' +
+        'Everything else is yours.';
+    }
+    asRoleChanged();
+  }
+
   function openAddStaff() {
     const modalEl = asEl('addStaffModal');
     ['as-name','as-username','as-email','as-specialty','as-qual','as-regno','as-password']
@@ -1247,8 +1344,191 @@
     asEl('as-form').classList.remove('d-none');
     asEl('as-save').classList.remove('d-none');
     (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+
+    // Asked every time the form opens rather than cached: an owner may have
+    // granted or withdrawn the flag since this tab was loaded, and being
+    // wrong here means offering somebody a role they will be refused.
+    google.script.run
+      .withSuccessHandler(asApplyScope)
+      // A failure leaves the list as it is; the server still refuses what it
+      // must, and a form that offers too much is better than one that
+      // silently offers nothing because a lookup timed out.
+      .withFailureHandler(function () {})
+      .crescUserAdminScope(window.sessionToken || '');
   }
   window.openAddStaff = openAddStaff;
+
+  /* ══════════════════════════════════════════════════════════════════
+     STAFF ACCOUNTS — the list, and the one switch on each row
+     ══════════════════════════════════════════════════════════════════ */
+
+  const SA_ROLE_LABELS = {
+    doctor: 'Doctor', nurse: 'Nurse', receptionist: 'Receptionist',
+    pharmacist: 'Pharmacist', lab: 'Lab technician',
+    accountant: 'Accountant', admin: 'Administrator'
+  };
+
+  /**
+   * A value safe to drop inside a single-quoted JS string in an onclick.
+   *
+   * crescEsc() escapes for HTML TEXT — it deliberately leaves the apostrophe
+   * alone, which is right for "O'Brien" in a table cell and wrong inside
+   * onclick="f('...')", where it closes the string and everything after it
+   * is executed. Usernames created through Add Staff cannot contain one, but
+   * a row typed into the Users sheet by hand can, and that row would be
+   * running arbitrary script in an administrator's session.
+   */
+  function saJs(v) {
+    return String(v === null || v === undefined ? '' : v)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '\\x3c');
+  }
+
+  function saMsg(text, kind) {
+    const box = asEl('sa-msg');
+    if (!box) return;
+    if (!text) { box.classList.add('d-none'); return; }
+    box.className = 'alert alert-' + (kind || 'info') + ' py-2 small mb-3';
+    box.textContent = text;
+    box.classList.remove('d-none');
+  }
+
+  function openStaffAccounts() {
+    const modalEl = asEl('staffAccountsModal');
+    saMsg('');
+    asEl('sa-list').innerHTML =
+      '<div class="text-center py-4 label-bright">' +
+      '<i class="fa-solid fa-spinner fa-spin me-2"></i>Loading…</div>';
+    (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+    saLoad();
+  }
+  window.openStaffAccounts = openStaffAccounts;
+
+  function saLoad() {
+    google.script.run
+      .withSuccessHandler(saRender)
+      .withFailureHandler(function (err) {
+        asEl('sa-list').innerHTML =
+          '<div class="text-danger small py-3">Could not read the account list: ' +
+          window.crescEsc((err && err.message) || err) + '</div>';
+      })
+      .crescListStaffAccounts(window.sessionToken || '');
+  }
+
+  function saRender(res) {
+    const host = asEl('sa-list');
+    if (!res || !res.success) {
+      host.innerHTML = '<div class="text-danger small py-3">' +
+        window.crescEsc((res && res.message) || 'The account list could not be read.') +
+        '</div>';
+      return;
+    }
+
+    const note = asEl('sa-note');
+    if (note) {
+      note.textContent = res.elevated
+        ? 'You are the system owner: you may manage every account, including ' +
+          'doctors and administrators.'
+        : 'Doctors and administrators are managed by the system owner. ' +
+          'Everything else is yours.';
+    }
+
+    if (!res.accounts.length) {
+      host.innerHTML = '<div class="label-bright small py-3">No staff accounts on file.</div>';
+      return;
+    }
+
+    host.innerHTML =
+      '<div class="table-responsive"><table class="table table-sm align-middle mb-0">' +
+      '<thead><tr>' +
+        '<th>User ID</th><th>Role</th><th>Password</th><th>Status</th><th></th>' +
+      '</tr></thead><tbody>' +
+      res.accounts.map(function (a) {
+        const e = window.crescEsc;
+        const role = SA_ROLE_LABELS[a.role] || a.role;
+        const pwd = a.mustChange
+          ? '<span class="text-warning">temporary — not yet changed</span>'
+          : (a.passwordChangedAt
+              ? '<span class="label-bright">changed ' + e(a.passwordChangedAt) + '</span>'
+              : '<span class="label-bright">—</span>');
+        const status = a.active
+          ? '<span class="badge bg-success-subtle text-success-emphasis">Active</span>'
+          : '<span class="badge bg-danger-subtle text-danger-emphasis">Switched off</span>';
+
+        let actions;
+        if (a.isSelf) {
+          // Switching off your own account locks the clinic out of its own
+          // user management with no way back in through the application.
+          actions = '<span class="label-bright small">this is you</span>';
+        } else if (!a.manageable) {
+          actions = '<span class="label-bright small">owner only</span>';
+        } else {
+          actions =
+            '<button class="btn btn-sm btn-outline-secondary me-1" ' +
+              'onclick="saReset(\'' + saJs(a.username) + '\')">Reset password</button>' +
+            '<button class="btn btn-sm ' +
+              (a.active ? 'btn-outline-danger' : 'btn-outline-success') + '" ' +
+              'onclick="saSetActive(\'' + saJs(a.username) + '\', ' + (!a.active) + ')">' +
+              (a.active ? 'Switch off' : 'Switch on') + '</button>';
+        }
+
+        return '<tr' + (a.active ? '' : ' style="opacity:.6;"') + '>' +
+          '<td class="fw-bold">' + e(a.username) +
+            (a.superAdmin ? ' <span class="badge bg-info-subtle text-info-emphasis">owner</span>' : '') +
+            (a.email ? '<div class="label-bright" style="font-size:.68rem;">' + e(a.email) + '</div>' : '') +
+          '</td>' +
+          '<td>' + e(role) + '</td>' +
+          '<td class="small">' + pwd + '</td>' +
+          '<td>' + status + '</td>' +
+          '<td class="text-end text-nowrap">' + actions + '</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table></div>';
+  }
+
+  function saSetActive(username, active) {
+    const verb = active ? 'switch on' : 'switch off';
+    const ask = (typeof crescConfirm === 'function')
+      ? crescConfirm(
+          active
+            ? username + ' will be able to sign in again.'
+            : username + ' will no longer be able to sign in. Everything they ' +
+              'have recorded stays on the record in their name — nothing is deleted.',
+          { title: 'Staff account', okLabel: verb.charAt(0).toUpperCase() + verb.slice(1) })
+      : Promise.resolve(window.confirm(verb + ' ' + username + '?'));
+
+    Promise.resolve(ask).then(function (ok) {
+      if (!ok) return;
+      saMsg('');
+      google.script.run
+        .withSuccessHandler(function (res) {
+          saMsg((res && res.message) || 'Done.', (res && res.success) ? 'success' : 'danger');
+          if (res && res.success) saLoad();
+        })
+        .withFailureHandler(function (err) {
+          saMsg('Network error: ' + ((err && err.message) || err), 'danger');
+        })
+        .crescSetAccountActive(username, active, window.sessionToken || '');
+    });
+  }
+  window.saSetActive = saSetActive;
+
+  function saReset(username) {
+    saMsg('');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        // The temporary password is shown ONCE and is never readable again.
+        saMsg((res && res.message) || 'Done.', (res && res.success) ? 'success' : 'danger');
+        if (res && res.success) saLoad();
+      })
+      .withFailureHandler(function (err) {
+        saMsg('Network error: ' + ((err && err.message) || err), 'danger');
+      })
+      .crescAdminResetPassword(username, window.sessionToken || '');
+  }
+  window.saReset = saReset;
 
   function asCreate() {
     const btn = asEl('as-save');
@@ -1396,6 +1676,8 @@
         if (b && window.crescCan && window.crescCan('admin.audit')) b.classList.remove('d-none');
         const sb = document.getElementById('dash-add-staff-btn');
         if (sb && window.crescCan && window.crescCan('admin.users')) sb.classList.remove('d-none');
+        const sl = document.getElementById('dash-staff-list-btn');
+        if (sl && window.crescCan && window.crescCan('admin.users')) sl.classList.remove('d-none');
         const vb = document.getElementById('dash-visiting-btn');
         if (vb && window.crescCan && window.crescCan('admin.audit')) vb.classList.remove('d-none');
       }

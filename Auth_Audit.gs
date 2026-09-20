@@ -64,7 +64,14 @@ var CRESC_AUTH_EVENTS = {
   PASSWORD_RESET_REFUSED: 'PASSWORD_RESET_REFUSED',
   PASSWORD_MIGRATION: 'PASSWORD_MIGRATION',
   LEGACY_REFUSED:     'LOGIN_LEGACY_CREDENTIAL',   // plain-text cell, refused
-  MUST_CHANGE:        'LOGIN_MUST_CHANGE'          // correct password, expired by policy
+  MUST_CHANGE:        'LOGIN_MUST_CHANGE',         // correct password, expired by policy
+
+  // An account switched on or off. Rows are never deleted from Users - a
+  // deleted row takes the history of who did what with it - so "removing" a
+  // member of staff is this event and nothing else, and the register of who
+  // removed whom, and when, is the audit log.
+  ACCOUNT_DISABLED:   'ACCOUNT_DISABLED',
+  ACCOUNT_ENABLED:    'ACCOUNT_ENABLED'
 };
 
 
