@@ -424,7 +424,7 @@ function dpdp_editorSession_(fn) {
   try {
     return fn(token);
   } finally {
-    try { revokeSession(token); } catch (e) {}
+    try { revokeSession_(token); } catch (e) {}
   }
 }
 

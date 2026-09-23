@@ -5,6 +5,7 @@
 // ==========================================
 
 function auditIPAdmissionsSheet() {
+  crescEditorOnly_('auditIPAdmissionsSheet');
   const out = { success: true, sheetExists: false, headers: [], rowCount: 0,
                 statusTally: {}, patients: [], warnings: [] };
   try {

@@ -118,10 +118,15 @@ function createOPDLabOrder(p) {
  *
  * IP orders skip payment entry and post to the IP account as before.
  */
-function collectAndBillLabSample(payload) {
+function collectAndBillLabSample(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    // It used to take no token and call generateLabBill / collectLabSample
+    // without one, so both refused and this entry point could never succeed.
+    // The token is checked here and handed to each step, which checks its own
+    // permission (billing.write, lab.collect) against the same person.
+    crescRequire_(sessionToken, ['lab.collect', 'billing.write']);
     if (!payload || !payload.orderId) return { success: false, message: 'Order ID required.' };
 
     var od = getLabOrderDetail(payload.orderId);
@@ -142,12 +147,12 @@ function collectAndBillLabSample(payload) {
         paymentMode: payload.paymentMode,
         paidAmount: payload.paidAmount,
         discountPercent: payload.discountPercent
-      });
+      }, sessionToken);
       if (!billRes.success) return { success: false, message: billRes.message, stage: 'BILLING' };
     }
 
     // ---- then collect
-    var colRes = collectLabSample({ orderId: order.orderId, samples: payload.samples });
+    var colRes = collectLabSample({ orderId: order.orderId, samples: payload.samples }, sessionToken);
     if (!colRes.success) {
       return { success: false, stage: 'COLLECTION',
                message: 'Billed, but collection failed: ' + colRes.message +

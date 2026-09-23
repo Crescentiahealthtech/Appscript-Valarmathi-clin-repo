@@ -5,6 +5,7 @@
 // ============================================================================
 
 function debugDoctorSetup() {
+  crescEditorOnly_('debugDoctorSetup');
   var out = [];
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -68,15 +69,15 @@ function debugDoctorSetup() {
 
   // ---- 3. What the picker actually returns -------------------------------
   try {
-    var active = getActiveDoctors();
-    out.push("getActiveDoctors() returned " + active.length + " doctor(s).");
+    var active = getActiveDoctors_();
+    out.push("getActiveDoctors_() returned " + active.length + " doctor(s).");
     if (!active.length) {
       out.push(">>> THIS IS WHY THE DROPDOWN IS EMPTY. Fix the exclusions above.");
     } else {
       active.forEach(function (d) { out.push("   " + d.doctorId + " — " + d.name); });
     }
   } catch (e) {
-    out.push("getActiveDoctors() THREW: " + e.message);
+    out.push("getActiveDoctors_() THREW: " + e.message);
   }
   out.push("");
 

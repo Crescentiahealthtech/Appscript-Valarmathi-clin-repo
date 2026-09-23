@@ -629,7 +629,7 @@ function lockFinancialPeriod(period, loggedBy, sessionToken) {
   }
 }
 
-function getLockedPeriods() {
+function getLockedPeriods_() {
   try { return { success: true, periods: acc_lockedSet_() }; }
   catch (e) { return { success: false, message: e.message }; }
 }

@@ -115,7 +115,7 @@ function saveOPEncounter_(payload) {
 
     // Pharmacy Routing — INTERNAL drugs only (external Rx prints but is never billed)
     if (rxSheet && payload.meds && payload.meds.length > 0) {
-      clearExistingQueueRows(rxSheet, encounterId, 2);
+      clearExistingQueueRows_(rxSheet, encounterId, 2);
       payload.meds.forEach((med, index) => {
         if ((med.source || "INTERNAL").toUpperCase() === "EXTERNAL") return; // skip external Rx
         rxSheet.appendRow([
@@ -175,7 +175,7 @@ function saveOPEncounter_(payload) {
     }
 
     // Self-learning templates (complaints / history / advice) — non-fatal
-    try { if (payload.templateLearn) learnTemplates(payload.templateLearn); }
+    try { if (payload.templateLearn) learnTemplates_(payload.templateLearn); }
     catch (tErr) { Logger.log("template learn skipped: " + tErr.message); }
 
     SpreadsheetApp.flush();
@@ -188,7 +188,7 @@ function saveOPEncounter_(payload) {
   }
 }
 
-function clearExistingQueueRows(sheet, encounterId, colIndex) {
+function clearExistingQueueRows_(sheet, encounterId, colIndex) {
   const data = sheet.getDataRange().getDisplayValues();
   for (let i = data.length - 1; i >= 1; i--) {
     if (data[i][colIndex] === encounterId) sheet.deleteRow(i + 1);
@@ -278,7 +278,7 @@ function getEncounterForPrint(encounterId, sessionToken) {
 // 4. PHARMACY STOCK  (Brand[1] Generic[2] Type[3] Stock[4] Reorder[5])
 //    Single definition — the old plain version has been removed.
 // ─────────────────────────────────────────────────────────────
-function fetchPharmacyInventoryForOP() {
+function fetchPharmacyInventoryForOP_() {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Pharmacy_Inventory");
     if (!sheet) return [];
@@ -355,7 +355,7 @@ function op_universalDrugs_() {
 // ─────────────────────────────────────────────────────────────
 // 6. LAB TEST MASTER  (Name[0] Panel[1] Internal Y/N[2] Sample[3] TAT[4])
 // ─────────────────────────────────────────────────────────────
-function fetchLabTestMaster() {
+function fetchLabTestMaster_() {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Lab_Test_Master");
     if (!sheet) return { internal: [], external: [] };
@@ -380,7 +380,7 @@ function fetchLabTestMaster() {
 // ─────────────────────────────────────────────────────────────
 // 7. CLINICAL TEMPLATES  (Category[0] Text[1] UseCount[2]) — self-learning
 // ─────────────────────────────────────────────────────────────
-function fetchClinicalTemplates() {
+function fetchClinicalTemplates_() {
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Clinical_Templates");
     if (!sheet) return { CC: [], HX: [], ADVICE: [] };
@@ -399,7 +399,7 @@ function fetchClinicalTemplates() {
 }
 
 // Increments use-count / inserts new phrases. Called from saveOPEncounter.
-function learnTemplates(items) {
+function learnTemplates_(items) {
   if (!items || !items.length) return;
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return;
@@ -427,7 +427,7 @@ function learnTemplates(items) {
     });
     SpreadsheetApp.flush();
   } catch (e) {
-    Logger.log("learnTemplates error: " + e.message);
+    Logger.log("learnTemplates_ error: " + e.message);
   } finally {
     lock.releaseLock();
   }

@@ -265,7 +265,7 @@ function RUN_90_resetOnePassword() {
   var token = issueSession_({ username: 'SCRIPT_OWNER', role: 'admin',
                               doctorId: '', name: 'Script owner (editor)' });
   var res = crescAdminResetPassword(USERNAME, token);
-  try { revokeSession(token); } catch (e) {}      // the session ends with the job
+  try { revokeSession_(token); } catch (e) {}      // the session ends with the job
 
   Logger.log(res.message);
   return res.message;
@@ -285,7 +285,7 @@ function RUN_91_setVoicePolicy() {
   var token = issueSession_({ username: 'SCRIPT_OWNER', role: 'admin',
                               doctorId: '', name: 'Script owner (editor)' });
   var res = dpdpSetVoicePolicy(POLICY, token);
-  try { revokeSession(token); } catch (e) {}
+  try { revokeSession_(token); } catch (e) {}
 
   Logger.log(res.message);
   return res.message;

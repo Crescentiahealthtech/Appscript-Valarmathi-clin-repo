@@ -513,7 +513,7 @@ function getClinicDayGrid(dateStr, sessionToken) {
     var dateKey = dc_dateKey_(dateStr);
     if (!dateKey) return { success: false, message: "Select a valid date.", columns: [] };
 
-    var all = getActiveDoctors();
+    var all = getActiveDoctors_();
     var visible = (scope.mode === "ALL") ? all : all.filter(function (d) {
       return scope.doctorIds.indexOf(d.doctorId) !== -1;
     });

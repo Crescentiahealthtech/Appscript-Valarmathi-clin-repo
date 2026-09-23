@@ -7,7 +7,7 @@
 function getTenantId_() { return "VALARMATHI"; }
 
 // ---------- DOCTOR MASTER ----------
-function getActiveDoctors() {
+function getActiveDoctors_() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("Doctors");
@@ -51,6 +51,7 @@ function resolveDoctorByUsername_(username) {
 // Admin-run once: creates the sheet and seeds your two existing names so
 // historical records keep resolving. Fill Linked_Username after, to bind logins.
 function setupDoctorsSheet() {
+  crescEditorOnly_('setupDoctorsSheet', ['admin.config', 'admin.users']);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName("Doctors");
   if (!sheet) {

@@ -156,6 +156,7 @@ function bc_existsInColumn_(sheet, col1, value) {
  * barcode. Lists every Patient ID that appears on more than one row.
  */
 function auditDuplicatePatientIds() {
+  crescEditorOnly_('auditDuplicatePatientIds');
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
   if (!sheet || sheet.getLastRow() < 2) return 'Patients sheet is empty.';
   var vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
@@ -535,7 +536,7 @@ function getSampleLabelData(orderId, sessionToken) {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.SAMPLES);
     if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'No samples found.' };
 
-    var map = labHeaderMap(sheet);
+    var map = labHeaderMap_(sheet);
     var cells = sheet.getRange(2, map['OrderID'] + 1, sheet.getLastRow() - 1, 1)
       .createTextFinder(id).matchEntireCell(true).findAll();
     if (!cells.length) return { success: false, message: 'No tubes recorded for ' + id + '.' };
@@ -601,7 +602,7 @@ function verifyCollectionIdentity(orderId, scannedCode, sessionToken) {
     var oSheet = ss.getSheetByName(LAB.ORDERS);
     if (!oSheet || oSheet.getLastRow() < 2) return { success: false, message: 'Lab orders sheet is missing.' };
 
-    var oMap = labHeaderMap(oSheet);
+    var oMap = labHeaderMap_(oSheet);
     var cell = oSheet.getRange(2, oMap['OrderID'] + 1, oSheet.getLastRow() - 1, 1)
       .createTextFinder(id).matchEntireCell(true).findNext();
     if (!cell) return { success: false, message: 'Order ' + id + ' was not found.' };
@@ -666,7 +667,7 @@ function receiveLabSampleByBarcode(barcodeId, sessionToken) {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.SAMPLES);
     if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'No samples found.' };
 
-    var map = labHeaderMap(sheet);
+    var map = labHeaderMap_(sheet);
     var cell = sheet.getRange(2, map['BarcodeID'] + 1, sheet.getLastRow() - 1, 1)
       .createTextFinder(code).matchEntireCell(true).matchCase(false).findNext();
     if (!cell) {

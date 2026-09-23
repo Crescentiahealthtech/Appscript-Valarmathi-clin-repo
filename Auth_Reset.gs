@@ -428,6 +428,7 @@ function cresc_htmlEsc_(v) {
  * screen and a problem the clinic should fix before somebody needs it at 2am.
  */
 function crescResetReadiness() {
+  crescEditorOnly_('crescResetReadiness');
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var out = [], staffMissing = 0, patientMissing = 0, staffOk = 0, patientOk = 0;
 

@@ -132,6 +132,7 @@ function crescGetBundle(name) {
  * Run from the script editor after adding, renaming or re-pasting a UI file.
  */
 function crescVerifyBundles() {
+  crescEditorOnly_('crescVerifyBundles');
   var seen = {}, problems = [], sizes = [], count = 0;
   Object.keys(CRESC_BUNDLES).forEach(function (key) {
     CRESC_BUNDLES[key].forEach(function (f) {

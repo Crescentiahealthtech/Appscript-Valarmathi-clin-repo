@@ -116,7 +116,7 @@ function opt_examSheet_() {
 // ============================================================================
 
 /**
- * FRONTEND ENTRY. Replaces fetchClinicalTemplates() in the OP module.
+ * FRONTEND ENTRY. Replaces fetchClinicalTemplates_() in the OP module.
  * Personal phrases rank above clinic phrases; each tier sorted by use count.
  * @return {{success, CC:[], HX:[], ADVICE:[]}}  items = {text, count, scope, id}
  */
@@ -177,8 +177,8 @@ function getScopedTemplates(doctorId, sessionToken) {
 
 /**
  * Records phrases against the doctor who actually used them.
- * Called from saveOPEncounterScoped — replaces the global learnTemplates()
- * for the OP path. Existing callers of learnTemplates() are unaffected.
+ * Called from saveOPEncounterScoped — replaces the global learnTemplates_()
+ * for the OP path. Existing callers of learnTemplates_() are unaffected.
  */
 function learnTemplatesScoped_(items, doctorId) {
   if (!items || !items.length) return;

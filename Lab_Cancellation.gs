@@ -52,10 +52,11 @@ function labx_up_(v) { return labx_str_(v).toUpperCase(); }
  * live sheets. Idempotent.
  *
  * The columns go on the END of both the schema array and the sheet, because
- * labHeaderMap() resolves LAB_* sheets from LAB_SCHEMA by POSITION — every
+ * labHeaderMap_() resolves LAB_* sheets from LAB_SCHEMA by POSITION — every
  * existing index has to keep the value it has.
  */
 function labEnsureCancellationColumns() {
+  crescEditorOnly_('labEnsureCancellationColumns');
   var lock = LockService.getScriptLock();
   var report = [];
   try {
@@ -65,7 +66,7 @@ function labEnsureCancellationColumns() {
     Object.keys(LABX_CANCEL_COLS).forEach(function (sheetName) {
       var wanted = LABX_CANCEL_COLS[sheetName];
 
-      // a) the in-memory schema, so labHeaderMap() knows the indices
+      // a) the in-memory schema, so labHeaderMap_() knows the indices
       if (LAB_SCHEMA[sheetName]) {
         wanted.forEach(function (h) {
           if (LAB_SCHEMA[sheetName].indexOf(h) === -1) LAB_SCHEMA[sheetName].push(h);
@@ -156,7 +157,7 @@ function labCancelPendingOrder(payload, sessionToken) {
     if (!sheet || sheet.getLastRow() < 2) {
       return { success: false, message: "There are no lab orders." };
     }
-    var map = labHeaderMap(sheet);
+    var map = labHeaderMap_(sheet);
     var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
 
     for (var i = 0; i < data.length; i++) {
@@ -200,7 +201,7 @@ function labCancelPendingOrder(payload, sessionToken) {
       // The order's individual tests go with it, or the worklist keeps them.
       labx_cancelOrderTests_(orderId, actor.username);
 
-      labAudit("ORDER_CANCELLED", "ORDER", orderId,
+      labAudit_("ORDER_CANCELLED", "ORDER", orderId,
                { status: status }, { status: "CANCELLED", reason: reason, by: actor.username });
 
       SpreadsheetApp.flush();
@@ -221,7 +222,7 @@ function labx_cancelOrderTests_(orderId, username) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.ORDER_TESTS);
     if (!sh || sh.getLastRow() < 2) return;
-    var m = labHeaderMap(sh);
+    var m = labHeaderMap_(sh);
     if (m["OrderID"] === undefined || m["TestStatus"] === undefined) return;
 
     var data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
@@ -239,7 +240,7 @@ function labx_billFor_(orderId) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.BILLING);
     if (!sh || sh.getLastRow() < 2) return "";
-    var m = labHeaderMap(sh);
+    var m = labHeaderMap_(sh);
     var data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     for (var i = 0; i < data.length; i++) {
       if (labx_str_(data[i][m["OrderID"]]) !== labx_str_(orderId)) continue;
@@ -293,7 +294,7 @@ function labCancelBill(payload, sessionToken) {
     if (!sheet || sheet.getLastRow() < 2) {
       return { success: false, message: "There are no lab bills." };
     }
-    var map = labHeaderMap(sheet);
+    var map = labHeaderMap_(sheet);
     var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
 
     for (var i = 0; i < data.length; i++) {
@@ -325,7 +326,7 @@ function labCancelBill(payload, sessionToken) {
       labx_setIf_(sheet, rowNum, map, "CancelledBy", actor.username);
       labx_setIf_(sheet, rowNum, map, "CancelReason", reason);
 
-      labAudit("BILL_CANCELLED", "BILL", billId,
+      labAudit_("BILL_CANCELLED", "BILL", billId,
                { status: status, net: net, mode: mode },
                { status: "CANCELLED", reason: reason, by: actor.username,
                  reportAlreadyReleased: released });
@@ -372,7 +373,7 @@ function labCancelPendingOrderInternal_(orderId, reason, username) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.ORDERS);
     if (!sh || sh.getLastRow() < 2) return false;
-    var m = labHeaderMap(sh);
+    var m = labHeaderMap_(sh);
     var data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     for (var i = 0; i < data.length; i++) {
       if (labx_str_(data[i][m["OrderID"]]) !== labx_str_(orderId)) continue;
@@ -382,7 +383,7 @@ function labCancelPendingOrderInternal_(orderId, reason, username) {
       labx_setIf_(sh, i + 2, m, "CancelledBy", username);
       labx_setIf_(sh, i + 2, m, "CancelReason", reason);
       labx_cancelOrderTests_(orderId, username);
-      labAudit("ORDER_CANCELLED", "ORDER", orderId, null,
+      labAudit_("ORDER_CANCELLED", "ORDER", orderId, null,
                { status: "CANCELLED", reason: reason, by: username, via: "BILL_VOID" });
       return true;
     }
@@ -396,7 +397,7 @@ function labx_orderStatus_(orderId) {
     if (!orderId) return "";
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.ORDERS);
     if (!sh || sh.getLastRow() < 2) return "";
-    var m = labHeaderMap(sh);
+    var m = labHeaderMap_(sh);
     var data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     for (var i = 0; i < data.length; i++) {
       if (labx_str_(data[i][m["OrderID"]]) === labx_str_(orderId)) {
@@ -412,7 +413,7 @@ function labx_setOrderStatus_(orderId, status, username) {
   try {
     var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.ORDERS);
     if (!sh || sh.getLastRow() < 2) return;
-    var m = labHeaderMap(sh);
+    var m = labHeaderMap_(sh);
     var data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     for (var i = 0; i < data.length; i++) {
       if (labx_str_(data[i][m["OrderID"]]) !== labx_str_(orderId)) continue;
@@ -438,7 +439,7 @@ function labListCancelled(sessionToken, limit) {
 
     var bs = ss.getSheetByName(LAB.BILLING);
     if (bs && bs.getLastRow() > 1) {
-      var bm = labHeaderMap(bs);
+      var bm = labHeaderMap_(bs);
       var bd = bs.getRange(2, 1, bs.getLastRow() - 1, bs.getLastColumn()).getValues();
       for (var i = bd.length - 1; i >= 0 && out.length < cap; i--) {
         if (labx_up_(bd[i][bm["PaymentStatus"]]) !== "CANCELLED") continue;
@@ -458,7 +459,7 @@ function labListCancelled(sessionToken, limit) {
 
     var os = ss.getSheetByName(LAB.ORDERS);
     if (os && os.getLastRow() > 1) {
-      var om = labHeaderMap(os);
+      var om = labHeaderMap_(os);
       var od = os.getRange(2, 1, os.getLastRow() - 1, os.getLastColumn()).getValues();
       for (var j = od.length - 1; j >= 0 && out.length < cap; j--) {
         if (labx_up_(od[j][om["OrderStatus"]]) !== "CANCELLED") continue;

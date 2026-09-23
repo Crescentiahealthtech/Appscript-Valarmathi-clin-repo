@@ -183,7 +183,7 @@ function ds_identify_(drugName, genericMap) {
  * @param {Object} [genericMap]  rx_genericMap_()
  * @return {{alerts:Array, checked:number, identified:number}}
  */
-function checkDuplicateTherapy(meds, genericMap) {
+function checkDuplicateTherapy_(meds, genericMap) {
   var out = { alerts: [], checked: 0, identified: 0 };
   try {
     meds = (meds || []).filter(function (m) { return ds_str_(m && m.drugName); });
@@ -267,7 +267,7 @@ function checkDuplicateTherapy(meds, genericMap) {
     });
 
   } catch (e) {
-    Logger.log("checkDuplicateTherapy failed: " + e.message);
+    Logger.log("checkDuplicateTherapy_ failed: " + e.message);
   }
   return out;
 }
@@ -287,7 +287,7 @@ function checkDuplicateTherapy(meds, genericMap) {
  * @param {Array<string>} allergies
  * @param {Array} meds  [{ drugName }]
  */
-function checkAllergyConflicts(allergies, meds, genericMap) {
+function checkAllergyConflicts_(allergies, meds, genericMap) {
   var out = [];
   try {
     allergies = (allergies || []).map(ds_str_).filter(function (a) { return a.length >= 3; });
@@ -355,7 +355,7 @@ function checkAllergyConflicts(allergies, meds, genericMap) {
       });
     });
   } catch (e) {
-    Logger.log("checkAllergyConflicts failed: " + e.message);
+    Logger.log("checkAllergyConflicts_ failed: " + e.message);
   }
   return out;
 }
@@ -370,6 +370,7 @@ function checkAllergyConflicts(allergies, meds, genericMap) {
  * nothing looks identical to a check that found nothing.
  */
 function testDrugSafety(names) {
+  crescEditorOnly_('testDrugSafety');
   var meds = (names || []).map(function (n) { return { drugName: n }; });
   var gm = (typeof rx_genericMap_ === "function") ? rx_genericMap_() : null;
   var lines = ["=== identity ==="];
@@ -382,15 +383,15 @@ function testDrugSafety(names) {
                "\n      known from: " + id.source);
   });
 
-  var dup = checkDuplicateTherapy(meds, gm);
+  var dup = checkDuplicateTherapy_(meds, gm);
   lines.push("\n=== duplicate / class (" + dup.identified + " of " + dup.checked +
              " identified) ===");
   lines.push(dup.alerts.length
     ? dup.alerts.map(function (a) { return "  [" + a.type + "] " + a.message; }).join("\n")
     : "  (none)");
 
-  var inter = (typeof checkDrugInteractions === "function")
-    ? checkDrugInteractions(meds, gm) : { alerts: [], rulesLoaded: 0 };
+  var inter = (typeof checkDrugInteractions_ === "function")
+    ? checkDrugInteractions_(meds, gm) : { alerts: [], rulesLoaded: 0 };
   lines.push("\n=== interactions (" + inter.rulesLoaded + " pairs loaded) ===");
   lines.push(inter.alerts.length
     ? inter.alerts.map(function (a) { return "  [" + a.severity + "] " + a.message; }).join("\n")

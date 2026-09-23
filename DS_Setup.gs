@@ -100,6 +100,7 @@ var DSX_SHEET_SPEC = [
  *           data:{created:Array, extended:Array, verified:Array, proposed:Array}}}
  */
 function setupDischargeSummaryModule() {
+  crescEditorOnly_('setupDischargeSummaryModule');
   var lock = LockService.getScriptLock();
   var created = [], extended = [], verified = [];
 
@@ -215,6 +216,7 @@ function dsx_inspectDoctorsMaster_() {
  * through the payload packer.
  */
 function ds_selfTest() {
+  crescEditorOnly_('ds_selfTest');
   var lines = [], ok = true;
 
   DSX_SHEET_SPEC.forEach(function (spec) {

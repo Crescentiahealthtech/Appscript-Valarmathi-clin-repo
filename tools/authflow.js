@@ -169,7 +169,7 @@ let m = env.verifyMFA('nurse1', '000000', ticket);
 check('a wrong code returns no session', !m.sessionToken, m);
 m = env.verifyMFA('nurse1', '123456', 'not-a-ticket');
 check('a code without the password step is refused', m.success === false && m.code === 'TICKET_EXPIRED', m);
-const code = env.generateTOTPAlgorithm(env.base32ToBytes(SECRET), Math.floor(Date.now() / 30000));
+const code = env.generateTOTPAlgorithm_(env.base32ToBytes_(SECRET), Math.floor(Date.now() / 30000));
 m = env.verifyMFA('nurse1', code, ticket);
 check('the right code with the ticket returns a session', m.success === true && !!m.sessionToken, m);
 m = env.verifyMFA('nurse1', code, ticket);

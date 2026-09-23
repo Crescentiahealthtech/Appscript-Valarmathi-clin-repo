@@ -71,7 +71,7 @@ function getDashboardData(role, bust, sessionToken) {
 }
 
 /** Call this from any write-path module after data changes if you want instant freshness. */
-function invalidateDashboardCache() {
+function invalidateDashboardCache_() {
   try { CacheService.getScriptCache().removeAll(['DASH2_FIN', 'DASH2_CLIN', 'DASH_FIN', 'DASH_CLIN']); } catch (e) {}
 }
 

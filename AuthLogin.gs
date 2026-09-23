@@ -381,14 +381,14 @@ function cresc_staffSignIn_(username, role, rawSecret, method) {
 //   was never the maths — it was the SECRET, and the old code could not say
 //   so, because:
 //
-//     * base32ToBytes() silently skipped every character outside the Base32
+//     * base32ToBytes_() silently skipped every character outside the Base32
 //       alphabet. A secret typed or pasted with 0/1/8/9 in it (the four
 //       digits Base32 does not use, and the four most commonly mistyped for
 //       O/I/B/g) therefore produced a SHORTER key that was wrong in a way
 //       nobody could see. The phone, given the same string, rejects those
 //       characters too — so the two sides derive different keys and every
 //       code is "invalid" for ever.
-//     * processTOTP() caught every error and returned the single message
+//     * processTOTP_() caught every error and returned the single message
 //       "Verification error.", which the UI then overwrote with "Invalid or
 //       Expired MFA Code" — so a malformed secret and a mistyped code looked
 //       identical to the user.
@@ -494,7 +494,7 @@ function verifyMFA(username, userCode, mfaTicket) {
       // past once they already hold the password, so a failure here is the
       // most interesting row in the whole audit — it means the first factor
       // has already gone.
-      var totp = processTOTP(norm.secret, userCode);
+      var totp = processTOTP_(norm.secret, userCode);
       crescAuthAudit_(totp && totp.success ? CRESC_AUTH_EVENTS.MFA_PASSED
                                            : CRESC_AUTH_EVENTS.MFA_FAILED,
                       String(stored).trim(), String(userData[i][2] || ''),
@@ -527,7 +527,7 @@ function verifyMFA(username, userCode, mfaTicket) {
  * @param {string} userToken     the six digits the user typed
  * @return {{success:boolean, message:string, code?:string}}
  */
-function processTOTP(secretBase32, userToken) {
+function processTOTP_(secretBase32, userToken) {
   var norm = mfa_normaliseSecret_(secretBase32);
   if (!norm.ok) return { success: false, code: 'BAD_SECRET', message: norm.message };
 
@@ -540,7 +540,7 @@ function processTOTP(secretBase32, userToken) {
   }
 
   try {
-    var keyBytes = base32ToBytes(norm.secret);
+    var keyBytes = base32ToBytes_(norm.secret);
     if (!keyBytes.length) {
       return { success: false, code: 'BAD_SECRET',
                message: 'The stored authenticator secret produced no key. Re-enrol this user.' };
@@ -548,7 +548,7 @@ function processTOTP(secretBase32, userToken) {
 
     var timeWindow = Math.floor(Date.now() / 1000 / 30);
     for (var i = -MFA_DRIFT_WINDOWS; i <= MFA_DRIFT_WINDOWS; i++) {
-      if (generateTOTPAlgorithm(keyBytes, timeWindow + i) === token) {
+      if (generateTOTPAlgorithm_(keyBytes, timeWindow + i) === token) {
         return { success: true, message: 'MFA Verified' };
       }
     }
@@ -560,7 +560,7 @@ function processTOTP(secretBase32, userToken) {
   }
 }
 
-function generateTOTPAlgorithm(keyBytes, timeValue) {
+function generateTOTPAlgorithm_(keyBytes, timeValue) {
   var timeBytes = new Array(8);
   for (var i = 7; i >= 0; i--) {
     // Sign-extend to the -128..127 range Java's byte[] uses. Apps Script will
@@ -578,7 +578,7 @@ function generateTOTPAlgorithm(keyBytes, timeValue) {
   return otp;
 }
 
-function base32ToBytes(base32) {
+function base32ToBytes_(base32) {
   var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   var bits = 0, value = 0, output = [];
   var s = String(base32 || '').toUpperCase();
@@ -658,7 +658,7 @@ function diagnoseMFA(username) {
           } else {
             var expect = '';
             try {
-              expect = generateTOTPAlgorithm(base32ToBytes(norm.secret),
+              expect = generateTOTPAlgorithm_(base32ToBytes_(norm.secret),
                                              Math.floor(Date.now() / 1000 / 30));
             } catch (e) { expect = 'could not be computed: ' + e.message; }
             out.push('PASS  The secret is valid Base32.');

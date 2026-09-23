@@ -199,6 +199,7 @@ function dpdp_nomineeSheet_() {
 
 /** ONE-OFF. Creates every register. Safe to re-run. */
 function dpdpSetup() {
+  crescEditorOnly_('dpdpSetup', ['dpdp.manage', 'admin.config']);
   dpdp_consentSheet_();
   dpdp_requestSheet_();
   dpdp_sharedSheet_();
@@ -1233,7 +1234,7 @@ function exportPatientData(patientId, sessionToken) {
  * look at dpdpIssueDocumentLink_() first — publishing to Drive is almost
  * never the answer.
  */
-function dpdpRegisterSharedFile(file, docType, patientId, sharedBy) {
+function dpdpRegisterSharedFile_(file, docType, patientId, sharedBy) {
   try {
     if (!file) return '';
     var sh = dpdp_sharedSheet_();
@@ -1249,7 +1250,7 @@ function dpdpRegisterSharedFile(file, docType, patientId, sharedBy) {
     dc_invalidate_(DPDP_CFG.SHARED);
     return id;
   } catch (e) {
-    Logger.log('dpdpRegisterSharedFile: ' + e.message);
+    Logger.log('dpdpRegisterSharedFile_: ' + e.message);
     return '';
   }
 }
@@ -1262,7 +1263,7 @@ function dpdpRegisterSharedFile(file, docType, patientId, sharedBy) {
  *
  * @param {boolean} [dryRun]  true to report without changing anything
  */
-function dpdpExpireSharedLinks(dryRun) {
+function dpdpExpireSharedLinks_(dryRun) {
   var sh = dpdp_sharedSheet_();
   var m = dc_headerMap_(sh);
   var data = dc_sheetValues_(sh);
@@ -1319,6 +1320,7 @@ function dpdpExpireSharedLinks(dryRun) {
  * @param {boolean} [confirm]  false/omitted reports; true erases
  */
 function dpdpEraseUnusedFields(confirm) {
+  crescEditorOnly_('dpdpEraseUnusedFields');
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
   if (!sh || sh.getLastRow() < 2) return 'No patient rows.';
 
@@ -1370,7 +1372,7 @@ function dpdpEraseUnusedFields(confirm) {
  * act on. A retention sweep that deletes on its own is how a clinic loses
  * the record it is about to be asked for.
  */
-function dpdpRetentionReport() {
+function dpdpRetentionReport_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var now = Date.now();
   var lines = ['DPDP retention report — ' + dpdp_fmt_(dpdp_now_()), ''];
@@ -1621,7 +1623,7 @@ function dpdpSetVoicePolicy(policy, sessionToken) {
 function dpdpRetentionReportUI(sessionToken) {
   try {
     crescRequire_(sessionToken, ['dpdp.manage', 'admin.config']);
-    return { success: true, report: dpdpRetentionReport() };
+    return { success: true, report: dpdpRetentionReport_() };
   } catch (err) {
     return { success: false, report: '',
              message: String(err.message || err).replace('FORBIDDEN: ', '') };
@@ -1642,6 +1644,7 @@ function dpdpRetentionReportUI(sessionToken) {
  * technical and no function can assert it.
  */
 function dpdpReadinessCheck() {
+  crescEditorOnly_('dpdpReadinessCheck', ['dpdp.manage', 'admin.config', 'admin.audit']);
   var findings = [];
   function add(severity, area, text, fix) {
     findings.push({ severity: severity, area: area, text: text, fix: fix });
@@ -1907,4 +1910,20 @@ function dpdpReadinessCheck() {
   var report = lines.join('\n');
   Logger.log(report);
   return { success: true, findings: findings, report: report };
+}
+
+
+/** Editor entry for dpdpExpireSharedLinks_(). The app and the scheduled jobs call the
+ *  private one; this public name exists for the Run menu and RUN_Setup.gs. */
+function dpdpExpireSharedLinks() {
+  crescEditorOnly_('dpdpExpireSharedLinks');
+  return dpdpExpireSharedLinks_.apply(null, arguments);
+}
+
+
+/** Editor entry for dpdpRetentionReport_(). The app and the scheduled jobs call the
+ *  private one; this public name exists for the Run menu and RUN_Setup.gs. */
+function dpdpRetentionReport() {
+  crescEditorOnly_('dpdpRetentionReport');
+  return dpdpRetentionReport_.apply(null, arguments);
 }

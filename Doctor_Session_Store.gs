@@ -61,6 +61,7 @@ function dc_validateSession_(sessionToken) {
 
   if (sess) {
     ds_touchSession_(token, sess);     // writes the row if it is missing
+    if (typeof crescNoteSession_ === 'function') crescNoteSession_(sess);
     return sess;
   }
 
@@ -102,6 +103,7 @@ function dc_validateSession_(sessionToken) {
       } catch (e) { /* cache is best-effort; the sheet is the truth */ }
 
       ds_slideExpiry_(sh, i + 1);
+      if (typeof crescNoteSession_ === 'function') crescNoteSession_(revived);
       return revived;
     }
     return null;
@@ -149,7 +151,7 @@ function ds_slideExpiry_(sh, rowNumber) {
 }
 
 /** Call from your sign-out handler to revoke server-side. Optional. */
-function revokeSession(sessionToken) {
+function revokeSession_(sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -180,7 +182,7 @@ function revokeSession(sessionToken) {
  * becomes the largest sheet in the workbook within a year.
  * Attach to a weekly time-driven trigger.
  */
-function purgeExpiredSessions() {
+function purgeExpiredSessions_() {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);

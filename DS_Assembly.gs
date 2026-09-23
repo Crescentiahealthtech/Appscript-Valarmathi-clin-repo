@@ -1664,6 +1664,7 @@ function dsx_orderBelongsToAdmission_(orderId, ip) {
  * number before trusting the engine on live patients.
  */
 function ds_dryRunAssembly(ipNumber) {
+  crescEditorOnly_('ds_dryRunAssembly');
   var ip = dsx_ip_(ipNumber);
   if (!ip) {
     var msg = 'ds_dryRunAssembly: pass an IP number, e.g. ds_dryRunAssembly("IP2609-0002").';

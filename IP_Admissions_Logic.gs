@@ -888,6 +888,7 @@ function ipa_releaseBed_(bedId) {
  * DRY RUN. Reports what repairWardBedColumns() would change. Writes nothing.
  */
 function previewWardBedRepair() {
+  crescEditorOnly_('previewWardBedRepair');
   var sheet = ipa_ss_().getSheetByName(IPA_CFG.SHEET);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) { Logger.log('Nothing to repair.'); return; }
@@ -915,6 +916,7 @@ function previewWardBedRepair() {
  * patient IDs. Run previewWardBedRepair() first and read the output.
  */
 function repairWardBedColumns() {
+  crescEditorOnly_('repairWardBedColumns');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(IPA_CFG.LOCK_MS);
@@ -992,7 +994,7 @@ function getConsultantList(sessionToken) {
     crescRequire_(sessionToken, 'ward.read');
     var docs = [];
     try {
-      docs = (typeof getActiveDoctors === 'function') ? (getActiveDoctors() || []) : [];
+      docs = (typeof getActiveDoctors_ === 'function') ? (getActiveDoctors_() || []) : [];
     } catch (e) { docs = []; }
 
     var out = [], seen = {};
@@ -1189,6 +1191,7 @@ function markBedReady(bedId) {
 
 /** DRY RUN. Logs divergence between the ledger and Master_Beds. Writes nothing. */
 function dryRunBedReconciliation() {
+  crescEditorOnly_('dryRunBedReconciliation');
   var report = ipa_computeBedReconciliation_();
   Logger.log('--- BED RECONCILIATION DRY RUN ---');
   Logger.log('Beds to free (no live admission): ' + JSON.stringify(report.toFree));

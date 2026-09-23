@@ -398,6 +398,7 @@ function listVisitingConsultants(sessionToken, limit) {
  * for any other staff login.
  */
 function setupVisitingConsultant() {
+  crescEditorOnly_('setupVisitingConsultant');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);

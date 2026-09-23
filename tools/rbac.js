@@ -51,6 +51,7 @@ const GUARD_ROOTS = [
   'crescActor_',             // RBAC.gs — resolve, may return null
   'crescRequireOwnRecord_',  // RBAC.gs — a patient, their own record only
   'crescEditorOnly_',        // RBAC.gs — the script owner, or an admin's inner call
+  'crescTriggerOnly_',       // RBAC.gs — an installed trigger, or the owner
   'dsx_requireRole_',        // DS_Workflow.gs — the discharge desk
   'dc_validateSession_',     // Doctor_Session_Store.gs — the durable session
   'validateSession_'         // Doctors_Engine.gs — the cache-only original

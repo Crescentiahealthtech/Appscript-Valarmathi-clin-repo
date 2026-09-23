@@ -44,7 +44,7 @@ function lab_orderableTests_() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, tests: [] };
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
     const tests = [];
     data.forEach(function (r) {
@@ -84,14 +84,14 @@ function lab_catalog_() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: true, panels: [], individuals: [], packages: [] };
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
     const panelMap = {}, paramsByPanel = {}, individuals = [], packages = [];
 
     data.forEach(function (r) {
       const type = String(r[map['TestType']] || '');
       const active = (r[map['IsActive']] === true || String(r[map['IsActive']]).toUpperCase() === 'TRUE');
-      const item = _rowToCatalogItem(r, map);
+      const item = _rowToCatalogItem_(r, map);
       if (type === 'PANEL')      { panelMap[item.testId] = item; paramsByPanel[item.testId] = []; }
       else if (type === 'PARAMETER') { const pid = String(r[map['ParentPanelID']]||''); if (pid && paramsByPanel[pid]) paramsByPanel[pid].push(item); }
       else if (type === 'INDIVIDUAL') individuals.push(item);
@@ -109,7 +109,7 @@ function lab_catalog_() {
   }
 }
 
-function _rowToCatalogItem(r, map) {
+function _rowToCatalogItem_(r, map) {
   return {
     testId:          String(r[map['TestID']]),
     testCode:        String(r[map['TestCode']]),
@@ -119,13 +119,13 @@ function _rowToCatalogItem(r, map) {
     sampleType:      String(r[map['SampleType']] || ''),
     resultType:      String(r[map['ResultType']] || ''),
     unit:            String(r[map['Unit']] || ''),
-    maleRefLow:      _safeNum(r[map['MaleRefLow']]),
-    maleRefHigh:     _safeNum(r[map['MaleRefHigh']]),
-    femaleRefLow:    _safeNum(r[map['FemaleRefLow']]),
-    femaleRefHigh:   _safeNum(r[map['FemaleRefHigh']]),
+    maleRefLow:      _safeNum_(r[map['MaleRefLow']]),
+    maleRefHigh:     _safeNum_(r[map['MaleRefHigh']]),
+    femaleRefLow:    _safeNum_(r[map['FemaleRefLow']]),
+    femaleRefHigh:   _safeNum_(r[map['FemaleRefHigh']]),
     paediatricRefText: String(r[map['PaediatricRefText']] || ''),
-    criticalLow:     _safeNum(r[map['CriticalLow']]),
-    criticalHigh:    _safeNum(r[map['CriticalHigh']]),
+    criticalLow:     _safeNum_(r[map['CriticalLow']]),
+    criticalHigh:    _safeNum_(r[map['CriticalHigh']]),
     price:           Number(r[map['Price']]) || 0,
     tatMinutes:      Number(r[map['TAT_Minutes']]) || 0,
     componentTestIds:String(r[map['ComponentTestIDs']] || ''),
@@ -145,7 +145,7 @@ function saveCatalogEntry(p, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet) return { success: false, message: 'Catalog sheet missing. Run setupLabDatabase() first.' };
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const ncols = LAB_SCHEMA.LAB_TEST_CATALOG.length;
     const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     const by = Session.getActiveUser().getEmail() || 'SYSTEM';
@@ -181,13 +181,13 @@ function saveCatalogEntry(p, sessionToken) {
     row[map['SampleType']]       = String(p.sampleType || '').toUpperCase();
     row[map['ResultType']]       = String(p.resultType || '').toUpperCase();
     row[map['Unit']]             = String(p.unit || '');
-    row[map['MaleRefLow']]       = isNumeric ? _safeNumW(p.maleRefLow)   : '';
-    row[map['MaleRefHigh']]      = isNumeric ? _safeNumW(p.maleRefHigh)  : '';
-    row[map['FemaleRefLow']]     = isNumeric ? _safeNumW(p.femaleRefLow) : '';
-    row[map['FemaleRefHigh']]    = isNumeric ? _safeNumW(p.femaleRefHigh): '';
+    row[map['MaleRefLow']]       = isNumeric ? _safeNumW_(p.maleRefLow)   : '';
+    row[map['MaleRefHigh']]      = isNumeric ? _safeNumW_(p.maleRefHigh)  : '';
+    row[map['FemaleRefLow']]     = isNumeric ? _safeNumW_(p.femaleRefLow) : '';
+    row[map['FemaleRefHigh']]    = isNumeric ? _safeNumW_(p.femaleRefHigh): '';
     row[map['PaediatricRefText']]= String(p.paediatricRefText || '');
-    row[map['CriticalLow']]      = isNumeric ? _safeNumW(p.criticalLow)  : '';
-    row[map['CriticalHigh']]     = isNumeric ? _safeNumW(p.criticalHigh) : '';
+    row[map['CriticalLow']]      = isNumeric ? _safeNumW_(p.criticalLow)  : '';
+    row[map['CriticalHigh']]     = isNumeric ? _safeNumW_(p.criticalHigh) : '';
     row[map['Price']]            = Number(p.price) || 0;
     row[map['TAT_Minutes']]      = parseInt(p.tatMinutes, 10) || 0;
     row[map['ComponentTestIDs']] = components;
@@ -200,7 +200,7 @@ function saveCatalogEntry(p, sessionToken) {
     if (existingRow !== -1) sheet.getRange(existingRow, 1, 1, ncols).setValues([row]);
     else sheet.appendRow(row);
 
-    labAudit(existingRow !== -1 ? 'CATALOG_UPDATED' : 'CATALOG_CREATED', 'CATALOG', testId, null, { name: p.testName, type: type });
+    labAudit_(existingRow !== -1 ? 'CATALOG_UPDATED' : 'CATALOG_CREATED', 'CATALOG', testId, null, { name: p.testName, type: type });
     SpreadsheetApp.flush();
     return { success: true, message: (existingRow !== -1 ? 'Updated' : 'Created') + ' "' + p.testName + '".', testId: testId };
   } catch (err) {
@@ -218,7 +218,7 @@ function setCatalogActive(testId, isActive, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'Catalog empty.' };
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const ids = sheet.getRange(2, map['TestID']+1, sheet.getLastRow()-1, 1).getValues();
     for (let i = 0; i < ids.length; i++) {
       if (String(ids[i][0]) === String(testId)) {
@@ -235,15 +235,15 @@ function setCatalogActive(testId, isActive, sessionToken) {
   }
 }
 
-/** Global HTML-escape helper — used by getLabBillHtml, _buildReportHtmlGrouped, etc. */
-function calculateFlag(value, resultType, gender, ref) {
+/** Global HTML-escape helper — used by getLabBillHtml, _buildReportHtmlGrouped_, etc. */
+function calculateFlag_(value, resultType, gender, ref) {
   if (!resultType || String(resultType).toUpperCase() !== 'NUMERIC') return '';
   const v = parseFloat(value);
   if (isNaN(v)) return '';
   const g = String(gender || '').toUpperCase().charAt(0);
-  const lo = g === 'F' ? _safeNum(ref.femaleRefLow)  : _safeNum(ref.maleRefLow);
-  const hi = g === 'F' ? _safeNum(ref.femaleRefHigh) : _safeNum(ref.maleRefHigh);
-  const cl = _safeNum(ref.criticalLow), ch = _safeNum(ref.criticalHigh);
+  const lo = g === 'F' ? _safeNum_(ref.femaleRefLow)  : _safeNum_(ref.maleRefLow);
+  const hi = g === 'F' ? _safeNum_(ref.femaleRefHigh) : _safeNum_(ref.maleRefHigh);
+  const cl = _safeNum_(ref.criticalLow), ch = _safeNum_(ref.criticalHigh);
   if (cl !== null && v < cl) return 'C';
   if (ch !== null && v > ch) return 'C';
   if (lo !== null && v < lo) return 'L';
@@ -262,7 +262,7 @@ function savePanelWithParameters(p, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
     if (!sheet) return { success: false, message: 'Catalog sheet missing.' };
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const ncols = LAB_SCHEMA.LAB_TEST_CATALOG.length;
     const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     const by = Session.getActiveUser().getEmail() || 'SYSTEM';
@@ -329,10 +329,10 @@ function savePanelWithParameters(p, sessionToken) {
       pmRow_[map['SampleType']]    = String(p.sampleType||'').toUpperCase();
       pmRow_[map['ResultType']]    = String(pm.resultType||'NUMERIC').toUpperCase();
       pmRow_[map['Unit']]          = String(pm.unit||'');
-      pmRow_[map['MaleRefLow']]    = isNum ? _safeNumW(pm.maleRefLow)  : '';
-      pmRow_[map['MaleRefHigh']]   = isNum ? _safeNumW(pm.maleRefHigh) : '';
-      pmRow_[map['CriticalLow']]   = isNum ? _safeNumW(pm.criticalLow) : '';
-      pmRow_[map['CriticalHigh']]  = isNum ? _safeNumW(pm.criticalHigh): '';
+      pmRow_[map['MaleRefLow']]    = isNum ? _safeNumW_(pm.maleRefLow)  : '';
+      pmRow_[map['MaleRefHigh']]   = isNum ? _safeNumW_(pm.maleRefHigh) : '';
+      pmRow_[map['CriticalLow']]   = isNum ? _safeNumW_(pm.criticalLow) : '';
+      pmRow_[map['CriticalHigh']]  = isNum ? _safeNumW_(pm.criticalHigh): '';
       pmRow_[map['Price']]         = 0;
       pmRow_[map['TAT_Minutes']]   = parseInt(p.tatMinutes,10)||0;
       pmRow_[map['SortOrder']]     = idx+1;
@@ -343,7 +343,7 @@ function savePanelWithParameters(p, sessionToken) {
       else sheet.appendRow(pmRow_);
     });
     existingParams.forEach(function(ep){ if(!touched[ep.id]) sheet.getRange(ep.rowNum, map['IsActive']+1).setValue(false); });
-    labAudit('PANEL_SAVED','CATALOG',panelId,null,{name:p.testName,params:params.length});
+    labAudit_('PANEL_SAVED','CATALOG',panelId,null,{name:p.testName,params:params.length});
     SpreadsheetApp.flush();
     return { success: true, message: 'Panel "'+p.testName+'" saved with '+params.length+' parameter(s).', panelId: panelId, paramCount: params.length };
   } catch (err) {
@@ -365,7 +365,7 @@ function createLabRequest(d, sessionToken) {
     if (!d) return { success: false, message: 'No data received.' };
     if (!d.patientId || !String(d.patientId).trim()) {
     const wiSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LAB.ORDERS);
-    const wiCol = wiSheet ? labHeaderMap(wiSheet)['PatientID'] : undefined;
+    const wiCol = wiSheet ? labHeaderMap_(wiSheet)['PatientID'] : undefined;
     d.patientId = bc_nextDailyId_('LAB_WALKIN', 'WALKIN-', '-', 4,
                                   wiSheet, (wiCol === undefined) ? 0 : wiCol + 1);   // Barcode_Engine.gs
     }
@@ -379,14 +379,14 @@ function createLabRequest(d, sessionToken) {
     const nameList = Array.isArray(d.testNames) ? d.testNames.filter(Boolean) : [];
 
     if (!testIds.length && nameList.length) {
-      testIds = _resolveTestNamesToCatalogIds(nameList);
+      testIds = _resolveTestNamesToCatalogIds_(nameList);
       if (!testIds.length) {
         testIds = ['MANUAL_MAP'];
       }
     }
     if (!testIds.length) return { success: false, message: 'Select at least one test.' };
 
-    const catalog = _loadCatalogById();
+    const catalog = _loadCatalogById_();
     const names = [], consent = [];
     testIds.forEach(function(tid){
       if (tid === 'MANUAL_MAP') { names.push(nameList.join(', ')); return; }
@@ -398,7 +398,7 @@ function createLabRequest(d, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.ORDERS);
     if (!sheet) return { success: false, message: 'Orders sheet missing. Run setupLabDatabase() first.' };
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const ncols = LAB_SCHEMA.LAB_ORDERS.length;
     const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
     const by = Session.getActiveUser().getEmail() || 'SYSTEM';
@@ -439,7 +439,7 @@ function createLabRequest(d, sessionToken) {
     row[map['LastUpdatedBy']]      = by;
 
     sheet.appendRow(row);
-    labAudit('ORDER_CREATED','ORDER',orderId,null,{source:source, tests:names, priority:row[map['Priority']]});
+    labAudit_('ORDER_CREATED','ORDER',orderId,null,{source:source, tests:names, priority:row[map['Priority']]});
     SpreadsheetApp.flush();
 
     return { success: true, message: 'Order '+orderId+' created.', orderId: orderId, requiresConsentFor: consent };
@@ -458,7 +458,7 @@ function getLabOrderDetail(orderId, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.ORDERS);
     if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'Order not found.' };
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const data = sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     for (let i = 0; i < data.length; i++) {
       const r = data[i];
@@ -531,7 +531,7 @@ function lab_setOrderStatus_(orderId, newStatus) {
     const sheet = ss.getSheetByName(LAB.ORDERS);
     if (!sheet || sheet.getLastRow() < 2) return { success: false, message: 'Order not found.' };
     
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
     
     for (let i = 0; i < data.length; i++) {
@@ -550,7 +550,7 @@ function lab_setOrderStatus_(orderId, newStatus) {
         sheet.getRange(rowNum, map['LastUpdatedAt'] + 1).setValue(nowStr);
         sheet.getRange(rowNum, map['LastUpdatedBy'] + 1).setValue(Session.getActiveUser().getEmail() || 'SYSTEM');
         
-        labAudit('STATUS_CHANGED', 'ORDER', orderId, { from: cur }, { to: targetStatus });
+        labAudit_('STATUS_CHANGED', 'ORDER', orderId, { from: cur }, { to: targetStatus });
         SpreadsheetApp.flush();
         
         return { success: true, message: 'Status updated to ' + targetStatus };
@@ -580,14 +580,14 @@ function getLabWorkspaceData(sessionToken) {
                     agedOut:0, expiredHidden:0, queueWindowDays: Math.round(LAB_QUEUE_WINDOW_MS/86400000) };
     if (!oSheet || oSheet.getLastRow() < 2) return { success: true, stats: stats, orders: [] };
 
-    const oMap  = labHeaderMap(oSheet);
+    const oMap  = labHeaderMap_(oSheet);
     const oData = oSheet.getRange(2,1,oSheet.getLastRow()-1,oSheet.getLastColumn()).getValues();
-    const billIdx   = _lwBillingIndex();
-    const sampIdx   = _lwSamplesIndex();
-    const tatIdx    = _lwTatIndex();
+    const billIdx   = _lwBillingIndex_();
+    const sampIdx   = _lwSamplesIndex_();
+    const tatIdx    = _lwTatIndex_();
     const nowMs     = new Date().getTime();
     const todayStr  = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    stats.criticalPending = _lwCritCount();
+    stats.criticalPending = _lwCritCount_();
 
     const orders = [];
     oData.forEach(function(r){
@@ -618,7 +618,7 @@ function getLabWorkspaceData(sessionToken) {
       // Visibility is decided BEFORE the counters, so a tab's badge counts
       // exactly the rows that tab will show. Counting first and hiding after
       // would put "Billing 14" over a list of three.
-      const vis = _lwQueueVisibility(status, createdAt, r[oMap['LastUpdatedAt']],
+      const vis = _lwQueueVisibility_(status, createdAt, r[oMap['LastUpdatedAt']],
                                      samp ? samp.s : '', nowMs);
       if (vis.expired) stats.expiredHidden++;
       if (!vis.show) { stats.agedOut++; return; }
@@ -705,7 +705,7 @@ function generateLabBill(d, sessionToken) {
       return { success: false, message: 'Order already billed (status: '+order.status+').' };
     }
 
-    const catalog = _loadCatalogById();
+    const catalog = _loadCatalogById_();
     let gross = 0;
     const items = [];
     order.testIds.forEach(function(tid){
@@ -728,7 +728,7 @@ function generateLabBill(d, sessionToken) {
     if (ip) {
       category='IP_ACCOUNT'; payMode='ON_ACCOUNT'; paid=0; balance=net; payStatus='ON_ACCOUNT';
       ledgerPostId='IPPOST-'+Utilities.getUuid().substring(0,8).toUpperCase();
-      labAudit('IP_ACCOUNT_POST','BILL',ledgerPostId,null,{admissionId:order.admissionId,amount:net});
+      labAudit_('IP_ACCOUNT_POST','BILL',ledgerPostId,null,{admissionId:order.admissionId,amount:net});
     } else {
       category=(order.source==='WALKIN')?'WALKIN_SPOT':'OP_SPOT';
       payMode=String(d.paymentMode||'').toUpperCase();
@@ -742,7 +742,7 @@ function generateLabBill(d, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.BILLING);
     if (!sheet) return {success:false,message:'Billing sheet missing.'};
-    const map = labHeaderMap(sheet);
+    const map = labHeaderMap_(sheet);
     const ncols = LAB_SCHEMA.LAB_BILLING.length;
     const billId = 'LAB-BILL-'+Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyyMMdd')+'-'+Utilities.getUuid().substring(0,4).toUpperCase();
 
@@ -786,7 +786,7 @@ function generateLabBill(d, sessionToken) {
     }
     // 👆 END NEW HOOK 👆
 
-    labAudit('BILL_GENERATED','BILL',billId,null,{orderId:order.orderId,net:net,category:category});
+    labAudit_('BILL_GENERATED','BILL',billId,null,{orderId:order.orderId,net:net,category:category});
     if (order.status === 'PENDING') lab_setOrderStatus_(order.orderId,'BILLED');
     SpreadsheetApp.flush();
 
@@ -806,13 +806,13 @@ function getLabBill(orderId, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.BILLING);
     if (!sheet||sheet.getLastRow()<2) return {success:false,message:'No bills found.'};
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     let found=null;
     data.forEach(function(r){
       if(String(r[map['OrderID']])===String(orderId)){
         found={billId:String(r[map['BillID']]),orderId:String(r[map['OrderID']]),patientName:String(r[map['PatientName']]||''),
-          category:String(r[map['BillingCategory']]||''),items:_safeParse(r[map['TestsJSON']]),gross:Number(r[map['GrossAmount']])||0,
+          category:String(r[map['BillingCategory']]||''),items:_safeParse_(r[map['TestsJSON']]),gross:Number(r[map['GrossAmount']])||0,
           discountAmount:Number(r[map['DiscountAmount']])||0,net:Number(r[map['NetAmount']])||0,paymentMode:String(r[map['PaymentMode']]||''),
           paid:Number(r[map['PaidAmount']])||0,balance:Number(r[map['BalanceAmount']])||0,paymentStatus:String(r[map['PaymentStatus']]||''),
           receiptNumber:String(r[map['ReceiptNumber']]||''),billedAt:String(r[map['BilledAt']]||'')};
@@ -841,7 +841,7 @@ function collectLabSample(d, sessionToken) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.SAMPLES);
     if(!sheet) return {success:false,message:'Samples sheet missing.'};
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const ncols=LAB_SCHEMA.LAB_SAMPLES.length;
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     const by=Session.getActiveUser().getEmail()||'SYSTEM';
@@ -859,9 +859,9 @@ function collectLabSample(d, sessionToken) {
       sheet.appendRow(row); sampleIds.push(sampleId);
     });
 
-    _startTat(order, nowStr);
+    _startTat_(order, nowStr);
     lab_setOrderStatus_(order.orderId,'SAMPLE_COLLECTED');
-    labAudit('SAMPLE_COLLECTED','SAMPLE',order.orderId,null,{count:sampleIds.length});
+    labAudit_('SAMPLE_COLLECTED','SAMPLE',order.orderId,null,{count:sampleIds.length});
     SpreadsheetApp.flush();
     return {success:true,message:sampleIds.length+' sample(s) collected.',sampleIds:sampleIds};
   } catch(err){return{success:false,message:'collectLabSample failed: '+err.message};}
@@ -876,7 +876,7 @@ function receiveLabSample(orderId, sessionToken) {
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.SAMPLES);
     if(!sheet||sheet.getLastRow()<2) return {success:false,message:'No samples found.'};
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     const by=Session.getActiveUser().getEmail()||'SYSTEM';
@@ -889,7 +889,7 @@ function receiveLabSample(orderId, sessionToken) {
     });
     if(!n) return {success:false,message:'No unprocessed samples for this order.'};
     lab_setOrderStatus_(orderId,'IN_PROCESS');
-    labAudit('SAMPLE_RECEIVED','SAMPLE',orderId,null,{count:n});
+    labAudit_('SAMPLE_RECEIVED','SAMPLE',orderId,null,{count:n});
     SpreadsheetApp.flush();
     return {success:true,message:n+' sample(s) received. Processing started.'};
   } catch(err){return{success:false,message:'receiveLabSample failed: '+err.message};}
@@ -905,7 +905,7 @@ function rejectLabSample(sampleId, reason, sessionToken) {
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.SAMPLES);
     if(!sheet||sheet.getLastRow()<2) return {success:false,message:'No samples found.'};
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     let orderId='',patientId='',rowFound=-1;
     for(let i=0;i<data.length;i++){
@@ -914,9 +914,9 @@ function rejectLabSample(sampleId, reason, sessionToken) {
     if(rowFound===-1) return {success:false,message:'Sample not found: '+sampleId};
     sheet.getRange(rowFound,map['CollectionStatus']+1).setValue('REJECTED');
     sheet.getRange(rowFound,map['RejectionReason']+1).setValue(String(reason||'').toUpperCase());
-    const ncrId=_raiseNcr({orderId:orderId,sampleId:sampleId,patientId:patientId,type:'SAMPLE_REJECTION',description:'Sample '+sampleId+' rejected: '+reason,immediateAction:'Recollection requested'});
+    const ncrId=_raiseNcr_({orderId:orderId,sampleId:sampleId,patientId:patientId,type:'SAMPLE_REJECTION',description:'Sample '+sampleId+' rejected: '+reason,immediateAction:'Recollection requested'});
     lab_setOrderStatus_(orderId,'RECOLLECT');
-    labAudit('SAMPLE_REJECTED','SAMPLE',sampleId,null,{reason:reason,ncr:ncrId});
+    labAudit_('SAMPLE_REJECTED','SAMPLE',sampleId,null,{reason:reason,ncr:ncrId});
     SpreadsheetApp.flush();
     return {success:true,message:'Rejected. NCR '+ncrId+' raised.',ncrId:ncrId};
   } catch(err){return{success:false,message:'rejectLabSample failed: '+err.message};}
@@ -931,7 +931,7 @@ function getOrderSamples(orderId, sessionToken) {
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.SAMPLES);
     if(!sheet||sheet.getLastRow()<2) return {success:true,samples:[]};
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const out=[];
     data.forEach(function(r){
@@ -962,16 +962,16 @@ function buildResultEntrySheet(orderId, sessionToken) {
     cat.packages.forEach(function(p){pkgById[p.testId]=p;});
 
     const rowDefs=[];
-    const _addPanel=function(panel){(panel.parameters||[]).forEach(function(pm){rowDefs.push(_mkRowDef(panel.testId,pm));});};
-    const _addIndiv=function(t){rowDefs.push(_mkRowDef(t.testId,t));};
+    const _addPanel=function(panel){(panel.parameters||[]).forEach(function(pm){rowDefs.push(_mkRowDef_(panel.testId,pm));});};
+    const _addIndiv=function(t){rowDefs.push(_mkRowDef_(t.testId,t));};
     order.testIds.forEach(function(tid){
       if(panelById[tid]) _addPanel(panelById[tid]);
       else if(indivById[tid]) _addIndiv(indivById[tid]);
       else if(pkgById[tid]){ (pkgById[tid].componentTestIds||'').split(',').filter(Boolean).forEach(function(cid){if(panelById[cid])_addPanel(panelById[cid]);else if(indivById[cid])_addIndiv(indivById[cid]);}); }
     });
 
-    const existing=_latestResultsForOrder(orderId);
-    const prior=_priorValuesForPatient(order.patientId,orderId);
+    const existing=_latestResultsForOrder_(orderId);
+    const prior=_priorValuesForPatient_(order.patientId,orderId);
 
     const rows=rowDefs.map(function(rd){
       const ex=existing[rd.parameterId]||{};
@@ -1000,12 +1000,12 @@ function saveLabResultsDraft(d, sessionToken) {
     if(!od.success) return {success:false,message:od.message};
     const order=od.order;
     const gender=String(d.gender||order.gender||'').toUpperCase().charAt(0)||'M';
-    const refByParam=_refRangesByParameter();
-    const sampleId=_firstSampleId(order.orderId);
+    const refByParam=_refRangesByParameter_();
+    const sampleId=_firstSampleId_(order.orderId);
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.RESULTS);
     if(!sheet) return {success:false,message:'Results sheet missing.'};
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const ncols=LAB_SCHEMA.LAB_RESULTS.length;
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     const by=Session.getActiveUser().getEmail()||'SYSTEM';
@@ -1026,10 +1026,10 @@ function saveLabResultsDraft(d, sessionToken) {
     d.results.forEach(function(res){
       if(!res.parameterId) return;
       const ref=refByParam[res.parameterId]||{};
-      const flag=calculateFlag(res.value,ref.resultType,gender,ref);
+      const flag=calculateFlag_(res.value,ref.resultType,gender,ref);
       if(flag==='C') critCount++;
       const refText=(String(ref.resultType||'').toUpperCase()==='NUMERIC')
-        ?(gender==='F'?_rngTxt(ref.femaleRefLow,ref.femaleRefHigh):_rngTxt(ref.maleRefLow,ref.maleRefHigh)):'';
+        ?(gender==='F'?_rngTxt_(ref.femaleRefLow,ref.femaleRefHigh):_rngTxt_(ref.maleRefLow,ref.maleRefHigh)):'';
       const exRow=existingRows[res.parameterId];
       if(exRow){
         const row=rowValues[exRow];
@@ -1062,7 +1062,7 @@ function saveLabResultsDraft(d, sessionToken) {
       sheet.getRange(sheet.getLastRow()+1,1,appends.length,ncols).setValues(appends);
     }
     SpreadsheetApp.flush();
-    labAudit('RESULTS_DRAFT_SAVED','RESULT',order.orderId,null,{count:d.results.length,critical:critCount});
+    labAudit_('RESULTS_DRAFT_SAVED','RESULT',order.orderId,null,{count:d.results.length,critical:critCount});
     return {success:true,message:'Draft saved'+(critCount?' · '+critCount+' CRITICAL value(s)':'')+'.', criticalCount:critCount};
   } catch(err){return{success:false,message:'saveLabResultsDraft failed: '+err.message};}
   finally{try{lock.releaseLock();}catch(e){}}
@@ -1080,7 +1080,7 @@ function submitLabResults(d, sessionToken) {
     const sheet=ss.getSheetByName(LAB.RESULTS);
     if(!sheet||sheet.getLastRow()<2) return {success:false,message:'No results to submit.'};
     
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     let n=0; 
     let emptyCount=0;
@@ -1107,8 +1107,8 @@ function submitLabResults(d, sessionToken) {
     // Force transition safely
     lab_setOrderStatus_(d.orderId,'RESULT_ENTERED');
     
-    crits.forEach(function(c){_logCritical(d.orderId,c);});
-    labAudit('RESULTS_SUBMITTED','RESULT',d.orderId,null,{count:n,critical:crits.length});
+    crits.forEach(function(c){_logCritical_(d.orderId,c);});
+    labAudit_('RESULTS_SUBMITTED','RESULT',d.orderId,null,{count:n,critical:crits.length});
     SpreadsheetApp.flush();
     return {success:true,message:'Submitted for verification'+(crits.length?' · '+crits.length+' critical value(s) logged.':'.')};
   } catch(err){
@@ -1131,7 +1131,7 @@ function verifyLabResults(d, sessionToken) {
     
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.RESULTS);
-    const map=labHeaderMap(sheet);
+    const map=labHeaderMap_(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     // The signature on a lab report is the signed-in verifier, not a name the
@@ -1166,12 +1166,12 @@ function verifyLabResults(d, sessionToken) {
       sheet.getRange(rowNum,1,1,row.length).setValues([row]);
     });
     
-    _closeTat(d.orderId,nowStr);
+    _closeTat_(d.orderId,nowStr);
     
     // Force transition to verified
     lab_setOrderStatus_(d.orderId,'VERIFIED');
     
-    labAudit('RESULTS_VERIFIED','RESULT',d.orderId,null,{verifier:verifier,hash:hash.substring(0,12)+'…'});
+    labAudit_('RESULTS_VERIFIED','RESULT',d.orderId,null,{verifier:verifier,hash:hash.substring(0,12)+'…'});
     SpreadsheetApp.flush();
     return {success:true,message:'Verified & signed by '+verifier+'. Attestation hash generated.',attestationHash:hash};
   } catch(err){
@@ -1209,7 +1209,7 @@ function DIAG_labRecords() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
  
   var oSheet = ss.getSheetByName(LAB.ORDERS);
-  var oMap = labHeaderMap(oSheet);
+  var oMap = labHeaderMap_(oSheet);
   var oData = oSheet.getRange(2,1,oSheet.getLastRow()-1,oSheet.getLastColumn()).getValues();
  
   var report = [];
@@ -1226,7 +1226,7 @@ function DIAG_labRecords() {
  
   // Check result rows
   var rSheet = ss.getSheetByName(LAB.RESULTS);
-  var rMap = labHeaderMap(rSheet);
+  var rMap = labHeaderMap_(rSheet);
   var rData = rSheet.getRange(2,1,rSheet.getLastRow()-1,rSheet.getLastColumn()).getValues();
   var resCount = {};
   rData.forEach(function(r){
@@ -1502,22 +1502,22 @@ function setMyClinicConfig() {
    SECTION 9 — INTERNAL HELPERS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function _loadCatalogById(){
+function _loadCatalogById_(){
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   const sheet=ss.getSheetByName(LAB.CATALOG);
   const out={};
   if(!sheet||sheet.getLastRow()<2) return out;
-  const map=labHeaderMap(sheet);
+  const map=labHeaderMap_(sheet);
   const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
-  data.forEach(function(r){ out[String(r[map['TestID']])]=_rowToCatalogItem(r,map); });
+  data.forEach(function(r){ out[String(r[map['TestID']])]=_rowToCatalogItem_(r,map); });
   return out;
 }
 
-function _resolveTestNamesToCatalogIds(nameList) {
+function _resolveTestNamesToCatalogIds_(nameList) {
   const ss=SpreadsheetApp.getActiveSpreadsheet();
   const sheet=ss.getSheetByName(LAB.CATALOG);
   if(!sheet||sheet.getLastRow()<2) return [];
-  const map=labHeaderMap(sheet);
+  const map=labHeaderMap_(sheet);
   const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   const resolved=[];
   nameList.forEach(function(name){
@@ -1538,24 +1538,24 @@ function _resolveTestNamesToCatalogIds(nameList) {
   return resolved;
 }
 
-function _lwBillingIndex(){
+function _lwBillingIndex_(){
   const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.BILLING); const out={};
   if(!sheet||sheet.getLastRow()<2) return out;
-  const map=labHeaderMap(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  const map=labHeaderMap_(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   data.forEach(function(r){ const k=String(r[map['OrderID']]||''); if(k) out[k]={s:String(r[map['PaymentStatus']]||''),n:Number(r[map['NetAmount']])||0,r:String(r[map['ReceiptNumber']]||'')}; });
   return out;
 }
-function _lwSamplesIndex(){
+function _lwSamplesIndex_(){
   const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.SAMPLES); const out={};
   if(!sheet||sheet.getLastRow()<2) return out;
-  const map=labHeaderMap(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  const map=labHeaderMap_(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   data.forEach(function(r){ const k=String(r[map['OrderID']]||''); if(k) out[k]={s:String(r[map['CollectionStatus']]||'')}; });
   return out;
 }
-function _lwTatIndex(){
+function _lwTatIndex_(){
   const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.TAT_LOG); const out={};
   if(!sheet||sheet.getLastRow()<2) return out;
-  const map=labHeaderMap(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  const map=labHeaderMap_(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   data.forEach(function(r){
     const k=String(r[map['OrderID']]||''); if(!k) return;
     const dl=r[map['TAT_Deadline']]; const st=r[map['SampleCollectedAt']];
@@ -1573,7 +1573,7 @@ function _lwTatIndex(){
    needs a clinician told NOW, by a person, not by a report landing in a queue
    — a potassium of 7.2, a platelet count of 8, a positive blood culture.
    Whenever a result is saved past the CriticalLow/CriticalHigh bounds on the
-   test, _logCritical() appends a row to LAB_CRITICAL_COMMS with
+   test, _logCritical_() appends a row to LAB_CRITICAL_COMMS with
    IsAcknowledged = FALSE. The KPI counts those rows. Six of them meant six
    critical results where nobody had confirmed the clinician was reached.
 
@@ -1614,7 +1614,7 @@ function labListCriticalUnacked(token) {
     if (!sheet || sheet.getLastRow() < 2) {
       return { success: true, rows: [], count: 0, message: '' };
     }
-    var map = labHeaderMap(sheet);
+    var map = labHeaderMap_(sheet);
     var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
 
     var rows = [];
@@ -1699,7 +1699,7 @@ function labAcknowledgeCritical(token, commIds, note) {
     if (!sheet || sheet.getLastRow() < 2) {
       return { success: false, acknowledged: 0, message: 'No critical communication log found.' };
     }
-    var map = labHeaderMap(sheet);
+    var map = labHeaderMap_(sheet);
     var lastCol = sheet.getLastColumn();
     var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, lastCol).getValues();
 
@@ -1748,10 +1748,10 @@ function labAcknowledgeCritical(token, commIds, note) {
   }
 }
 
-function _lwCritCount(){
+function _lwCritCount_(){
   try{
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.CRITICAL_COMMS); if(!sheet||sheet.getLastRow()<2) return 0;
-    const map=labHeaderMap(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+    const map=labHeaderMap_(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     let n=0; data.forEach(function(r){ if(!(r[map['IsAcknowledged']]===true||String(r[map['IsAcknowledged']]).toUpperCase()==='TRUE')) n++; });
     return n;
   }catch(e){return 0;}
@@ -1765,13 +1765,13 @@ function _lwCritCount(){
  */
 var LAB_QUEUE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
-function _lwWithin48h(ts,nowMs){
+function _lwWithin48h_(ts,nowMs){
   var t=cresc_ms_(ts);
   return t ? (nowMs-t)<LAB_QUEUE_WINDOW_MS : false;
 }
 
 /** Milliseconds since a timestamp, or null when it cannot be read. */
-function _lwAgeMs(ts,nowMs){
+function _lwAgeMs_(ts,nowMs){
   var t=cresc_ms_(ts);
   return t ? (nowMs-t) : null;
 }
@@ -1796,14 +1796,14 @@ function _lwAgeMs(ts,nowMs){
  *
  * @return {{show:boolean, expired:boolean}}
  */
-function _lwQueueVisibility(status,createdAt,lastUpdatedAt,sampleStatus,nowMs){
+function _lwQueueVisibility_(status,createdAt,lastUpdatedAt,sampleStatus,nowMs){
   var terminal = (status==='REPORT_DISPATCHED'||status==='AMENDED'||status==='CANCELLED');
   if (terminal) {
-    return { show: _lwWithin48h(lastUpdatedAt||createdAt, nowMs), expired: false };
+    return { show: _lwWithin48h_(lastUpdatedAt||createdAt, nowMs), expired: false };
   }
 
   if (status==='VERIFIED') {
-    return { show: _lwWithin48h(lastUpdatedAt||createdAt, nowMs), expired: false };
+    return { show: _lwWithin48h_(lastUpdatedAt||createdAt, nowMs), expired: false };
   }
 
   // Awaiting billing or awaiting collection: expired once the window passes
@@ -1812,7 +1812,7 @@ function _lwQueueVisibility(status,createdAt,lastUpdatedAt,sampleStatus,nowMs){
     var collected = String(sampleStatus||'').toUpperCase();
     var drawn = collected && collected !== 'PENDING' && collected !== 'REJECTED';
     if (drawn) return { show: true, expired: false };
-    var age = _lwAgeMs(createdAt, nowMs);
+    var age = _lwAgeMs_(createdAt, nowMs);
     if (age !== null && age >= LAB_QUEUE_WINDOW_MS) {
       return { show: false, expired: true };
     }
@@ -1821,23 +1821,23 @@ function _lwQueueVisibility(status,createdAt,lastUpdatedAt,sampleStatus,nowMs){
   return { show: true, expired: false };
 }
 
-function _mkRowDef(testId,pm){
+function _mkRowDef_(testId,pm){
   return {testId:testId,parameterId:pm.testId,parameterName:String(pm.testName||''),unit:String(pm.unit||''),resultType:String(pm.resultType||'NUMERIC'),
     maleRefLow:pm.maleRefLow,maleRefHigh:pm.maleRefHigh,femaleRefLow:pm.femaleRefLow,femaleRefHigh:pm.femaleRefHigh,
     criticalLow:pm.criticalLow,criticalHigh:pm.criticalHigh,
-    refRangeText:(String(pm.resultType||'').toUpperCase()==='NUMERIC')?('M '+_rngTxt(pm.maleRefLow,pm.maleRefHigh)+' F '+_rngTxt(pm.femaleRefLow,pm.femaleRefHigh)):''};
+    refRangeText:(String(pm.resultType||'').toUpperCase()==='NUMERIC')?('M '+_rngTxt_(pm.maleRefLow,pm.maleRefHigh)+' F '+_rngTxt_(pm.femaleRefLow,pm.femaleRefHigh)):''};
 }
-function _refRangesByParameter(){
+function _refRangesByParameter_(){
   const cat=lab_catalog_(); const out={};
   if(!cat.success) return out;
   cat.panels.forEach(function(p){(p.parameters||[]).forEach(function(pm){ out[pm.testId]={testId:p.testId,parameterName:pm.testName,unit:pm.unit||'',resultType:pm.resultType||'NUMERIC',maleRefLow:pm.maleRefLow,maleRefHigh:pm.maleRefHigh,femaleRefLow:pm.femaleRefLow,femaleRefHigh:pm.femaleRefHigh,criticalLow:pm.criticalLow,criticalHigh:pm.criticalHigh}; }); });
   cat.individuals.forEach(function(t){ out[t.testId]={testId:t.testId,parameterName:t.testName,unit:t.unit||'',resultType:t.resultType||'NUMERIC',maleRefLow:t.maleRefLow,maleRefHigh:t.maleRefHigh,femaleRefLow:t.femaleRefLow,femaleRefHigh:t.femaleRefHigh,criticalLow:t.criticalLow,criticalHigh:t.criticalHigh}; });
   return out;
 }
-function _latestResultsForOrder(orderId){
+function _latestResultsForOrder_(orderId){
   const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.RESULTS); const out={};
   if(!sheet||sheet.getLastRow()<2) return out;
-  const map=labHeaderMap(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  const map=labHeaderMap_(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   data.forEach(function(r){
     if(String(r[map['OrderID']])!==String(orderId)) return;
     if(!(r[map['IsLatest']]===true||String(r[map['IsLatest']]).toUpperCase()==='TRUE')) return;
@@ -1845,10 +1845,10 @@ function _latestResultsForOrder(orderId){
   });
   return out;
 }
-function _priorValuesForPatient(patientId,excludeOrderId){
+function _priorValuesForPatient_(patientId,excludeOrderId){
   const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.RESULTS); const out={};
   if(!sheet||sheet.getLastRow()<2) return out;
-  const map=labHeaderMap(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+  const map=labHeaderMap_(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
   data.forEach(function(r){
     if(String(r[map['PatientID']])!==String(patientId)) return;
     if(String(r[map['OrderID']])===String(excludeOrderId)) return;
@@ -1861,7 +1861,7 @@ function _priorValuesForPatient(patientId,excludeOrderId){
 /**
  * Latest result rows for an order, WITH their contents.
  *
- * _existingResultRowNums() below reads the same block and throws the values
+ * _existingResultRowNums_() below reads the same block and throws the values
  * away, which forced every caller that wanted to edit a row to fetch cells
  * back one at a time. This keeps them.
  *
@@ -1882,7 +1882,7 @@ function _existingResultRows_(sheet,map,orderId){
   return out;
 }
 
-function _existingResultRowNums(sheet,map,orderId){
+function _existingResultRowNums_(sheet,map,orderId){
   const out={};
   if(sheet.getLastRow()<2) return out;
   const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
@@ -1891,15 +1891,15 @@ function _existingResultRowNums(sheet,map,orderId){
   });
   return out;
 }
-function _firstSampleId(orderId){
+function _firstSampleId_(orderId){
   const s=getOrderSamples(orderId); return (s.success&&s.samples.length)?s.samples[0].sampleId:'';
 }
-function _startTat(order,collectedAtStr){
+function _startTat_(order,collectedAtStr){
   try{
     const cat=lab_catalog_(); if(!cat.success) return;
     const byId={}; cat.panels.forEach(function(t){byId[t.testId]=t;}); cat.individuals.forEach(function(t){byId[t.testId]=t;}); cat.packages.forEach(function(t){byId[t.testId]=t;});
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.TAT_LOG); if(!sheet) return;
-    const map=labHeaderMap(sheet); const ncols=LAB_SCHEMA.LAB_TAT_LOG.length;
+    const map=labHeaderMap_(sheet); const ncols=LAB_SCHEMA.LAB_TAT_LOG.length;
     // A TAT deadline computed from an unreadable collection time would be
     // 1970, and every test on the order would show as overdue the moment it
     // was booked in.
@@ -1915,12 +1915,12 @@ function _startTat(order,collectedAtStr){
       row[map['SampleCollectedAt']]=collectedAtStr; row[map['TAT_Minutes']]=tat; row[map['TAT_Deadline']]=deadlineStr; row[map['IsOverdue']]=false;
       sheet.appendRow(row);
     });
-  }catch(e){Logger.log('_startTat failed: '+e.message);}
+  }catch(e){Logger.log('_startTat_ failed: '+e.message);}
 }
-function _closeTat(orderId,verifiedStr){
+function _closeTat_(orderId,verifiedStr){
   try{
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.TAT_LOG); if(!sheet||sheet.getLastRow()<2) return;
-    const map=labHeaderMap(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
+    const map=labHeaderMap_(sheet); const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     data.forEach(function(r,i){
       if(String(r[map['OrderID']])!==String(orderId)||r[map['ResultVerifiedAt']]) return;
       const rowNum=i+2;
@@ -1932,12 +1932,12 @@ function _closeTat(orderId,verifiedStr){
       sheet.getRange(rowNum,map['IsOverdue']+1).setValue(overdue);
       if(overdue&&dlStr) sheet.getRange(rowNum,map['OverdueBy_Minutes']+1).setValue(Math.round((new Date(verifiedStr)-new Date(dlStr))/60000));
     });
-  }catch(e){Logger.log('_closeTat failed: '+e.message);}
+  }catch(e){Logger.log('_closeTat_ failed: '+e.message);}
 }
-function _raiseNcr(d){
+function _raiseNcr_(d){
   try{
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.NONCONFORMANCE); if(!sheet) return '';
-    const map=labHeaderMap(sheet); const ncols=LAB_SCHEMA.LAB_NONCONFORMANCE.length;
+    const map=labHeaderMap_(sheet); const ncols=LAB_SCHEMA.LAB_NONCONFORMANCE.length;
     const ncrId='NCR-'+Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyyMMdd')+'-'+Utilities.getUuid().substring(0,4).toUpperCase();
     const row=new Array(ncols).fill('');
     row[map['NCRId']]=ncrId; row[map['OrderID']]=String(d.orderId||''); row[map['SampleID']]=String(d.sampleId||'');
@@ -1947,7 +1947,7 @@ function _raiseNcr(d){
     row[map['RaisedAt']]=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     row[map['Status']]='OPEN';
     sheet.appendRow(row); return ncrId;
-  }catch(e){Logger.log('_raiseNcr failed: '+e.message); return '';}
+  }catch(e){Logger.log('_raiseNcr_ failed: '+e.message); return '';}
 }
 /**
  * THE AUTHENTICITY BLOCK, REDUCED TO THE ONE THING IT MAY SAY ON PAPER.
@@ -2030,7 +2030,7 @@ function labVerifyPage_(orderId, code) {
     var resSheet = ss.getSheetByName(LAB.RESULTS);
 
     if (want && give && resSheet && resSheet.getLastRow() >= 2) {
-      var map = labHeaderMap(resSheet);
+      var map = labHeaderMap_(resSheet);
       // TextFinder on the OrderID column, then read only the rows it names.
       // LAB_RESULTS is one of the fastest-growing sheets in the project and
       // this route is public, so it must not pull the whole sheet in.
@@ -2087,10 +2087,10 @@ function labVerifyPage_(orderId, code) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-function _logCritical(orderId,c){
+function _logCritical_(orderId,c){
   try{
     const ss=SpreadsheetApp.getActiveSpreadsheet(); const sheet=ss.getSheetByName(LAB.CRITICAL_COMMS); if(!sheet) return;
-    const map=labHeaderMap(sheet); const ncols=LAB_SCHEMA.LAB_CRITICAL_COMMS.length;
+    const map=labHeaderMap_(sheet); const ncols=LAB_SCHEMA.LAB_CRITICAL_COMMS.length;
     const row=new Array(ncols).fill('');
     row[map['CommID']]='CRIT-'+Utilities.getUuid().substring(0,8).toUpperCase();
     row[map['OrderID']]=orderId; row[map['ResultID']]=String(c.resultId||''); row[map['PatientID']]=String(c.patientId||'');
@@ -2099,19 +2099,19 @@ function _logCritical(orderId,c){
     row[map['CommunicatedAt']]=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     row[map['IsAcknowledged']]=false;
     sheet.appendRow(row);
-  }catch(e){Logger.log('_logCritical failed: '+e.message);}
+  }catch(e){Logger.log('_logCritical_ failed: '+e.message);}
 }
 
-function _safeNum(v){ if(v===''||v==null) return null; const n=Number(v); return isNaN(n)?null:n; }
-function _safeNumW(v){ if(v===''||v==null) return ''; const n=Number(v); return isNaN(n)?'':n; }
-function _rngTxt(lo,hi){ const l=_safeNum(lo),h=_safeNum(hi); if(l===null&&h===null) return '—'; return (l===null?'?':l)+'-'+(h===null?'?':h); }
-function _safeParse(s){ try{return JSON.parse(s);}catch(e){return [];} }
+function _safeNum_(v){ if(v===''||v==null) return null; const n=Number(v); return isNaN(n)?null:n; }
+function _safeNumW_(v){ if(v===''||v==null) return ''; const n=Number(v); return isNaN(n)?'':n; }
+function _rngTxt_(lo,hi){ const l=_safeNum_(lo),h=_safeNum_(hi); if(l===null&&h===null) return '—'; return (l===null?'?':l)+'-'+(h===null?'?':h); }
+function _safeParse_(s){ try{return JSON.parse(s);}catch(e){return [];} }
 
 /**
  * ============================================================================
  * CRESCENTIA LAB — PHASE 1 ADDITIONS
  * ============================================================================
- * searchPatientByMobile, getSuggestedTubes, getLabBillHtml, _buildReportHtmlGrouped.
+ * searchPatientByMobile, getSuggestedTubes, getLabBillHtml, _buildReportHtmlGrouped_.
  * Grouped (per-test sectioned) printing is wired directly into
  * getLabReportHtml() above — no separate dispatch step needed in this
  * order-level engine.
@@ -2170,7 +2170,7 @@ function getSuggestedTubes(orderId, sessionToken) {
     // Primary source: LAB_ORDER_TESTS (per-test rows), if populated.
     var ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName(LAB.ORDER_TESTS);
     if (sh && sh.getLastRow() >= 2) {
-      var m = labHeaderMap(sh), data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+      var m = labHeaderMap_(sh), data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
       data.forEach(function (r) {
         if (String(r[m['OrderID']]) !== String(orderId)) return;
         var stype = String(r[m['SampleType']] || '').toUpperCase().trim();
@@ -2186,7 +2186,7 @@ function getSuggestedTubes(orderId, sessionToken) {
     if (!Object.keys(byType).length) {
       var od = getLabOrderDetail(orderId);
       if (od.success) {
-        var catalog = _loadCatalogById();
+        var catalog = _loadCatalogById_();
         var resolveTypes = function (tid) {
           var t = catalog[tid];
           if (!t) return;
@@ -2232,7 +2232,7 @@ function getLabBillHtml(orderId, sessionToken) {
 
     var ss = SpreadsheetApp.getActiveSpreadsheet(), sh = ss.getSheetByName(LAB.BILLING);
     if (!sh || sh.getLastRow() < 2) return { success: false, message: 'No bill found for this order.' };
-    var m = labHeaderMap(sh), data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+    var m = labHeaderMap_(sh), data = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
     var b = null;
     for (var i = data.length - 1; i >= 0; i--) {
       if (String(data[i][m['OrderID']]) === String(orderId)) {
@@ -2273,14 +2273,14 @@ function getLabBillHtml(orderId, sessionToken) {
     var itemRows = items.map(function (it, idx) {
       return '<tr>' +
         '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;">' + (idx + 1) + '</td>' +
-        '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;">' + _esc(it.testName) + '</td>' +
+        '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;">' + _esc_(it.testName) + '</td>' +
         '<td style="padding:8px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">&#8377;' + Number(it.price).toFixed(2) + '</td>' +
       '</tr>';
     }).join('');
 
     var payLine = isIp
       ? '<div style="font-weight:700;color:#0369a1;">Posted to IP Account &#8226; Settled at discharge</div>'
-      : '<div>Payment: <strong>' + _esc(b.payMode) + '</strong> &#8226; Status: <strong>' + _esc(b.payStatus) + '</strong></div>';
+      : '<div>Payment: <strong>' + _esc_(b.payMode) + '</strong> &#8226; Status: <strong>' + _esc_(b.payStatus) + '</strong></div>';
 
     var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' +
       '*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;}' +
@@ -2292,22 +2292,22 @@ function getLabBillHtml(orderId, sessionToken) {
       // Header
       '<div style="padding:18px 24px;border-bottom:2px solid #0369a1;display:flex;justify-content:space-between;align-items:flex-start;">' +
         '<div>' +
-          '<div style="font-size:20px;font-weight:800;color:#0369a1;">' + _esc(clinicName) + '</div>' +
-          (clinicAddress ? '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + _esc(clinicAddress) + '</div>' : '') +
-          (clinicPhone ? '<div style="font-size:12px;color:#6b7280;">' + _esc(clinicPhone) + '</div>' : '') +
-          (gstNumber ? '<div style="font-size:11px;color:#6b7280;">GSTIN: ' + _esc(gstNumber) + '</div>' : '') +
+          '<div style="font-size:20px;font-weight:800;color:#0369a1;">' + _esc_(clinicName) + '</div>' +
+          (clinicAddress ? '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + _esc_(clinicAddress) + '</div>' : '') +
+          (clinicPhone ? '<div style="font-size:12px;color:#6b7280;">' + _esc_(clinicPhone) + '</div>' : '') +
+          (gstNumber ? '<div style="font-size:11px;color:#6b7280;">GSTIN: ' + _esc_(gstNumber) + '</div>' : '') +
         '</div>' +
         '<div style="text-align:right;">' +
           '<div style="font-size:16px;font-weight:800;letter-spacing:1px;color:#111827;">LAB INVOICE</div>' +
-          '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + _esc(b.receipt || b.billId) + '</div>' +
-          '<div style="font-size:11px;color:#6b7280;">' + _esc(b.billedAt) + '</div>' +
+          '<div style="font-size:12px;color:#6b7280;margin-top:2px;">' + _esc_(b.receipt || b.billId) + '</div>' +
+          '<div style="font-size:11px;color:#6b7280;">' + _esc_(b.billedAt) + '</div>' +
         '</div>' +
       '</div>' +
 
       // Patient strip
       '<div style="padding:12px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:13px;">' +
-        '<div><span style="color:#6b7280;">Patient:</span> <strong>' + _esc(o.patientName) + '</strong> &#8226; ' + _esc(o.patientId) + ' &#8226; ' + _esc(o.gender) + (o.age ? ' &#8226; ' + _esc(o.age) + 'y' : '') + '</div>' +
-        '<div><span style="color:#6b7280;">Order:</span> ' + _esc(o.orderId) + '</div>' +
+        '<div><span style="color:#6b7280;">Patient:</span> <strong>' + _esc_(o.patientName) + '</strong> &#8226; ' + _esc_(o.patientId) + ' &#8226; ' + _esc_(o.gender) + (o.age ? ' &#8226; ' + _esc_(o.age) + 'y' : '') + '</div>' +
+        '<div><span style="color:#6b7280;">Order:</span> ' + _esc_(o.orderId) + '</div>' +
       '</div>' +
 
       // Items
@@ -2359,7 +2359,7 @@ function getLabBillHtml(orderId, sessionToken) {
    `groups` = [ { groupName, interpretation, rows:[{parameterName,value,
                  unit,refRangeText,flag}] } ]
    ─────────────────────────────────────────────────────────────────── */
-function _buildReportHtmlGrouped(o, groups, bill, now) {
+function _buildReportHtmlGrouped_(o, groups, bill, now) {
   var allRows = [];
   groups.forEach(function (g) { (g.rows || []).forEach(function (r) { allRows.push(r); }); });
   var hasCrit = allRows.some(function (r) { return r.flag === 'C'; });
@@ -2389,15 +2389,15 @@ function _buildReportHtmlGrouped(o, groups, bill, now) {
                r.flag === 'L' ? 'color:#60a5fa;font-weight:600' :
                r.flag === 'N' ? 'color:#10b981' : '';
       return '<tr>' +
-        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;">' + _esc(r.parameterName) + '</td>' +
-        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;' + fc + '">' + _esc(r.value) + '</td>' +
-        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;color:#94a3b8;">' + _esc(r.unit) + '</td>' +
-        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;color:#94a3b8;font-size:12px;">' + _esc(r.refRangeText) + '</td>' +
-        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;' + fc + '">' + _esc(r.flag) + '</td>' +
+        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;">' + _esc_(r.parameterName) + '</td>' +
+        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;' + fc + '">' + _esc_(r.value) + '</td>' +
+        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;color:#94a3b8;">' + _esc_(r.unit) + '</td>' +
+        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;color:#94a3b8;font-size:12px;">' + _esc_(r.refRangeText) + '</td>' +
+        '<td style="padding:7px 10px;border-bottom:1px solid #1e293b;' + fc + '">' + _esc_(r.flag) + '</td>' +
       '</tr>';
     }).join('');
     return '<div style="padding:0 24px;margin-top:8px;">' +
-      '<div style="font-weight:700;font-size:13px;padding:12px 0 6px;color:#7dd3fc;">' + _esc(g.groupName) + '</div>' +
+      '<div style="font-weight:700;font-size:13px;padding:12px 0 6px;color:#7dd3fc;">' + _esc_(g.groupName) + '</div>' +
       '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#0a1628;">' +
         '<th style="padding:8px 10px;text-align:left;color:#94a3b8;font-size:11px;text-transform:uppercase;">Parameter</th>' +
         '<th style="padding:8px 10px;text-align:left;color:#94a3b8;font-size:11px;text-transform:uppercase;">Result</th>' +
@@ -2405,7 +2405,7 @@ function _buildReportHtmlGrouped(o, groups, bill, now) {
         '<th style="padding:8px 10px;text-align:left;color:#94a3b8;font-size:11px;text-transform:uppercase;">Reference</th>' +
         '<th style="padding:8px 10px;text-align:left;color:#94a3b8;font-size:11px;text-transform:uppercase;">Flag</th>' +
       '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
-      (g.interpretation ? '<div style="background:#0f2744;border:1px solid #1e3a5f;border-radius:8px;padding:10px 14px;margin:10px 0;font-size:13px;"><strong>' + _esc(g.groupName) + ' — Interpretation:</strong> ' + _esc(g.interpretation) + '</div>' : '') +
+      (g.interpretation ? '<div style="background:#0f2744;border:1px solid #1e3a5f;border-radius:8px;padding:10px 14px;margin:10px 0;font-size:13px;"><strong>' + _esc_(g.groupName) + ' — Interpretation:</strong> ' + _esc_(g.interpretation) + '</div>' : '') +
     '</div>';
   }
 
@@ -2413,15 +2413,15 @@ function _buildReportHtmlGrouped(o, groups, bill, now) {
     '<div style="max-width:800px;margin:20px auto;background:#0f172a;border:1px solid #1e293b;border-radius:12px;overflow:hidden;">' +
     (hasCrit ? '<div style="background:#450a0a;border-bottom:2px solid #f87171;padding:10px 20px;color:#fca5a5;font-weight:700;font-size:14px;">&#9888; CRITICAL VALUES — Inform clinician immediately (NABL ISO 15189:2022)</div>' : '') +
     '<div style="background:linear-gradient(135deg,#1e3a5f,#0f2744);padding:18px 24px;display:flex;justify-content:space-between;align-items:center;">' +
-    '<div><div style="font-size:18px;font-weight:800;color:#7dd3fc;">&#128300; ' + _esc(clinicName) + ' — Lab Report</div><div style="color:#94a3b8;font-size:12px;margin-top:2px;">NABL ISO 15189:2022 Compliant</div></div>' +
-    '<div style="text-align:right;"><div style="color:#94a3b8;font-size:11px;">Order ID</div><div style="font-family:monospace;color:#7dd3fc;font-size:13px;">' + _esc(o.orderId) + '</div></div></div>' +
+    '<div><div style="font-size:18px;font-weight:800;color:#7dd3fc;">&#128300; ' + _esc_(clinicName) + ' — Lab Report</div><div style="color:#94a3b8;font-size:12px;margin-top:2px;">NABL ISO 15189:2022 Compliant</div></div>' +
+    '<div style="text-align:right;"><div style="color:#94a3b8;font-size:11px;">Order ID</div><div style="font-family:monospace;color:#7dd3fc;font-size:13px;">' + _esc_(o.orderId) + '</div></div></div>' +
     '<div style="padding:14px 24px;background:#0a1628;border-bottom:1px solid #1e293b;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">' +
-    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Patient</div><div style="font-weight:700;font-size:15px;margin-top:2px;">' + _esc(o.patientName) + '</div><div style="color:#94a3b8;font-size:12px;">' + _esc(o.patientId) + ' · ' + _esc(o.gender) + (o.age ? ' · ' + _esc(o.age) + 'y' : '') + '</div>' + idBarcodeHtml + '</div>' +
-    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Ordered By</div><div style="font-weight:600;margin-top:2px;">' + _esc(o.doctorName || '—') + '</div><div style="color:#94a3b8;font-size:12px;">' + _esc(o.source) + '</div></div>' +
-    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Report Date</div><div style="font-weight:600;margin-top:2px;">' + _esc(now.substring(0, 10)) + '</div>' + (bill && bill.receiptNumber ? '<div style="color:#94a3b8;font-size:12px;">Receipt: ' + _esc(bill.receiptNumber) + '</div>' : '') + '</div></div>' +
+    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Patient</div><div style="font-weight:700;font-size:15px;margin-top:2px;">' + _esc_(o.patientName) + '</div><div style="color:#94a3b8;font-size:12px;">' + _esc_(o.patientId) + ' · ' + _esc_(o.gender) + (o.age ? ' · ' + _esc_(o.age) + 'y' : '') + '</div>' + idBarcodeHtml + '</div>' +
+    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Ordered By</div><div style="font-weight:600;margin-top:2px;">' + _esc_(o.doctorName || '—') + '</div><div style="color:#94a3b8;font-size:12px;">' + _esc_(o.source) + '</div></div>' +
+    '<div><div style="color:#94a3b8;font-size:10px;text-transform:uppercase;">Report Date</div><div style="font-weight:600;margin-top:2px;">' + _esc_(now.substring(0, 10)) + '</div>' + (bill && bill.receiptNumber ? '<div style="color:#94a3b8;font-size:12px;">Receipt: ' + _esc_(bill.receiptNumber) + '</div>' : '') + '</div></div>' +
     groups.map(sectionHtml).join('') +
     '<div style="padding:14px 24px;background:#0a1628;border-top:1px solid #1e293b;display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-top:8px;">' +
-    '<div>Verified by: <strong style="color:#f8fafc;">' + _esc(vBy || '—') + '</strong>' + (vAt ? ' at ' + _esc(vAt) : '') + '</div>' +
+    '<div>Verified by: <strong style="color:#f8fafc;">' + _esc_(vBy || '—') + '</strong>' + (vAt ? ' at ' + _esc_(vAt) : '') + '</div>' +
     '<div>SHA-256 attested · Digitally Signed</div></div></div>' +
     '<div class="no-print" style="text-align:center;padding:14px;"><button onclick="window.print();" style="background:#10b981;color:#fff;border:none;padding:10px 28px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">&#128424; Print / Save PDF</button></div>' +
     '</body></html>';

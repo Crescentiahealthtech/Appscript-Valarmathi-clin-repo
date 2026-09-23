@@ -31,6 +31,9 @@ node tools/rpc.js
 hr "5. Server calls with no failure handler (they fail silently)"
 node tools/nofail.js && echo "(nothing listed above = every call has a failure path)"
 
+hr "5b. The same top-level name defined in two .gs files (last one wins)"
+node tools/dupes.js || FAILED=1
+
 hr "6. Deployment_Check.gs DEP_MAP vs the functions that actually exist"
 node tools/dep.js
 

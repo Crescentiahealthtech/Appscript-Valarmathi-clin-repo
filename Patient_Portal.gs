@@ -837,7 +837,7 @@ function pp_serialisable_(value) {
 function portalBookableDoctors(sessionToken) {
   try {
     pp_me_(sessionToken);
-    var docs = getActiveDoctors() || [];
+    var docs = getActiveDoctors_() || [];
     var out = docs.map(function (d) {
       var next = pp_nextFreeDay_(d.doctorId, PP.BOOK_HORIZON_DAYS);
       return {

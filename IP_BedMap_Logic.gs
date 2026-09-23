@@ -10,7 +10,7 @@ function getBedStatuses(sessionToken) {
   try {
     crescRequire_(sessionToken, 'ward.read');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = initializeBedsIfEmpty(ss); // Auto-heals if empty
+    const sheet = initializeBedsIfEmpty_(ss); // Auto-heals if empty
 
     const data = sheet.getDataRange().getValues();
     const results = [];
@@ -88,7 +88,7 @@ function updateBedStatusInDB(bedId, newStatus, sessionToken) {
   }
 }
 // SHARED INITIALIZER: Injects default schema if missing or empty
-function initializeBedsIfEmpty(ss) {
+function initializeBedsIfEmpty_(ss) {
   let sheet = ss.getSheetByName("Master_Beds");
   if (!sheet) {
     sheet = ss.insertSheet("Master_Beds");

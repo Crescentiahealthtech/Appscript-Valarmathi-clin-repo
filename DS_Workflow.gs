@@ -1767,13 +1767,13 @@ function dsx_verifyCredential_(actor, credential) {
     if (!hasTotp) {
       return { ok: false, message: 'You have no authenticator enrolled. Sign with your password instead.' };
     }
-    // processTOTP returns an ENVELOPE ({success, message, code}), never the
+    // processTOTP_ returns an ENVELOPE ({success, message, code}), never the
     // boolean true. Comparing it with === true made every TOTP signature fail,
     // so a clinic that had enrolled MFA could not sign a discharge summary at
     // all — and the message blamed the doctor's code for it.
     var res = null;
     try {
-      if (typeof processTOTP === 'function') res = processTOTP(user.mfaSecret, value);
+      if (typeof processTOTP_ === 'function') res = processTOTP_(user.mfaSecret, value);
     } catch (e) { res = { success: false, message: 'Verification error: ' + e.message }; }
 
     if (res && res.success === true) return { ok: true, method: 'TOTP' };
@@ -1988,6 +1988,7 @@ function dsx_conflictOr_(e) {
 
 /** Writes nothing. Validates the state machine and the permission matrix. */
 function ds_testTransitions() {
+  crescEditorOnly_('ds_testTransitions');
   var lines = [], pass = 0, fail = 0;
   var check = function (label, got, want) {
     var ok = (got === want);

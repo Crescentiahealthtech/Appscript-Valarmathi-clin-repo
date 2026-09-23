@@ -90,7 +90,7 @@ function lab_billingWorkspace_() {
           paymentMode: b.PaymentMode || 'CASH',
           patientName: b.PatientName || 'Unknown',
           patientId: b.PatientID || '',
-          testNames: parseTestsForUI(b.TestsJSON) || "Lab Tests",
+          testNames: parseTestsForUI_(b.TestsJSON) || "Lab Tests",
           receiptNumber: b.ReceiptNumber || b.BillID,
           billedAt: b.BilledAt ? new Date(b.BilledAt).toLocaleString('en-IN') : '',
           net: Number(b.NetAmount) || 0,
@@ -171,7 +171,7 @@ function lab_billingWorkspace_() {
   }
 }
 
-function parseTestsForUI(jsonStr) {
+function parseTestsForUI_(jsonStr) {
   try {
     let arr = JSON.parse(jsonStr);
     return arr.map(t => t.testName).join(", ");
@@ -258,8 +258,8 @@ function getLabReceiptHtml(billId, sessionToken) {
         <tr>
           <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb;">${idx + 1}</td>
           <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb;">
-            <strong>${_esc(it.testName)}</strong>
-            ${it.testId ? `<br><span style="font-size:10px;color:#6b7280;">${_esc(it.testId)}</span>` : ''}
+            <strong>${_esc_(it.testName)}</strong>
+            ${it.testId ? `<br><span style="font-size:10px;color:#6b7280;">${_esc_(it.testId)}</span>` : ''}
           </td>
           <td style="padding:8px 10px; border-bottom:1px solid #e5e7eb; text-align:right;">₹${Number(it.price).toFixed(2)}</td>
         </tr>
@@ -283,7 +283,7 @@ function getLabReceiptHtml(billId, sessionToken) {
     
     const payLine = isIp
       ? `<div style="font-weight:700;color:#0369a1;">Posted to IP Account &bull; Settled at discharge</div>`
-      : `<div>Payment: <strong>${_esc(b.payMode)}</strong> &bull; Status: <strong style="${b.payStatus === 'PAID' ? 'color:#10b981;' : 'color:#dc2626;'}">${_esc(b.payStatus)}</strong></div>`;
+      : `<div>Payment: <strong>${_esc_(b.payMode)}</strong> &bull; Status: <strong style="${b.payStatus === 'PAID' ? 'color:#10b981;' : 'color:#dc2626;'}">${_esc_(b.payStatus)}</strong></div>`;
 
     // Construct Clean, Premium HTML
     const html = `
@@ -303,21 +303,21 @@ function getLabReceiptHtml(billId, sessionToken) {
           
           <div style="padding:18px 24px;border-bottom:2px solid #0369a1;display:flex;justify-content:space-between;align-items:flex-start;">
             <div>
-              <div style="font-size:20px;font-weight:800;color:#0369a1;text-transform:uppercase;">${_esc(clinicName)}</div>
-              ${clinicAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;">${_esc(clinicAddress)}</div>` : ''}
-              ${clinicPhone ? `<div style="font-size:12px;color:#6b7280;">Phone: ${_esc(clinicPhone)}</div>` : ''}
-              ${gstNumber ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">GSTIN: ${_esc(gstNumber)}</div>` : ''}
+              <div style="font-size:20px;font-weight:800;color:#0369a1;text-transform:uppercase;">${_esc_(clinicName)}</div>
+              ${clinicAddress ? `<div style="font-size:12px;color:#6b7280;margin-top:4px;">${_esc_(clinicAddress)}</div>` : ''}
+              ${clinicPhone ? `<div style="font-size:12px;color:#6b7280;">Phone: ${_esc_(clinicPhone)}</div>` : ''}
+              ${gstNumber ? `<div style="font-size:11px;color:#6b7280;margin-top:2px;">GSTIN: ${_esc_(gstNumber)}</div>` : ''}
             </div>
             <div style="text-align:right;">
               <div style="font-size:16px;font-weight:800;letter-spacing:1px;color:#111827;">LAB INVOICE</div>
-              <div style="font-size:12px;color:#4b5563;margin-top:4px;">Inv: <strong>${_esc(b.receipt)}</strong></div>
-              <div style="font-size:11px;color:#6b7280;">Date: ${_esc(b.billedAt)}</div>
+              <div style="font-size:12px;color:#4b5563;margin-top:4px;">Inv: <strong>${_esc_(b.receipt)}</strong></div>
+              <div style="font-size:11px;color:#6b7280;">Date: ${_esc_(b.billedAt)}</div>
             </div>
           </div>
 
           <div style="padding:12px 24px;background:#f9fafb;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;font-size:13px;">
-            <div><span style="color:#6b7280;">Patient:</span> <strong>${_esc(b.patientName)}</strong> &bull; ${_esc(b.patientId)}</div>
-            <div><span style="color:#6b7280;">Order ID:</span> ${_esc(b.orderId)}</div>
+            <div><span style="color:#6b7280;">Patient:</span> <strong>${_esc_(b.patientName)}</strong> &bull; ${_esc_(b.patientId)}</div>
+            <div><span style="color:#6b7280;">Order ID:</span> ${_esc_(b.orderId)}</div>
           </div>
 
           <div style="padding:8px 24px;">
@@ -370,7 +370,7 @@ function getLabReceiptHtml(billId, sessionToken) {
   }
 }
 
-function _esc(s) {
+function _esc_(s) {
   return String(s == null ? '' : s).replace(/[&<>"'`=\/]/g, function (s) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '/': '&#x2F;', '`': '&#x60;', '=': '&#x3D;' }[s];
   });

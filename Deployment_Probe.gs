@@ -351,6 +351,7 @@ function dpdpConfirmDeploymentAccess(mode, sessionToken) {
  * @return {{severity:string, text:string, fix:string}}
  */
 function depDeploymentFinding() {
+  crescEditorOnly_('depDeploymentFinding', ['dpdp.manage', 'admin.config', 'admin.audit']);
   var p = dep_probeSummary_();
   var att = dep_attestation_();
   var total = p.identified + p.anonymous;

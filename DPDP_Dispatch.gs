@@ -339,16 +339,17 @@ function dpdpRequireDispatchConsent_(patientId, channel, actor, docType, opts) {
  * nothing but the clinic's own description of what it does.
  */
 function getDispatchChannelNotice(channel) {
+  crescEditorOnly_('getDispatchChannelNotice');
   var ch = dpdp_channel_(channel);
   if (!ch) {
-    return { success: false, message: 'Unknown channel.', channels: dpdpDispatchChannels() };
+    return { success: false, message: 'Unknown channel.', channels: dpdpDispatchChannels_() };
   }
   return { success: true, channel: ch.key, label: ch.label,
            processor: ch.processor, notice: ch.notice, message: '' };
 }
 
 /** FRONTEND ENTRY. Every channel and its notice, for a settings screen. */
-function dpdpDispatchChannels() {
+function dpdpDispatchChannels_() {
   return Object.keys(DPDP_DISPATCH.CHANNELS).map(function (k) {
     var c = DPDP_DISPATCH.CHANNELS[k];
     return { key: c.key, label: c.label, processor: c.processor, notice: c.notice };

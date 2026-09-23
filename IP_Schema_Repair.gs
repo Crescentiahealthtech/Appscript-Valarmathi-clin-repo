@@ -28,6 +28,7 @@
  * Nothing is deleted — the legacy columns keep their data.
  */
 function repairCasesheetHeaderDrift() {
+  crescEditorOnly_('repairCasesheetHeaderDrift');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
@@ -118,6 +119,7 @@ function repairCasesheetHeaderDrift() {
  * new deployment.
  */
 function runIPHealthCheck() {
+  crescEditorOnly_('runIPHealthCheck');
   var out = [];
   out.push("========== IP SCHEMA ==========");
   out.push(verifyIPClinicalSchema());
@@ -146,6 +148,7 @@ function runIPHealthCheck() {
  * Rows are marked DUPLICATE, never deleted.
  */
 function repairDuplicatePharmacyQueueRows() {
+  crescEditorOnly_('repairDuplicatePharmacyQueueRows');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);
@@ -202,6 +205,7 @@ function repairDuplicatePharmacyQueueRows() {
  * @return {string} a human-readable report
  */
 function normaliseSheetDates(apply) {
+  crescEditorOnly_('normaliseSheetDates');
   var TARGETS = [
     { sheet: 'IP_Admissions',      columns: ['DOA', 'DOD'] },
     { sheet: 'Master_Beds',        columns: ['DOA'] },

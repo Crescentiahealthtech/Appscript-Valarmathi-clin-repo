@@ -124,14 +124,14 @@ function crescLogSignOut(token) {
     crescAuthAudit_(CRESC_AUTH_EVENTS.SIGNOUT,
                     actor ? actor.username : '(expired session)',
                     actor ? actor.role : '', {});
-    // revokeSession() has carried the comment "Call from your sign-out
+    // revokeSession_() has carried the comment "Call from your sign-out
     // handler to revoke server-side. Optional." since it was written, and
     // nothing ever called it. So a sign-out only cleared localStorage: the
     // token stayed valid in the cache and in the durable Sessions sheet for
     // its full eight hours, and anyone who had it could keep using it after
     // the user believed they had left.
-    if (typeof revokeSession === 'function') {
-      try { revokeSession(token); } catch (e) {}
+    if (typeof revokeSession_ === 'function') {
+      try { revokeSession_(token); } catch (e) {}
     }
     return { success: true };
   } catch (err) {

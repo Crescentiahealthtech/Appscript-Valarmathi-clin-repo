@@ -15,6 +15,7 @@ function ipk_sheet_(name, headers) {
 
 // Run once from the editor.
 function setupPackages() {
+  crescEditorOnly_('setupPackages');
   var sh = ipk_sheet_('Package_Master', ['Code', 'Name', 'Amount_Min', 'Amount_Max', 'Default_Cap', 'Stay_Days', 'Room_Type', 'Inclusions', 'Exclusions']);
   // [Code, Name, min, max, defaultCap, stayDays, roomType, inclusions, exclusions]
   var P = [

@@ -86,7 +86,7 @@ function lpv_resultsFor_(pid, limit) {
       return { success: true, patientId: pid, orders: [], message: '' };
     }
 
-    var oMap = labHeaderMap(oSheet);
+    var oMap = labHeaderMap_(oSheet);
     var oData = oSheet.getRange(2, 1, oSheet.getLastRow() - 1, oSheet.getLastColumn()).getValues();
 
     var byOrder = {}, ids = [];
@@ -122,7 +122,7 @@ function lpv_resultsFor_(pid, limit) {
 
     var rSheet = ss.getSheetByName(LAB.RESULTS);
     if (rSheet && rSheet.getLastRow() >= 2) {
-      var rMap = labHeaderMap(rSheet);
+      var rMap = labHeaderMap_(rSheet);
       var rData = rSheet.getRange(2, 1, rSheet.getLastRow() - 1, rSheet.getLastColumn()).getValues();
       rData.forEach(function (r) {
         var oid = String(r[rMap['OrderID']] || '');

@@ -5,7 +5,7 @@
 // DEPENDS ON (already present in Doctors_Engine.gs — do NOT redefine here):
 //   getTenantId_()            validateSession_(token)
 //   issueSession_(obj)        resolveDoctorByUsername_(username)
-//   logAudit_(sess, ...)      getActiveDoctors()
+//   logAudit_(sess, ...)      getActiveDoctors_()
 //
 // ADD THIS AS A NEW FILE. It does not overwrite anything.
 // ============================================================================
@@ -228,6 +228,7 @@ function dc_dateKey_(v) {
  * Returns a human-readable report. Verify the report before shipping Phase 3.
  */
 function runMultiDoctorMigration() {
+  crescEditorOnly_('runMultiDoctorMigration');
   var lock = LockService.getScriptLock();
   var report = [];
   try {
@@ -281,7 +282,7 @@ function runMultiDoctorMigration() {
     });
 
     SpreadsheetApp.flush();
-    report.push("--- Columns done. Now run backfillDoctorAttribution() ---");
+    report.push("--- Columns done. Now run backfillDoctorAttribution_() ---");
     return report.join("\n");
 
   } catch (e) {
@@ -296,7 +297,7 @@ function runMultiDoctorMigration() {
  * as inferred, never as recorded. Run AFTER runMultiDoctorMigration().
  * Only writes to cells that are currently blank — safe to re-run.
  */
-function backfillDoctorAttribution() {
+function backfillDoctorAttribution_() {
   var lock = LockService.getScriptLock();
   var report = [];
   try {
@@ -419,7 +420,7 @@ function getDoctorPickerContext(sessionToken) {
     var scope = resolveScope_(sessionToken, null);
     if (!scope.ok) return { success: false, message: scope.message, doctors: [] };
 
-    var all = getActiveDoctors();
+    var all = getActiveDoctors_();
     var visible = (scope.mode === "ALL")
       ? all
       : all.filter(function (d) { return scope.doctorIds.indexOf(d.doctorId) !== -1; });

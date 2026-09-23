@@ -160,7 +160,7 @@ function getIPCasesheetContext(ipNumber, sessionToken) {
     var doctors = [];
     if (actsOnBehalf) {
       try {
-        doctors = (getActiveDoctors() || []).map(function (d) {
+        doctors = (getActiveDoctors_() || []).map(function (d) {
           return { doctorId: d.doctorId, name: d.name, specialty: d.specialty };
         });
       } catch (e) { doctors = []; }

@@ -342,6 +342,7 @@ function ipc_ensurePrimaryOnCareTeam_(ipNumber) {
  * trail. Safe to re-run; reports what it changed.
  */
 function repairDuplicateCareTeamRows() {
+  crescEditorOnly_('repairDuplicateCareTeamRows');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);
@@ -723,7 +724,7 @@ function getIPNotePermissions(sessionToken) {
     var doctors = [];
     if (actsAs) {
       try {
-        doctors = (getActiveDoctors() || []).map(function (d) {
+        doctors = (getActiveDoctors_() || []).map(function (d) {
           return { doctorId: d.doctorId, name: d.name, specialty: d.specialty };
         });
       } catch (e) { doctors = []; }
@@ -764,6 +765,7 @@ function getIPNotePermissions(sessionToken) {
  * report first; it is the Phase 5 ship gate.
  */
 function verifyIPClinicalSchema() {
+  crescEditorOnly_('verifyIPClinicalSchema');
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var out = [];
 
@@ -827,6 +829,7 @@ function verifyIPClinicalSchema() {
  * by hand. Run it after verifyIPClinicalSchema().
  */
 function verifyIPCareTeamCoverage() {
+  crescEditorOnly_('verifyIPCareTeamCoverage');
   var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("IP_Admissions");
   if (!sh) return "IP_Admissions sheet absent.";
 

@@ -80,6 +80,7 @@ function rx_bundleSheet_() {
  * Columns: Category | Department | Text | Aliases | Labs | Dx
  */
 function seedClinicalLibrary() {
+  crescEditorOnly_('seedClinicalLibrary');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -835,7 +836,7 @@ function checkRxSafety(patientId, meds, sessionToken) {
     // fire on Amoxicillin — which is the one that matters. The replacement
     // matches whole words and knows the cross-reactive families a clinic
     // actually records allergies in terms of.
-    checkAllergyConflicts(allergies, meds, gm).forEach(function (a) { alerts.push(a); });
+    checkAllergyConflicts_(allergies, meds, gm).forEach(function (a) { alerts.push(a); });
 
     // ---- duplicate therapy and therapeutic-class overlap ------------------
     // Also moved. The old pair of checks covered only drugs carrying a
@@ -844,11 +845,11 @@ function checkRxSafety(patientId, meds, sessionToken) {
     // had nothing at all for two NSAIDs or an ACE inhibitor beside an ARB —
     // the duplicates that reach the patient, because they look like two
     // different drugs on the page.
-    var dup = checkDuplicateTherapy(meds, gm);
+    var dup = checkDuplicateTherapy_(meds, gm);
     dup.alerts.forEach(function (a) { alerts.push(a); });
 
     // ---- drug-drug interactions ------------------------------------------
-    var inter = checkDrugInteractions(meds, gm);
+    var inter = checkDrugInteractions_(meds, gm);
     inter.alerts.forEach(function (a) { alerts.push(a); });
 
     // Honest about how much of the formulary this can actually check.
