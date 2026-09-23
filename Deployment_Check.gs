@@ -107,6 +107,7 @@ var DEP_MAP = {
     "dpdpListDocumentLinks", "dpdpExpireDocumentGrants_", "dpdp_unpublish_"
   ],
   "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
+  "External_Lab.gs":        ["saveExternalLabResult", "voidExternalLabResult", "getExternalLabFormContext", "exl_ordersFor_"],
   // IP Records reads the discharge summary's own sections through the
   // discharge engine's version resolver rather than parsing DS_Snapshots
   // itself. Optional at runtime — a deployment without the discharge module

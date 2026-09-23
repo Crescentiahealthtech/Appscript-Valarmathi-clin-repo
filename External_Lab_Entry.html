@@ -1,0 +1,317 @@
+<!-- =====================================================================
+     🧪 OUTSIDE LAB REPORT — values from another lab, entered at the bedside
+
+     In the SHELL, beside Lab_Results_Peek, for the same reason: IP Notes,
+     the IP case sheet and the OP consult live in different lazy bundles and
+     all of them need it. Any of them opens it with
+
+         window.crescExternalLabOpen({ patientId, ipNumber, name, onSaved })
+
+     Backed by External_Lab.gs. Saved values appear in the Labs viewer and
+     the IP Notes Investigations panel, labelled with the outside lab's name.
+
+     Keyboard: Enter in a value moves to the next row (adding one at the end),
+     Ctrl+Enter saves, Escape closes.
+     ===================================================================== -->
+<style>
+  #cresc-exlab { position: fixed; inset: 0; z-index: 3550; display: flex;
+                 align-items: center; justify-content: center;
+                 background: var(--overlay-scrim); backdrop-filter: blur(3px); }
+  #cresc-exlab[hidden] { display: none !important; }
+  #cresc-exlab .xl-card { background: var(--bg-card); color: var(--text-main);
+                 border: 1px solid var(--border-color); border-radius: 14px;
+                 width: 96%; max-width: 860px; max-height: 94vh;
+                 display: flex; flex-direction: column; box-shadow: var(--shadow-lg); }
+  #cresc-exlab .xl-head { padding: .9rem 1.1rem; border-bottom: 1px solid var(--divider-color);
+                 display: flex; justify-content: space-between; gap: 1rem; }
+  #cresc-exlab .xl-body { padding: .9rem 1.1rem; overflow: auto; }
+  #cresc-exlab .xl-foot { padding: .75rem 1.1rem; border-top: 1px solid var(--divider-color);
+                 display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
+  #cresc-exlab label { font-size: .74rem; font-weight: 600; color: var(--text-label);
+                 display: block; margin-bottom: .2rem; }
+  #cresc-exlab input, #cresc-exlab textarea, #cresc-exlab select {
+                 background: var(--bg-input); color: var(--text-main);
+                 border: 1px solid var(--border-color); border-radius: 7px;
+                 padding: .38rem .5rem; font-size: .88rem; width: 100%; box-sizing: border-box; }
+  #cresc-exlab input:focus, #cresc-exlab textarea:focus, #cresc-exlab select:focus {
+                 outline: 2px solid var(--accent); outline-offset: 0; }
+  #cresc-exlab .xl-grid { display: grid; grid-template-columns: 2fr 1fr 2fr; gap: .6rem; }
+  #cresc-exlab table { width: 100%; border-collapse: separate; border-spacing: 0 .3rem; }
+  #cresc-exlab th { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+                 color: var(--text-label); font-weight: 600; padding: 0 .25rem; }
+  #cresc-exlab td { padding: 0 .25rem; vertical-align: middle; }
+  #cresc-exlab .xl-flag { font-weight: 700; font-size: .8rem; min-width: 2.2rem; text-align: center; }
+  #cresc-exlab .xl-flag.H { color: var(--danger-fg); }
+  #cresc-exlab .xl-flag.L { color: var(--info-fg); }
+  #cresc-exlab .xl-flag.N { color: var(--success-fg); }
+  #cresc-exlab .xl-err { background: var(--danger-bg); color: var(--danger-fg);
+                 border: 1px solid var(--danger); border-radius: 8px;
+                 padding: .45rem .7rem; font-size: .82rem; font-weight: 600; }
+  #cresc-exlab .xl-del { background: none; border: 0; color: var(--text-faint); padding: .2rem .4rem; }
+  #cresc-exlab .xl-del:hover, #cresc-exlab .xl-del:focus { color: var(--danger-fg); }
+  @media (max-width: 640px) {
+    #cresc-exlab .xl-grid { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div id="cresc-exlab" hidden role="dialog" aria-modal="true" aria-labelledby="xl-title">
+  <div class="xl-card">
+    <div class="xl-head">
+      <div>
+        <div class="fw-bold" id="xl-title" style="font-size:1rem;">
+          <i class="fa-solid fa-file-medical me-2" style="color: var(--accent-fg);"></i>Outside lab report
+        </div>
+        <div class="label-bright small" id="xl-sub">&nbsp;</div>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="crescExternalLabClose()">Close</button>
+    </div>
+    <div class="xl-body">
+      <div class="xl-grid mb-3">
+        <div>
+          <label for="xl-lab">Lab / centre *</label>
+          <input id="xl-lab" list="xl-lab-list" autocomplete="off" placeholder="e.g. Metropolis, Salem">
+          <datalist id="xl-lab-list"></datalist>
+        </div>
+        <div>
+          <label for="xl-date">Report date *</label>
+          <input id="xl-date" type="date">
+        </div>
+        <div>
+          <label for="xl-test">Test or panel *</label>
+          <input id="xl-test" list="xl-test-list" autocomplete="off" placeholder="e.g. Lipid profile">
+          <datalist id="xl-test-list"></datalist>
+        </div>
+      </div>
+
+      <table>
+        <thead><tr>
+          <th style="width:32%">Parameter</th><th style="width:16%">Value</th>
+          <th style="width:14%">Unit</th><th style="width:22%">Reference range</th>
+          <th style="width:8%">Flag</th><th style="width:8%"></th>
+        </tr></thead>
+        <tbody id="xl-rows"></tbody>
+      </table>
+      <datalist id="xl-param-list"></datalist>
+      <button type="button" class="btn btn-sm btn-outline-info mt-1" onclick="crescExternalLabAddRow(true)">
+        <i class="fa-solid fa-plus me-1"></i>Add value
+      </button>
+
+      <div class="mt-3">
+        <label for="xl-notes">Notes (optional)</label>
+        <textarea id="xl-notes" rows="2" placeholder="Impression, method, or anything the numbers do not say"></textarea>
+      </div>
+      <div class="xl-err mt-3" id="xl-err" hidden></div>
+    </div>
+    <div class="xl-foot">
+      <span class="label-bright small">Flags are worked out from the reference range. Enter moves to the next row; Ctrl+Enter saves.</span>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="crescExternalLabClose()">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" id="xl-save" onclick="crescExternalLabSave()">
+          <i class="fa-solid fa-floppy-disk me-1"></i>Save report
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var ctx = null;          // { patientId, ipNumber, name, onSaved }
+  var params = {};         // UPPER(name) -> { name, unit, ref }
+  var lastFocus = null;
+
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return window.crescEsc ? window.crescEsc(s) : String(s == null ? '' : s); }
+
+  /** Same rule as exl_flagFor_ in External_Lab.gs, so the preview matches what is saved. */
+  function flagFor(value, ref) {
+    var v = parseFloat(String(value).replace(/,/g, ''));
+    if (isNaN(v)) return '';
+    var r = String(ref || '').replace(/,/g, '').replace(/[–—]/g, '-').trim().toLowerCase();
+    if (!r) return '';
+    var m = /^(-?\d+(?:\.\d+)?)\s*-\s*(-?\d+(?:\.\d+)?)/.exec(r);
+    if (m) return v < parseFloat(m[1]) ? 'L' : (v > parseFloat(m[2]) ? 'H' : 'N');
+    m = /^(?:<|≤|<=|up to|upto|below)\s*(-?\d+(?:\.\d+)?)/.exec(r);
+    if (m) return v > parseFloat(m[1]) ? 'H' : 'N';
+    m = /^(?:>|≥|>=|above|over)\s*(-?\d+(?:\.\d+)?)/.exec(r);
+    if (m) return v < parseFloat(m[1]) ? 'L' : 'N';
+    return '';
+  }
+
+  function paintFlag(tr) {
+    var f = flagFor(tr.querySelector('.xl-v').value, tr.querySelector('.xl-r').value);
+    var cell = tr.querySelector('.xl-flag');
+    cell.textContent = f === 'N' ? '✓' : f;
+    cell.className = 'xl-flag ' + f;
+    cell.title = f === 'H' ? 'Above the reference range' : f === 'L' ? 'Below the reference range'
+               : f === 'N' ? 'Within the reference range' : '';
+  }
+
+  window.crescExternalLabAddRow = function (focus) {
+    var tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input class="xl-p" list="xl-param-list" autocomplete="off" aria-label="Parameter"></td>' +
+      '<td><input class="xl-v" inputmode="decimal" autocomplete="off" aria-label="Value"></td>' +
+      '<td><input class="xl-u" autocomplete="off" aria-label="Unit"></td>' +
+      '<td><input class="xl-r" autocomplete="off" placeholder="70 - 110" aria-label="Reference range"></td>' +
+      '<td class="xl-flag"></td>' +
+      '<td><button type="button" class="xl-del" title="Remove this row" aria-label="Remove this row">' +
+        '<i class="fa-solid fa-xmark"></i></button></td>';
+    el('xl-rows').appendChild(tr);
+    var p = tr.querySelector('.xl-p');
+    p.addEventListener('change', function () {
+      var hit = params[p.value.trim().toUpperCase()];
+      if (!hit) return;
+      if (!tr.querySelector('.xl-u').value) tr.querySelector('.xl-u').value = hit.unit || '';
+      if (!tr.querySelector('.xl-r').value) tr.querySelector('.xl-r').value = hit.ref || '';
+      paintFlag(tr);
+    });
+    tr.querySelector('.xl-v').addEventListener('input', function () { paintFlag(tr); });
+    tr.querySelector('.xl-r').addEventListener('input', function () { paintFlag(tr); });
+    tr.querySelector('.xl-del').addEventListener('click', function () {
+      if (el('xl-rows').children.length > 1) tr.remove();
+      else tr.querySelectorAll('input').forEach(function (i) { i.value = ''; paintFlag(tr); });
+    });
+    if (focus) p.focus();
+    return tr;
+  };
+
+  function error(msg) {
+    var e = el('xl-err');
+    e.textContent = msg || '';
+    e.hidden = !msg;
+  }
+
+  function loadContext() {
+    if (!google || !google.script || !google.script.run) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) return;
+        params = {};
+        el('xl-param-list').innerHTML = (res.parameters || []).map(function (p) {
+          params[String(p.name).toUpperCase()] = p;
+          return '<option value="' + esc(p.name) + '">' + esc([p.unit, p.ref].filter(Boolean).join(' · ')) + '</option>';
+        }).join('');
+        el('xl-lab-list').innerHTML = (res.labs || []).map(function (l) {
+          return '<option value="' + esc(l) + '"></option>';
+        }).join('');
+        el('xl-test-list').innerHTML = (res.tests || []).map(function (t) {
+          return '<option value="' + esc(t) + '"></option>';
+        }).join('');
+      })
+      .withFailureHandler(function () { /* suggestions are a convenience */ })
+      .getExternalLabFormContext(window.sessionToken || '');
+  }
+
+  window.crescExternalLabOpen = function (opts) {
+    ctx = opts || {};
+    if (!ctx.patientId) {
+      if (window.crescAlert) window.crescAlert('Open a patient first.', 'warn');
+      return;
+    }
+    lastFocus = document.activeElement;
+    el('xl-sub').textContent = (ctx.name ? ctx.name + ' · ' : '') + ctx.patientId +
+                               (ctx.ipNumber ? ' · ' + ctx.ipNumber : '');
+    ['xl-lab', 'xl-test', 'xl-notes'].forEach(function (id) { el(id).value = ''; });
+    var d = new Date();
+    el('xl-date').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    el('xl-rows').innerHTML = '';
+    for (var i = 0; i < 3; i++) window.crescExternalLabAddRow(false);
+    error('');
+    el('xl-save').disabled = false;
+    el('cresc-exlab').hidden = false;
+    el('xl-lab').focus();
+    loadContext();
+  };
+
+  window.crescExternalLabClose = function () {
+    el('cresc-exlab').hidden = true;
+    if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} }
+  };
+
+  window.crescExternalLabSave = function () {
+    if (!ctx) return;
+    var rows = Array.prototype.map.call(el('xl-rows').children, function (tr) {
+      return {
+        parameter: tr.querySelector('.xl-p').value.trim(),
+        value: tr.querySelector('.xl-v').value.trim(),
+        unit: tr.querySelector('.xl-u').value.trim(),
+        refRange: tr.querySelector('.xl-r').value.trim()
+      };
+    }).filter(function (r) { return r.parameter || r.value; });
+
+    if (!el('xl-lab').value.trim()) { error('Name the lab the report came from.'); el('xl-lab').focus(); return; }
+    if (!el('xl-test').value.trim()) { error('Name the test or panel.'); el('xl-test').focus(); return; }
+    if (!rows.length) { error('Enter at least one value.'); return; }
+
+    var btn = el('xl-save');
+    btn.disabled = true;
+    error('');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.disabled = false;
+        if (!res || !res.success) { error((res && res.message) || 'The report was not saved.'); return; }
+        if (window.showToast) window.showToast('Outside lab report', res.message, 'success');
+        window.crescExternalLabClose();
+        if (typeof ctx.onSaved === 'function') { try { ctx.onSaved(res); } catch (e) {} }
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false;
+        error('Could not save: ' + ((err && err.message) || err));
+      })
+      .saveExternalLabResult({
+        patientId: ctx.patientId, ipNumber: ctx.ipNumber || '',
+        labName: el('xl-lab').value.trim(), reportDate: el('xl-date').value,
+        testName: el('xl-test').value.trim(), notes: el('xl-notes').value.trim(),
+        rows: rows
+      }, window.sessionToken || '');
+  };
+
+  /** Removes (voids) an outside report, keeping it on the sheet with a reason. */
+  window.crescExternalLabVoid = function (reportId, onDone) {
+    if (!window.crescPrompt) return;
+    window.crescPrompt('Why is this outside report being removed? It stays on record, marked void.', '',
+                       { title: 'Remove outside report', okLabel: 'Remove', kind: 'warn' })
+      .then(function (why) {
+        if (!why || !why.trim()) return;
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (window.showToast) window.showToast('Outside lab report', (res && res.message) || '', res && res.success ? 'success' : 'error');
+            if (res && res.success && typeof onDone === 'function') onDone();
+          })
+          .withFailureHandler(function (err) {
+            if (window.crescAlert) window.crescAlert('Could not remove it: ' + ((err && err.message) || err), 'err');
+          })
+          .voidExternalLabResult(reportId, why.trim(), window.sessionToken || '');
+      });
+  };
+
+  // Keyboard: Enter walks down the value column, Ctrl+Enter saves, Escape closes.
+  document.addEventListener('keydown', function (e) {
+    var host = el('cresc-exlab');
+    if (!host || host.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); window.crescExternalLabClose(); return; }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); window.crescExternalLabSave(); return; }
+    if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT' && host.contains(e.target)) {
+      e.preventDefault();
+      var tr = e.target.closest('tr');
+      if (!tr) {                      // header fields: next field
+        var order = ['xl-lab', 'xl-date', 'xl-test'];
+        var i = order.indexOf(e.target.id);
+        if (i !== -1 && i < order.length - 1) el(order[i + 1]).focus();
+        else { var first = el('xl-rows').querySelector('.xl-p'); if (first) first.focus(); }
+        return;
+      }
+      var inputs = Array.prototype.slice.call(tr.querySelectorAll('input'));
+      var j = inputs.indexOf(e.target);
+      if (j < inputs.length - 1 && !(e.target.classList.contains('xl-v') && tr.querySelector('.xl-u').value)) {
+        inputs[j + 1].focus();
+        return;
+      }
+      var next = tr.nextElementSibling || window.crescExternalLabAddRow(false);
+      next.querySelector('.xl-p').focus();
+    }
+  });
+})();
+</script>

@@ -387,6 +387,9 @@
       .lri-status { font-size: 0.7rem; }
       .lri-status.pending   { color: var(--text-muted); }
       .lri-status.available { color: var(--success-fg); }
+      .lri-vals { display: flex; flex-wrap: wrap; gap: .25rem .6rem; margin-top: .3rem; font-size: .76rem; color: var(--text-secondary); }
+      .lri-val b { color: var(--text-main); }
+      .lri-val.lri-off b, .lri-val.lri-off em { color: var(--danger-fg); font-style: normal; font-weight: 700; }
 
       @keyframes ipFadeIn {
         from { opacity: 0; transform: translateY(8px); }
@@ -651,6 +654,14 @@
             title="This patient's verified lab results">
             <i class="fa-solid fa-flask-vial" style="color:var(--teal-fg);"></i>
             <span style="font-size:0.8rem;">Labs</span>
+          </button>
+          <!-- Values from a lab outside the clinic: typed once, then shown in
+               the Labs viewer and under Investigations like any other result. -->
+          <button class="action-fab py-2 px-3 flex-row gap-2" style="flex-direction:row;"
+            onclick="ipnOpenExternalLab()"
+            title="Enter values from an outside lab report">
+            <i class="fa-solid fa-file-circle-plus" style="color:var(--info-fg);"></i>
+            <span style="font-size:0.8rem;">Outside lab</span>
           </button>
           <!-- The medical record and the nursing record are separate documents
                and file separately, so printing asks which one is wanted. -->
@@ -2248,16 +2259,34 @@ function ipn_prompt(message, value, done, opts) {
           cont.innerHTML = '<div style="color:var(--text-faint); font-size:0.8rem;">No orders found.</div>';
           return;
         }
+        // Each order: what it is, where it stands, and — once reported — the
+        // values themselves, out-of-range ones marked. It used to print the
+        // raw result object as JSON.
+        const STATUS = { PENDING: 'Ordered', PENDING_BILLING: 'Awaiting billing', BILLED: 'Billed',
+                         SAMPLE_COLLECTED: 'Sample collected', RECEIVED: 'In the lab',
+                         RESULTS_ENTERED: 'Awaiting verification', CANCELLED: 'Cancelled' };
         cont.innerHTML = resp.data.map(function(l) {
-          const isPending = l.status.toLowerCase().includes('pending');
-          const hasResult = !isPending && l.result && Object.keys(l.result).length > 0;
+          const ext = l.source === 'EXTERNAL';
+          const done = !!l.reported;
+          const st = String(l.status || '').toUpperCase();
+          const badge = ext
+            ? '<span class="lri-status available" title="Entered from an outside report">Outside · ' + _esc(l.labName || '') + '</span>'
+            : done ? '<span class="lri-status available">✓ Reported' + (l.abnormal ? ' · ' + l.abnormal + ' out of range' : '') + '</span>'
+                   : '<span class="lri-status pending">⏳ ' + _esc(STATUS[st] || l.status || 'Pending') + '</span>';
+          const vals = done ? (l.results || []).map(function(r) {
+            const f = String(r.flag || '').toUpperCase();
+            const off = f && f !== 'N' && f !== 'NORMAL';
+            return '<span class="lri-val' + (off ? ' lri-off' : '') + '" title="' + _esc(r.refRangeText || '') + '">' +
+                   _esc(r.parameterName) + ' <b>' + _esc(r.value) + '</b>' + (r.unit ? ' ' + _esc(r.unit) : '') +
+                   (off ? ' <em>' + _esc(f) + '</em>' : '') + '</span>';
+          }).join('') : '';
           return `<div class="lab-result-item">
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center gap-2">
               <div class="lri-test">${_esc(l.testName)}</div>
-              <span class="lri-status ${isPending ? 'pending' : 'available'}">${isPending ? '⏳ Pending' : '✓ Available'}</span>
+              ${badge}
             </div>
-            <div style="font-size:0.7rem; color:var(--text-faint);">${l.orderedAt}</div>
-            ${hasResult ? '<div class="mt-1" style="font-size:0.78rem; color:var(--teal-fg);">' + JSON.stringify(l.result) + '</div>' : ''}
+            <div style="font-size:0.7rem; color:var(--text-faint);">${_esc(l.orderedAt)}${ext && l.enteredBy ? ' · entered by ' + _esc(l.enteredBy) : ''}</div>
+            ${vals ? '<div class="lri-vals">' + vals + '</div>' : ''}
           </div>`;
         }).join('');
       })
@@ -3584,6 +3613,22 @@ function ipn_prompt(message, value, done, opts) {
         .saveIPNote(payload, window.sessionToken);
     });
   }
+
+  // ── 11b. OUTSIDE LAB REPORT ─────────────────────────────
+  // External_Lab_Entry.html, in the shell. Saved values show under
+  // Investigations here, so the panel is reloaded once they land.
+  function ipnOpenExternalLab() {
+    const ctx = IPNotesModule.context || {};
+    if (typeof window.crescExternalLabOpen !== 'function') {
+      ipnToast('External_Lab_Entry.html is not in this deployment.', 'err');
+      return;
+    }
+    window.crescExternalLabOpen({
+      patientId: ctx.patientId, ipNumber: ctx.ipNumber, name: ctx.name,
+      onSaved: function () { loadLabResults(); }
+    });
+  }
+  window.ipnOpenExternalLab = ipnOpenExternalLab;
 
   // ── 12. OPEN BASELINE CASESHEET ─────────────────────────
   function openBaselineCasesheet() {

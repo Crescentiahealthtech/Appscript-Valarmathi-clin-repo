@@ -957,38 +957,116 @@ function getIPLabResults(ipNumber, patientId, sessionToken) {
     var gate = resolveIPRead_(sessionToken, ipNumber);
     if (!gate.ok) return { success: false, message: gate.message, data: [] };
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('Lab_Queue_DB');
-    if (!sheet) return { success: true, data: [] };
+    // THIS READ THE WRONG SHEET. IP notes order through createLabRequest into
+    // LAB_ORDERS (the lab engine), but this panel read Lab_Queue_DB, the old
+    // OPD queue — so an order placed on the ward never appeared under
+    // "Investigations", and the few rows that did were printed as raw JSON.
+    // It now reads the lab engine (orders for this admission, and this
+    // patient's orders since the admission date), then the legacy queue for
+    // anything older, then any outside-lab reports entered for the stay.
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ip = String(ipNumber || '').trim().toUpperCase();
+    var pid = String(patientId || '').trim().toUpperCase();
+    var adm = ipc_admissionRow_(ip);
+    if (adm && !pid) pid = String(adm.row[1] || '').trim().toUpperCase();
+    var since = adm ? (cresc_ms_(adm.row[4]) || 0) : 0;
+    var results = [];
 
-    const data = sheet.getDataRange().getValues();
-    const results = [];
+    // ---- 1. the lab engine ------------------------------------------------
+    var oSheet = ss.getSheetByName(LAB.ORDERS);
+    var wanted = {};
+    if (oSheet && oSheet.getLastRow() > 1) {
+      var om = labHeaderMap_(oSheet);
+      var od = oSheet.getRange(2, 1, oSheet.getLastRow() - 1, oSheet.getLastColumn()).getValues();
+      od.forEach(function (r) {
+        var rowIp = String(r[om['AdmissionID']] || '').trim().toUpperCase();
+        var rowPid = String(r[om['PatientID']] || '').trim().toUpperCase();
+        var ms = cresc_ms_(r[om['CreatedAt']]) || 0;
+        var mine = (ip && rowIp === ip) || (!rowIp && pid && rowPid === pid && since && ms >= since - 86400000);
+        if (!mine) return;
+        var oid = String(r[om['OrderID']] || '');
+        if (!oid || wanted[oid]) return;
+        var status = String(r[om['OrderStatus']] || 'PENDING');
+        wanted[oid] = {
+          orderId: oid,
+          ms: ms,
+          orderedAt: cresc_formatDate_(r[om['CreatedAt']], 'dd-MMM hh:mm a') || '--',
+          testName: String(r[om['TestNames']] || ''),
+          priority: String(r[om['Priority']] || ''),
+          status: status,
+          reported: ['VERIFIED', 'REPORT_DISPATCHED', 'AMENDED'].indexOf(status) !== -1,
+          results: [],
+          abnormal: 0,
+          source: 'LAB'
+        };
+      });
+      var rSheet = ss.getSheetByName(LAB.RESULTS);
+      if (rSheet && rSheet.getLastRow() > 1 && Object.keys(wanted).length) {
+        var rm = labHeaderMap_(rSheet);
+        var rd = rSheet.getRange(2, 1, rSheet.getLastRow() - 1, rSheet.getLastColumn()).getValues();
+        rd.forEach(function (r) {
+          var o = wanted[String(r[rm['OrderID']] || '')];
+          if (!o || !o.reported) return;          // unverified numbers are never shown
+          var latest = r[rm['IsLatest']] === true || String(r[rm['IsLatest']]).toUpperCase() === 'TRUE';
+          var draft = r[rm['IsDraft']] === true || String(r[rm['IsDraft']]).toUpperCase() === 'TRUE';
+          if (!latest || draft) return;
+          var flag = String(r[rm['Flag']] || '').toUpperCase();
+          if (flag && flag !== 'N' && flag !== 'NORMAL') o.abnormal++;
+          o.results.push({ parameterName: String(r[rm['ParameterName']] || ''),
+                           value: String(r[rm['ResultValue']] || ''),
+                           unit: String(r[rm['Unit']] || ''), flag: flag,
+                           refRangeText: String(r[rm['RefRangeText']] || '') });
+        });
+      }
+      Object.keys(wanted).forEach(function (k) { results.push(wanted[k]); });
+    }
 
-    for (let i = 1; i < data.length; i++) {
-      const rowIP  = String(data[i][3] || "").trim();
-      const rowPID = String(data[i][2] || "").trim();
-      if (rowIP !== String(ipNumber).trim() && rowPID !== String(patientId).trim()) continue;
+    // ---- 2. the legacy queue, for orders placed before the lab engine -----
+    var legacy = ss.getSheetByName('Lab_Queue_DB');
+    if (legacy && legacy.getLastRow() > 1) {
+      var data = legacy.getDataRange().getValues();
+      for (var i = 1; i < data.length; i++) {
+        var rowIP  = String(data[i][3] || "").trim().toUpperCase();
+        var rowPID = String(data[i][2] || "").trim().toUpperCase();
+        if (rowIP !== ip && !(rowPID === pid && !rowIP)) continue;
+        if (wanted[String(data[i][0])]) continue;
+        var resultData = {};
+        try { resultData = JSON.parse(data[i][8] || "{}"); } catch (e) {}
+        var lres = Object.keys(resultData || {}).map(function (k) {
+          return { parameterName: k, value: String(resultData[k]), unit: '', flag: '', refRangeText: '' };
+        });
+        var lstatus = String(data[i][7] || "");
+        results.push({
+          orderId: String(data[i][0]),
+          ms: cresc_ms_(data[i][4]) || 0,
+          orderedAt: cresc_formatDate_(data[i][4], "dd-MMM hh:mm a") || "--",
+          testName: String(data[i][5] || ""),
+          priority: String(data[i][6] || ""),
+          status: lstatus,
+          reported: lres.length > 0 && lstatus.toLowerCase().indexOf('pending') === -1,
+          results: lres,
+          abnormal: 0,
+          source: 'LEGACY'
+        });
+      }
+    }
 
-      let orderedAtFmt = cresc_formatDate_(data[i][4], "dd-MMM hh:mm a") || "--";
-
-      let resultData = {};
-      try { resultData = JSON.parse(data[i][8] || "{}"); } catch(e) {}
-
-      results.push({
-        orderId:    String(data[i][0]),
-        orderedAt:  orderedAtFmt,
-        testName:   String(data[i][5] || ""),
-        priority:   String(data[i][6] || ""),
-        status:     String(data[i][7] || ""),
-        result:     resultData,
-        reportedAt: String(data[i][9] || "--")
+    // ---- 3. outside labs --------------------------------------------------
+    if (typeof exl_ordersFor_ === 'function' && pid) {
+      exl_ordersFor_(pid, ip).forEach(function (o) {
+        results.push({
+          orderId: o.orderId, ms: o.ms, orderedAt: o.date, testName: o.testNames,
+          priority: '', status: 'EXTERNAL', reported: true, results: o.results,
+          abnormal: o.abnormal, source: 'EXTERNAL', labName: o.labName,
+          enteredBy: o.enteredBy, notes: o.notes
+        });
       });
     }
 
-    results.sort((a, b) => b.orderId.localeCompare(a.orderId));
+    results.sort(function (a, b) { return (b.ms || 0) - (a.ms || 0); });
     return { success: true, data: results };
   } catch (error) {
-    return { success: false, message: error.toString() };
+    return { success: false, message: error.toString(), data: [] };
   }
 }
 // ── 14. PRINTABLE PROGRESS RECORD ─────────────────────────
