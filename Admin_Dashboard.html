@@ -1671,6 +1671,14 @@
   }
   window.openVisitingLog = openVisitingLog;
 
+  // The dashboard keeps itself current while it is on screen. A silent
+  // re-read of the shared cache (60 s on the server), so ten open tabs cost
+  // one recomputation a minute, not ten; the Refresh button still forces one.
+  if (window.crescAutoRefresh) {
+    window.crescAutoRefresh('admin-dashboard', { section: 'tab-admin-dash', every: 60,
+                                                 run: function () { renderAdminDashboard(false); } });
+  }
+
   // The button appears only for a role that holds admin.audit. applyRBAC
   // fetches the permissions asynchronously, so this waits for them rather
   // than reading window.crescPerms before the server has answered.

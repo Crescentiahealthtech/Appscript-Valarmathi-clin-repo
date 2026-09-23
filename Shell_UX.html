@@ -560,3 +560,78 @@
   };
 })();
 </script>
+<script>
+/* ====================================================================
+   AUTO-REFRESH — screens that keep themselves current
+
+   window.crescAutoRefresh(key, { section, every, run })
+
+     section  element id of the screen; it refreshes only while that
+              element is actually on screen
+     every    seconds between refreshes (default 60)
+     run      the screen's own quiet reload
+
+   One timer for the whole app. A refresh is skipped — not queued — while
+   the browser tab is hidden, while a dialog is open, or while somebody is
+   typing into the screen, so a list never redraws under a half-typed
+   search or a half-filled form. Coming back to the tab catches up at once.
+   ==================================================================== */
+(function () {
+  'use strict';
+  var entries = {};
+  var lastInput = 0;
+
+  document.addEventListener('keydown', function () { lastInput = Date.now(); }, true);
+  document.addEventListener('input', function () { lastInput = Date.now(); }, true);
+
+  function onScreen(id) {
+    var el = document.getElementById(id);
+    if (!el) return false;
+    // offsetParent is null for anything display:none, itself or via a parent.
+    return el.offsetParent !== null || el.getClientRects().length > 0;
+  }
+
+  function dialogOpen() {
+    return !!document.querySelector('.modal.show, [role="dialog"]:not([hidden]):not(.d-none)' +
+                                    ':not(#cresc-labpeek):not(#cresc-exlab)[aria-modal="true"]');
+  }
+
+  function busyTyping(id) {
+    var a = document.activeElement;
+    var el = document.getElementById(id);
+    if (!a || !el || !el.contains(a)) return false;
+    var tag = (a.tagName || '').toUpperCase();
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT' && !a.isContentEditable) return false;
+    return (Date.now() - lastInput) < 20000;
+  }
+
+  function tick(force) {
+    if (document.hidden) return;
+    var now = Date.now();
+    Object.keys(entries).forEach(function (k) {
+      var e = entries[k];
+      if (!onScreen(e.section)) { e.seen = false; return; }
+      // Arriving on the screen runs its own loader; start the clock from there.
+      if (!e.seen) { e.seen = true; e.last = now; return; }
+      if (!force && now - e.last < e.every * 1000) return;
+      if (dialogOpen() || busyTyping(e.section)) return;
+      e.last = now;
+      try { e.run(); } catch (err) { if (window.console) console.warn('auto-refresh ' + k, err); }
+    });
+  }
+
+  window.crescAutoRefresh = function (key, opts) {
+    if (!opts || !opts.section || typeof opts.run !== 'function') return;
+    entries[key] = { section: opts.section, every: Math.max(20, opts.every || 60),
+                     run: opts.run, last: Date.now(), seen: false };
+  };
+
+  setInterval(function () { tick(false); }, 5000);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    // Back on the tab after a while: anything overdue refreshes now.
+    tick(false);
+  });
+})();
+</script>
+

@@ -5,7 +5,7 @@
 // Single server round-trip for the whole dashboard.
 // - Reads each source sheet ONCE (perf).
 // - Role-gated: financial keys are never returned to non-finance roles.
-// - CacheService (5 min) so repeat loads are instant.
+// - CacheService (60 s) so repeat loads, and the auto-refresh, are cheap.
 // - No LockService: this module never writes.
 // ============================================================
 
@@ -62,7 +62,9 @@ function getDashboardData(role, bust, sessionToken) {
       data.revenue = _dashRevenue_(ss, tz, todayKey, memo);
     }
 
-    cache.put(cacheKey, JSON.stringify(data), 300); // 5 minutes
+    // 60 s: the dashboard refreshes itself every minute while it is open
+    // (Admin_Dashboard.html), and this is the one copy every tab shares.
+    cache.put(cacheKey, JSON.stringify(data), 60);
     return { success: true, data: data, message: "fresh" };
 
   } catch (e) {
