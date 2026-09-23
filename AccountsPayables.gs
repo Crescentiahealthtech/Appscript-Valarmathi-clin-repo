@@ -38,7 +38,11 @@ function recordPayable(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.payables');
+    var actor = crescRequire_(sessionToken, 'accounts.payables');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var entity = acc_str_(payload.entityType).toUpperCase();
     if (PAY_CFG.TYPES.indexOf(entity) === -1) entity = 'VENDOR';
     var name = acc_str_(payload.name).trim();
@@ -73,7 +77,11 @@ function payPayable(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.payables');
+    var actor = crescRequire_(sessionToken, 'accounts.payables');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var target = acc_str_(payload.payableId).trim();
     var amt = acc_money_(payload.amount);
     if (!target) return { success: false, message: "Missing payable reference." };

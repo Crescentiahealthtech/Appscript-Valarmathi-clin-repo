@@ -4,7 +4,8 @@
 // ==========================================
 
 // 1. FETCH DETAILS
-function fetchPatientContext(patientId) {
+function fetchPatientContext(patientId, sessionToken) {
+  crescRequire_(sessionToken, 'patient.read');
   const result = searchPatientForEMR(patientId);
   if (result.success) {
     return {
@@ -20,7 +21,11 @@ function fetchPatientContext(patientId) {
 }
 
 // 2. MAIN OP ENCOUNTER SAVE / UPSERT
-function saveOPEncounter(payload) {
+// Private (trailing _): it checks no session. The only entry is
+// saveOPEncounterScoped in OP_Doctor_Engine.gs, which resolves the doctor
+// first. Public, it let anyone holding the URL write encounters, prescriptions
+// and lab queue rows for any patient.
+function saveOPEncounter_(payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
 
@@ -191,7 +196,10 @@ function clearExistingQueueRows(sheet, encounterId, colIndex) {
 }
 
 // 3. OP PRINT FETCHER
-function getEncounterForPrint(encounterId) {
+function getEncounterForPrint(encounterId, sessionToken) {
+  // Only ever called from inside a guarded endpoint: the ambient actor it
+  // set answers here. A direct google.script.run call has none and is refused.
+  crescRequire_(sessionToken);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("OP_Encounters");

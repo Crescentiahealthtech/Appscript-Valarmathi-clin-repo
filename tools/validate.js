@@ -1,7 +1,7 @@
 /* Syntax-check every .gs file and every <script> block in every .html file.
    Apps Script runs V8, so node's parser is the same parser. */
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const ROOT = '/home/user/Appscript-Valarmathi-clin-repo';
+const ROOT = process.env.REPO || path.resolve(__dirname, '..');
 let bad = 0, checked = 0;
 
 function check(label, code) {

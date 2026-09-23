@@ -101,7 +101,11 @@ function addIpCharge(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'billing.write');
+    var actor = crescRequire_(sessionToken, 'billing.write');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var ip = acc_str_(payload.ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };
@@ -122,7 +126,12 @@ function addIpCharge(payload, sessionToken) {
 }
 
 // Hook for Lab/Pharmacy "Bill to IP". Idempotent on (source, sourceRef).
-function billChargeToIp(payload) {
+function billChargeToIp(payload, sessionToken) {
+  // Only ever called from inside a guarded endpoint: the ambient actor it
+  // set answers here. A direct google.script.run call has none and is refused.
+  var actor = crescRequire_(sessionToken);
+  payload = payload || {};
+  payload.user = actor.displayName || actor.username;
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -149,7 +158,8 @@ function billChargeToIp(payload) {
 }
 
 // When an IP patient pays a pharmacy/lab bill at the counter instead of on tab.
-function markIpChargePaidAtCounter(source, sourceRef, payMode, user) {
+function markIpChargePaidAtCounter(source, sourceRef, payMode, user, sessionToken) {
+  crescRequire_(sessionToken, 'billing.write');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -173,7 +183,11 @@ function collectIpAdvance(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'billing.write');
+    var actor = crescRequire_(sessionToken, 'billing.write');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var ip = acc_str_(payload.ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };
@@ -254,7 +268,11 @@ function saveDischargeDraft(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.settle');
+    var actor = crescRequire_(sessionToken, 'accounts.settle');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var ip = acc_str_(payload.ipNumber).trim();
     if (!ip) return { success: false, message: "IP number required." };
     var sh = ipc_drafts_(), d = sh.getDataRange().getValues();
@@ -285,7 +303,11 @@ function addIpVisit(p, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'billing.write');
+    var actor = crescRequire_(sessionToken, 'billing.write');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    p = p || {};
+    p.user = actor.displayName || actor.username;
     var ip = acc_str_(p.ipNumber).trim(); if (!ip) return { success: false, message: 'IP number required.' };
     ipc_visits_().appendRow([ipc_id_('VIS'), ip, acc_str_(p.date) || Utilities.formatDate(new Date(), ACC_CFG.TZ, 'yyyy-MM-dd'), acc_str_(p.doctor), acc_str_(p.type), acc_money_(p.count) || 1, acc_str_(p.remark), acc_str_(p.user) || 'UNKNOWN']);
     SpreadsheetApp.flush();
@@ -316,7 +338,11 @@ function settleDischarge(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.settle');
+    var actor = crescRequire_(sessionToken, 'accounts.settle');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var ip = acc_str_(payload.ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };

@@ -450,7 +450,10 @@ function createLabRequest(d, sessionToken) {
   }
 }
 
-function getLabOrderDetail(orderId) {
+function getLabOrderDetail(orderId, sessionToken) {
+  // Only ever called from inside a guarded endpoint: the ambient actor it
+  // set answers here. A direct google.script.run call has none and is refused.
+  crescRequire_(sessionToken);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.ORDERS);
@@ -795,7 +798,10 @@ function generateLabBill(d, sessionToken) {
   }
 }
 
-function getLabBill(orderId) {
+function getLabBill(orderId, sessionToken) {
+  // Only ever called from inside a guarded endpoint: the ambient actor it
+  // set answers here. A direct google.script.run call has none and is refused.
+  crescRequire_(sessionToken);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.BILLING);
@@ -917,7 +923,10 @@ function rejectLabSample(sampleId, reason, sessionToken) {
   finally{try{lock.releaseLock();}catch(e){}}
 }
 
-function getOrderSamples(orderId) {
+function getOrderSamples(orderId, sessionToken) {
+  // Only ever called from inside a guarded endpoint: the ambient actor it
+  // set answers here. A direct google.script.run call has none and is refused.
+  crescRequire_(sessionToken);
   try {
     const ss=SpreadsheetApp.getActiveSpreadsheet();
     const sheet=ss.getSheetByName(LAB.SAMPLES);
@@ -1115,7 +1124,7 @@ function verifyLabResults(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'lab.verify');
+    const actor=crescRequire_(sessionToken, 'lab.verify');
     if(!d||!d.orderId) return {success:false,message:'Order ID required.'};
     const od=getLabOrderDetail(d.orderId);
     if(!od.success) return {success:false,message:od.message};
@@ -1125,7 +1134,9 @@ function verifyLabResults(d, sessionToken) {
     const map=labHeaderMap(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
-    const verifier=String(d.verifierName||Session.getActiveUser().getEmail()||'SYSTEM');
+    // The signature on a lab report is the signed-in verifier, not a name the
+    // browser sends: d.verifierName let anyone sign as any pathologist.
+    const verifier=String(actor.displayName||actor.username||'SYSTEM');
     const valRows=[]; const targetRows=[];
     
     data.forEach(function(r,i){
@@ -1193,6 +1204,7 @@ function lookupLabPatient(pid, sessionToken) {
 }
 
 function DIAG_labRecords() {
+  crescEditorOnly_('DIAG_labRecords');
   var pid = 'LMTVS0001';   // ← put the patient ID you searched
   var ss = SpreadsheetApp.getActiveSpreadsheet();
  
@@ -1476,6 +1488,7 @@ function getLabReportHtml(orderId, sessionToken) {
  * All reports and receipts will use these values instead of hardcoded strings.
  */
 function setMyClinicConfig() {
+  crescEditorOnly_('setMyClinicConfig');
   var p = PropertiesService.getScriptProperties();
   p.setProperty('CLINIC_NAME',    'Crescentia Clinic');     // ← Change this
   p.setProperty('CLINIC_ADDRESS', 'Your Address, City');    // ← Change this

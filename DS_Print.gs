@@ -631,6 +631,7 @@ function dsCron_processPdfQueue() {
 
 /** Admin-run once. Installs the ten-minute trigger, without duplicating it. */
 function installDischargePdfTrigger() {
+  crescEditorOnly_('installDischargePdfTrigger');
   var existing = ScriptApp.getProjectTriggers().filter(function (t) {
     return t.getHandlerFunction() === 'dsCron_processPdfQueue';
   });

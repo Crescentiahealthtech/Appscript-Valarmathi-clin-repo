@@ -88,7 +88,11 @@ function createManualClaim(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.write');
+    var actor = crescRequire_(sessionToken, 'accounts.write');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     payload = payload || {};
     var insurer = acc_str_(payload.insurer).trim();
     if (!insurer) return { success: false, message: "Insurer / TPA required." };
@@ -122,7 +126,11 @@ function updateClaim(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.write');
+    var actor = crescRequire_(sessionToken, 'accounts.write');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var id = acc_str_(payload.claimId).trim(); if (!id) return { success: false, message: "Missing claim." };
     var sh = ins_sheet_(), d = sh.getDataRange().getValues(), h = d[0].map(function (x) { return acc_str_(x).trim(); });
     var cId = h.indexOf('Claim_ID');
@@ -154,7 +162,11 @@ function settleClaim(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.settle');
+    var actor = crescRequire_(sessionToken, 'accounts.settle');
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var id = acc_str_(payload.claimId).trim(); if (!id) return { success: false, message: "Missing claim." };
     var settled = acc_money_(payload.settledAmount); if (settled < 0) return { success: false, message: "Invalid amount." };
     var sh = ins_sheet_(), d = sh.getDataRange().getValues(), h = d[0].map(function (x) { return acc_str_(x).trim(); });

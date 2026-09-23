@@ -28,6 +28,7 @@ var OPT_PROMOTE_MIN_DOCS  = 2;
 
 /** Run once from the editor after adding this file. Idempotent. */
 function runTemplateMigration() {
+  crescEditorOnly_('runTemplateMigration');
   var lock = LockService.getScriptLock();
   var out = [];
   try {

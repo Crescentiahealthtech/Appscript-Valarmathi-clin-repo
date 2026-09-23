@@ -3,6 +3,7 @@
 // =========================================================================
 
 function runEnterpriseAccountsSetup() {
+  crescEditorOnly_('runEnterpriseAccountsSetup');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
   // Define the 7 Enterprise Financial Pillars based on Master Blueprint

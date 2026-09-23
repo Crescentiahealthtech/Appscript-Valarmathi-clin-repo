@@ -226,6 +226,7 @@ function dpdpSetup() {
  * finding, so this is stored where the notice can read it.
  */
 function dpdpSetGrievanceOfficer(name, email, phone) {
+  crescEditorOnly_('dpdpSetGrievanceOfficer', ['dpdp.manage', 'admin.config']);
   var v = { name: dpdp_str_(name), email: dpdp_str_(email), phone: dpdp_str_(phone) };
   if (!v.name || !(v.email || v.phone)) {
     return 'Give a name and at least one of email or phone. ' +

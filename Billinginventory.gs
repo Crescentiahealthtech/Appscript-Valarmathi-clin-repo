@@ -31,7 +31,8 @@
  * Historical rows from the pre-2026 `Billing_Ledger` sheet, newest first.
  * Not part of any live workflow — for migration and reference only.
  */
-function getLegacyBillingLedger() {
+function getLegacyBillingLedger(sessionToken) {
+  crescRequire_(sessionToken, 'billing.read');
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Billing_Ledger');
     if (!sheet || sheet.getLastRow() < 2) return [];

@@ -98,6 +98,11 @@ for (const f of fs.readdirSync(ROOT)) {
       for (; p < src.length; p++) {
         const c = src[p];
         if (quote) { if (c === '\\') { p++; continue; } if (c === quote) quote = null; continue; }
+        // A comment inside a handler is not code: an apostrophe in
+        // `/* the caller's refresh */` used to open a quote that never closed,
+        // and every endpoint after it in the file went unseen.
+        if (c === '/' && src[p + 1] === '/') { const n = src.indexOf('\n', p); p = (n === -1 ? src.length : n) - 1; continue; }
+        if (c === '/' && src[p + 1] === '*') { const e = src.indexOf('*/', p + 2); p = (e === -1 ? src.length : e + 1); continue; }
         if (c === "'" || c === '"' || c === '`') { quote = c; continue; }
         if (c === '(') depth++;
         else if (c === ')') { depth--; if (depth === 0) break; }

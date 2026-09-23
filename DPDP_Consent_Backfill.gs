@@ -403,6 +403,11 @@ function dpdpConsentQueue(sessionToken) {
 
 // ---------------------------------------------------------------------------
 // RUNNABLE FROM THE SCRIPT EDITOR
+//
+// Every name here ends in `_` (see RUN_Setup.gs for why). Each one mints an
+// admin session; without the underscore they were endpoints that handed that
+// session's powers — the consent worklist with every patient's name, and a
+// real write to the consent register — to anyone holding the URL.
 // ---------------------------------------------------------------------------
 
 /**
@@ -427,7 +432,7 @@ function dpdp_editorSession_(fn) {
  * ADMIN, from the editor. What the LEGITIMATE backfill would write. Writes
  * nothing.
  */
-function RUN_consentBackfill_DRYRUN() {
+function RUN_consentBackfill_DRYRUN_() {
   var r = dpdp_editorSession_(function (t) {
     return dpdpBackfillConsent({ mode: 'LEGITIMATE', dryRun: true }, t);
   });
@@ -437,7 +442,7 @@ function RUN_consentBackfill_DRYRUN() {
 }
 
 /** ADMIN, from the editor. Runs the LEGITIMATE backfill for real. */
-function RUN_consentBackfill_FOR_REAL() {
+function RUN_consentBackfill_FOR_REAL_() {
   var r = dpdp_editorSession_(function (t) {
     return dpdpBackfillConsent({ mode: 'LEGITIMATE' }, t);
   });
@@ -447,7 +452,7 @@ function RUN_consentBackfill_FOR_REAL() {
 }
 
 /** ADMIN, from the editor. The worklist for the front desk. */
-function RUN_consentQueue() {
+function RUN_consentQueue_() {
   var r = dpdp_editorSession_(function (t) { return dpdpConsentQueue(t); });
   var lines = (r.rows || []).map(function (x) {
     return '  ' + x.patientId + '  ' + x.name +

@@ -120,7 +120,8 @@ function ipa_nextIpNumber_(sheet) {
  * Full admissions ledger, newest first.
  * Contract: { success, message, data:[] }. data is ALWAYS an array.
  */
-function getIPLedgerData() {
+function getIPLedgerData(sessionToken) {
+  crescRequire_(sessionToken, 'ward.read');
   try {
     var sheet = ipa_ss_().getSheetByName(IPA_CFG.SHEET);
     if (!sheet) return { success: true, message: 'Ledger not yet created.', data: [] };
@@ -766,10 +767,14 @@ function processBedTransfer(ipNumber, oldBedId, newWard, newBedId, sessionToken)
  *        discharge-summary gate returns DS_NOT_SIGNED. With
  *        DS_BILLING_GATE = OFF the gate is a no-op and this argument is
  *        never needed, so existing callers are unaffected.
+ * @param {string} sessionToken
  */
-function processPatientDischarge(ipNumber, bedId, dsOverrideReason) {
+function processPatientDischarge(ipNumber, bedId, dsOverrideReason, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
+    // Was unguarded, and called from DS_Discharge_Flow.html: anyone holding
+    // the URL could discharge any inpatient and free their bed.
+    crescRequire_(sessionToken, 'ward.discharge');
     var ip0 = ipa_str_(ipNumber);
     if (!ip0) return { success: false, message: 'IP Number is required.' };
 
@@ -1059,6 +1064,7 @@ function getConsultantList(sessionToken) {
 
 /** One-shot. Creates Master_Doctors and seeds the four consultants. */
 function seedMasterDoctors() {
+  crescEditorOnly_('seedMasterDoctors');
   var lock = LockService.getScriptLock();
   var acquired = false;
   try {
@@ -1138,6 +1144,7 @@ function getWardBedBoard(ward, sessionToken) {
  * Refuses on OCCUPIED — that must go through discharge or transfer.
  */
 function markBedReady(bedId) {
+  crescEditorOnly_('markBedReady');
   var lock = LockService.getScriptLock();
   var acquired = false;
   try {
@@ -1192,6 +1199,7 @@ function dryRunBedReconciliation() {
 
 /** Applies the dry-run result. Run dryRunBedReconciliation() first. */
 function reconcileBedOccupancy() {
+  crescEditorOnly_('reconcileBedOccupancy');
   var lock = LockService.getScriptLock();
   var acquired = false;
   try {

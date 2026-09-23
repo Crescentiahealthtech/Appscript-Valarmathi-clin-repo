@@ -474,6 +474,7 @@ function base32ToBytes(base32) {
  * revealing the secret. Run diagnoseMFA("nurse1") in the editor.
  */
 function diagnoseMFA(username) {
+  crescEditorOnly_('diagnoseMFA');
   var out = [];
   var want = String(username || '').trim().toUpperCase();
   out.push('MFA DIAGNOSIS — ' + (want || '(no username given)'));
@@ -554,6 +555,7 @@ function diagnoseMFA(username) {
  * @return {string} the otpauth URL, also logged
  */
 function enrolMFA(username) {
+  crescEditorOnly_('enrolMFA');
   var want = String(username || '').trim();
   if (!want) throw new Error('Pass the username, e.g. enrolMFA("nurse1").');
 
@@ -570,10 +572,16 @@ function enrolMFA(username) {
   if (rowNo === -1) throw new Error('No row in Users has username "' + want + '".');
 
   // 160 bits, the RFC 4226 recommendation, drawn from the alphabet only.
+  // From Utilities.getUuid(), not Math.random(): the second is a predictable
+  // PRNG, and this secret is the whole second factor. One byte per character,
+  // and 256 is a multiple of 32, so the mapping has no bias.
   var alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
   var secret = '';
-  for (var k = 0; k < 32; k++) {
-    secret += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  while (secret.length < 32) {
+    var raw = Utilities.getUuid().replace(/-/g, '');
+    for (var k = 0; k + 1 < raw.length && secret.length < 32; k += 2) {
+      secret += alphabet.charAt(parseInt(raw.substr(k, 2), 16) % alphabet.length);
+    }
   }
 
   if (sh.getLastColumn() < 6) sh.getRange(1, 6).setValue('MFA_Secret');

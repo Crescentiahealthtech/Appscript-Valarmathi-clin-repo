@@ -1,0 +1,10 @@
+# clasp push uploads every .gs/.js/.html it finds. These are not part of the
+# Apps Script project: the tools/ scripts are Node (require, fs, __dirname),
+# and pushed as server files they share one global scope with the app — ten
+# files each declaring `const fs` is a SyntaxError that stops EVERY function
+# in the project from loading.
+tools/**
+docs/**
+.github/**
+node_modules/**
+**/*.md

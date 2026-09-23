@@ -249,6 +249,7 @@ function crescPwdPolicy_(plain, username, patientName) {
  * which is a worse security outcome than a lower iteration count.
  */
 function crescPwdBenchmark() {
+  crescEditorOnly_('crescPwdBenchmark');
   var salt = cresc_newSalt_();
   var sizes = [1000, 5000, 10000, 20000];
   var lines = ['Password hashing cost on this runtime', ''];
@@ -1010,6 +1011,7 @@ function cresc_createDoctorRow_(username, display, payload, role) {
  * a single password.
  */
 function crescCredentialStatus() {
+  crescEditorOnly_('crescCredentialStatus');
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var lines = ['Credential storage — ' +
     Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm'), ''];
@@ -1057,6 +1059,7 @@ function crescCredentialStatus() {
  * @param {boolean} [dryRun] true to report who WOULD be reset, changing nothing
  */
 function crescMigrateCredentials(dryRun) {
+  crescEditorOnly_('crescMigrateCredentials');
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var out = ['Credential migration' + (dryRun ? ' — DRY RUN' : '') + ' — ' +
     Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm'), ''];

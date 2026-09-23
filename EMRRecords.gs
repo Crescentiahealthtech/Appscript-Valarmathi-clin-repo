@@ -2,7 +2,10 @@
 // 🩺 EMR RECORDS MODULE (COMMON & IP WARD)
 // ==========================================
 
-function searchPatientForEMR(patientId) {
+function searchPatientForEMR(patientId, sessionToken) {
+  // Only ever called from inside a guarded endpoint: the ambient actor it
+  // set answers here. A direct google.script.run call has none and is refused.
+  crescRequire_(sessionToken);
   try {
     // Server-side caller: uses the internal reader (CodeMV.gs). getUserProfile()
     // is now session-checked and is for browser calls only.
@@ -26,7 +29,8 @@ function searchPatientForEMR(patientId) {
   }
 }
 
-function getPatientEMRHistory(patientId) {
+function getPatientEMRHistory(patientId, sessionToken) {
+  crescRequire_(sessionToken, 'emr.read');
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('OP_Encounters'); 
@@ -55,7 +59,8 @@ function getPatientEMRHistory(patientId) {
   }
 }
 
-function saveClinicalEncounter(payload) {
+function saveClinicalEncounter(payload, sessionToken) {
+  crescRequire_(sessionToken, 'emr.write');
   const lock = LockService.getScriptLock();
   lock.waitLock(10000); 
   

@@ -170,7 +170,11 @@ function openShift(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
+    var actor = crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var counter = acc_str_(payload.counterName).trim();
     if (!counter) return { success: false, message: "Counter name required." };
     var opening = acc_money_(payload.openingCash);
@@ -201,7 +205,11 @@ function closeShift(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
+    var actor = crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
+    // Who did this is the session's answer, never the browser's: the client
+    // sends `user`, and anything it sends it can make up.
+    payload = payload || {};
+    payload.user = actor.displayName || actor.username;
     var target = acc_str_(payload.shiftId).trim();
     if (!target) return { success: false, message: "Missing shift reference." };
 

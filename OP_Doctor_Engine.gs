@@ -452,7 +452,7 @@ function saveOPEncounterScoped(payload, sessionToken) {
     var bookingDoctorId = op_findBookingDoctor_(patientId, new Date());
 
     // ---- run the existing save engine unchanged --------------------------
-    var res = saveOPEncounter(payload);
+    var res = saveOPEncounter_(payload);
     if (!res || !res.success) return res;
 
     // ---- stamp attribution ----------------------------------------------

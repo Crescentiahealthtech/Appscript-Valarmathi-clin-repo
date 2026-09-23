@@ -33,6 +33,7 @@ function getBedStatuses(sessionToken) {
 }
 
 function mockBedDataGenerater() {
+  crescEditorOnly_('mockBedDataGenerater');
   const beds = [];
   ['A101','A102','A103','A104','A105'].forEach(b => beds.push({ bedId: b, ward: 'A', status: 'Available' }));
   ['B201','B202','B203','B204','B205'].forEach(b => beds.push({ bedId: b, ward: 'B', status: 'Available' }));

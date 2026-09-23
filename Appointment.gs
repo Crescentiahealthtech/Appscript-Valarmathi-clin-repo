@@ -87,7 +87,8 @@ function getAvailableTimeSlots(dateStr, sessionToken) {
 }
 
 // Retrieves accurate schedule array for the Frontend Checkboxes
-function getAppointmentsByDate(dateStr) {
+function getAppointmentsByDate(dateStr, sessionToken) {
+  crescRequire_(sessionToken, 'appointment.read');
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('Appointments');
@@ -151,7 +152,8 @@ function getPatientDemographics(patientId, sessionToken) {
 }
 
 // 3. ADMIN DAILY LEDGER
-function fetchDailyLedger(dateStr) {
+function fetchDailyLedger(dateStr, sessionToken) {
+  crescRequire_(sessionToken, 'appointment.read');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const apptSheet = ss.getSheetByName('Appointments');
   const patientSheet = ss.getSheetByName('Patients');
@@ -349,7 +351,8 @@ function updateAppointmentStatus(apptId, newStatus, sessionToken) {
 // 🚀 ENTERPRISE AVAILABILITY ENGINE (FIXED)
 // ==========================================
 
-function saveEnterpriseAvailability(payload) {
+function saveEnterpriseAvailability(payload, sessionToken) {
+  crescRequire_(sessionToken, 'schedule.write');
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const apptSheet = ss.getSheetByName('Appointments');

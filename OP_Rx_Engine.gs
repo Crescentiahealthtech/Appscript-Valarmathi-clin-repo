@@ -21,6 +21,7 @@ var RX_MAX_TAPER_STEPS = 24;
 
 /** Run once from the editor. Idempotent. */
 function runRxEngineMigration() {
+  crescEditorOnly_('runRxEngineMigration');
   var lock = LockService.getScriptLock();
   var out = [];
   try {

@@ -173,6 +173,7 @@ var CRESC_PUBLIC_BY_DESIGN = {
   'getClinicProfile':   'The clinic letterhead — name, address, phone, GSTIN. Already printed on every document that leaves the building, and the invoice renderers need it before sign-in.',
   'crescGetBundle':     'UI markup only: the same HTML the shell used to inline. No patient data passes through it.',
   'getDPDPNotice':      'Section 5 requires the notice to be given AT OR BEFORE collection. A notice you have to sign in to read is not a notice.',
+  'crescRequestPasswordReset': 'Forgot password: the person asking cannot sign in, by definition. Mails a temporary password only to the address already on the record, answers every outcome the same way, and is capped per account and per deployment (Auth_Reset.gs).',
   'dpdpSubmitPublicRequest': 'Section 11-13: a data principal must be able to ask without holding a staff login. It writes to a queue that is verified before anything is answered, and is rate-limited per browser.'
 };
 
@@ -566,6 +567,44 @@ function crescRequire_(token, permission) {
   }
 
   return actor;
+}
+
+/**
+ * FOR FUNCTIONS MEANT TO BE RUN FROM THE SCRIPT EDITOR, NOT THE BROWSER.
+ *
+ * Every top-level function without a trailing underscore is reachable through
+ * google.script.run, and this deployment runs as the owner. So enrolMFA(),
+ * diagnoseMFA(), crescMigrateCredentials(), setClinicProfile() and the other
+ * runbook tools were endpoints anyone with the URL could call by name — MFA
+ * secrets and the live TOTP code for any account included.
+ *
+ * They take no session token (the editor's Run button cannot pass one), so
+ * this lets a call through in exactly two cases:
+ *
+ *   1. It is the script owner, in the editor: the signed-in user IS the
+ *      account the script runs as.
+ *   2. It is an inner call from an endpoint that already checked a signed-in
+ *      user holding one of `perms` (default admin.config), via the ambient
+ *      actor.
+ *
+ * A web-app visitor is neither: Apps Script reports no active user, or a
+ * different one, for anyone but the owner.
+ *
+ * @param {string} what      the function's name, for the refusal
+ * @param {string|string[]} [perms]
+ */
+function crescEditorOnly_(what, perms) {
+  var need = perms ? (typeof perms === 'string' ? [perms] : perms) : ['admin.config'];
+  if (CRESC_CURRENT_ACTOR && CRESC_CURRENT_ACTOR.permissions) {
+    for (var i = 0; i < need.length; i++) {
+      if (CRESC_CURRENT_ACTOR.permissions.indexOf(need[i]) !== -1) return;
+    }
+  }
+  var active = '', effective = '';
+  try { active = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) {}
+  try { effective = String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) {}
+  if (active && active === effective) return;
+  throw new Error('FORBIDDEN: ' + what + '() can only be run from the Apps Script editor.');
 }
 
 /**

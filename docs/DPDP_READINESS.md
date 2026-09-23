@@ -60,7 +60,7 @@ not a substitute for the clinic adopting them.
    * **LOW** — "*all 340 loads over 21 days were from an identified account*".
      The redeployment worked.
 
-   `RUN_deploymentEvidence()` prints the same answer on demand. The probe
+   `RUN_deploymentEvidence_()` prints the same answer on demand. The probe
    stores a count per day and nothing else — no email, no IP, no query string
    (which carries document grant keys).
 2. **Hash the passwords.** `crescCredentialStatus()` to see where you are, then

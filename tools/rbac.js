@@ -50,6 +50,7 @@ const GUARD_ROOTS = [
   'crescRequire_',           // RBAC.gs — the permission matrix
   'crescActor_',             // RBAC.gs — resolve, may return null
   'crescRequireOwnRecord_',  // RBAC.gs — a patient, their own record only
+  'crescEditorOnly_',        // RBAC.gs — the script owner, or an admin's inner call
   'dsx_requireRole_',        // DS_Workflow.gs — the discharge desk
   'dc_validateSession_',     // Doctor_Session_Store.gs — the durable session
   'validateSession_'         // Doctors_Engine.gs — the cache-only original
@@ -120,6 +121,11 @@ function terminalCalls(src) {
       for (; p < src.length; p++) {
         const c = src[p];
         if (quote) { if (c === '\\') { p++; continue; } if (c === quote) quote = null; continue; }
+        // A comment inside a handler is not code: an apostrophe in
+        // `/* the caller's refresh */` used to open a quote that never closed,
+        // and every endpoint after it in the file went unseen.
+        if (c === '/' && src[p + 1] === '/') { const n = src.indexOf('\n', p); p = (n === -1 ? src.length : n) - 1; continue; }
+        if (c === '/' && src[p + 1] === '*') { const e = src.indexOf('*/', p + 2); p = (e === -1 ? src.length : e + 1); continue; }
         if (c === "'" || c === '"' || c === '`') { quote = c; continue; }
         if (c === '(') depth++;
         else if (c === ')') { depth--; if (depth === 0) { p++; break; } }
@@ -187,6 +193,16 @@ for (const [name, fn] of fns) {
   (guarded(name) ? guardedList : open).push({ name, file: fn.file, called: called.has(name) });
 }
 
+// A public function that mints its own session passes every check above — it
+// reaches crescRequire_ — while guarding nothing: the caller supplies no
+// credential and gets an admin's. Only the sign-in endpoints may do this.
+const MINTS_OK = ['verifyLogin', 'verifyGoogleLogin', 'verifyMFA'];
+const minting = [];
+for (const [name, fn] of fns) {
+  if (name.endsWith('_') || MINTS_OK.indexOf(name) !== -1) continue;
+  if (fn.calls.has('issueSession_')) minting.push(fn.file + ': ' + name);
+}
+
 const openCalled = open.filter(o => o.called);
 const total = guardedList.length + open.length + declaredPublic.length;
 console.log(`${total} public .gs functions`);
@@ -205,6 +221,12 @@ if (openCalled.length) {
 } else {
   console.log('\nEvery endpoint the browser can reach carries a check, or is');
   console.log('declared public by design with its reason. That is finding C2 closed.');
+}
+
+if (minting.length) {
+  console.log('\n=== public functions that mint a session for their caller (fix these) ===');
+  minting.sort().forEach(m => console.log(' ' + m));
+  console.log('End the name in _ so google.script.run cannot reach it.');
 }
 
 // Unreachable from the browser is not the same as safe: the deployment is
