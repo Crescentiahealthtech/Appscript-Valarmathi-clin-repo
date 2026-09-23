@@ -24,8 +24,9 @@
 //
 // WHAT THIS DOES
 //
-// The person names their account. A random temporary password is written,
-// flagged must-change, and EMAILED to the address already on the record —
+// The person names their account. A random temporary password is stored
+// BESIDE the current one (which keeps working) and EMAILED to the address
+// already on the record —
 // never to an address supplied in the request, which would turn this into a
 // way to take over any account whose id you can guess. They sign in with it
 // and the existing must-change flow forces them to set their own.
@@ -40,11 +41,10 @@
 //    DIFFERENCE is in the audit log, where it belongs.
 //
 // 2. IT IS RATE LIMITED, PER ACCOUNT AND PER DEPLOYMENT.
-//    Without a cap this is a button that mails a working credential and
-//    invalidates the real one. Anybody who knows a colleague's user id could
-//    lock them out repeatedly, from a signed-out page, for as long as they
-//    cared to keep clicking. Three per account per hour, and a deployment-wide
-//    ceiling so a script cannot walk the patient id range.
+//    It no longer invalidates the real password (see "THE TEMPORARY PASSWORD
+//    LIVES BESIDE THE REAL ONE" below), so a stranger clicking it cannot lock
+//    anybody out — but it still sends mail. Three per account per hour, and a
+//    deployment-wide ceiling so a script cannot walk the patient id range.
 //
 // 3. THE TEMPORARY PASSWORD IS SHORT-LIVED BY POLICY, NOT BY HOPE.
 //    The must-change flag means it cannot be left in place, and the reset is
@@ -72,6 +72,9 @@ var CRESC_RESET = {
   /** Length of the temporary password. Same alphabet as every other one. */
   TEMP_LENGTH: 12,
 
+  /** How long an emailed temporary password stays usable. */
+  TEMP_HOURS: 24,
+
   /**
    * The one answer every outcome gets.
    *
@@ -82,8 +85,9 @@ var CRESC_RESET = {
   SAME_ANSWER:
     'If that account exists and has an email address on file, a temporary ' +
     'password has just been sent to it. Check the inbox — and the spam ' +
-    'folder — then sign in with it and choose a new password. If nothing ' +
-    'arrives within a few minutes, please contact the clinic.'
+    'folder — then sign in with it and choose a new password. Your current ' +
+    'password keeps working until you do. If nothing arrives within a few ' +
+    'minutes, please contact the clinic.'
 };
 
 function cresc_resetKey_(username) {
@@ -124,6 +128,66 @@ function cresc_resetThrottle_(username) {
     // A cache that cannot be read must not become an uncapped reset endpoint.
     return 'Password resets are temporarily unavailable. Please contact the clinic.';
   }
+}
+
+// ---------------------------------------------------------------------------
+// THE TEMPORARY PASSWORD LIVES BESIDE THE REAL ONE, NOT IN ITS PLACE
+//
+// A reset used to overwrite the password the moment it was asked for. Anyone
+// who knew a colleague's user id could therefore lock them out from the
+// signed-out page, three times an hour, and the clinic-wide cap meant twenty
+// such clicks stopped everyone else resetting at all.
+//
+// Now the temporary password is stored in its own columns with an expiry.
+// The old password keeps working. Whichever is used first decides:
+//   * the temporary one  -> the person must choose a new password, and that
+//                           replaces the old one (crescChangePassword);
+//   * the old one        -> the pending temporary password is discarded.
+// ---------------------------------------------------------------------------
+
+function cresc_resetCols_(sheet, isPatient) {
+  return {
+    temp: ensureColumn_(sheet, isPatient ? 'Portal_Reset_Temp' : 'Reset_Temp'),
+    exp:  ensureColumn_(sheet, isPatient ? 'Portal_Reset_Expires' : 'Reset_Expires')
+  };
+}
+
+/** Stores a pending temporary password; the real one is untouched. */
+function cresc_writePendingReset_(sheet, rowNo, temp, isPatient) {
+  var c = cresc_resetCols_(sheet, isPatient);
+  sheet.getRange(rowNo, c.temp).setNumberFormat('@').setValue(crescPwdEncode_(temp));
+  sheet.getRange(rowNo, c.exp)
+       .setValue(new Date(Date.now() + CRESC_RESET.TEMP_HOURS * 3600 * 1000));
+}
+
+/** Does `plain` match an unexpired pending temporary password on this row? */
+function cresc_pendingResetMatches_(sheet, rowNo, plain, isPatient) {
+  try {
+    var tc = cresc_colOf_(sheet, isPatient ? 'Portal_Reset_Temp' : 'Reset_Temp');
+    var ec = cresc_colOf_(sheet, isPatient ? 'Portal_Reset_Expires' : 'Reset_Expires');
+    if (tc === -1 || ec === -1 || !plain) return false;
+    var stored = sheet.getRange(rowNo, tc).getValue();
+    if (!stored || !crescPwdIsHashed_(stored)) return false;
+    var exp = sheet.getRange(rowNo, ec).getValue();
+    exp = (exp instanceof Date) ? exp : new Date(exp);
+    if (isNaN(exp.getTime()) || exp.getTime() < Date.now()) {
+      cresc_clearPendingReset_(sheet, rowNo, isPatient);
+      return false;
+    }
+    return crescPwdVerify_(plain, stored).ok === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** Discards any pending temporary password on this row. Never throws. */
+function cresc_clearPendingReset_(sheet, rowNo, isPatient) {
+  try {
+    var tc = cresc_colOf_(sheet, isPatient ? 'Portal_Reset_Temp' : 'Reset_Temp');
+    var ec = cresc_colOf_(sheet, isPatient ? 'Portal_Reset_Expires' : 'Reset_Expires');
+    if (tc !== -1 && sheet.getRange(rowNo, tc).getValue() !== '') sheet.getRange(rowNo, tc).setValue('');
+    if (ec !== -1 && sheet.getRange(rowNo, ec).getValue() !== '') sheet.getRange(rowNo, ec).setValue('');
+  } catch (e) {}
 }
 
 /** A plausible email address, for deciding whether there is anywhere to send. */
@@ -187,10 +251,10 @@ function crescRequestPasswordReset(payload) {
           return { success: true, message: CRESC_RESET.SAME_ANSWER };
         }
 
-        // Written BEFORE the send, then rolled forward: a temporary password
-        // that was mailed but not stored is an account nobody can get into.
-        cresc_writeCredential_(cresc_usersSheet_(), i + 1, temp, true,
-                               'Must_Change', 'Password_Updated_At');
+        // Written BEFORE the send: a temporary password that was mailed but
+        // not stored would be one nobody can use. It sits beside the real
+        // password, which keeps working until one or the other is used.
+        cresc_writePendingReset_(cresc_usersSheet_(), i + 1, temp, false);
         SpreadsheetApp.flush();
 
         var sent = cresc_sendResetEmail_(uEmail, want, temp, clinic,
@@ -202,15 +266,15 @@ function crescRequestPasswordReset(payload) {
                           problem: sent.ok ? '' : sent.message });
 
         if (!sent.ok) {
-          // The password HAS changed, so the old one no longer works and
-          // saying "check your email" would leave them locked out with no
-          // idea why. This is the one case that gets a different answer,
-          // because it is about this system failing rather than about
-          // whether the account exists.
+          // Nothing was lost — the old password still works — but the person
+          // is waiting for an email that is not coming, and should be told.
+          // It is about this system failing, not about whether the account
+          // exists, so it is the one case with a different answer.
+          cresc_clearPendingReset_(cresc_usersSheet_(), i + 1, false);
           return { success: false,
-                   message: 'Your password was reset but the email could not be ' +
-                            'sent (' + sent.message + '). Contact the clinic — ' +
-                            'an administrator can give you the new one.' };
+                   message: 'The email could not be sent (' + sent.message + '). ' +
+                            'Your current password still works; if you have lost ' +
+                            'it, contact the clinic.' };
         }
         return { success: true, message: CRESC_RESET.SAME_ANSWER };
       }
@@ -233,8 +297,7 @@ function crescRequestPasswordReset(payload) {
           return { success: true, message: CRESC_RESET.SAME_ANSWER };
         }
 
-        cresc_writeCredential_(cresc_patientsSheet_(), j + 1, temp, true,
-                               'Portal_Must_Change', 'Portal_Password_Updated_At');
+        cresc_writePendingReset_(cresc_patientsSheet_(), j + 1, temp, true);
         SpreadsheetApp.flush();
 
         var psent = cresc_sendResetEmail_(pEmail, want, temp, clinic, 'patient');
@@ -244,9 +307,11 @@ function crescRequestPasswordReset(payload) {
                           problem: psent.ok ? '' : psent.message });
 
         if (!psent.ok) {
+          cresc_clearPendingReset_(cresc_patientsSheet_(), j + 1, true);
           return { success: false,
-                   message: 'Your password was reset but the email could not be ' +
-                            'sent (' + psent.message + '). Please contact the clinic.' };
+                   message: 'The email could not be sent (' + psent.message + '). ' +
+                            'Your current password still works; if you have lost ' +
+                            'it, please contact the clinic.' };
         }
         return { success: true, message: CRESC_RESET.SAME_ANSWER };
       }
@@ -294,10 +359,10 @@ function cresc_sendResetEmail_(to, username, temp, clinic, role) {
     'A temporary password was requested for the account ' + username + '.\n\n' +
     'Temporary password:  ' + temp + '\n\n' +
     'Sign in with it and you will be asked to choose a new password straight ' +
-    'away. This temporary one stops working as soon as you do.\n\n' +
-    'IF YOU DID NOT ASK FOR THIS, your old password has already stopped ' +
-    'working and somebody else may have requested it. Contact the clinic' +
-    (phone ? ' on ' + phone : '') + ' as soon as you can.\n\n' +
+    'away. It works once, and only for the next ' + CRESC_RESET.TEMP_HOURS + ' hours.\n\n' +
+    'IF YOU DID NOT ASK FOR THIS, you can ignore this email: your current ' +
+    'password still works, and signing in with it cancels this temporary one. ' +
+    'If it keeps happening, tell the clinic' + (phone ? ' on ' + phone : '') + '.\n\n' +
     'We will never ask you for your password, and this email contains no ' +
     'links to click.\n\n' +
     name + (site ? '\n' + site : '');
@@ -319,14 +384,14 @@ function cresc_sendResetEmail_(to, username, temp, clinic, role) {
             'letter-spacing:.12em;margin-top:6px;">' + cresc_htmlEsc_(temp) + '</div>' +
         '</div>' +
         '<p style="margin:0 0 14px;">Sign in with it and you will be asked to choose ' +
-          'a new password straight away. This temporary one stops working as soon ' +
-          'as you do.</p>' +
-        '<p style="margin:0 0 14px;padding:12px 14px;background:#fef2f2;' +
-          'border-left:4px solid #dc2626;color:#7f1d1d;">' +
-          '<strong>If you did not ask for this</strong>, your old password has ' +
-          'already stopped working and somebody else may have requested it. ' +
-          'Contact the clinic' + (phone ? ' on ' + cresc_htmlEsc_(phone) : '') +
-          ' as soon as you can.</p>' +
+          'a new password straight away. It works once, and only for the next ' +
+          CRESC_RESET.TEMP_HOURS + ' hours.</p>' +
+        '<p style="margin:0 0 14px;padding:12px 14px;background:#f8fafc;' +
+          'border-left:4px solid #64748b;color:#334155;">' +
+          '<strong>If you did not ask for this</strong>, you can ignore this email: ' +
+          'your current password still works, and signing in with it cancels this ' +
+          'temporary one. If it keeps happening, tell the clinic' +
+          (phone ? ' on ' + cresc_htmlEsc_(phone) : '') + '.</p>' +
         '<p style="margin:0;font-size:12px;color:#6b7280;">We will never ask you ' +
           'for your password. This email contains no links to click.</p>' +
       '</div>' +

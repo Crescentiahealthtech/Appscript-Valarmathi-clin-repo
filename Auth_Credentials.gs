@@ -389,6 +389,12 @@ function crescChangePassword(payload) {
         if (String(udata[i][0]).trim().toUpperCase() !== username.toUpperCase()) continue;
 
         var uv = crescPwdVerify_(current, udata[i][1]);
+        // The emailed temporary password proves the account as well as the
+        // real one does (Auth_Reset.gs keeps it beside the real one).
+        if (!uv.ok && typeof cresc_pendingResetMatches_ === 'function' &&
+            cresc_pendingResetMatches_(users, i + 1, current, false)) {
+          uv = { ok: true, legacy: false };
+        }
         if (uv.legacy) {
           // Deliberately NOT a self-service migration path. A plain-text
           // password has been readable by everyone with access to the
@@ -412,6 +418,7 @@ function crescChangePassword(payload) {
 
         var ush = cresc_usersSheet_();
         cresc_writeCredential_(ush, i + 1, next, false, 'Must_Change', 'Password_Updated_At');
+        if (typeof cresc_clearPendingReset_ === 'function') cresc_clearPendingReset_(ush, i + 1, false);
         SpreadsheetApp.flush();
         crescAuthPassed_(username, String(udata[i][2] || ''), 'password-change');
         crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, String(udata[i][2] || ''),
@@ -429,6 +436,10 @@ function crescChangePassword(payload) {
         if (String(pdata[j][0]).trim().toUpperCase() !== username.toUpperCase()) continue;
 
         var pv = crescPwdVerify_(current, pdata[j][1]);
+        if (!pv.ok && typeof cresc_pendingResetMatches_ === 'function' &&
+            cresc_pendingResetMatches_(patients, j + 1, current, true)) {
+          pv = { ok: true, legacy: false };
+        }
         if (pv.legacy) {
           // The old portal password was derivable from the patient's name and
           // birth year, both printed on documents they carry. Accepting it
@@ -450,6 +461,7 @@ function crescChangePassword(payload) {
         var psh = cresc_patientsSheet_();
         cresc_writeCredential_(psh, j + 1, next, false,
                                'Portal_Must_Change', 'Portal_Password_Updated_At');
+        if (typeof cresc_clearPendingReset_ === 'function') cresc_clearPendingReset_(psh, j + 1, true);
         SpreadsheetApp.flush();
         crescAuthPassed_(username, 'patient', 'password-change');
         crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, 'patient', { by: 'self' });

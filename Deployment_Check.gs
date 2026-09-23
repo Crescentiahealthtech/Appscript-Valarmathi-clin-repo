@@ -115,7 +115,7 @@ var DEP_MAP = {
   "DS_Workflow.gs": ["dsx_resolveRef_"],
   "Deployment_Probe.gs": [
     "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
-    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence_"
+    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence"
   ],
   "Patient_Portal.gs": [
     "portalHome", "portalBookableDoctors", "portalDoctorSlots",
@@ -135,8 +135,8 @@ var DEP_MAP = {
   ],
   "DPDP_Consent_Backfill.gs": [
     "dpdpBackfillConsent", "dpdpConsentQueue", "dpdp_consentMatrix_",
-    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN_",
-    "RUN_consentBackfill_FOR_REAL_", "RUN_consentQueue_"
+    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN",
+    "RUN_consentBackfill_FOR_REAL", "RUN_consentQueue"
   ],
   "DPDP_Dispatch.gs": [
     "dpdpRequireDispatchConsent_", "dpdp_resolvePatientFor_", "dpdp_consentState_",
@@ -149,15 +149,15 @@ var DEP_MAP = {
     "dpdpListBreaches", "dpdpBreachNotice"
   ],
   "RUN_Setup.gs": [
-    "RUN_01_checkFilesArrived_", "RUN_02_checkRoleMatrix_", "RUN_03_checkPasswordStorage_",
-    "RUN_04_timePasswordHashing_", "RUN_04b_makeSignInFaster_", "RUN_05_createRegisters_",
-    "RUN_06_nameGrievanceOfficer_", "RUN_07a_migrateCredentials_DRYRUN_",
-    "RUN_07b_migrateCredentials_FOR_REAL_", "RUN_08_installScheduledJobs_",
-    "RUN_09_checkScheduledJobs_", "RUN_10a_revokeOldPublicLinks_DRYRUN_",
-    "RUN_10b_revokeOldPublicLinks_FOR_REAL_", "RUN_11a_eraseUnusedFields_DRYRUN_",
-    "RUN_11b_eraseUnusedFields_FOR_REAL_", "RUN_12_readinessCheck_",
-    "RUN_13_retentionReport_", "RUN_14_auditReviewThisWeek_",
-    "RUN_90_resetOnePassword_", "RUN_91_setVoicePolicy_", "RUN_99_removeScheduledJobs_"
+    "RUN_01_checkFilesArrived", "RUN_02_checkRoleMatrix", "RUN_03_checkPasswordStorage",
+    "RUN_04_timePasswordHashing", "RUN_04b_makeSignInFaster", "RUN_05_createRegisters",
+    "RUN_06_nameGrievanceOfficer", "RUN_07a_migrateCredentials_DRYRUN",
+    "RUN_07b_migrateCredentials_FOR_REAL", "RUN_08_installScheduledJobs",
+    "RUN_09_checkScheduledJobs", "RUN_10a_revokeOldPublicLinks_DRYRUN",
+    "RUN_10b_revokeOldPublicLinks_FOR_REAL", "RUN_11a_eraseUnusedFields_DRYRUN",
+    "RUN_11b_eraseUnusedFields_FOR_REAL", "RUN_12_readinessCheck",
+    "RUN_13_retentionReport", "RUN_14_auditReviewThisWeek",
+    "RUN_90_resetOnePassword", "RUN_91_setVoicePolicy", "RUN_99_removeScheduledJobs"
   ],
   "DPDP_Triggers.gs": [
     "dpdpInstallTriggers", "dpdpRemoveTriggers", "dpdpTriggerStatus",

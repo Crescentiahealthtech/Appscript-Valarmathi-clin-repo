@@ -78,24 +78,22 @@ function verifyLogin(credentials) {
                               'before you can sign in.' };
           }
 
-          const doc  = resolveDoctorByUsername_(storedUsername);
-          const token = issueSession_({
-            username: storedUsername,
-            role: role,
-            doctorId: doc ? doc.doctorId : "",
-            name: doc ? doc.name : storedUsername
-          });
-          crescAuthPassed_(storedUsername, role, 'password');
-          return {
-            success: true,
-            role: role,
-            portal: 'hospital',
-            username: storedUsername,
-            displayName: doc ? doc.name : storedUsername,
-            doctorId: doc ? doc.doctorId : "",
-            sessionToken: token,
-            message: "Welcome " + storedRole
-          };
+          // The real password worked, so a reset somebody else may have
+          // asked for is no longer needed: the temporary one stops here.
+          if (typeof cresc_clearPendingReset_ === 'function') {
+            cresc_clearPendingReset_(userSheet, i + 1, false);
+          }
+          return cresc_staffSignIn_(storedUsername, role, userData[i][5], 'password');
+        } else if (typeof cresc_pendingResetMatches_ === 'function' &&
+                   cresc_pendingResetMatches_(userSheet, i + 1, passwordInput, false)) {
+          // The emailed temporary password. It opens exactly one screen: the
+          // one that replaces it. The old password kept working until now.
+          crescAuthAudit_(CRESC_AUTH_EVENTS.MUST_CHANGE, storedUsername, storedRole,
+                          { via: 'reset email' });
+          return { success: false, code: 'MUST_CHANGE',
+                   username: storedUsername.toString().trim(),
+                   message: 'You signed in with a temporary password. Choose your ' +
+                            'own password to continue.' };
         } else {
           const warn = crescAuthFailed_(storedUsername, storedRole, 'bad staff password');
           // The counter's warning is worth showing; which half was wrong is not.
@@ -140,7 +138,19 @@ function verifyLogin(credentials) {
                           'you can sign in. Please ask at reception.' };
       }
 
+      if (!pcheck.ok && typeof cresc_pendingResetMatches_ === 'function' &&
+          cresc_pendingResetMatches_(patientSheet, i + 1, passwordInput, true)) {
+        crescAuthAudit_(CRESC_AUTH_EVENTS.MUST_CHANGE, patientID, 'patient', { via: 'reset email' });
+        return { success: false, code: 'MUST_CHANGE',
+                 username: patientID.toString().trim().toUpperCase(),
+                 message: 'You signed in with a temporary password. Choose your ' +
+                          'own password to continue.' };
+      }
+
       if (pcheck.ok) {
+        if (typeof cresc_clearPendingReset_ === 'function') {
+          cresc_clearPendingReset_(patientSheet, i + 1, true);
+        }
         if (cresc_mustChange_(patientSheet, i + 1, 'Portal_Must_Change')) {
           crescAuthAudit_(CRESC_AUTH_EVENTS.MUST_CHANGE, patientID, 'patient', {});
           return { success: false, code: 'MUST_CHANGE',
@@ -195,11 +205,24 @@ function verifyLogin(credentials) {
 // ==========================================
 // GOOGLE SSO AUTHENTICATION ENGINE
 // ==========================================
-function verifyGoogleLogin(userEmail) {
+function verifyGoogleLogin(payload) {
   try {
-    if (!userEmail) {
-      return { success: false, message: "Authentication payload missing email link." };
+    // IT USED TO TAKE AN EMAIL ADDRESS. The browser did the Google sign-in and
+    // then told this function who the user was, and this function believed
+    // it: google.script.run.verifyGoogleLogin('admin@clinic') from any
+    // browser console returned an administrator's session — no password, no
+    // second factor. The browser now sends the ID token Google gave it, and
+    // Google (not the browser) says whose it is.
+    var idToken = (payload && typeof payload === 'object') ? String(payload.idToken || '') : '';
+    if (!idToken) {
+      return { success: false, message: 'Google sign-in did not complete. Please try again.' };
     }
+    var who = cresc_verifyGoogleIdToken_(idToken);
+    if (!who.ok) {
+      crescAuthAudit_(CRESC_AUTH_EVENTS.FAILED, '', '', { method: 'google', reason: who.message });
+      return { success: false, message: who.message };
+    }
+    var userEmail = who.email;
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const userSheet = ss.getSheetByName('Users');
@@ -216,8 +239,8 @@ function verifyGoogleLogin(userEmail) {
 
       if (!storedEmail) continue;
 
-      if (storedEmail.toString().trim().toLowerCase() === userEmail.toString().trim().toLowerCase()) {
-        
+      if (storedEmail.toString().trim().toLowerCase() === userEmail) {
+
         if (isActive && isActive.toString().toLowerCase() !== 'active') {
           crescAuthAudit_(CRESC_AUTH_EVENTS.DISABLED, storedUsername, storedRole,
                           { method: 'google', email: String(userEmail), status: String(isActive) });
@@ -225,24 +248,7 @@ function verifyGoogleLogin(userEmail) {
         }
 
         const role = storedRole.toString().trim().toLowerCase();
-        const doc  = resolveDoctorByUsername_(storedUsername);
-        const token = issueSession_({
-          username: storedUsername,
-          role: role,
-          doctorId: doc ? doc.doctorId : "",
-          name: doc ? doc.name : storedUsername
-        });
-        crescAuthPassed_(storedUsername, role, 'google');
-        return {
-          success: true,
-          role: role,
-          portal: 'hospital',
-          username: storedUsername,
-          displayName: doc ? doc.name : storedUsername,
-          doctorId: doc ? doc.doctorId : "",
-          sessionToken: token,
-          message: "Welcome back " + storedUsername
-        };
+        return cresc_staffSignIn_(storedUsername, role, userData[i][5], 'google');
       }
     }
 
@@ -251,14 +257,115 @@ function verifyGoogleLogin(userEmail) {
     // guess, naming the address back is safe — whoever is reading it owns it.
     crescAuthAudit_(CRESC_AUTH_EVENTS.UNKNOWN_USER, String(userEmail), '',
                     { method: 'google' });
-    return { 
-      success: false, 
-      message: "Access Denied: The email " + userEmail + " is not registered in CresRx. Contact Admin." 
+    return {
+      success: false,
+      message: "Access Denied: The email " + userEmail + " is not registered in CresRx. Contact Admin."
     };
 
   } catch (error) {
     return { success: false, message: "System Security Fault: " + error.toString() };
   }
+}
+
+/**
+ * Asks Google whose ID token this is. accounts:lookup checks the signature,
+ * the expiry and that the token was issued for THIS Firebase project (the one
+ * the API key belongs to), so a token from another site is refused.
+ *
+ * The web API key is the same public value Auth.html already ships; override
+ * it with the script property FIREBASE_API_KEY if the project changes.
+ *
+ * @return {{ok:boolean, email:string, message:string}}
+ */
+var CRESC_FIREBASE_API_KEY_DEFAULT = 'AIzaSyDJSMsLhlbsGwC1cMR9mNM4Vy2kQ1MmGy4';
+
+function cresc_verifyGoogleIdToken_(idToken) {
+  var key = '';
+  try { key = PropertiesService.getScriptProperties().getProperty('FIREBASE_API_KEY') || ''; } catch (e) {}
+  key = key || CRESC_FIREBASE_API_KEY_DEFAULT;
+  try {
+    var resp = UrlFetchApp.fetch(
+      'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(key), {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({ idToken: idToken }),
+        muteHttpExceptions: true
+      });
+    if (resp.getResponseCode() !== 200) {
+      return { ok: false, email: '', message: 'Google could not confirm this sign-in. Please try again.' };
+    }
+    var body = JSON.parse(resp.getContentText() || '{}');
+    var u = (body.users || [])[0];
+    if (!u || !u.email) {
+      return { ok: false, email: '', message: 'Google did not return an email address for this account.' };
+    }
+    if (u.emailVerified !== true) {
+      return { ok: false, email: '', message: 'This Google account\'s email address is not verified.' };
+    }
+    if (u.disabled === true) {
+      return { ok: false, email: '', message: 'This Google account is disabled.' };
+    }
+    return { ok: true, email: String(u.email).trim().toLowerCase(), message: '' };
+  } catch (e) {
+    return { ok: false, email: '', message: 'Google sign-in could not be verified: ' + e.message };
+  }
+}
+
+// ==========================================
+// STAFF SIGN-IN: ONE PLACE A SESSION IS ISSUED
+// ------------------------------------------
+// verifyLogin used to issue the session BEFORE the second factor. The browser
+// then showed the MFA screen and waited — but it already held a working
+// token, so a stolen password alone was a full sign-in for anyone who read
+// the reply instead of typing six digits. Now an account with MFA enrolled
+// gets a short-lived ticket, and only verifyMFA turns a ticket plus a valid
+// code into a session.
+// ==========================================
+
+var CRESC_MFA_TICKET_S = 300;        // five minutes to type the code
+var CRESC_MFA_TICKET_TRIES = 5;      // wrong codes before the ticket is spent
+
+function cresc_hasMfa_(rawSecret) {
+  return !!String(rawSecret || '').replace(/\s/g, '');
+}
+
+function cresc_issueStaffSession_(username, role, method) {
+  var doc = resolveDoctorByUsername_(username);
+  var token = issueSession_({
+    username: username,
+    role: role,
+    doctorId: doc ? doc.doctorId : "",
+    name: doc ? doc.name : username
+  });
+  crescAuthPassed_(username, role, method);
+  return {
+    success: true,
+    role: role,
+    portal: 'hospital',
+    username: String(username),
+    displayName: doc ? doc.name : String(username),
+    doctorId: doc ? doc.doctorId : "",
+    sessionToken: token,
+    message: "Welcome " + role
+  };
+}
+
+function cresc_staffSignIn_(username, role, rawSecret, method) {
+  if (!cresc_hasMfa_(rawSecret)) return cresc_issueStaffSession_(username, role, method);
+
+  var ticket = Utilities.getUuid();
+  CacheService.getScriptCache().put('MFAT_' + ticket, JSON.stringify({
+    u: String(username).trim(), role: role, method: method, tries: 0
+  }), CRESC_MFA_TICKET_S);
+  return {
+    success: true,
+    mfaRequired: true,
+    mfaTicket: ticket,
+    role: role,
+    portal: 'hospital',
+    username: String(username).trim(),
+    message: 'Enter the 6-digit code from your authenticator.'
+  };
 }
 
 // ==========================================
@@ -336,12 +443,25 @@ function mfa_normaliseSecret_(raw) {
  * Verifies a 6-digit authenticator code for a staff username.
  * Contract: { success:boolean, message:string, code?:string }.
  *
- * code 'NOT_ENROLLED'  MFA is not set up for this user — the caller lets them in
- * code 'BAD_SECRET'    the enrolment itself is broken — an admin must fix it
- * code 'BAD_CODE'      the secret is fine, the six digits are not
+ * On success the reply IS the sign-in: it carries the session token, which
+ * verifyLogin / verifyGoogleLogin withhold from any account with MFA enrolled.
+ *
+ * code 'TICKET_EXPIRED' no password step before this, or it timed out / was spent
+ * code 'BAD_SECRET'     the enrolment itself is broken — an admin must fix it
+ * code 'BAD_CODE'       the secret is fine, the six digits are not
  */
-function verifyMFA(username, userCode) {
+function verifyMFA(username, userCode, mfaTicket) {
   try {
+    // A code proves nothing without the password (or Google) step before it.
+    var cache = CacheService.getScriptCache();
+    var tkey = 'MFAT_' + String(mfaTicket || '');
+    var ticket = null;
+    try { ticket = mfaTicket ? JSON.parse(cache.get(tkey) || 'null') : null; } catch (e) { ticket = null; }
+    if (!ticket || String(ticket.u).toUpperCase() !== String(username || '').trim().toUpperCase()) {
+      return { success: false, code: 'TICKET_EXPIRED',
+               message: 'This sign-in has expired. Enter your password again.' };
+    }
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var userSheet = ss.getSheetByName('Users');
     if (!userSheet) {
@@ -362,7 +482,9 @@ function verifyMFA(username, userCode) {
       // Not enrolled at all: MFA is optional per user, so this is a pass.
       // A blank cell, and a cell holding only spaces, must behave identically.
       if (!norm.ok && !String(userData[i][5] || '').replace(/\s/g, '')) {
-        return { success: true, code: 'NOT_ENROLLED', message: 'MFA is not enrolled for this user.' };
+        // Unenrolled between the password and the code: the password stands.
+        cache.remove(tkey);
+        return cresc_issueStaffSession_(String(stored).trim(), ticket.role, ticket.method);
       }
       if (!norm.ok) {
         return { success: false, code: 'BAD_SECRET', message: norm.message };
@@ -377,8 +499,19 @@ function verifyMFA(username, userCode) {
                                            : CRESC_AUTH_EVENTS.MFA_FAILED,
                       String(stored).trim(), String(userData[i][2] || ''),
                       { code: (totp && totp.code) || '' });
-      if (!(totp && totp.success)) crescAuthFailed_(String(stored).trim(), '', 'bad MFA code');
-      return totp;
+      if (!(totp && totp.success)) {
+        crescAuthFailed_(String(stored).trim(), '', 'bad MFA code');
+        ticket.tries = (ticket.tries || 0) + 1;
+        if (ticket.tries >= CRESC_MFA_TICKET_TRIES) {
+          cache.remove(tkey);
+          return { success: false, code: 'TICKET_EXPIRED',
+                   message: 'Too many wrong codes. Enter your password again.' };
+        }
+        cache.put(tkey, JSON.stringify(ticket), CRESC_MFA_TICKET_S);
+        return totp;
+      }
+      cache.remove(tkey);
+      return cresc_issueStaffSession_(String(stored).trim(), ticket.role, ticket.method);
     }
     crescAuthAudit_(CRESC_AUTH_EVENTS.UNKNOWN_USER, want, '', { stage: 'mfa' });
     return { success: false, code: 'NO_USER', message: 'User not found for MFA verification.' };

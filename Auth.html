@@ -808,8 +808,11 @@
 
     auth.signInWithPopup(provider)
       .then(function (result) {
-        const userEmail = result.user.email;
-
+        // The server is sent Google's ID token, never the email: it asks
+        // Google whose token it is (AuthLogin.gs, cresc_verifyGoogleIdToken_).
+        return result.user.getIdToken();
+      })
+      .then(function (idToken) {
         google.script.run
           .withSuccessHandler(function (res) {
             btn.innerHTML = originalHtml;
@@ -822,7 +825,7 @@
             btn.disabled = false;
             crescAlert("Network Verification Error: " + err.message);
           })
-          .verifyGoogleLogin(userEmail);
+          .verifyGoogleLogin({ idToken: idToken });
       })
       .catch(function () {
         btn.innerHTML = originalHtml;
@@ -1034,14 +1037,19 @@
   // 5. THE INTERCEPTOR (MFA CHECKER)
   // ==========================================
   function triggerMFAOrRoute(res, username) {
-    if (res.role === 'patient') {
-      executeUIRouting(res, username);
-    } else {
-      pendingAuthRes = res;
-      pendingAuthName = username;
-      document.getElementById('auth-screen').classList.add('d-none');
-      document.getElementById('mfa-screen').classList.remove('d-none');
+    // The server decides whether a second factor is needed. When it is, the
+    // reply carries a short-lived ticket and NO session token; only
+    // verifyMFA turns the ticket and a correct code into a session.
+    if (!res.mfaRequired) {
+      executeUIRouting(res, res.username || username);
+      return;
     }
+    pendingAuthRes = res;
+    pendingAuthName = res.username || username;
+    document.getElementById('auth-screen').classList.add('d-none');
+    document.getElementById('mfa-screen').classList.remove('d-none');
+    var codeBox = document.getElementById('in-mfa-code');
+    if (codeBox) { codeBox.value = ''; codeBox.focus(); }
   }
 
   function submitMFA() {
@@ -1057,9 +1065,15 @@
       .withSuccessHandler(function (mfaRes) {
         btn.innerHTML = 'Verify & Login';
         btn.disabled = false;
-        if (mfaRes && mfaRes.success) {
+        if (mfaRes && mfaRes.success && mfaRes.sessionToken) {
           document.getElementById('mfa-screen').classList.add('d-none');
-          executeUIRouting(pendingAuthRes, pendingAuthName);
+          executeUIRouting(mfaRes, mfaRes.username || pendingAuthName);
+          pendingAuthRes = null;
+          return;
+        }
+        if (mfaRes && mfaRes.code === 'TICKET_EXPIRED') {
+          crescAlert(mfaRes.message);
+          cancelMFA();
           return;
         }
         // Say what actually went wrong. The old blanket "Invalid or Expired
@@ -1081,7 +1095,7 @@
         btn.disabled = false;
         crescAlert("Network error: " + err.message);
       })
-      .verifyMFA(pendingAuthName, code);
+      .verifyMFA(pendingAuthName, code, pendingAuthRes && pendingAuthRes.mfaTicket);
   }
 
   function cancelMFA() {
