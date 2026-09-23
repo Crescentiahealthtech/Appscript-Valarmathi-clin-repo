@@ -421,9 +421,15 @@ function crescChangePassword(payload) {
         if (typeof cresc_clearPendingReset_ === 'function') cresc_clearPendingReset_(ush, i + 1, false);
         SpreadsheetApp.flush();
         crescAuthPassed_(username, String(udata[i][2] || ''), 'password-change');
+        // Everybody else signed in as this account — on another computer,
+        // with the old password — is signed out. keepSession is the session
+        // the change was made from, when it was made in the app.
+        var uOut = (typeof ds_revokeUserSessions_ === 'function')
+          ? ds_revokeUserSessions_(username, payload.keepSession) : 0;
         crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, String(udata[i][2] || ''),
-                        { by: 'self' });
-        return { success: true, message: 'Password changed. Sign in with the new one.' };
+                        { by: 'self', otherSessionsEnded: uOut });
+        return { success: true, otherSessionsEnded: uOut,
+                 message: 'Password changed.' + (uOut ? ' ' + uOut + ' other sign-in(s) of this account were ended.' : '') };
       }
     }
 
@@ -464,8 +470,12 @@ function crescChangePassword(payload) {
         if (typeof cresc_clearPendingReset_ === 'function') cresc_clearPendingReset_(psh, j + 1, true);
         SpreadsheetApp.flush();
         crescAuthPassed_(username, 'patient', 'password-change');
-        crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, 'patient', { by: 'self' });
-        return { success: true, message: 'Password changed. Sign in with the new one.' };
+        var pOut = (typeof ds_revokeUserSessions_ === 'function')
+          ? ds_revokeUserSessions_(username, payload.keepSession) : 0;
+        crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, 'patient',
+                        { by: 'self', otherSessionsEnded: pOut });
+        return { success: true, otherSessionsEnded: pOut,
+                 message: 'Password changed.' + (pOut ? ' ' + pOut + ' other sign-in(s) of this account were ended.' : '') };
       }
     }
 

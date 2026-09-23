@@ -131,7 +131,7 @@
            module and searching for the patient by name or number. -->
       <button class="btn btn-outline-info btn-sm py-1 px-2" onclick="crescLabPeek(window.currentPatientId, document.getElementById('hd-pat-name').textContent)" title="This patient's verified lab results, without leaving the consult"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
 
-      <span class="ms-auto text-muted small">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></span>
+      <span id="op-draft-status" class="ms-auto text-muted small me-3" title="Unsaved work is kept in this browser for 24 hours"></span><span class="text-muted small">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></span>
     </div>
 
     <!-- Row 2: attribution + actions -->
@@ -1567,6 +1567,8 @@ function doSearchEMRPatient(pId, isSwitch) {
         loadLastVisit(pId);
         opRefreshCards(pId);
         runSafetyCheck();
+        // Work left unsaved for this patient, in this browser, comes back.
+        if (window.crescDraft) window.crescDraft.offer('op|' + pId, 'emr-workspace-op-consult', OP_DRAFT_SPEC);
     }).withFailureHandler(function (err) {
         document.getElementById('hd-pat-name').innerText = "Search Failed";
         opToast("Backend Network Error: " + err.message, 'err');
@@ -3396,6 +3398,7 @@ function submitOPEncounter() {
             btn.disabled = false;
             if (response && response.success) {
                 activeOpEncounterId = response.encounterId;
+                if (window.crescDraft) window.crescDraft.clear('op|' + payload.patientId);
                 loadComposerContext();   // pick up newly learnt phrases
                 opToast("Saved.\nEncounter: " + activeOpEncounterId +
                       (response.doctorName ? "\nRecorded under: " + response.doctorName : "") +
@@ -3412,6 +3415,37 @@ function submitOPEncounter() {
         })
         .saveOPEncounterScoped(payload, window.sessionToken);
 }
+
+// ============================================================================
+// DRAFTS — a consultation is interrupted constantly
+// Kept in this browser per user for 24 h (crescDraft, Shell_UX.html) and
+// offered back when the same patient is opened. Cleared by a successful save.
+// ============================================================================
+var OP_DRAFT_SPEC = {
+    status: 'op-draft-status',
+    ignore: '#op-search-pat-id, #op-doctor-select, #ref-to-doctor',
+    rows: {
+        'op-cc-tbody': { add: function () { addOPDynamicRow('op-cc-tbody', 'CC'); }, field: /^op-array-/ },
+        'op-hx-tbody': { add: function () { addOPDynamicRow('op-hx-tbody', 'HX'); }, field: /^op-array-/ },
+        'op-rx-tbody': { add: function () { addOPRxRow(); }, field: /^op-rx-/ },
+        'op-lab-results-tbody': { add: function () { addOPLabResultRow(); }, field: /^op-lab-res-/ }
+    },
+    extra: {
+        get: function () { return { dx: opDxList.slice(), labs: opSelectedLabs.slice() }; },
+        set: function (x) {
+            if (x.dx && x.dx.length) opSetDx(x.dx.join(', '));
+            (x.labs || []).forEach(function (l) { opLabSelect(l.testId, l.testName); });
+            if (typeof compileOPLabs === 'function') compileOPLabs();
+            if (typeof queueSafetyCheck === 'function') queueSafetyCheck();
+        }
+    }
+};
+function opDraftKey() {
+    var p = String(window.currentPatientId || '').trim();
+    var ws = document.getElementById('emr-workspace-op-consult');
+    return (p && p !== '--' && ws && !ws.classList.contains('d-none')) ? 'op|' + p : '';
+}
+if (window.crescDraft) window.crescDraft.watch(opDraftKey, 'emr-workspace-op-consult', OP_DRAFT_SPEC);
 
 function closeOPConsultationWorkspace() {
     // Clearing only the encounter id left the whole chart in the DOM, ready to

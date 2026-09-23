@@ -1033,8 +1033,6 @@ function ipcApplyAdmissionContext(ctx) {
     ipcRecallPrevious(ctx.lastCasesheet);
     ipcRestoreDraft(p.ipNumber);
 
-    if (ipcDraftTimer) clearInterval(ipcDraftTimer);
-    ipcDraftTimer = setInterval(ipcSaveDraft, 30000);
 
     ipcQueueSafetyCheck();
 }
@@ -1126,51 +1124,40 @@ function ipcApplyPrevious(includeMeds) {
 // ============================================================================
 // DRAFTS — a ward round is interrupted constantly
 // ============================================================================
-function ipcDraftKey(ip) { return 'ipc_draft_' + (ip || window.ipcCurrentIP || ''); }
-
-function ipcSaveDraft() {
-    if (!ipcAdmission) return;
-    try {
-        localStorage.setItem(ipcDraftKey(), JSON.stringify(ipcBuildIPCFlatPayload()));
-        const el = document.getElementById('ipc-draft-status');
-        if (el) {
-            el.innerHTML = '<i class="fa-solid fa-check text-success"></i> Draft saved ' +
-                           new Date().toLocaleTimeString();
-            setTimeout(function () {
-                el.innerHTML = '<i class="fa-solid fa-cloud"></i> Up to date';
-            }, 3000);
+// Kept in this browser per user for 24 h (crescDraft, Shell_UX.html). It used
+// to restore only the diagnosis, advice, vitals and examination: complaints,
+// history and every medicine typed on the round were lost. It is a snapshot
+// of the whole form now, and it is kept per user, not per bed, so a colleague
+// opening the same bed on this machine is never offered someone else's draft.
+var IPC_DRAFT_SPEC = {
+    status: 'ipc-draft-status',
+    rows: {
+        'ipc-cc-tbody': { add: function () { ipcAddIPCDynamicRow('ipc-cc-tbody', 'CC'); }, field: /^ipc-array-/ },
+        'ipc-hx-tbody': { add: function () { ipcAddIPCDynamicRow('ipc-hx-tbody', 'HX'); }, field: /^ipc-array-/ },
+        'ipc-rx-tbody': { add: function () { ipcAddIPCRxRow(); }, field: /^ipc-rx-/ },
+        'ipc-lab-results-tbody': { add: function () { ipcAddIPCLabResultRow(); }, field: /^ipc-lab-res-/ }
+    },
+    extra: {
+        get: function () { return { dx: ipcDxList.slice(), labs: ipcSelectedLabs.slice() }; },
+        set: function (x) {
+            if (x.dx && x.dx.length) ipcSetDx(x.dx.join(', '));
+            (x.labs || []).forEach(function (l) { ipcLabSelect(l.testId, l.testName); });
+            if (typeof ipcCompileIPCLabs === 'function') ipcCompileIPCLabs();
+            if (typeof ipcQueueSafetyCheck === 'function') ipcQueueSafetyCheck();
         }
-    } catch (e) { /* a full localStorage must not break the round */ }
+    }
+};
+function ipcDraftKey(ip) {
+    var id = String(ip || window.ipcCurrentIP || '').trim();
+    return id ? 'ipc|' + id : '';
 }
-
+if (window.crescDraft) {
+    window.crescDraft.watch(function () { return ipcAdmission ? ipcDraftKey() : ''; },
+                            'emr-workspace-ip-casesheet', IPC_DRAFT_SPEC);
+}
+function ipcSaveDraft() { if (window.crescDraft) window.crescDraft.saveAll(); }
 function ipcRestoreDraft(ip) {
-    let raw = null;
-    try { raw = localStorage.getItem(ipcDraftKey(ip)); } catch (e) { return; }
-    if (!raw) return;
-    ipc_confirm('An unsaved casesheet draft exists for this bed. Recover it?',
-        function (ok) {
-            if (!ok) { try { localStorage.removeItem(ipcDraftKey(ip)); } catch (e) {} return; }
-            ipcApplyDraft(raw);
-        }, { okLabel: 'Recover draft' });
-}
-
-function ipcApplyDraft(raw) {
-    try {
-        const d = JSON.parse(raw);
-        ipcSetDx(d.provDiagnosis);
-        ipcSetVal('ipc-advice-free', d.advice);
-        if (d.vitals) {
-            ipcSetVal('ipc-vit-sys', d.vitals.sys);   ipcSetVal('ipc-vit-dia', d.vitals.dia);
-            ipcSetVal('ipc-vit-pr', d.vitals.hr);     ipcSetVal('ipc-vit-spo2', d.vitals.spo2);
-            ipcSetVal('ipc-vit-temp', d.vitals.temp); ipcSetVal('ipc-vit-wt', d.vitals.weight);
-        }
-        if (d.sysExam) {
-            ipcSetVal('ipc-se-cvs-text', d.sysExam.cvs); ipcSetVal('ipc-se-rs-text', d.sysExam.rs);
-            ipcSetVal('ipc-se-pa-text', d.sysExam.pa);   ipcSetVal('ipc-se-cns-text', d.sysExam.cns);
-        }
-        document.getElementById('ipc-draft-status').innerHTML =
-            '<i class="fa-solid fa-rotate-left text-warning"></i> Draft restored';
-    } catch (e) { /* a corrupt draft is not worth an error dialog */ }
+    if (window.crescDraft) window.crescDraft.offer(ipcDraftKey(ip), 'emr-workspace-ip-casesheet', IPC_DRAFT_SPEC);
 }
 
 function ipcUpdateTriageUI() {
@@ -3103,7 +3090,7 @@ function ipcSubmitConfirmed() {
             }
             activeIpcEncounterId = res.encounterId;
             ipcLoadWard();   // the bed leaves the picker now it has a casesheet
-            try { localStorage.removeItem(ipcDraftKey()); } catch (e) {}
+            if (window.crescDraft) window.crescDraft.clear(ipcDraftKey());
 
             ipcToast(res.message, res.warnings && res.warnings.length ? 'warn' : 'ok');
             ipc_confirm('Casesheet saved. Print it now?',

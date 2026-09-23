@@ -1770,7 +1770,62 @@ function ipn_prompt(message, value, done, opts) {
     return IPNotesModule.clientNoteIds[btnId];
   }
 
-  function ipnClearClientNoteId(btnId) { delete IPNotesModule.clientNoteIds[btnId]; }
+  function ipnClearClientNoteId(btnId) {
+    delete IPNotesModule.clientNoteIds[btnId];
+    // Called on every successful save: the note is on the server now, so the
+    // draft kept for it in this browser goes.
+    const b = document.getElementById(btnId);
+    const m = b && b.closest('.modal');
+    if (m && IPN_DRAFTS[m.id] && window.crescDraft) window.crescDraft.clear(ipnDraftKey(m.id));
+  }
+
+  // ── DRAFTS ────────────────────────────────────────────────
+  // A ward note is written between interruptions. What is typed into any of
+  // the four note forms is kept in this browser (per user, 24 h — crescDraft,
+  // Shell_UX.html) and offered back when the same form is opened for the
+  // same admission. The half-typed "new drug" boxes are not kept: an order
+  // is kept once it is added to the list.
+  const IPN_DRAFTS = {
+    modalIPDoctorNote: { key: 'dr', spec: {
+      ignore: '#ipn-lab-search, #ip-new-drug-name, #ip-new-drug-dose, #ip-new-drug-instructions, #dr-actas',
+      extra: {
+        get: function () { return { orders: (IPNotesModule.newDrugOrders || []).slice(), labs: (IPNotesModule.selectedLabs || []).slice() }; },
+        set: function (x) {
+          IPNotesModule.newDrugOrders = x.orders || []; ipnRedrawNewOrders('dr');
+          IPNotesModule.selectedLabs = x.labs || []; if (typeof ipnRenderLabPicker === 'function') ipnRenderLabPicker('dr');
+        }
+      } } },
+    modalIPNurseNote: { key: 'nr', spec: {} },
+    modalIPConsultantNote: { key: 'cons', spec: {
+      ignore: '#cons-lab-search, #cons-new-drug-name, #cons-new-drug-dose, #cons-new-drug-instructions, #cons-actas',
+      extra: {
+        get: function () { return { orders: (IPNotesModule.consNewDrugOrders || []).slice(), labs: (IPNotesModule.consSelectedLabs || []).slice() }; },
+        set: function (x) {
+          IPNotesModule.consNewDrugOrders = x.orders || []; ipnRedrawNewOrders('cons');
+          IPNotesModule.consSelectedLabs = x.labs || []; if (typeof ipnRenderLabPicker === 'function') ipnRenderLabPicker('cons');
+        }
+      } } },
+    modalIPProcedureNote: { key: 'proc', spec: {} }
+  };
+  function ipnDraftKey(modalId) {
+    const ip = IPNotesModule.context && IPNotesModule.context.ipNumber;
+    return (ip && IPN_DRAFTS[modalId]) ? 'ipn|' + ip + '|' + IPN_DRAFTS[modalId].key : '';
+  }
+  function ipnOfferDraft(modalId) {
+    if (!window.crescDraft) return;
+    // After the form has been reset and shown, so the draft lands on top.
+    setTimeout(function () {
+      window.crescDraft.offer(ipnDraftKey(modalId), modalId, IPN_DRAFTS[modalId].spec);
+    }, 350);
+  }
+  if (window.crescDraft) {
+    Object.keys(IPN_DRAFTS).forEach(function (id) {
+      window.crescDraft.watch(function () {
+        const m = document.getElementById(id);
+        return (m && m.classList.contains('show')) ? ipnDraftKey(id) : '';
+      }, id, IPN_DRAFTS[id].spec);
+    });
+  }
 
   /**
    * @param {string} btnId   id of the save button to lock
@@ -2751,7 +2806,7 @@ function ipn_prompt(message, value, done, opts) {
     // Check for latest pending doctor orders to show nurse alert context
     _checkForPendingDoctorOrders();
 
-    _getModal_('modalIPDoctorNote').show();
+    _getModal_('modalIPDoctorNote').show(); ipnOfferDraft('modalIPDoctorNote');
   }
 
   function selectMedAction(btn, idx) {
@@ -3371,7 +3426,7 @@ function ipn_prompt(message, value, done, opts) {
     // Show pending doctor order alert (if any)
     _checkForPendingDoctorOrders(true);
 
-    _getModal_('modalIPNurseNote').show();
+    _getModal_('modalIPNurseNote').show(); ipnOfferDraft('modalIPNurseNote');
   }
 
   function toggleMarkGiven(btn) {
@@ -3493,7 +3548,7 @@ function ipn_prompt(message, value, done, opts) {
 
     ipnLoadLabCatalog(function () { ipnRenderLabPicker('cons'); });
     ipnLoadAdviceTemplates();
-    _getModal_('modalIPConsultantNote').show();
+    _getModal_('modalIPConsultantNote').show(); ipnOfferDraft('modalIPConsultantNote');
   }
 
   function saveConsultantNote() {
@@ -3574,7 +3629,7 @@ function ipn_prompt(message, value, done, opts) {
   }
 
   // ── 10. PROCEDURE NOTE MODAL ─────────────────────────────
-  function openProcedureNoteModal() { _getModal_('modalIPProcedureNote').show(); }
+  function openProcedureNoteModal() { _getModal_('modalIPProcedureNote').show(); ipnOfferDraft('modalIPProcedureNote'); }
 
   function saveProcedureNote() {
     const ctx = IPNotesModule.context;

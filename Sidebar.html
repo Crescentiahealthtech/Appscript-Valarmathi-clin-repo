@@ -158,7 +158,9 @@
              a shared login is forgetting which person you are signed in as,
              so the answer sits next to the name, permanently. -->
         <div id="cresc-visiting-chip" onclick="crescVisitingOpen()"></div>
-        <small><a href="#" onclick="signOut(); return false;" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
+        <small><a href="#" onclick="crescOpenChangePassword(); return false;" style="color: var(--text-muted); text-decoration: none;">Change password</a>
+          <span style="color: var(--text-faint);"> · </span>
+          <a href="#" onclick="signOut(); return false;" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
       </div>
     </div>
 
@@ -468,12 +470,14 @@
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
     btn.disabled = true;
 
+    // This sign-in stays; every other one of this account is ended.
+    var keepSess = window.sessionToken || '';
     google.script.run
       .withSuccessHandler(function (res) {
         btn.innerHTML = label;
         btn.disabled = false;
         if (res && res.success) {
-          say('Password changed. It takes effect the next time you sign in.', true);
+          say((res.message || 'Password changed.') + ' You stay signed in here.', true);
           ['cpw-current', 'cpw-new', 'cpw-new2'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
@@ -486,7 +490,8 @@
         btn.disabled = false;
         say('Network error: ' + ((err && err.message) || err));
       })
-      .crescChangePassword({ username: who, currentPassword: current, newPassword: next });
+      .crescChangePassword({ username: who, currentPassword: current, newPassword: next,
+                             keepSession: keepSess });
   }
   window.crescSubmitChangePassword = crescSubmitChangePassword;
 

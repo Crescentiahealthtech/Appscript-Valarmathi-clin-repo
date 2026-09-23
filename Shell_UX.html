@@ -712,3 +712,214 @@
   window.crescSuggestKeys = true;
 })();
 </script>
+
+<script>
+/* ====================================================================
+   DRAFTS — crescDraft
+
+   A consultation, a case sheet or a ward note is interrupted constantly: a
+   phone call, a patient at the door, a session that times out. Whatever was
+   typed is kept in this browser, per signed-in user, for 24 hours, and
+   offered back the next time the same patient / admission is opened.
+
+     crescDraft.watch(key, rootId, spec)   start keeping one
+       key    function returning the current draft key ('' = nothing open)
+       spec   rows:  { tbodyId: { add: fn, field: /^op-/ } }
+              extra: { get: fn -> any, set: fn(any) }
+              ignore: css selector of fields never to keep
+     crescDraft.offer(key, apply)          "Recover unsaved draft from 10:42?"
+     crescDraft.clear(key)                 after a successful save
+
+   The draft is a snapshot of the form, not of the payload: fixed fields by
+   id, table rows by their field class, rebuilt through the module's own
+   add-row function — so a restore looks exactly like what was left.
+   Nothing here is sent anywhere; it never leaves the browser.
+   ==================================================================== */
+(function () {
+  'use strict';
+  var PREFIX = 'cresc_draft|';
+  var MAX_AGE = 24 * 3600 * 1000;
+
+  function user() { return String(window.loggedInUser || localStorage.getItem('loggedInUser') || 'anon'); }
+  function full(key) { return PREFIX + user() + '|' + key; }
+  function prune() {
+    try {
+      var now = Date.now();
+      for (var i = localStorage.length - 1; i >= 0; i--) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(PREFIX) !== 0) continue;
+        var v = null;
+        try { v = JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) {}
+        if (!v || !v.at || now - v.at > MAX_AGE) localStorage.removeItem(k);
+      }
+    } catch (e) {}
+  }
+
+  function fieldKey(el, pattern) {
+    var cls = Array.prototype.filter.call(el.classList, function (c) { return pattern.test(c); });
+    return cls[0] || '';
+  }
+
+  function snapshot(root, spec) {
+    var snap = { ids: {}, rows: {}, checks: {}, extra: null };
+    var rows = spec.rows || {};
+    var inRows = function (el) {
+      return Object.keys(rows).some(function (id) {
+        var tb = document.getElementById(id); return tb && tb.contains(el);
+      });
+    };
+    Array.prototype.forEach.call(root.querySelectorAll('input, textarea, select'), function (el) {
+      if (el.type === 'file' || el.type === 'password' || el.type === 'button' || el.type === 'submit') return;
+      if (spec.ignore && el.matches(spec.ignore)) return;
+      if (inRows(el)) return;
+      if (el.id) {
+        snap.ids[el.id] = (el.type === 'checkbox' || el.type === 'radio') ? { c: el.checked } : { v: el.value };
+      } else if (el.type === 'checkbox' && el.value) {
+        var host = el.closest('[id]');
+        if (host) snap.checks[host.id + '::' + el.value] = el.checked;
+      }
+    });
+    Object.keys(rows).forEach(function (id) {
+      var tb = document.getElementById(id);
+      if (!tb) return;
+      var list = [];
+      Array.prototype.forEach.call(tb.querySelectorAll(':scope > tr'), function (tr) {
+        var row = {}, any = false;
+        Array.prototype.forEach.call(tr.querySelectorAll('input, textarea, select'), function (el) {
+          var k = fieldKey(el, rows[id].field);
+          if (!k) return;
+          row[k] = el.value;
+          if (el.tagName !== 'SELECT' && String(el.value || '').trim()) any = true;
+        });
+        if (any) list.push(row);
+      });
+      snap.rows[id] = list;
+    });
+    if (spec.extra && spec.extra.get) { try { snap.extra = spec.extra.get(); } catch (e) {} }
+    return snap;
+  }
+
+  function hasContent(snap) {
+    var any = Object.keys(snap.rows).some(function (k) { return snap.rows[k].length; });
+    if (any) return true;
+    return Object.keys(snap.ids).some(function (k) {
+      var x = snap.ids[k];
+      return x && typeof x.v === 'string' && x.v.trim() && x.v.trim() !== '--';
+    });
+  }
+
+  function apply(root, snap, spec) {
+    var rows = spec.rows || {};
+    Object.keys(snap.rows || {}).forEach(function (id) {
+      var tb = document.getElementById(id);
+      if (!tb || !rows[id]) return;
+      if (!snap.rows[id].length) return;
+      tb.innerHTML = '';
+      snap.rows[id].forEach(function (r) {
+        rows[id].add();
+        var tr = tb.lastElementChild;
+        if (!tr) return;
+        Object.keys(r).forEach(function (cls) {
+          var el = tr.querySelector('.' + cls);
+          if (el) el.value = r[cls];
+        });
+      });
+    });
+    Object.keys(snap.ids || {}).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el || !root.contains(el)) return;
+      var x = snap.ids[id];
+      if ('c' in x) el.checked = !!x.c; else el.value = x.v;
+    });
+    Object.keys(snap.checks || {}).forEach(function (k) {
+      var i = k.indexOf('::'), host = document.getElementById(k.slice(0, i));
+      if (!host) return;
+      Array.prototype.forEach.call(host.querySelectorAll('input[type="checkbox"]'), function (c) {
+        if (c.value === k.slice(i + 2)) c.checked = !!snap.checks[k];
+      });
+    });
+    if (spec.extra && spec.extra.set && snap.extra !== null && snap.extra !== undefined) {
+      try { spec.extra.set(snap.extra); } catch (e) {}
+    }
+  }
+
+  var watchers = [];
+
+  var api = {
+    save: function (key, data) {
+      if (!key) return;
+      try { localStorage.setItem(full(key), JSON.stringify({ at: Date.now(), data: data })); }
+      catch (e) { prune(); }
+    },
+    load: function (key) {
+      if (!key) return null;
+      prune();
+      try { return JSON.parse(localStorage.getItem(full(key)) || 'null'); } catch (e) { return null; }
+    },
+    clear: function (key) {
+      if (!key) return;
+      try { localStorage.removeItem(full(key)); } catch (e) {}
+      watchers.forEach(function (w) { if (w.keyFn() === key) w.dirty = false; });
+    },
+
+    /** Starts keeping a draft of one form. Returns { saveNow }. */
+    watch: function (keyFn, rootId, spec) {
+      var w = { keyFn: keyFn, rootId: rootId, spec: spec || {}, dirty: false, timer: null };
+      w.saveNow = function () {
+        var root = document.getElementById(rootId), key = keyFn();
+        if (!root || !key || !w.dirty) return;
+        var snap = snapshot(root, w.spec);
+        if (hasContent(snap)) api.save(key, snap);
+        w.dirty = false;
+        var st = w.spec.status && document.getElementById(w.spec.status);
+        if (st) st.innerHTML = '<i class="fa-solid fa-check"></i> Draft kept ' +
+          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      };
+      var bump = function (e) {
+        var root = document.getElementById(rootId);
+        if (!root || !root.contains(e.target) || !keyFn()) return;
+        w.dirty = true;
+        clearTimeout(w.timer);
+        w.timer = setTimeout(w.saveNow, 1500);
+      };
+      document.addEventListener('input', bump, true);
+      document.addEventListener('change', bump, true);
+      watchers.push(w);
+      return w;
+    },
+
+    /** If a draft exists for this key, offers it back. */
+    offer: function (key, rootId, spec, done) {
+      var d = api.load(key);
+      if (!d || !d.data) { if (done) done(false); return; }
+      var when = new Date(d.at);
+      var label = when.toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      var ask = window.crescConfirm
+        ? window.crescConfirm('Unsaved work from ' + label + ' was kept for this patient. Put it back?',
+                              { title: 'Recover draft', okLabel: 'Recover', cancelLabel: 'Discard', kind: 'info' })
+        : Promise.resolve(true);
+      ask.then(function (ok) {
+        if (ok) {
+          var root = document.getElementById(rootId);
+          if (root) apply(root, d.data, spec || {});
+          if (window.showToast) window.showToast('Draft recovered', 'Check it before saving.', 'info');
+        } else {
+          api.clear(key);
+        }
+        if (done) done(!!ok);
+      });
+    },
+
+    /** Saves every watched form now — before a timeout sign-out, a reload, or leaving. */
+    saveAll: function () { watchers.forEach(function (w) { try { w.saveNow(); } catch (e) {} }); },
+
+    _snapshot: snapshot, _apply: apply
+  };
+  window.crescDraft = api;
+
+  window.addEventListener('beforeunload', function () { api.saveAll(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) api.saveAll(); });
+  document.addEventListener('cresc:before-signout', function () { api.saveAll(); });
+  setInterval(function () { api.saveAll(); }, 20000);
+})();
+</script>
