@@ -65,7 +65,7 @@
       <div class="modal-body">
         <div class="row g-3 mb-1">
           <div class="col-md-4">
-            <label class="form-label small label-bright">Patient ID <span class="label-bright" style="font-size:.68rem;">(optional)</span></label>
+            <label class="form-label small label-bright">Patient ID <span class="label-bright" style="font-size:var(--fs-2xs);">(optional)</span></label>
             <div class="input-group input-group-sm">
               <input type="text" id="lx-wi-pid" class="form-control form-control-sm" placeholder="LMTVS0001" onkeydown="if(event.key==='Enter')LabX.wiLookup();">
               <button class="btn" style="background:var(--teal-bg);border:1px solid var(--teal);color:var(--teal-fg);" onclick="LabX.wiLookup();" title="Fetch patient">
@@ -98,7 +98,7 @@
         <div id="lx-wi-tests" class="lx-pickbox"><div class="text-center label-bright small py-3">Loading catalog…</div></div>
         <div class="mt-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div class="d-flex flex-wrap gap-1" id="lx-wi-chips"></div>
-          <div class="text-white-force fw-bold" id="lx-wi-total" style="font-size:1.05rem;color:var(--teal-fg)!important;">₹0.00</div>
+          <div class="text-white-force fw-bold" id="lx-wi-total" style="font-size:var(--fs-md);color:var(--teal-fg)!important;">₹0.00</div>
         </div>
         <div id="lx-wi-consent" class="mt-2"></div>
       </div>
@@ -228,7 +228,7 @@
 .lx-kpi { background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:14px 16px;cursor:pointer;transition:.18s; }
 .lx-kpi:hover { border-color:var(--border-hover);transform:translateY(-2px); }
 .lx-kpi-num { font-size:1.7rem;font-weight:800;color:var(--text-main);line-height:1; }
-.lx-kpi-lbl { font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:6px; }
+.lx-kpi-lbl { font-size:var(--fs-2xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-top:6px; }
 .lx-kpi-warn .lx-kpi-num { color:var(--warning-fg); }
 .lx-kpi-crit { border-color:var(--danger-bg); }
 .lx-kpi-crit .lx-kpi-num { color:var(--danger-fg); }
@@ -236,10 +236,10 @@
 @keyframes lxGlow { 0%,100%{box-shadow:0 0 0 rgba(248,113,113,0);} 50%{box-shadow:0 0 18px rgba(248,113,113,.35);} }
 
 /* tabs */
-.lx-tab { background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:.78rem;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px; }
+.lx-tab { background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:var(--fs-xs);cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px; }
 .lx-tab:hover { border-color:var(--border-hover);color:var(--text-main); }
 .lx-tab.on { background:var(--accent-purple);border-color:var(--accent-purple);color:var(--text-on-accent); }
-.lx-tab .lx-count { background:var(--surface-active);border-radius:10px;padding:0 7px;font-size:.68rem;font-weight:700; }
+.lx-tab .lx-count { background:var(--surface-active);border-radius:10px;padding:0 7px;font-size:var(--fs-2xs);font-weight:700; }
 /* On the active tab the chip sits on a saturated accent fill, so it keeps a
    white tint in both themes for contrast against that fill. */
 .lx-tab.on .lx-count { background:rgba(255,255,255,.22); }
@@ -249,7 +249,7 @@
 .lx-card:hover { border-color:var(--border-hover);transform:translateX(3px); }
 .lx-card.lx-overdue { border-color:var(--danger-bg);background:linear-gradient(90deg,var(--danger-bg),var(--bg-card) 40%); }
 .lx-card.lx-stat { border-left:4px solid var(--danger); }
-.lx-avatar { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;flex-shrink:0;color:var(--text-main); }
+.lx-avatar { width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:var(--fs-md);flex-shrink:0;color:var(--text-main); }
 .lx-dots { display:flex;gap:4px;align-items:center; }
 .lx-dot { width:9px;height:9px;border-radius:50%;background:var(--bg-input);border:1px solid var(--border-color); }
 .lx-dot.done { background:var(--success);border-color:var(--success); }
@@ -259,34 +259,34 @@
 .lx-tatbar.warn > div { background:var(--warning); } .lx-tatbar.over > div { background:var(--danger); }
 
 /* badges & pills */
-.lx-badge { font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.3px;white-space:nowrap; }
+.lx-badge { font-size:var(--fs-2xs);font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.3px;white-space:nowrap; }
 .lx-b-STAT   { background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger); }
 .lx-b-URGENT { background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning); }
 .lx-b-ROUTINE{ background:var(--bg-input);color:var(--text-muted);border:1px solid var(--border-color); }
-.lx-stage-pill { font-size:.68rem;font-weight:600;padding:3px 10px;border-radius:20px;background:var(--bg-input);color:var(--text-label);border:1px solid var(--border-color); }
+.lx-stage-pill { font-size:var(--fs-2xs);font-weight:600;padding:3px 10px;border-radius:20px;background:var(--bg-input);color:var(--text-label);border:1px solid var(--border-color); }
 
 /* stepper */
 .lx-stepper { display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:4px; }
 .lx-step { display:flex;align-items:center;flex-shrink:0; }
-.lx-step-node { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;background:var(--bg-input);border:2px solid var(--border-color);color:var(--text-muted); }
+.lx-step-node { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xs);font-weight:700;background:var(--bg-input);border:2px solid var(--border-color);color:var(--text-muted); }
 .lx-step.done .lx-step-node { background:var(--success-solid);border-color:var(--success);color:var(--text-on-accent); }
 .lx-step.cur  .lx-step-node { background:var(--warning);border-color:var(--warning);color: var(--text-on-accent);box-shadow:0 0 10px rgba(245,158,11,.5); }
-.lx-step-lbl { font-size:.64rem;color:var(--text-muted);margin:0 8px 0 6px;white-space:nowrap; }
+.lx-step-lbl { font-size:var(--fs-2xs);color:var(--text-muted);margin:0 8px 0 6px;white-space:nowrap; }
 .lx-step.done .lx-step-lbl,.lx-step.cur .lx-step-lbl { color:var(--text-main); }
 .lx-step-line { width:26px;height:2px;background:var(--border-color);margin-right:8px; }
 .lx-step.done .lx-step-line { background:var(--success); }
 
 /* pick box & result table */
 .lx-pickbox { background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:10px;max-height:250px;overflow-y:auto; }
-.lx-pick { display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;font-size:.83rem; }
+.lx-pick { display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;font-size:var(--fs-sm); }
 .lx-pick:hover { background:var(--bg-card); }
 .lx-pick.sel { background:var(--warning-bg);border-color:var(--warning); }
-.lx-chip { display:inline-flex;align-items:center;gap:5px;font-size:.74rem;padding:3px 10px;border-radius:20px;background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg); }
+.lx-chip { display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);padding:3px 10px;border-radius:20px;background:var(--warning-bg);border:1px solid var(--warning);color:var(--warning-fg); }
 .lx-rtable { width:100%;border-collapse:separate;border-spacing:0; }
-.lx-rtable th { color:var(--text-muted);font-weight:500;font-size:.68rem;text-transform:uppercase;letter-spacing:.4px;padding:7px 8px;background:var(--bg-input); }
+.lx-rtable th { color:var(--text-muted);font-weight:500;font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.4px;padding:7px 8px;background:var(--bg-input); }
 .lx-rtable th:first-child{border-radius:8px 0 0 8px;} .lx-rtable th:last-child{border-radius:0 8px 8px 0;}
-.lx-rtable td { padding:7px 8px;border-bottom:1px solid var(--border-color);font-size:.83rem;vertical-align:middle; }
-.lx-rin { background:var(--bg-input)!important;border:1px solid var(--border-color)!important;color:var(--text-main)!important;border-radius:7px;padding:5px 9px;font-size:.85rem;width:120px;transition:.15s; }
+.lx-rtable td { padding:7px 8px;border-bottom:1px solid var(--border-color);font-size:var(--fs-sm);vertical-align:middle; }
+.lx-rin { background:var(--bg-input)!important;border:1px solid var(--border-color)!important;color:var(--text-main)!important;border-radius:7px;padding:5px 9px;font-size:var(--fs-sm);width:120px;transition:.15s; }
 .lx-rin:focus { outline:none;border-color:var(--accent-purple)!important; }
 .lx-rin.crit { border-color:var(--danger)!important;color:var(--danger-fg)!important;font-weight:700;background:var(--danger-bg)!important; }
 .lx-rin.high { border-color:var(--warning)!important;color:var(--warning-fg)!important; }
@@ -303,7 +303,7 @@
 .lx-bill-line { display:flex; justify-content:space-between; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border-color); }
 .lx-bill-line:last-of-type { border-bottom:none; }
 .lx-bill-total { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:var(--success-bg); border-top:2px solid var(--success); }
-.lx-pm { background:var(--bg-input); border:1px solid var(--border-color); color:var(--text-muted); border-radius:8px; padding:6px 12px; font-size:.8rem; cursor:pointer; }
+.lx-pm { background:var(--bg-input); border:1px solid var(--border-color); color:var(--text-muted); border-radius:8px; padding:6px 12px; font-size:var(--fs-sm); cursor:pointer; }
 .lx-pm.on { background:var(--success-bg); border-color:var(--success); color:var(--success-fg); }
 
 </style>

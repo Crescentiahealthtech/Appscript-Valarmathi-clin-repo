@@ -78,7 +78,7 @@
       display: flex; align-items: center; gap: .6rem; width: 100%;
       background: transparent; border: 0; border-radius: 7px;
       padding: .45rem .6rem; color: var(--text-main);
-      font-size: .86rem; font-weight: 500; text-align: left;
+      font-size: var(--fs-base); font-weight: 500; text-align: left;
   }
   .sidebar-account-menu .sam-item:hover { background: var(--surface-hover); }
   .sidebar-account-menu .sam-item i { width: 1rem; text-align: center; color: var(--text-muted); }
@@ -167,7 +167,7 @@
     <div id="sidebar-account-menu" class="sidebar-account-menu" hidden>
       <div class="sam-who">
         <div class="fw-bold small" id="sam-name">&nbsp;</div>
-        <div class="label-bright" style="font-size:.72rem;" id="sam-role">&nbsp;</div>
+        <div class="label-bright" style="font-size:var(--fs-xs);" id="sam-role">&nbsp;</div>
       </div>
       <button type="button" class="sam-item" onclick="toggleTheme(); crescCloseAccountMenu();">
         <i class="fa-solid fa-circle-half-stroke"></i> Toggle theme
@@ -190,6 +190,9 @@
       <button type="button" class="sam-item" id="sam-mfa"
               onclick="crescCloseAccountMenu(); crescMfaOpen();">
         <i class="fa-solid fa-shield-halved"></i> <span id="sam-mfa-label">Two-step sign-in</span>
+      </button>
+      <button type="button" class="sam-item" onclick="crescCloseAccountMenu(); crescShowShortcuts && crescShowShortcuts();">
+        <i class="fa-regular fa-keyboard"></i> Keyboard shortcuts <span class="ms-auto label-bright" style="font-size:var(--fs-2xs);">?</span>
       </button>
       <button type="button" class="sam-item sam-danger" onclick="crescCloseAccountMenu(); signOut();">
         <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign out

@@ -75,7 +75,7 @@
   .pp-row:last-child { border-bottom: 0; }
 
   /* THE TWO CLASSES THAT REPLACE FORTY INLINE FONT SIZES.
-     The render functions below carried `style="font-size:.85rem; color:
+     The render functions below carried `style="font-size:var(--fs-sm); color:
      var(--text-main)"` on nearly every line of detail they produced, and a
      handful of them said .84rem, .88rem or .9rem instead — the same kind of
      text, four sizes, depending on which function happened to draw it. One
@@ -268,7 +268,7 @@
                background: var(--bg-card); color: var(--text-main); font-size: var(--fs-sm);
                font-weight: var(--fw-semi); min-height: 92px; transition: .15s; text-decoration: none; }
   .pp-action:hover, .pp-action:focus-visible { border-color: var(--accent-purple); transform: translateY(-1px); color: var(--text-main); }
-  .pp-action i { font-size: 1.15rem; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  .pp-action i { font-size: var(--fs-lg); width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
                  background: var(--pp-soft); color: var(--accent-fg); }
   .pp-action small { display: block; font-weight: var(--fw-normal); color: var(--text-muted); font-size: var(--fs-2xs); }
 
@@ -288,7 +288,7 @@
   .pp-tl-item { position: relative; padding: 0 0 16px; }
   .pp-tl-item:last-child { padding-bottom: 0; }
   .pp-tl-dot { position: absolute; left: -26px; top: 2px; width: 20px; height: 20px; border-radius: 50%;
-               display: grid; place-items: center; font-size: .6rem; background: var(--bg-elevated);
+               display: grid; place-items: center; font-size: var(--fs-2xs); background: var(--bg-elevated);
                border: 2px solid var(--border-color); color: var(--text-muted); }
   .pp-tl-dot.info { border-color: var(--info-fg); color: var(--info-fg); }
   .pp-tl-dot.accent { border-color: var(--accent-purple); color: var(--accent-fg); }

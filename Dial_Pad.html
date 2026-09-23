@@ -27,15 +27,15 @@
                 width: 94%; max-width: 310px; padding: .8rem; box-shadow: var(--shadow-lg); }
   #cresc-dial .cd-head { display: flex; justify-content: space-between; align-items: center;
                 border-bottom: 1px solid var(--divider-color); padding-bottom: .45rem; margin-bottom: .5rem; }
-  #cresc-dial .cd-title { font-size: .8rem; font-weight: 700; color: var(--info-fg); }
+  #cresc-dial .cd-title { font-size: var(--fs-sm); font-weight: 700; color: var(--info-fg); }
   #cresc-dial .cd-display { background: var(--bg-card); border: 1px solid var(--border-color);
                 border-radius: 8px; padding: .45rem .6rem; min-height: 2.1rem;
-                font-family: ui-monospace, monospace; font-size: .95rem; font-weight: 700;
+                font-family: ui-monospace, monospace; font-size: var(--fs-md); font-weight: 700;
                 color: var(--warning-fg); word-break: break-word; }
-  #cresc-dial .cd-hint { font-size: .66rem; color: var(--text-muted); min-height: 1rem; margin: .3rem 0 .45rem; }
+  #cresc-dial .cd-hint { font-size: var(--fs-2xs); color: var(--text-muted); min-height: 1rem; margin: .3rem 0 .45rem; }
   #cresc-dial .cd-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: .25rem; }
   #cresc-dial .cd-key { grid-column: span 3; border-radius: 7px; border: 1px solid var(--border-color);
-                background: var(--bg-card); color: var(--text-main); font-size: .74rem; font-weight: 600;
+                background: var(--bg-card); color: var(--text-main); font-size: var(--fs-xs); font-weight: 600;
                 padding: .38rem .1rem; cursor: pointer; }
   #cresc-dial .cd-key:hover { border-color: var(--border-hover); }
   #cresc-dial .cd-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -47,13 +47,13 @@
   #cresc-dial .cd-key.success { color: var(--success-fg); border-color: var(--success); }
   #cresc-dial .cd-key.unit    { color: var(--text-secondary); }
   #cresc-dial .cd-tools button { background: none; border: 1px solid var(--border-color); color: var(--text-muted);
-                border-radius: 6px; font-size: .7rem; padding: .1rem .45rem; margin-left: .25rem; }
+                border-radius: 6px; font-size: var(--fs-2xs); padding: .1rem .45rem; margin-left: .25rem; }
   #cresc-dial .cd-tools button:hover { color: var(--text-main); }
   #cresc-dial .cd-foot { display: grid; grid-template-columns: 1fr 2fr; gap: .35rem; margin-top: .55rem; }
   #cresc-dial .cd-ok { background: var(--info-solid); color: var(--text-on-accent); border: 0;
-                border-radius: 8px; font-weight: 700; font-size: .8rem; padding: .4rem; }
+                border-radius: 8px; font-weight: 700; font-size: var(--fs-sm); padding: .4rem; }
   #cresc-dial .cd-taper { background: none; border: 1px solid var(--warning); color: var(--warning-fg);
-                border-radius: 8px; font-weight: 700; font-size: .72rem; padding: .35rem; }
+                border-radius: 8px; font-weight: 700; font-size: var(--fs-xs); padding: .35rem; }
 </style>
 
 <div id="cresc-dial" hidden role="dialog" aria-modal="true" aria-labelledby="cd-title">

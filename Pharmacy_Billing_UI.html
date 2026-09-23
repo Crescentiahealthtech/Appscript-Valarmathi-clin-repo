@@ -68,7 +68,7 @@
     /* PHARMACY BILLING &#8212; THEME ADAPTIVE (light + dark via vars)  */
     /* ========================================================= */
     #pharmacy-billing-workspace .ph-label {
-      font-size: 0.7rem; color: var(--text-muted); font-weight: 600;
+      font-size: var(--fs-2xs); color: var(--text-muted); font-weight: 600;
       text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; display: block;
     }
     #pharmacy-billing-workspace input,
@@ -87,13 +87,13 @@
     #pharmacy-billing-workspace .ph-table > :not(caption) > * > * {
       background-color: transparent !important; box-shadow: none !important; color: var(--text-main);
     }
-    .ph-table input { width: 100%; font-size: 0.85rem; padding: 0.3rem 0.5rem; }
+    .ph-table input { width: 100%; font-size: var(--fs-sm); padding: 0.3rem 0.5rem; }
     .ph-table input[readonly] {
       background-color: var(--bg-card) !important; color: var(--text-muted) !important;
       border-color: var(--border-color) !important;
     }
     .ph-table th {
-      color: var(--text-label); font-size: 0.72rem; text-transform: uppercase;
+      color: var(--text-label); font-size: var(--fs-xs); text-transform: uppercase;
       letter-spacing: 0.4px; padding: 0.5rem; border-bottom: 1px solid var(--border-color);
     }
     .ph-table td { padding: 0.4rem; vertical-align: middle; border-bottom: 1px solid var(--border-color); }
@@ -103,7 +103,7 @@
     .ph-subtotal { color: var(--success-fg) !important; font-weight: bold; }
     .ph-money-line { color: var(--text-muted); }
     .ph-money-val  { color: var(--text-main); }
-    .ph-expiry-flag { font-size: 0.65rem; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
+    .ph-expiry-flag { font-size: var(--fs-2xs); padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
     .ph-flag-ok   { background: var(--success-bg); color: var(--success-fg); }
     .ph-flag-near { background: var(--warning-bg); color: var(--warning-fg); }
 
@@ -117,8 +117,8 @@
       background: var(--bg-input); border: 1px solid var(--border-color);
       border-left: 3px solid var(--accent-purple); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px;
     }
-    .rx-chip .rx-meta { font-size: 0.7rem; color: var(--text-muted); }
-    .rx-src { font-size: 0.6rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .rx-chip .rx-meta { font-size: var(--fs-2xs); color: var(--text-muted); }
+    .rx-src { font-size: var(--fs-2xs); font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
     .rx-src.OPD          { background: var(--accent-glow); color: var(--accent-purple); }
     .rx-src.IP-ADMISSION { background: var(--success-bg); color: var(--success-fg); }
     .rx-src.IP-WARD      { background: var(--warning-bg); color: var(--warning-fg); }
@@ -134,11 +134,11 @@
       background-color: var(--bg-card); max-height: 280px; overflow-y: auto;
       border: 1px solid var(--accent-purple); border-radius: 6px; box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.25);
     }
-    .autocomplete-items div { padding: 9px 11px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.82rem; }
+    .autocomplete-items div { padding: 9px 11px; cursor: pointer; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: var(--fs-sm); }
     .autocomplete-items div:hover { background-color: var(--border-hover); }
     .ac-brand  { font-weight: 700; color: var(--text-main); }
-    .ac-generic{ color: var(--text-muted); font-size: 0.72rem; font-style: italic; }
-    .ac-meta   { font-size: 0.68rem; color: var(--text-muted); }
+    .ac-generic{ color: var(--text-muted); font-size: var(--fs-xs); font-style: italic; }
+    .ac-meta   { font-size: var(--fs-2xs); color: var(--text-muted); }
 
     /* Overlay + credit panel */
     #ph-overlay { position: fixed; inset: 0; background: var(--overlay-scrim); z-index: 20000; display: none; align-items: center; justify-content: center; }
@@ -233,7 +233,7 @@
 
     <div class="hd-panel mb-3">
       <div class="hd-panel-title d-flex justify-content-between">
-        <span>2. Billed Items <span class="text-muted" style="font-size:0.72rem; font-weight:400;">(batches auto-picked by earliest expiry)</span></span>
+        <span>2. Billed Items <span class="text-muted" style="font-size:var(--fs-xs); font-weight:400;">(batches auto-picked by earliest expiry)</span></span>
         <button class="btn btn-sm btn-outline-success" data-ph="add-row">+ Add Medicine</button>
       </div>
       <div class="table-responsive" style="overflow: visible;">
@@ -273,7 +273,7 @@
               <input type="text" id="phTxnId" class="hd-input w-100 p-2 d-none" placeholder="Enter UPI/Card Ref Number">
             </div>
             <div class="col-md-6 d-flex align-items-end gap-2">
-              <button id="phSaveBtn" class="btn btn-success w-100 py-3" style="font-weight: bold; font-size: 1.05rem;" data-ph="save">
+              <button id="phSaveBtn" class="btn btn-success w-100 py-3" style="font-weight: bold; font-size: var(--fs-md);" data-ph="save">
                 <i class="fa-solid fa-floppy-disk me-1"></i> Save Bill
               </button>
               <button id="phClearBtn" class="btn btn-outline-danger py-3 px-3" style="font-weight: bold;"
@@ -291,8 +291,8 @@
             <span id="phGross" class="ph-money-val">&#8377; 0.00</span>
           </div>
           <div class="d-flex justify-content-between mb-2">
-            <span class="ph-money-line" style="font-size: 0.8rem;">Incl. Total GST</span>
-            <span id="phTotalGst" class="text-warning" style="font-size: 0.8rem;">&#8377; 0.00</span>
+            <span class="ph-money-line" style="font-size: var(--fs-sm);">Incl. Total GST</span>
+            <span id="phTotalGst" class="text-warning" style="font-size: var(--fs-sm);">&#8377; 0.00</span>
           </div>
           <div class="d-flex justify-content-between align-items-center mb-2">
             <span class="ph-money-line">Discount (&#8377;)</span>
@@ -340,7 +340,7 @@
         </button>
       </div>
 
-      <button class="btn btn-dark w-100 py-2" style="font-weight: bold; font-size: 1.1rem;" data-ph="dispatch-close">
+      <button class="btn btn-dark w-100 py-2" style="font-weight: bold; font-size: var(--fs-lg);" data-ph="dispatch-close">
         <i class="fa-solid fa-rotate-right me-2"></i> Start New Bill
       </button>
     </div>

@@ -29,19 +29,19 @@
   #cresc-visiting .vc-body { padding: .9rem 1.1rem; overflow: auto; }
   #cresc-visiting .vc-foot { padding: .75rem 1.1rem; border-top: 1px solid var(--divider-color);
                     display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
-  #cresc-visiting label { font-size: .74rem; font-weight: 600; color: var(--text-label);
+  #cresc-visiting label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-label);
                     display: block; margin-bottom: .2rem; }
   #cresc-visiting input {
                     background: var(--bg-input); color: var(--text-main);
                     border: 1px solid var(--border-color); border-radius: 7px;
-                    padding: .4rem .55rem; font-size: .9rem; width: 100%; }
+                    padding: .4rem .55rem; font-size: var(--fs-base); width: 100%; }
   #cresc-visiting .vc-err { background: var(--danger-bg); color: var(--danger-fg);
                     border: 1px solid var(--danger); border-radius: 8px;
-                    padding: .5rem .7rem; font-size: .82rem; font-weight: 600;
+                    padding: .5rem .7rem; font-size: var(--fs-sm); font-weight: 600;
                     margin-top: .7rem; }
   #cresc-visiting .vc-preview { background: var(--surface-3); border: 1px solid var(--border-color);
                     border-radius: 8px; padding: .55rem .7rem; margin-top: .8rem;
-                    font-family: monospace; font-size: .84rem; word-break: break-word; }
+                    font-family: monospace; font-size: var(--fs-sm); word-break: break-word; }
 
   /* The standing reminder of who the session is signing as. It is not
      decoration: the whole risk of a shared slot is forgetting you are on
@@ -49,7 +49,7 @@
   #cresc-visiting-chip { display: none; align-items: center; gap: .45rem;
                     background: var(--info-bg); color: var(--info-fg);
                     border: 1px solid var(--info); border-radius: 999px;
-                    padding: .2rem .7rem; font-size: .74rem; font-weight: 700;
+                    padding: .2rem .7rem; font-size: var(--fs-xs); font-weight: 700;
                     cursor: pointer; max-width: 100%; }
   #cresc-visiting-chip.on { display: inline-flex; }
   #cresc-visiting-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -89,7 +89,7 @@
       </div>
 
       <div class="vc-preview" id="vc-preview">Dr. &mdash;</div>
-      <div class="label-bright" style="font-size:.72rem;margin-top:.35rem;">
+      <div class="label-bright" style="font-size:var(--fs-xs);margin-top:.35rem;">
         This is how you will be signed on prescriptions and case sheets.
       </div>
       <div class="vc-err d-none" id="vc-err"></div>

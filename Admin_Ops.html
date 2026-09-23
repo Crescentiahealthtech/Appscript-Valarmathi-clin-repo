@@ -21,7 +21,7 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <ul class="nav nav-tabs mb-3" role="tablist" id="ops-tabs" style="font-size:.85rem;">
+        <ul class="nav nav-tabs mb-3" role="tablist" id="ops-tabs" style="font-size:var(--fs-sm);">
           <li class="nav-item" data-perm="appointment.read"><button type="button" class="nav-link" role="tab" data-tab="reminders"><i class="fa-brands fa-whatsapp me-1"></i>Reminders</button></li>
           <li class="nav-item" data-perm="pharmacy.read"><button type="button" class="nav-link" role="tab" data-tab="stock"><i class="fa-solid fa-boxes-stacked me-1"></i>Stock alerts</button></li>
           <li class="nav-item" data-perm="accounts.read"><button type="button" class="nav-link" role="tab" data-tab="summary"><i class="fa-solid fa-sun me-1"></i>Day summary</button></li>
@@ -36,12 +36,12 @@
 <style>
   #crescOpsModal .ops-kpis { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
   #crescOpsModal .ops-kpi { border:1px solid var(--border-color); border-radius:10px; padding:6px 12px; min-width:120px; }
-  #crescOpsModal .ops-kpi b { display:block; font-size:1.2rem; }
+  #crescOpsModal .ops-kpi b { display:block; font-size:var(--fs-lg); }
   #crescOpsModal .ops-kpi.warn b { color:var(--warning-fg, #fbbf24); }
   #crescOpsModal .ops-kpi.bad b { color:var(--danger-fg, #f87171); }
-  #crescOpsModal .ops-kpi span { font-size:.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
-  #crescOpsModal table { font-size:.82rem; }
-  #crescOpsModal thead th { font-size:.7rem; text-transform:uppercase; position:sticky; top:0; background:var(--bg-card); z-index:2; }
+  #crescOpsModal .ops-kpi span { font-size:var(--fs-xs); color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
+  #crescOpsModal table { font-size:var(--fs-sm); }
+  #crescOpsModal thead th { font-size:var(--fs-2xs); text-transform:uppercase; position:sticky; top:0; background:var(--bg-card); z-index:2; }
   #crescOpsModal .ops-scroll { max-height:46vh; overflow:auto; }
   #crescOpsModal .ops-summary { background:#fff; color:#111; border-radius:10px; padding:16px; }
   #crescOpsModal .nav-link { color:var(--text-muted); }

@@ -27,26 +27,26 @@
   #cresc-exlab .xl-body { padding: .9rem 1.1rem; overflow: auto; }
   #cresc-exlab .xl-foot { padding: .75rem 1.1rem; border-top: 1px solid var(--divider-color);
                  display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
-  #cresc-exlab label { font-size: .74rem; font-weight: 600; color: var(--text-label);
+  #cresc-exlab label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-label);
                  display: block; margin-bottom: .2rem; }
   #cresc-exlab input, #cresc-exlab textarea, #cresc-exlab select {
                  background: var(--bg-input); color: var(--text-main);
                  border: 1px solid var(--border-color); border-radius: 7px;
-                 padding: .38rem .5rem; font-size: .88rem; width: 100%; box-sizing: border-box; }
+                 padding: .38rem .5rem; font-size: var(--fs-base); width: 100%; box-sizing: border-box; }
   #cresc-exlab input:focus, #cresc-exlab textarea:focus, #cresc-exlab select:focus {
                  outline: 2px solid var(--accent); outline-offset: 0; }
   #cresc-exlab .xl-grid { display: grid; grid-template-columns: 2fr 1fr 2fr; gap: .6rem; }
   #cresc-exlab table { width: 100%; border-collapse: separate; border-spacing: 0 .3rem; }
-  #cresc-exlab th { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+  #cresc-exlab th { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .04em;
                  color: var(--text-label); font-weight: 600; padding: 0 .25rem; }
   #cresc-exlab td { padding: 0 .25rem; vertical-align: middle; }
-  #cresc-exlab .xl-flag { font-weight: 700; font-size: .8rem; min-width: 2.2rem; text-align: center; }
+  #cresc-exlab .xl-flag { font-weight: 700; font-size: var(--fs-sm); min-width: 2.2rem; text-align: center; }
   #cresc-exlab .xl-flag.H { color: var(--danger-fg); }
   #cresc-exlab .xl-flag.L { color: var(--info-fg); }
   #cresc-exlab .xl-flag.N { color: var(--success-fg); }
   #cresc-exlab .xl-err { background: var(--danger-bg); color: var(--danger-fg);
                  border: 1px solid var(--danger); border-radius: 8px;
-                 padding: .45rem .7rem; font-size: .82rem; font-weight: 600; }
+                 padding: .45rem .7rem; font-size: var(--fs-sm); font-weight: 600; }
   #cresc-exlab .xl-del { background: none; border: 0; color: var(--text-faint); padding: .2rem .4rem; }
   #cresc-exlab .xl-del:hover, #cresc-exlab .xl-del:focus { color: var(--danger-fg); }
   @media (max-width: 640px) {
@@ -58,7 +58,7 @@
   <div class="xl-card">
     <div class="xl-head">
       <div>
-        <div class="fw-bold" id="xl-title" style="font-size:1rem;">
+        <div class="fw-bold" id="xl-title" style="font-size:var(--fs-md);">
           <i class="fa-solid fa-file-medical me-2" style="color: var(--accent-fg);"></i>Outside lab report
         </div>
         <div class="label-bright small" id="xl-sub">&nbsp;</div>

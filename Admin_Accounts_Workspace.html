@@ -42,7 +42,7 @@
       <div class="col-6 col-lg-3">
         <div class="card premium-card border-0 rounded-3 h-100" style="border-left:3px solid var(--success) !important;">
           <div class="card-body p-3">
-            <div class="small fw-bold text-uppercase mb-1 text-success" style="font-size:.7rem;letter-spacing:.04em;">Collected (MTD)</div>
+            <div class="small fw-bold text-uppercase mb-1 text-success" style="font-size:var(--fs-2xs);letter-spacing:.04em;">Collected (MTD)</div>
             <h5 class="mb-0 fw-bold text-main" id="acc-kpi-revenue">&mdash;</h5>
           </div>
         </div>
@@ -50,7 +50,7 @@
       <div class="col-6 col-lg-3">
         <div class="card premium-card border-0 rounded-3 h-100" style="border-left:3px solid var(--danger) !important;">
           <div class="card-body p-3">
-            <div class="small fw-bold text-uppercase mb-1 text-danger" style="font-size:.7rem;letter-spacing:.04em;">Paid out (MTD)</div>
+            <div class="small fw-bold text-uppercase mb-1 text-danger" style="font-size:var(--fs-2xs);letter-spacing:.04em;">Paid out (MTD)</div>
             <h5 class="mb-0 fw-bold text-main" id="acc-kpi-expense">&mdash;</h5>
           </div>
         </div>
@@ -58,18 +58,18 @@
       <div class="col-6 col-lg-3">
         <div class="card premium-card border-0 rounded-3 h-100" style="border-left:3px solid var(--info) !important;">
           <div class="card-body p-3">
-            <div class="small fw-bold text-uppercase mb-1 text-info" style="font-size:.7rem;letter-spacing:.04em;">Cash in drawers</div>
+            <div class="small fw-bold text-uppercase mb-1 text-info" style="font-size:var(--fs-2xs);letter-spacing:.04em;">Cash in drawers</div>
             <h5 class="mb-0 fw-bold text-main" id="acc-kpi-cash">&mdash;</h5>
             <!-- The three tills, individually. One clinic-wide cash figure
                  tells nobody which drawer to go and count. -->
-            <div class="small mt-1" id="acc-kpi-cash-split" style="font-size:.68rem;line-height:1.5;"></div>
+            <div class="small mt-1" id="acc-kpi-cash-split" style="font-size:var(--fs-2xs);line-height:1.5;"></div>
           </div>
         </div>
       </div>
       <div class="col-6 col-lg-3">
         <div class="card premium-card border-0 rounded-3 h-100" style="border-left:3px solid var(--warning) !important;">
           <div class="card-body p-3">
-            <div class="small fw-bold text-uppercase mb-1 text-warning" style="font-size:.7rem;letter-spacing:.04em;">Net (MTD)</div>
+            <div class="small fw-bold text-uppercase mb-1 text-warning" style="font-size:var(--fs-2xs);letter-spacing:.04em;">Net (MTD)</div>
             <h5 class="mb-0 fw-bold text-main" id="acc-kpi-net">&mdash;</h5>
           </div>
         </div>
@@ -98,7 +98,7 @@
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openAccountsDashboard()">
             <i class="fas fa-chart-pie fa-2x mb-3 text-primary"></i>
             <h6 class="text-white fw-bold m-0">Accounts Dashboard</h6>
-            <span class="text-muted" style="font-size:.72rem;">Overall &middot; Monthly &middot; Day</span>
+            <span class="text-muted" style="font-size:var(--fs-xs);">Overall &middot; Monthly &middot; Day</span>
           </div>
         </div>
 
@@ -106,7 +106,7 @@
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchAccountsPage('workspace-accounts-ledger')">
             <i class="fas fa-book-open fa-2x mb-3 text-primary"></i>
             <h6 class="text-white fw-bold m-0">Master Ledger</h6>
-            <span class="text-muted" style="font-size:.72rem;">Every transaction</span>
+            <span class="text-muted" style="font-size:var(--fs-xs);">Every transaction</span>
           </div>
         </div>
 
@@ -122,7 +122,7 @@
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchAccountsPage('workspace-accounts-payables')">
             <i class="fas fa-file-invoice-dollar fa-2x mb-3 text-danger"></i>
             <h6 class="text-white fw-bold m-0">Payables</h6>
-            <span class="text-muted" style="font-size:.72rem;">Vendor payments</span>
+            <span class="text-muted" style="font-size:var(--fs-xs);">Vendor payments</span>
           </div>
         </div>
 
@@ -138,7 +138,7 @@
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchAccountsPage('workspace-accounts-tax')">
             <i class="fas fa-landmark fa-2x mb-3 text-light"></i>
             <h6 class="text-white fw-bold m-0">Tax &amp; Audit</h6>
-            <span class="text-muted" style="font-size:.72rem;">GST &amp; compliance</span>
+            <span class="text-muted" style="font-size:var(--fs-xs);">GST &amp; compliance</span>
           </div>
         </div>
     </div>
@@ -169,7 +169,7 @@
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="openIpTab()">
             <i class="fas fa-bed-pulse fa-2x mb-3" style="color: var(--violet-fg);"></i>
             <h6 class="text-white fw-bold m-0">1 &middot; Running IP Tab</h6>
-            <span class="text-muted" style="font-size:.72rem;">
+            <span class="text-muted" style="font-size:var(--fs-xs);">
               While the patient is on the ward. Charges accrue here as the
               pharmacy, the lab and the ward post them.<br>
               <strong class="text-white-force">Reception or accounts</strong>
@@ -184,7 +184,7 @@
                  meant. This one is the money. -->
             <i class="fas fa-procedures fa-2x mb-3 text-warning"></i>
             <h6 class="text-white fw-bold m-0">2 &middot; Discharge Settlement</h6>
-            <span class="text-muted" style="font-size:.72rem;">
+            <span class="text-muted" style="font-size:var(--fs-xs);">
               Once the clinical discharge is signed. Caps the package, applies
               the discount and the advance, and closes the tab.<br>
               <strong class="text-white-force">Accounts only</strong>
@@ -197,7 +197,7 @@
           <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('tab-admin-billing')">
             <i class="fas fa-file-invoice-dollar fa-2x mb-3 text-success"></i>
             <h6 class="text-white fw-bold m-0">3 &middot; Hospital Billing</h6>
-            <span class="text-muted" style="font-size:.72rem;">
+            <span class="text-muted" style="font-size:var(--fs-xs);">
               The invoice the patient is handed, and the receipt. Also the
               route for an outpatient bill that never had a tab.<br>
               <strong class="text-white-force">Reception or accounts</strong>

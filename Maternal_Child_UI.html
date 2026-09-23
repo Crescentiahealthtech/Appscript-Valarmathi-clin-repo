@@ -35,19 +35,19 @@
   #cresc-mc .mc-head { padding: 14px 18px; border-bottom: 1px solid var(--border-color);
                        display: flex; align-items: center; gap: 10px; }
   #cresc-mc .mc-body { padding: 16px 18px; }
-  #cresc-mc label { font-size: .68rem; text-transform: uppercase; letter-spacing: .4px;
+  #cresc-mc label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .4px;
                     color: var(--text-muted); font-weight: 600; margin-bottom: 2px;
                     display: block; }
   #cresc-mc input, #cresc-mc select, #cresc-mc textarea {
     background: var(--bg-input) !important; color: var(--text-main) !important;
     border: 1px solid var(--border-color) !important; border-radius: 6px;
-    box-shadow: none !important; font-size: .85rem; padding: 6px 8px; width: 100%; }
-  #cresc-mc .mc-note { font-size: .74rem; color: var(--text-muted); line-height: 1.5; }
+    box-shadow: none !important; font-size: var(--fs-sm); padding: 6px 8px; width: 100%; }
+  #cresc-mc .mc-note { font-size: var(--fs-xs); color: var(--text-muted); line-height: 1.5; }
   #cresc-mc .mc-row { display: flex; justify-content: space-between; align-items: center;
                       gap: 10px; padding: 6px 0;
                       border-bottom: 1px solid var(--border-color); }
   #cresc-mc .mc-row:last-child { border-bottom: 0; }
-  #cresc-mc .mc-pill { font-size: .66rem; font-weight: 700; padding: 2px 8px;
+  #cresc-mc .mc-pill { font-size: var(--fs-2xs); font-weight: 700; padding: 2px 8px;
                        border-radius: 999px; text-transform: uppercase;
                        letter-spacing: .4px; white-space: nowrap; }
   #cresc-mc .mc-ok   { background: var(--success-bg); color: var(--success-fg); }
@@ -62,7 +62,7 @@
   <div class="mc-sheet">
     <div class="mc-head">
       <i class="fa-solid fa-notes-medical" style="color: var(--accent-fg);"></i>
-      <strong id="mc-title" style="color: var(--text-main); font-size: .95rem;">Card</strong>
+      <strong id="mc-title" style="color: var(--text-main); font-size: var(--fs-md);">Card</strong>
       <span class="mc-note ms-2" id="mc-who"></span>
       <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="CrescMC.close()">
         <i class="fa-solid fa-xmark"></i>

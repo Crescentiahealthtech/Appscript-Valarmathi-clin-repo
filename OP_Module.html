@@ -5,32 +5,32 @@
   .hd-workspace { background-color: var(--bg-main) !important; color: var(--text-main); }
   .hd-panel { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.05); }
 
-  .hd-panel-title { color: var(--accent-fg); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
+  .hd-panel-title { color: var(--accent-fg); font-size: var(--fs-sm); font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
   .hd-panel-title:hover { color: var(--accent-purple); }
-  .hd-label { font-size: 0.7rem; color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
+  .hd-label { font-size: var(--fs-2xs); color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
 
-  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: 0.75rem; padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
+  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: var(--fs-xs); padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
   .hd-input:focus { border-color: var(--accent-purple) !important; outline: none; box-shadow: 0 0 0 2px var(--accent-glow, rgba(99, 91, 255, 0.2)); }
   .hd-input:disabled { background-color: var(--bg-card) !important; color: var(--text-muted) !important; cursor: not-allowed; opacity: 0.7; }
 
   .table-tight td, .table-tight th { padding: 6px 4px !important; vertical-align: middle; border-bottom: 1px solid var(--border-color); background-color: transparent !important; color: var(--text-main);}
-  .table-tight th { font-size: 0.7rem; color: var(--text-label); text-transform: uppercase; }
+  .table-tight th { font-size: var(--fs-2xs); color: var(--text-label); text-transform: uppercase; }
 
   .bg-abnormal-high { background-color: var(--danger-bg, var(--danger-bg)) !important; border: 1px solid var(--danger) !important; color: var(--danger-fg) !important; }
   .bg-abnormal-low { background-color: var(--info-bg, var(--info-bg)) !important; border: 1px solid var(--info) !important; color: var(--info-fg) !important; }
 
   .dial-trigger { cursor: pointer; text-align: center; font-weight: bold; }
   .dial-trigger:hover { background-color: var(--accent-glow, var(--accent-glow)) !important; }
-  .dial-btn { font-size: 0.75rem; font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
+  .dial-btn { font-size: var(--fs-xs); font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
   .dial-btn:active { transform: scale(0.95); }
 
   .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card); border: 1px solid var(--border-color); width: 100%; max-height: 220px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.4); }
-  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
+  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
   .autocomplete-items div strong { color: var(--accent-fg); }
   .autocomplete-items div:hover { background-color: var(--border-hover); }
 
   .wnl-group { background: var(--bg-input); border-radius: 999px; display: inline-flex; border: 1px solid var(--border-color); overflow: hidden; }
-  .wnl-btn { padding: 4px 14px; font-size: 0.65rem; font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
+  .wnl-btn { padding: 4px 14px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
   .btn-check:checked + .wnl-btn-success { background-color: var(--success-solid); color: var(--text-on-accent); }
   .btn-check:checked + .wnl-btn-danger { background-color: var(--danger); color: var(--text-on-accent); }
   .wnl-group button.wnl-btn:hover { background-color: var(--surface-hover); color: var(--text-main); }
@@ -42,7 +42,7 @@
   /* ========================================= */
   /* SAFETY BAR — always visible               */
   /* ========================================= */
-  .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
+  .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: var(--fs-xs); }
   .op-safety-danger { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); }
   .op-safety-warn   { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning-fg); }
   /* The prescription line a safety alert is about. Set by markRxRows(). */
@@ -56,9 +56,9 @@
   /* ========================================= */
   .op-assist { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; }
   .op-assist-sec + .op-assist-sec { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
-  .op-assist-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
+  .op-assist-head { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
 
-  .op-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; transition: 0.15s; }
+  .op-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: var(--fs-2xs); cursor: pointer; transition: 0.15s; }
   .op-chip:hover { border-color: var(--accent-purple); }
   .op-chip .op-chip-add { color: var(--success-fg); font-weight: 700; }
   .op-chip-muted { color: var(--text-muted); }
@@ -69,17 +69,17 @@
      the assist panel that was never reliable, and a dropdown you cannot see is
      indistinguishable from a search that found nothing. */
   .op-assist-results { margin-top: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; max-height: 260px; overflow-y: auto; background: var(--bg-input); }
-  .op-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
+  .op-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
   .op-assist-hit:last-child { border-bottom: none; }
   .op-assist-hit:hover { background: var(--border-hover); }
-  .op-assist-empty { padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted); }
+  .op-assist-empty { padding: 8px 10px; font-size: var(--fs-xs); color: var(--text-muted); }
 
   /* Kind colours — the same hue identifies a kind in the result list, in the
      "most used" chips and on the preview card. */
   .op-kind-TPL { border-left-color: var(--accent-purple); }
   .op-kind-BND { border-left-color: var(--success); }
   .op-kind-LAB { border-left-color: var(--warning); }
-  .op-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .op-tag { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
   .op-tag-TPL { background: var(--accent-glow); color: var(--accent-fg); border: 1px solid var(--accent-purple); }
   .op-tag-BND { background: var(--success-bg); color: var(--success-fg); border: 1px solid var(--success); }
   .op-tag-LAB { background: var(--warning-bg); color: var(--warning-fg); border: 1px solid var(--warning); }
@@ -94,13 +94,13 @@
   .op-scope-SEED     { background: var(--surface-hover); color: var(--text-muted); }
   .op-scope-PRESET   { background: var(--info-bg); color: var(--info-fg); }
 
-  .op-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.73rem; }
+  .op-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: var(--fs-xs); }
   .op-suggest-strip { display: flex; flex-wrap: wrap; gap: 6px; }
-  .op-evidence { font-size: 0.6rem; color: var(--text-muted); }
-  .op-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
-  .op-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
+  .op-evidence { font-size: var(--fs-2xs); color: var(--text-muted); }
+  .op-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; }
+  .op-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); cursor: pointer; }
   .op-taper-tag { font-size: 0.55rem; background: var(--warning-bg); color: var(--warning-fg); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
-  .op-peds-hint { font-size: 0.6rem; color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
+  .op-peds-hint { font-size: var(--fs-2xs); color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
 </style>
 
 <div id="emr-workspace-op-consult" class="d-none hd-workspace mt-3 app-view h-100 flex-column px-2">
@@ -136,7 +136,7 @@
 
     <!-- Row 2: attribution + actions -->
     <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="hd-label m-0" style="font-size:.68rem;">Consulting doctor</span>
+      <span class="hd-label m-0" style="font-size:var(--fs-2xs);">Consulting doctor</span>
       <select id="op-doctor-select" class="form-select form-select-sm text-white-force" style="width: 210px;" onchange="onConsultDoctorChanged()">
         <option value="">Select doctor</option>
       </select>
@@ -231,7 +231,7 @@
 
             <label class="hd-label d-flex justify-content-between align-items-center">
               <span>Clinical summary</span>
-              <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.65rem;"
+              <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:var(--fs-2xs);"
                       onclick="fillReferralSummary()"><i class="fa-solid fa-wand-magic-sparkles"></i> From this consult</button>
             </label>
             <textarea class="hd-input" id="ref-summary" rows="4"
@@ -286,14 +286,14 @@
     <div id="op-assist-dx-section" class="op-assist-sec d-none">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="op-assist-head m-0" id="op-assist-dx-head">Treatment assist</div>
-        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:0.7rem;" id="btn-add-selected" onclick="addSelectedAssist()">Add selected</button>
+        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:var(--fs-2xs);" id="btn-add-selected" onclick="addSelectedAssist()">Add selected</button>
       </div>
       <div id="op-assist-body"></div>
     </div>
 
     <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top border-secondary">
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveTemplateModal()">Save as template</button>
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveBundleModal()">Save Rx as bundle</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="openSaveTemplateModal()">Save as template</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="openSaveBundleModal()">Save Rx as bundle</button>
     </div>
   </div>
 
@@ -305,7 +305,7 @@
         <div class="mb-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">Chief Complaints</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="addOPDynamicRow('op-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="addOPDynamicRow('op-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="op-cc-tbody"></tbody></table></div>
           <div id="op-workup-hint" class="mt-2"></div>
@@ -313,7 +313,7 @@
         <div class="border-top border-secondary pt-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">History / Comorbidities</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="addOPDynamicRow('op-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="addOPDynamicRow('op-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="op-hx-tbody"></tbody></table></div>
         </div>
@@ -575,7 +575,7 @@
       <div class="hd-panel mb-3 py-2">
           <div class="hd-panel-title border-0 m-0 mb-3">Pathology / Lab Orders</div>
           <div class="d-flex flex-column gap-2 mb-3">
-              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:0.75rem;" data-bs-toggle="modal" data-bs-target="#opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
+              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:var(--fs-xs);" data-bs-toggle="modal" data-bs-target="#opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
           </div>
           <label class="hd-label m-0">Advise Future Labs</label>
           <input type="text" class="hd-input" id="op-future-labs" placeholder="e.g., Fasting Sugar...">
@@ -593,7 +593,7 @@
       <div class="hd-panel mb-3 py-2" style="border-color: var(--info) !important;">
         <div class="hd-panel-title d-flex justify-content-between align-items-center m-0 border-0">
             <span class="text-info">External Lab Results</span>
-            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.7rem;" onclick="addOPLabResultRow()"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:var(--fs-2xs);" onclick="addOPLabResultRow()"><i class="fa-solid fa-plus"></i></button>
         </div>
         <div class="table-responsive mt-2">
             <table class="table table-borderless table-tight m-0">

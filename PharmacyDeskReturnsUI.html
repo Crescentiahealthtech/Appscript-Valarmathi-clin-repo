@@ -31,24 +31,24 @@
     #pharmacy-desk-workspace input:focus,
     #pharmacy-desk-workspace select:focus { border-color: var(--accent-purple) !important; }
     #pharmacy-desk-workspace .phd-label {
-      font-size: 0.7rem; color: var(--text-muted); font-weight: 600;
+      font-size: var(--fs-2xs); color: var(--text-muted); font-weight: 600;
       text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; display: block;
     }
     .phd-table { width: 100%; border-collapse: collapse; }
     .phd-table th {
-      color: var(--text-label); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px;
+      color: var(--text-label); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.4px;
       padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left;
     }
-    .phd-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.85rem; vertical-align: middle; }
-    .phd-table input { width: 100%; font-size: 0.85rem; padding: 0.3rem 0.4rem; text-align: center; }
-    .phd-pill { font-size: 0.62rem; font-weight: 700; padding: 2px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .phd-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: var(--fs-sm); vertical-align: middle; }
+    .phd-table input { width: 100%; font-size: var(--fs-sm); padding: 0.3rem 0.4rem; text-align: center; }
+    .phd-pill { font-size: var(--fs-2xs); font-weight: 700; padding: 2px 8px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.4px; }
     .phd-pill.active   { background: var(--success-bg); color: var(--success-fg); }
     .phd-pill.partial  { background: var(--warning-bg); color: var(--warning-fg); }
     .phd-pill.returned { background: var(--danger-bg); color: var(--danger-fg); }
     .phd-pill.pending  { background: var(--warning-bg); color: var(--warning-fg); }
     .phd-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 18px; }
     .phd-kpi-val { font-size: 1.5rem; font-weight: 800; color: var(--text-main); }
-    .phd-kpi-lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    .phd-kpi-lbl { font-size: var(--fs-2xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
     .phd-refund-total { font-size: 1.6rem; font-weight: 800; color: var(--danger-fg); }
 
     #phd-print { display: none; }
@@ -77,7 +77,7 @@
           <span>2. Choose Quantities to Return</span>
           <button class="btn btn-sm btn-outline-danger" onclick="phrCancelAll()"><i class="fa-solid fa-ban"></i> Cancel Entire Bill</button>
         </div>
-        <div id="phrHeaderInfo" class="mb-2" style="font-size: 0.85rem; color: var(--text-muted);"></div>
+        <div id="phrHeaderInfo" class="mb-2" style="font-size: var(--fs-sm); color: var(--text-muted);"></div>
         <div class="table-responsive">
           <table class="phd-table" id="phrTable">
             <thead>
@@ -108,7 +108,7 @@
                   <option value="CARD">CARD</option>
                 </select>
                 <input type="text" id="phrRefundRef" class="hd-input w-100 p-2 mt-2 d-none" placeholder="UPI / Card refund reference">
-                <div id="phrCreditNote" class="mt-2 d-none" style="font-size:0.75rem;color:var(--warning-fg);">
+                <div id="phrCreditNote" class="mt-2 d-none" style="font-size:var(--fs-xs);color:var(--warning-fg);">
                   Unsettled credit bill — this return reduces the outstanding amount (no cash refund).
                 </div>
               </div>
@@ -125,7 +125,7 @@
         <div class="col-md-4">
           <div class="hd-panel h-100">
             <div class="d-flex justify-content-between mb-1"><span style="color:var(--text-muted);">Returned Gross</span><span id="phrSumGross">₹ 0.00</span></div>
-            <div class="d-flex justify-content-between mb-2"><span style="color:var(--text-muted);font-size:0.8rem;">Incl. GST reversed</span><span id="phrSumGst" class="text-warning" style="font-size:0.8rem;">₹ 0.00</span></div>
+            <div class="d-flex justify-content-between mb-2"><span style="color:var(--text-muted);font-size:var(--fs-sm);">Incl. GST reversed</span><span id="phrSumGst" class="text-warning" style="font-size:var(--fs-sm);">₹ 0.00</span></div>
             <hr style="border-color: var(--border-color);">
             <div class="d-flex justify-content-between align-items-center"><span style="font-weight:bold;color:var(--text-muted);">TOTAL REFUND</span><span id="phrSumRefund" class="phd-refund-total">₹ 0.00</span></div>
           </div>
@@ -153,8 +153,8 @@
         <div class="col-md-3"><div class="phd-card"><div class="phd-kpi-lbl">Net GST Payable</div><div class="phd-kpi-val" style="color:var(--warning-fg);" id="fNetGst">₹0</div></div></div>
       </div>
       <div class="row g-3">
-        <div class="col-md-6"><div class="phd-card"><div class="hd-panel-title">Sales</div><div id="fSales" style="font-size:0.88rem;"></div></div></div>
-        <div class="col-md-6"><div class="phd-card"><div class="hd-panel-title">Returns &amp; Credit</div><div id="fReturns" style="font-size:0.88rem;"></div></div></div>
+        <div class="col-md-6"><div class="phd-card"><div class="hd-panel-title">Sales</div><div id="fSales" style="font-size:var(--fs-base);"></div></div></div>
+        <div class="col-md-6"><div class="phd-card"><div class="hd-panel-title">Returns &amp; Credit</div><div id="fReturns" style="font-size:var(--fs-base);"></div></div></div>
       </div>
     </div>
   </div>

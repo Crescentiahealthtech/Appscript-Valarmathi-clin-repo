@@ -5,32 +5,32 @@
   .hd-workspace { background-color: var(--bg-main) !important; color: var(--text-main); }
   .hd-panel { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.05); }
 
-  .hd-panel-title { color: var(--accent-fg); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
+  .hd-panel-title { color: var(--accent-fg); font-size: var(--fs-sm); font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
   .hd-panel-title:hover { color: var(--accent-purple); }
-  .hd-label { font-size: 0.7rem; color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
+  .hd-label { font-size: var(--fs-2xs); color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
 
-  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: 0.75rem; padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
+  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: var(--fs-xs); padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
   .hd-input:focus { border-color: var(--accent-purple) !important; outline: none; box-shadow: 0 0 0 2px var(--accent-glow, rgba(99, 91, 255, 0.2)); }
   .hd-input:disabled { background-color: var(--bg-card) !important; color: var(--text-muted) !important; cursor: not-allowed; opacity: 0.7; }
 
   .table-tight td, .table-tight th { padding: 6px 4px !important; vertical-align: middle; border-bottom: 1px solid var(--border-color); background-color: transparent !important; color: var(--text-main);}
-  .table-tight th { font-size: 0.7rem; color: var(--text-label); text-transform: uppercase; }
+  .table-tight th { font-size: var(--fs-2xs); color: var(--text-label); text-transform: uppercase; }
 
   .bg-abnormal-high { background-color: var(--danger-bg, var(--danger-bg)) !important; border: 1px solid var(--danger) !important; color: var(--danger-fg) !important; }
   .bg-abnormal-low { background-color: var(--info-bg, var(--info-bg)) !important; border: 1px solid var(--info) !important; color: var(--info-fg) !important; }
 
   .dial-trigger { cursor: pointer; text-align: center; font-weight: bold; }
   .dial-trigger:hover { background-color: var(--accent-glow, var(--accent-glow)) !important; }
-  .dial-btn { font-size: 0.75rem; font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
+  .dial-btn { font-size: var(--fs-xs); font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
   .dial-btn:active { transform: scale(0.95); }
 
   .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card); border: 1px solid var(--border-color); width: 100%; max-height: 220px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.4); }
-  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
+  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
   .autocomplete-items div strong { color: var(--accent-fg); }
   .autocomplete-items div:hover { background-color: var(--border-hover); }
 
   .wnl-group { background: var(--bg-input); border-radius: 999px; display: inline-flex; border: 1px solid var(--border-color); overflow: hidden; }
-  .wnl-btn { padding: 4px 14px; font-size: 0.65rem; font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
+  .wnl-btn { padding: 4px 14px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
   .btn-check:checked + .wnl-btn-success { background-color: var(--success-solid); color: var(--text-on-accent); }
   .btn-check:checked + .wnl-btn-danger { background-color: var(--danger); color: var(--text-on-accent); }
   .wnl-group button.wnl-btn:hover { background-color: var(--surface-hover); color: var(--text-main); }
@@ -42,7 +42,7 @@
   /* ========================================= */
   /* SAFETY BAR — always visible               */
   /* ========================================= */
-  .ipc-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
+  .ipc-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: var(--fs-xs); }
   .ipc-safety-danger { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); }
   .ipc-safety-warn   { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning-fg); }
   .ipc-safety-info   { background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-muted); }
@@ -53,9 +53,9 @@
   /* ========================================= */
   .ipc-assist { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; }
   .ipc-assist-sec + .ipc-assist-sec { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
-  .ipc-assist-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
+  .ipc-assist-head { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
 
-  .ipc-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; transition: 0.15s; }
+  .ipc-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: var(--fs-2xs); cursor: pointer; transition: 0.15s; }
   .ipc-chip:hover { border-color: var(--accent-purple); }
   .ipc-chip .ipc-chip-add { color: var(--success-fg); font-weight: 700; }
   .ipc-chip-muted { color: var(--text-muted); }
@@ -66,17 +66,17 @@
      the assist panel that was never reliable, and a dropdown you cannot see is
      indistinguishable from a search that found nothing. */
   .ipc-assist-results { margin-top: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; max-height: 260px; overflow-y: auto; background: var(--bg-input); }
-  .ipc-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
+  .ipc-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
   .ipc-assist-hit:last-child { border-bottom: none; }
   .ipc-assist-hit:hover { background: var(--border-hover); }
-  .ipc-assist-empty { padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted); }
+  .ipc-assist-empty { padding: 8px 10px; font-size: var(--fs-xs); color: var(--text-muted); }
 
   /* Kind colours — the same hue identifies a kind in the result list, in the
      "most used" chips and on the preview card. */
   .ipc-kind-TPL { border-left-color: var(--accent-purple); }
   .ipc-kind-BND { border-left-color: var(--success); }
   .ipc-kind-LAB { border-left-color: var(--warning); }
-  .ipc-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .ipc-tag { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
   .ipc-tag-TPL { background: var(--accent-glow); color: var(--accent-fg); border: 1px solid var(--accent-purple); }
   .ipc-tag-BND { background: var(--success-bg); color: var(--success-fg); border: 1px solid var(--success); }
   .ipc-tag-LAB { background: var(--warning-bg); color: var(--warning-fg); border: 1px solid var(--warning); }
@@ -91,13 +91,13 @@
   .ipc-scope-SEED     { background: var(--surface-hover); color: var(--text-muted); }
   .ipc-scope-PRESET   { background: var(--info-bg); color: var(--info-fg); }
 
-  .ipc-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.73rem; }
+  .ipc-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: var(--fs-xs); }
   .ipc-suggest-strip { display: flex; flex-wrap: wrap; gap: 6px; }
-  .ipc-evidence { font-size: 0.6rem; color: var(--text-muted); }
-  .ipc-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
-  .ipc-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
+  .ipc-evidence { font-size: var(--fs-2xs); color: var(--text-muted); }
+  .ipc-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; }
+  .ipc-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); cursor: pointer; }
   .ipc-taper-tag { font-size: 0.55rem; background: var(--warning-bg); color: var(--warning-fg); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
-  .ipc-peds-hint { font-size: 0.6rem; color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
+  .ipc-peds-hint { font-size: var(--fs-2xs); color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
 
   /* ========================================= */
   /* IP CASESHEET HEADER                       */
@@ -117,10 +117,10 @@
   #emr-workspace-ip-casesheet .ipc-hdr-row .badge,
   #emr-workspace-ip-casesheet .ipc-hdr-row .btn,
   #emr-workspace-ip-casesheet .ipc-hdr-row .form-select { padding-top: .2rem; padding-bottom: .2rem; }
-  #emr-workspace-ip-casesheet .ipc-hdr-row .badge { font-size: .68rem; }
+  #emr-workspace-ip-casesheet .ipc-hdr-row .badge { font-size: var(--fs-2xs); }
   #emr-workspace-ip-casesheet .ipc-hdr-row .hd-label { white-space: nowrap; }
   #emr-workspace-ip-casesheet > .mb-3.pb-2 { margin-bottom: .6rem !important; padding-bottom: .4rem !important; }
-  .ipc-care-chip { font-size: .62rem !important; padding: .12rem .4rem !important; }
+  .ipc-care-chip { font-size: var(--fs-2xs) !important; padding: .12rem .4rem !important; }
 
   /* Row 1 clears the floating "signed in as" badge the shell overlays. */
   #emr-workspace-ip-casesheet .ipc-hdr-row:first-of-type .ipc-hdr-right { padding-right: 14rem; }
@@ -160,7 +160,7 @@
 
       <div class="ipc-hdr-ident">
         <span class="fw-bold text-truncate" id="ipc-hd-pat-name"
-              style="color: var(--text-main); font-size: 1rem;">Select a bed</span>
+              style="color: var(--text-main); font-size: var(--fs-md);">Select a bed</span>
         <span class="badge bg-dark border border-secondary text-light px-2 py-1 flex-shrink-0" id="ipc-hd-pat-id">ID: --</span>
         <span class="badge bg-danger px-2 py-1 flex-shrink-0" id="ipc-hd-bed">Bed: --</span>
         <span class="text-warning fw-bold small flex-shrink-0" id="ipc-hd-pat-demo">-- Y | -</span>
@@ -173,7 +173,7 @@
              Lab module and searching for the patient by name. -->
         <button class="btn btn-sm btn-outline-info py-1 px-2 flex-shrink-0" onclick="crescLabPeek(window.currentPatientId, document.getElementById('ipc-hd-pat-name').textContent)" title="This patient's verified lab results, without leaving this screen"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
         <button class="btn btn-sm btn-outline-info py-1 px-2 flex-shrink-0" onclick="window.crescExternalLabOpen && crescExternalLabOpen({ patientId: window.currentPatientId, ipNumber: window.ipcCurrentIP, name: document.getElementById('ipc-hd-pat-name').textContent })" title="Enter values from an outside lab report"><i class="fa-solid fa-file-circle-plus me-1"></i>Outside lab</button>
-        <span class="text-muted" style="font-size:.7rem;">
+        <span class="text-muted" style="font-size:var(--fs-2xs);">
           <span id="ipc-hd-current-date" class="text-warning fw-bold"></span>
         </span>
       </div>
@@ -182,17 +182,17 @@
     <!-- Row 2: attribution, care team, actions -->
     <div class="ipc-hdr-row">
       <div class="ipc-hdr-left">
-        <span class="hd-label m-0 flex-shrink-0" style="font-size:.68rem;">Signing as</span>
+        <span class="hd-label m-0 flex-shrink-0" style="font-size:var(--fs-2xs);">Signing as</span>
         <span class="badge bg-dark border border-info text-info px-2 py-1 text-truncate" id="ipc-signing-as"
-              style="font-size:.72rem; max-width: 200px;">
+              style="font-size:var(--fs-xs); max-width: 200px;">
           <i class="fa-solid fa-id-badge me-1"></i>--
         </span>
         <!-- Administrators record a casesheet for a named doctor. Hidden for
              a doctor, who signs as themselves. -->
         <span class="d-none align-items-center gap-1 flex-shrink-0" id="ipc-actas-wrap">
-          <span class="hd-label m-0" style="font-size:.68rem;">Acting as</span>
+          <span class="hd-label m-0" style="font-size:var(--fs-2xs);">Acting as</span>
           <select id="ipc-actas" class="form-select form-select-sm bg-dark text-white border-secondary"
-                  style="width:180px; font-size:.72rem;" onchange="ipcSetActingDoctor(this.value)"></select>
+                  style="width:180px; font-size:var(--fs-xs);" onchange="ipcSetActingDoctor(this.value)"></select>
         </span>
         <select id="ipc-triage-status" class="form-select form-select-sm bg-dark text-white fw-bold border-secondary flex-shrink-0"
                 style="width: 118px;" onchange="ipcUpdateTriageUI()">
@@ -203,7 +203,7 @@
       </div>
 
       <div class="ipc-hdr-ident">
-        <span class="hd-label m-0 flex-shrink-0" style="font-size:.68rem;">
+        <span class="hd-label m-0 flex-shrink-0" style="font-size:var(--fs-2xs);">
           <i class="fa-solid fa-user-group me-1"></i>Care team
         </span>
         <span id="ipc-care-team-chips" class="d-flex gap-1 flex-wrap"></span>
@@ -250,14 +250,14 @@
     <div id="ipc-assist-dx-section" class="ipc-assist-sec d-none">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="ipc-assist-head m-0" id="ipc-assist-dx-head">Treatment assist</div>
-        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:0.7rem;" id="ipc-btn-add-selected" onclick="ipcAddSelectedAssist()">Add selected</button>
+        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:var(--fs-2xs);" id="ipc-btn-add-selected" onclick="ipcAddSelectedAssist()">Add selected</button>
       </div>
       <div id="ipc-assist-body"></div>
     </div>
 
     <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top border-secondary">
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="ipcOpenSaveTemplateModal()">Save as template</button>
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="ipcOpenSaveBundleModal()">Save Rx as bundle</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcOpenSaveTemplateModal()">Save as template</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcOpenSaveBundleModal()">Save Rx as bundle</button>
     </div>
   </div>
 
@@ -272,7 +272,7 @@
         <div class="mb-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">Chief Complaints</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="ipcAddIPCDynamicRow('ipc-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcAddIPCDynamicRow('ipc-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="ipc-cc-tbody"></tbody></table></div>
           <div id="ipc-workup-hint" class="mt-2"></div>
@@ -280,7 +280,7 @@
         <div class="border-top border-secondary pt-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">History / Comorbidities</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="ipcAddIPCDynamicRow('ipc-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcAddIPCDynamicRow('ipc-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="ipc-hx-tbody"></tbody></table></div>
         </div>
@@ -482,7 +482,7 @@
       <div class="hd-panel mb-3 py-2">
           <div class="hd-panel-title border-0 m-0 mb-3">Pathology / Lab Orders</div>
           <div class="d-flex flex-column gap-2 mb-3">
-              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:0.75rem;" data-bs-toggle="modal" data-bs-target="#ipc-opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
+              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:var(--fs-xs);" data-bs-toggle="modal" data-bs-target="#ipc-opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
           </div>
           <label class="hd-label m-0">Advise Future Labs</label>
           <input type="text" class="hd-input" id="ipc-future-labs" placeholder="e.g., Fasting Sugar...">
@@ -500,7 +500,7 @@
       <div class="hd-panel mb-3 py-2" style="border-color: var(--info) !important;">
         <div class="hd-panel-title d-flex justify-content-between align-items-center m-0 border-0">
             <span class="text-info">External Lab Results</span>
-            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.7rem;" onclick="ipcAddIPCLabResultRow()"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcAddIPCLabResultRow()"><i class="fa-solid fa-plus"></i></button>
         </div>
         <div class="table-responsive mt-2">
             <table class="table table-borderless table-tight m-0">

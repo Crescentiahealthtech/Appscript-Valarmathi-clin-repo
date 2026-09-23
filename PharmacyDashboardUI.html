@@ -29,14 +29,14 @@
       background-color: var(--bg-input) !important; color: var(--text-main) !important;
       border: 1px solid var(--border-color) !important; border-radius: 6px; box-shadow: none !important;
     }
-    #pharmacy-dashboard-workspace .pdash-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; display: block; }
+    #pharmacy-dashboard-workspace .pdash-label { font-size: var(--fs-2xs); color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; display: block; }
     .pdash-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px 18px; }
     .pdash-kpi { font-size: 1.5rem; font-weight: 800; color: var(--text-main); }
-    .pdash-kpi-lbl { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    .pdash-kpi-lbl { font-size: var(--fs-2xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
     .pdash-table { width: 100%; border-collapse: collapse; }
-    .pdash-table th { color: var(--text-label); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left; }
-    .pdash-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 0.85rem; }
-    .pdash-pill { font-size: 0.62rem; font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; }
+    .pdash-table th { color: var(--text-label); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.4px; padding: 0.5rem; border-bottom: 1px solid var(--border-color); text-align: left; }
+    .pdash-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: var(--fs-sm); }
+    .pdash-pill { font-size: var(--fs-2xs); font-weight: 700; padding: 2px 7px; border-radius: 5px; text-transform: uppercase; }
     .pdash-pill.active { background: var(--success-bg); color: var(--success-fg); }
     .pdash-pill.partial { background: var(--warning-bg); color: var(--warning-fg); }
     .pdash-pill.returned { background: var(--danger-bg); color: var(--danger-fg); }
@@ -92,7 +92,7 @@
     </div>
 
     <div class="hd-panel">
-      <div class="hd-panel-title">Bills <span id="pdashListLabel" class="text-muted" style="font-size:0.72rem;font-weight:400;"></span></div>
+      <div class="hd-panel-title">Bills <span id="pdashListLabel" class="text-muted" style="font-size:var(--fs-xs);font-weight:400;"></span></div>
       <div class="table-responsive">
         <table class="pdash-table">
           <thead><tr><th>Invoice</th><th>Time</th><th>Patient</th><th>Mode</th><th>Status</th><th style="text-align:right;">Net (₹)</th><th style="text-align:right;">Refund (₹)</th><th></th></tr></thead>
@@ -113,7 +113,7 @@
       </div>
     </div>
     <div class="hd-panel">
-      <div class="hd-panel-title">Results <span id="phsCount" class="text-muted" style="font-size:0.72rem;font-weight:400;"></span></div>
+      <div class="hd-panel-title">Results <span id="phsCount" class="text-muted" style="font-size:var(--fs-xs);font-weight:400;"></span></div>
       <div class="table-responsive">
         <table class="pdash-table">
           <thead><tr><th>Invoice</th><th>Date</th><th>Patient</th><th>Mobile</th><th>Mode</th><th>Status</th><th style="text-align:right;">Net (₹)</th><th style="text-align:right;">Refund (₹)</th><th></th></tr></thead>
