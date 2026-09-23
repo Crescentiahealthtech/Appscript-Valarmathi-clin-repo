@@ -364,7 +364,7 @@ function saveRxBundle(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId);
+    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId, { purpose: "manage" });
     if (!w.ok) return { success: false, message: w.message };
 
     var name = dc_str_(payload.name);

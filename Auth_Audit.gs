@@ -133,6 +133,11 @@ function crescLogSignOut(token) {
     if (typeof revokeSession_ === 'function') {
       try { revokeSession_(token); } catch (e) {}
     }
+    // A visiting consultant's declaration ends with the sign-in it was made
+    // under, or the register says "still signed in" about somebody who left.
+    if (typeof dv_endForToken_ === 'function') {
+      try { dv_endForToken_(token, 'ENDED'); } catch (e) {}
+    }
     return { success: true };
   } catch (err) {
     return { success: false, message: err.message };

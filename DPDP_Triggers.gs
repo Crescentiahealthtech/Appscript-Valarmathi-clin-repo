@@ -130,6 +130,14 @@ function dpdpDailyMaintenance(e) {
   try { out.push('  legacy:   ' + dpdpExpireSharedLinks_(false)); }
   catch (e) { out.push('  legacy:   FAILED ' + e.message); }
 
+  // Before the purge: a visiting declaration is closed against its session
+  // row, and the purge is what deletes old rows.
+  try {
+    if (typeof dv_closeStale_ === 'function') {
+      out.push('  visiting: ' + dv_closeStale_() + ' declaration(s) closed after sign-in ended');
+    }
+  } catch (e) { out.push('  visiting: FAILED ' + e.message); }
+
   try {
     if (typeof purgeExpiredSessions_ === 'function') {
       out.push('  sessions: ' + purgeExpiredSessions_());

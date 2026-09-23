@@ -99,7 +99,7 @@ function saveDoctorSchedule(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId);
+    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId, { purpose: "manage" });
     if (!w.ok) return { success: false, message: w.message };
 
     var incoming = (payload && payload.rows) || [];
@@ -198,7 +198,7 @@ function addScheduleException(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId);
+    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId, { purpose: "manage" });
     if (!w.ok) return { success: false, message: w.message };
 
     var type = dc_upper_(payload.type) || "BLOCK";
@@ -318,7 +318,7 @@ function deleteScheduleException(exceptionId, sessionToken) {
     for (var i = 1; i < data.length; i++) {
       if (dc_upper_(data[i][0]) !== target) continue;
       var owner = dc_str_(data[i][2]);
-      var w = resolveWriteDoctor_(sessionToken, owner);
+      var w = resolveWriteDoctor_(sessionToken, owner, { purpose: "manage" });
       if (!w.ok) return { success: false, message: w.message };
       sh.deleteRow(i + 1);
       SpreadsheetApp.flush();

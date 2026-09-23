@@ -526,6 +526,16 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData, opts) {
     signature   = prof.signature;
     displayName = prof.name;
 
+    // The shared visiting login signs as whoever declared themselves on it at
+    // sign-in, never as the blank slot.
+    var own = ipc_visitingIdentity_(doctorId, sessionToken, true);
+    if (own === false) {
+      return fail("Enter your name and registration number in the visiting-consultant " +
+                  "box before recording (click the blue name chip at the top).",
+                  "VISITING_IDENTITY_REQUIRED");
+    }
+    if (own) { signature = own.signature; displayName = own.name; }
+
   } else if (IPC_ROLE_ACTS_AS.indexOf(role) !== -1 &&
              IPC_DOCTOR_AUTHORED_TYPES.indexOf(type) !== -1) {
     // An administrator authoring a doctor's note must name the doctor it
@@ -553,6 +563,17 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData, opts) {
     displayName   = actProf.name;
     onBehalf      = true;
     effectiveRole = "doctor";
+
+    // Recording FOR the visiting slot: the consultant who signed in on it
+    // declared their name and number then; the recorder is not asked again.
+    var theirs = ipc_visitingIdentity_(actAs, sessionToken, false);
+    if (theirs === false) {
+      return fail("No visiting consultant has signed in on " + actProf.name + " in the " +
+                  "last 24 hours, so there is nobody to sign this note as. Ask them to " +
+                  "sign in on the visiting login, or choose a named doctor.",
+                  "VISITING_IDENTITY_REQUIRED");
+    }
+    if (theirs) { signature = theirs.signature; displayName = theirs.name; }
 
   } else if (IPC_ROLE_ACTS_AS.indexOf(role) !== -1 && type === "NURSE") {
     // Nursing observations recorded by the administrator stay the
@@ -589,6 +610,21 @@ function resolveIPWrite_(sessionToken, ipNumber, roleType, noteData, opts) {
     mayPrescribe: (effectiveRole === "doctor" && !!doctorId &&
                    IPC_PRESCRIBING_TYPES.indexOf(type) !== -1)
   };
+}
+
+/**
+ * The identity a note for this doctor should carry when the doctor is the
+ * shared visiting slot.
+ *   null   not a visiting slot (use the Doctors row as before)
+ *   false  a visiting slot with nobody declared on it
+ *   {...}  the declared consultant (name, signature, regNo)
+ * `own` is true when the session writing IS the slot's login.
+ */
+function ipc_visitingIdentity_(doctorId, sessionToken, own) {
+  if (typeof dv_isVisitingSlot_ !== "function" || !dv_isVisitingSlot_(doctorId)) return null;
+  var ident = own ? dv_identityFor_(sessionToken)
+                  : (typeof dv_latestIdentityForSlot_ === "function" ? dv_latestIdentityForSlot_(doctorId) : null);
+  return (ident && ident.name) ? ident : false;
 }
 
 /** Read gate shared by every IP fetcher. */
@@ -670,12 +706,12 @@ function addIPCrossConsult(payload, sessionToken) {
     }
 
     var adm = ipc_admissionRow_(ip);
-    return addIPCareTeamMember({
+    return dc_addCareTeamMember_({
       ipNumber:  ip,
       patientId: adm ? adm.row[1] : "",
       doctorId:  dc_str_(payload.doctorId),
       teamRole:  dc_str_(payload.teamRole) || "CROSS_CONSULT"
-    }, sessionToken);
+    }, dc_validateSession_(sessionToken));
   } catch (e) {
     return { success: false, message: "Could not add cross-consult: " + e.message };
   }

@@ -1650,7 +1650,11 @@
               '<td class="label-bright">' + laEsc(r.specialty) + '</td>' +
               '<td class="label-bright" style="white-space:nowrap;">' + laEsc(r.declaredAt) + '</td>' +
               '<td class="label-bright" style="white-space:nowrap;">' +
-                (r.endedAt ? laEsc(r.endedAt) : '<span class="text-success">still signed in</span>') + '</td>' +
+                (live ? '<span class="text-success">still signed in</span>'
+                      : laEsc(r.endedAt || '') +
+                        '<div class="small">' + ({ ENDED: 'signed out', EXPIRED: 'session expired',
+                          SUPERSEDED: 're-declared' }[String(r.status || '').toUpperCase()] || '') + '</div>') +
+              '</td>' +
               '<td class="label-bright">' + laEsc(r.declaredBy) + '</td>' +
             '</tr>';
           }).join('') +
