@@ -21,6 +21,10 @@
       <button id="dash-login-audit-btn" class="btn btn-sm btn-outline-info shadow-sm d-none" onclick="openLoginAudit()">
         <i class="fa-solid fa-user-shield me-1"></i> Sign-in Audit
       </button>
+      <!-- Reminders, stock alerts, the owner's day summary and backups. -->
+      <button id="dash-ops-btn" class="btn btn-sm btn-outline-primary shadow-sm d-none" onclick="crescOpsOpen()">
+        <i class="fa-solid fa-gears me-1"></i> Operations
+      </button>
       <!-- Every audit trail — clinical, billing, lab, schedule — in one list,
            filtered by user, patient or action and exportable. The three
            sheets had no screen at all; this is admin.audit like the above. -->
@@ -1944,6 +1948,8 @@
         clearInterval(t);
         const b = document.getElementById('dash-login-audit-btn');
         if (b && window.crescCan && window.crescCan('admin.audit')) b.classList.remove('d-none');
+        const ob = document.getElementById('dash-ops-btn');
+        if (ob && window.crescCan && ['appointment.read', 'pharmacy.read', 'accounts.read', 'admin.config'].some(p => window.crescCan(p))) ob.classList.remove('d-none');
         const ab = document.getElementById('dash-audit-log-btn');
         if (ab && window.crescCan && window.crescCan('admin.audit')) ab.classList.remove('d-none');
         const sb = document.getElementById('dash-add-staff-btn');

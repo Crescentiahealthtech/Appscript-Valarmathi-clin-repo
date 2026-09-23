@@ -240,6 +240,7 @@ function learnTemplatesScoped_(items, doctorId) {
   } catch (e) {
     Logger.log("learnTemplatesScoped_ error: " + e.message);
   } finally {
+    crescMasterBust_('Clinical_Templates');
     lock.releaseLock();
   }
 }
@@ -279,6 +280,7 @@ function deletePhraseTemplate(rowId, sessionToken) {
   } catch (e) {
     return { success: false, message: "Could not remove phrase: " + e.message };
   } finally {
+    crescMasterBust_('Clinical_Templates');
     lock.releaseLock();
   }
 }
@@ -334,6 +336,7 @@ function promotePhraseToClinic(rowId, sessionToken) {
   } catch (e) {
     return { success: false, message: "Could not promote phrase: " + e.message };
   } finally {
+    crescMasterBust_('Clinical_Templates');
     lock.releaseLock();
   }
 }

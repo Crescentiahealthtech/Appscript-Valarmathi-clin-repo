@@ -155,6 +155,9 @@
     <!-- Two-step sign-in set-up: opened from the account menu and from
          Staff Accounts, both of which live in the shell. -->
     <?!= include('MFA_Enrol'); ?>
+    <!-- Reminders, stock alerts, the day summary and backups: opened from
+         the appointments desk, the pharmacy and the Admin Dashboard. -->
+    <?!= include('Admin_Ops'); ?>
     <!-- One invoice layout for pharmacy, lab and hospital billing. Both
          billing desks are lazy bundles, so it belongs in the shell. -->
     <?!= include('Invoice_Template'); ?>

@@ -178,6 +178,7 @@ var CRESC_PUBLIC_BY_DESIGN = {
   'include':            'HTML partials for templates — the same markup the page already ships. No data passes through it.',
   'fetchIPRecordsLedger': 'Legacy stub: returns a fixed "please reload" message and reads nothing.',
   'fetchFullIPRecord':  'Legacy stub: returns a fixed "please reload" message and reads nothing.',
+  'onEdit':             'Spreadsheet simple trigger: a hand edit ends the cached copy of a reference list (Master_Cache.gs). From a browser it receives no Range and does nothing.',
   'dpdpSubmitPublicRequest': 'Section 11-13: a data principal must be able to ask without holding a staff login. It writes to a queue that is verified before anything is answered, and is rate-limited per browser.'
 };
 

@@ -16,6 +16,15 @@
         <h6 class="text-white fw-bold m-0">Doctor Availability</h6>
       </div>
     </div>
+    <!-- Tomorrow's appointment, follow-up and vaccination reminders
+         (Patient_Reminders.gs), sent from this desk or automatically. -->
+    <div class="col-6 col-md-4 col-xl-3">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" role="button" tabindex="0"
+           onclick="crescOpsOpen('reminders')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();crescOpsOpen('reminders');}">
+        <i class="fa-brands fa-whatsapp fa-2x mb-3 text-success"></i>
+        <h6 class="text-white fw-bold m-0">Patient Reminders</h6>
+      </div>
+    </div>
     <!-- id="card-hosp-billing" is what applyRBAC() in ScriptsMV hides for
          roles without billing rights. The card carried no id, so the gate
          listed it and could never find it — a nurse saw the billing desk. -->

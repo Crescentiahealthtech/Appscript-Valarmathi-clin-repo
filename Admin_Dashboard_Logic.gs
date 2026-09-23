@@ -221,7 +221,15 @@ function _dashOps_(ss, tz, todayKey, memo) {
     }
   }
 
-  var d = _dashSheet_(ss, "Pharmacy_Inventory", memo);
+  // Same numbers as Operations -> Stock alerts (Stock_Alerts.gs): low is
+  // judged by days of cover, not "ten or fewer in one batch row".
+  var stk = null;
+  try { if (typeof stk_analyse_ === 'function') stk = stk_analyse_(); } catch (e) { stk = null; }
+  if (stk) {
+    out.lowStock = stk.counts.low;
+    out.expiringSoon = stk.counts.urgent + stk.counts.expired;
+  }
+  var d = stk ? [] : _dashSheet_(ss, "Pharmacy_Inventory", memo);
   if (d.length > 1) {
     var nowYM = Utilities.formatDate(new Date(), tz, "yyyy-MM");
     for (var j = 1; j < d.length; j++) {

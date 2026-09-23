@@ -20,6 +20,16 @@
         </div>
       </div>
 
+      <!-- Low stock, near-expiry and a purchase-order suggestion
+           (Stock_Alerts.gs), in the shell's Operations panel. -->
+      <div class="col-6 col-md-4 col-xl-3">
+        <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" role="button" tabindex="0"
+             onclick="crescOpsOpen('stock')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();crescOpsOpen('stock');}">
+          <i class="fa-solid fa-triangle-exclamation fa-2x mb-3 text-danger"></i>
+          <h6 class="text-white fw-bold m-0">Stock Alerts &amp; Reorder</h6>
+        </div>
+      </div>
+
       <div class="col-6 col-md-4 col-xl-3">
         <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('pharmacy-inventory-view');">
           <i class="fa-solid fa-boxes-packing fa-2x mb-3 text-warning"></i>

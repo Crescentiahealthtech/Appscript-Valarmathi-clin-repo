@@ -54,16 +54,19 @@ function getPackages(sessionToken) {
 /** THE SAME READ, WITHOUT THE PERMISSION CHECK, for hb_getBootstrap and
  *  anything else that has already validated the caller. */
 function ipk_packages_() {
-  try {
-    var sh = ipk_ss_().getSheetByName('Package_Master');
-    if (!sh) return { success: true, packages: [], message: "Run setupPackages() first." };
-    var d = sh.getDataRange().getValues(), out = [];
-    for (var i = 1; i < d.length; i++) {
-      if (!String(d[i][0]).trim()) continue;
-      out.push({ code: String(d[i][0]), name: String(d[i][1]), min: Number(d[i][2]) || 0, max: Number(d[i][3]) || 0, cap: Number(d[i][4]) || 0, stayDays: Number(d[i][5]) || 0, roomType: String(d[i][6]), inclusions: String(d[i][7]), exclusions: String(d[i][8]) });
-    }
-    return { success: true, packages: out };
-  } catch (e) { return { success: false, message: e.message }; }
+  // Cached (Master_Cache.gs).
+  return crescMasterGet_('packages', function () {
+    try {
+      var sh = ipk_ss_().getSheetByName('Package_Master');
+      if (!sh) return { success: true, packages: [], message: "Run setupPackages() first." };
+      var d = sh.getDataRange().getValues(), out = [];
+      for (var i = 1; i < d.length; i++) {
+        if (!String(d[i][0]).trim()) continue;
+        out.push({ code: String(d[i][0]), name: String(d[i][1]), min: Number(d[i][2]) || 0, max: Number(d[i][3]) || 0, cap: Number(d[i][4]) || 0, stayDays: Number(d[i][5]) || 0, roomType: String(d[i][6]), inclusions: String(d[i][7]), exclusions: String(d[i][8]) });
+      }
+      return { success: true, packages: out };
+    } catch (e) { return { success: false, message: e.message }; }
+  });
 }
 
 // Insurers/TPAs. Reads Insurers_Master if present, else returns a default list.

@@ -331,71 +331,80 @@ function fetchUniversalDrugs(sessionToken) {
  * through the checked entry point above.
  */
 function op_universalDrugs_() {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Drug_Master_Universal");
-    if (!sheet) return [];
-    const data = sheet.getDataRange().getDisplayValues();
-    const out = [];
-    for (let i = 1; i < data.length; i++) {
-      const brand = (data[i][0] || "").trim();
-      if (!brand) continue;
-      out.push({
-        brand: brand,
-        generic: (data[i][1] || "").trim(),
-        type: (data[i][2] || "Tab").trim(),
-        stock: null,
-        status: "external",
-        source: "EXTERNAL"
-      });
-    }
-    return out;
-  } catch (e) { return []; }
+  // Cached for every desk (Master_Cache.gs); the drug master changes monthly.
+  return crescMasterGet_('drugs', function () {
+    try {
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Drug_Master_Universal");
+      if (!sheet) return [];
+      const data = sheet.getDataRange().getDisplayValues();
+      const out = [];
+      for (let i = 1; i < data.length; i++) {
+        const brand = (data[i][0] || "").trim();
+        if (!brand) continue;
+        out.push({
+          brand: brand,
+          generic: (data[i][1] || "").trim(),
+          type: (data[i][2] || "Tab").trim(),
+          stock: null,
+          status: "external",
+          source: "EXTERNAL"
+        });
+      }
+      return out;
+    } catch (e) { return []; }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────
 // 6. LAB TEST MASTER  (Name[0] Panel[1] Internal Y/N[2] Sample[3] TAT[4])
 // ─────────────────────────────────────────────────────────────
 function fetchLabTestMaster_() {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Lab_Test_Master");
-    if (!sheet) return { internal: [], external: [] };
-    const data = sheet.getDataRange().getDisplayValues();
-    const internal = [], external = [];
-    for (let i = 1; i < data.length; i++) {
-      const name = (data[i][0] || "").trim();
-      if (!name) continue;
-      const item = {
-        testName: name,
-        panel: (data[i][1] || "").trim(),
-        sample: (data[i][3] || "").trim(),
-        tat: (data[i][4] || "").trim()
-      };
-      if (String(data[i][2] || "").trim().toUpperCase() === "Y") { item.source = "INTERNAL"; internal.push(item); }
-      else { item.source = "EXTERNAL"; external.push(item); }
-    }
-    return { internal: internal, external: external };
-  } catch (e) { return { internal: [], external: [] }; }
+  // Cached (Master_Cache.gs).
+  return crescMasterGet_('labtests', function () {
+    try {
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Lab_Test_Master");
+      if (!sheet) return { internal: [], external: [] };
+      const data = sheet.getDataRange().getDisplayValues();
+      const internal = [], external = [];
+      for (let i = 1; i < data.length; i++) {
+        const name = (data[i][0] || "").trim();
+        if (!name) continue;
+        const item = {
+          testName: name,
+          panel: (data[i][1] || "").trim(),
+          sample: (data[i][3] || "").trim(),
+          tat: (data[i][4] || "").trim()
+        };
+        if (String(data[i][2] || "").trim().toUpperCase() === "Y") { item.source = "INTERNAL"; internal.push(item); }
+        else { item.source = "EXTERNAL"; external.push(item); }
+      }
+      return { internal: internal, external: external };
+    } catch (e) { return { internal: [], external: [] }; }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────
 // 7. CLINICAL TEMPLATES  (Category[0] Text[1] UseCount[2]) — self-learning
 // ─────────────────────────────────────────────────────────────
 function fetchClinicalTemplates_() {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Clinical_Templates");
-    if (!sheet) return { CC: [], HX: [], ADVICE: [] };
-    const data = sheet.getDataRange().getDisplayValues();
-    const buckets = { CC: [], HX: [], ADVICE: [] };
-    for (let i = 1; i < data.length; i++) {
-      const cat = (data[i][0] || "").trim().toUpperCase();
-      const text = (data[i][1] || "").trim();
-      const count = parseInt(data[i][2], 10) || 0;
-      if (!text || !buckets[cat]) continue;
-      buckets[cat].push({ text: text, count: count });
-    }
-    Object.keys(buckets).forEach(k => buckets[k].sort((a, b) => b.count - a.count));
-    return buckets;
-  } catch (e) { return { CC: [], HX: [], ADVICE: [] }; }
+  // Cached (Master_Cache.gs); learnTemplates_ ends the copy when it adds a phrase.
+  return crescMasterGet_('phrases', function () {
+    try {
+      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Clinical_Templates");
+      if (!sheet) return { CC: [], HX: [], ADVICE: [] };
+      const data = sheet.getDataRange().getDisplayValues();
+      const buckets = { CC: [], HX: [], ADVICE: [] };
+      for (let i = 1; i < data.length; i++) {
+        const cat = (data[i][0] || "").trim().toUpperCase();
+        const text = (data[i][1] || "").trim();
+        const count = parseInt(data[i][2], 10) || 0;
+        if (!text || !buckets[cat]) continue;
+        buckets[cat].push({ text: text, count: count });
+      }
+      Object.keys(buckets).forEach(k => buckets[k].sort((a, b) => b.count - a.count));
+      return buckets;
+    } catch (e) { return { CC: [], HX: [], ADVICE: [] }; }
+  });
 }
 
 // Increments use-count / inserts new phrases. Called from saveOPEncounter.
@@ -429,6 +438,7 @@ function learnTemplates_(items) {
   } catch (e) {
     Logger.log("learnTemplates_ error: " + e.message);
   } finally {
+    crescMasterBust_('Clinical_Templates');
     lock.releaseLock();
   }
 }

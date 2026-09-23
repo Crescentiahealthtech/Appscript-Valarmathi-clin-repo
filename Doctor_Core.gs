@@ -40,6 +40,8 @@ function dc_invalidate_(sheetName) {
   var k = String(sheetName || "");
   delete DC_CACHE.headers[k];
   delete DC_CACHE.sheets[k];
+  // The cross-user copy of a reference list built from this sheet, too.
+  if (typeof MCACHE_SOURCES !== 'undefined' && MCACHE_SOURCES[k]) crescMasterBust_(k);
 }
 
 /** Clears everything. Call at the top of a long entry point that writes. */
