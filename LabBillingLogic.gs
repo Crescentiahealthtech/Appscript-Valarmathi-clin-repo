@@ -19,7 +19,7 @@ function lab_billingWorkspace_() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const billingSheet = ss.getSheetByName("LAB_BILLING");
     const ordersSheet = ss.getSheetByName("LAB_ORDERS");
-    
+
     if (!billingSheet || !ordersSheet) {
       return { success: false, message: "Database Sheets missing." };
     }
@@ -27,62 +27,58 @@ function lab_billingWorkspace_() {
     // 1. Establish strict Midnight-to-Midnight Boundaries for "Today" (IST Timezone)
     const tz = Session.getScriptTimeZone();
     const now = new Date();
-    
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
-
     const todayStr = Utilities.formatDate(now, tz, "yyyy-MM-dd");
     let d = new Date(now); d.setDate(d.getDate() - 1);
     const yesterdayStr = Utilities.formatDate(d, tz, "yyyy-MM-dd");
+    // Cancellations stay on the desk for a week, then leave the working view.
+    // They are never deleted: "Find older" reads them back (labListCancelled).
+    const cancelCutoff = now.getTime() - LABB_CANCELLED_DAYS * 86400000;
+    const dayOf = function (v) {
+      var dt = (typeof cresc_parseDate_ === 'function') ? cresc_parseDate_(v) : new Date(v);
+      return (dt && !isNaN(dt.getTime())) ? dt : null;
+    };
+    const fmt = function (dt) { return dt ? dt.toLocaleString('en-IN') : ''; };
+
+    // Today's settlements of older balances count toward today's collection.
+    const settledToday = labb_settlementsOn_(todayStr, tz);
 
     // 2. Fetch & Parse Billing Data
     const bData = billingSheet.getDataRange().getValues();
-    const bHeaders = bData.length > 0 ? bData.shift() : []; 
-    
+    const bHeaders = bData.length > 0 ? bData.shift() : [];
+
     let billedOrderIds = new Set();
     let billsList = [];
-    let stats = { pendingCount: 0, todayOP: 0, todayIP: 0, todayCount: 0 };
+    let stats = { pendingCount: 0, todayOP: settledToday.total, todayIP: 0, todayCount: 0,
+                  unsettledCount: 0, unsettledTotal: 0, unsettledOP: 0, unsettledIP: 0,
+                  olderCancelled: 0 };
 
     bData.forEach(row => {
       let b = {};
       bHeaders.forEach((h, i) => b[h] = row[i]);
-      
       if (!b.BillID) return;
 
+      const status = String(b.PaymentStatus || '').trim().toUpperCase();
       // A CANCELLED bill is not a bill. Counting its order as "already
       // billed" is what would strand that order: it would never come back to
       // the pending queue and could never be billed correctly, which is the
       // usual reason for voiding one in the first place.
-      var isCancelled = String(b.PaymentStatus || '').trim().toUpperCase() === 'CANCELLED';
+      const isCancelled = status === 'CANCELLED';
       if (b.OrderID && !isCancelled) billedOrderIds.add(b.OrderID);
 
-      let billDateObj = null;
-      let billDateStr = "";
-      
-      if (b.BilledAt) {
-        billDateObj = new Date(b.BilledAt);
-        if (!isNaN(billDateObj.getTime())) {
-          billDateStr = Utilities.formatDate(billDateObj, tz, "yyyy-MM-dd");
-        }
-      }
-      
-      let isStrictlyToday = false;
-      if (billDateObj && billDateObj >= startOfToday && billDateObj <= endOfToday) {
-        isStrictlyToday = true;
-      } else if (billDateStr === todayStr) {
-        isStrictlyToday = true;
-      }
+      const billDate = dayOf(b.BilledAt);
+      const billDay = billDate ? Utilities.formatDate(billDate, tz, "yyyy-MM-dd") : '';
+      const isStrictlyToday = billDay === todayStr;
+      const isIP = (b.PaymentMode === 'IP_ACCOUNT' || b.BillingCategory === 'IP_ACCOUNT' || !!b.AdmissionID);
+      const net = Number(b.NetAmount) || 0;
+      const paid = Number(b.PaidAmount) || 0;
+      // An on-account bill carries its whole net as the balance even where
+      // the column was left blank — the same rule the dashboard uses.
+      const balance = Number(b.BalanceAmount) || (status === 'ON_ACCOUNT' ? net : 0);
 
-      if (isStrictlyToday || billDateStr === yesterdayStr) {
-        
-        let isIP = (b.PaymentMode === 'IP_ACCOUNT' || b.BillingCategory === 'IP_ACCOUNT' || b.AdmissionID);
-        let tType = isCancelled ? 'CANCELLED' : (isIP ? 'IP' : 'PAID');
-
-        billsList.push({
-          tabType: tType,
+      const card = function (tabType) {
+        return {
+          tabType: tabType,
+          status: status,
           cancelReason: b.CancelReason || '',
           cancelledBy: b.CancelledBy || '',
           orderId: b.OrderID || '',
@@ -90,22 +86,48 @@ function lab_billingWorkspace_() {
           paymentMode: b.PaymentMode || 'CASH',
           patientName: b.PatientName || 'Unknown',
           patientId: b.PatientID || '',
+          admissionId: b.AdmissionID || '',
           testNames: parseTestsForUI_(b.TestsJSON) || "Lab Tests",
           receiptNumber: b.ReceiptNumber || b.BillID,
-          billedAt: b.BilledAt ? new Date(b.BilledAt).toLocaleString('en-IN') : '',
-          net: Number(b.NetAmount) || 0,
+          billedAt: fmt(billDate),
+          net: net, paid: paid, balance: balance,
           discount: Number(b.DiscountAmount) || 0,
-          isStrictlyToday: isStrictlyToday 
-        });
+          isIP: isIP,
+          isStrictlyToday: isStrictlyToday
+        };
+      };
 
-        if (isStrictlyToday && !isCancelled) {
-          stats.todayCount++;
-          if (isIP) {
-            stats.todayIP += (Number(b.NetAmount) || 0);
-          } else {
-            stats.todayOP += (Number(b.NetAmount) || 0);
-          }
-        }
+      if (isCancelled) {
+        const when = dayOf(b.CancelledAt) || billDate;
+        if (when && when.getTime() >= cancelCutoff) billsList.push(card('CANCELLED'));
+        else stats.olderCancelled++;
+        return;
+      }
+
+      // UNSETTLED: every bill with money still owed, WHENEVER it was raised.
+      // This is the lab's share of the dashboard's Pending Credit, and it had
+      // no screen: part-paid and unpaid OP bills were filed under "Paid", and
+      // only today's and yesterday's were listed at all.
+      const open = balance > 0 && (status === 'PENDING' || status === 'PARTIAL' ||
+                                   status === 'ON_ACCOUNT' || status === 'CREDIT');
+      if (open) {
+        billsList.push(card('UNSETTLED'));
+        stats.unsettledCount++;
+        stats.unsettledTotal += balance;
+        if (isIP) stats.unsettledIP += balance; else stats.unsettledOP += balance;
+      }
+
+      if (isStrictlyToday || billDay === yesterdayStr) {
+        if (isIP) billsList.push(card('IP'));
+        else if (status === 'PAID' || paid > 0) billsList.push(card('PAID'));
+      }
+
+      if (isStrictlyToday) {
+        stats.todayCount++;
+        // Money TAKEN today, not billed today: an unpaid OP bill used to add
+        // its whole net to "Today Collection".
+        if (isIP) stats.todayIP += net;
+        else stats.todayOP += Math.min(paid, net) - (settledToday.byBill[b.BillID] || 0);
       }
     });
 
@@ -116,14 +138,15 @@ function lab_billingWorkspace_() {
     oData.forEach(row => {
       let o = {};
       oHeaders.forEach((h, i) => o[h] = row[i]);
-      
       if (!o.OrderID) return;
-      
+
       var oStatus = String(o.OrderStatus || '').trim().toUpperCase();
 
-      // Cancelled orders get their own tab rather than vanishing: a queue
-      // count is only trustworthy when what left it can still be seen.
+      // Cancelled orders stay visible for a week, then leave the working
+      // view like cancelled bills do.
       if (oStatus === 'CANCELLED') {
+        const when = dayOf(o.CancelledAt) || dayOf(o.CreatedAt);
+        if (!when || when.getTime() < cancelCutoff) { stats.olderCancelled++; return; }
         billsList.push({
           tabType: 'CANCELLED',
           orderId: o.OrderID,
@@ -133,9 +156,8 @@ function lab_billingWorkspace_() {
           patientId: o.PatientID || '',
           testNames: o.TestNames || 'Lab Tests',
           receiptNumber: '',
-          billedAt: o.CancelledAt ? new Date(o.CancelledAt).toLocaleString('en-IN')
-                                  : (o.CreatedAt ? new Date(o.CreatedAt).toLocaleString('en-IN') : ''),
-          net: 0,
+          billedAt: fmt(when),
+          net: 0, paid: 0, balance: 0,
           discount: 0,
           cancelReason: o.CancelReason || '',
           cancelledBy: o.CancelledBy || '',
@@ -146,7 +168,6 @@ function lab_billingWorkspace_() {
 
       if (!billedOrderIds.has(o.OrderID) && oStatus !== 'DELETE') {
         stats.pendingCount++;
-
         billsList.push({
           tabType: 'PENDING',
           orderId: o.OrderID,
@@ -156,18 +177,153 @@ function lab_billingWorkspace_() {
           patientId: o.PatientID || '',
           testNames: o.TestNames || "Pending Tests",
           receiptNumber: '',
-          billedAt: o.CreatedAt ? new Date(o.CreatedAt).toLocaleString('en-IN') : '',
-          net: 0, 
+          billedAt: fmt(dayOf(o.CreatedAt)),
+          net: 0, paid: 0, balance: 0,
           discount: 0,
           isStrictlyToday: false
         });
       }
     });
 
-    return { success: true, bills: billsList, stats: stats };
+    ['todayOP', 'todayIP', 'unsettledTotal', 'unsettledOP', 'unsettledIP'].forEach(function (k) {
+      stats[k] = Math.round(stats[k] * 100) / 100;
+    });
+    stats.cancelledDays = LABB_CANCELLED_DAYS;
+    return { success: true, bills: billsList, stats: stats, settlementsToday: settledToday.rows };
 
   } catch (error) {
     return { success: false, message: error.toString() };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SETTLING A BALANCE
+//
+// A part-paid or unpaid OP lab bill used to be settleable only from the
+// Finance Hub's receivables tab — which did not list OP lab bills at all
+// (acc_labRows_ counted ON_ACCOUNT only). The lab desk now collects it, and
+// every collection is a row on LAB_SETTLEMENTS with its own time and mode, so
+// the lab till counts the cash on the day it was actually taken.
+// ---------------------------------------------------------------------------
+
+var LABB_CANCELLED_DAYS = 7;
+var LABB_SETTLEMENTS = 'LAB_SETTLEMENTS';
+var LABB_SETTLEMENT_HEADERS = ['SettlementID', 'BillID', 'PatientID', 'Amount', 'PaymentMode',
+                               'SettledAt', 'SettledBy', 'Note'];
+
+function labb_settlementSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(LABB_SETTLEMENTS);
+  if (!sh) {
+    sh = ss.insertSheet(LABB_SETTLEMENTS);
+    sh.getRange(1, 1, 1, LABB_SETTLEMENT_HEADERS.length).setValues([LABB_SETTLEMENT_HEADERS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+/** Every settlement row, as objects. [] when the sheet does not exist yet. */
+function labb_settlements_() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LABB_SETTLEMENTS);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var data = sh.getDataRange().getValues();
+  var h = data.shift().map(function (x) { return String(x).trim(); });
+  return data.filter(function (r) { return r[0]; }).map(function (r) {
+    var o = {}; h.forEach(function (k, i) { o[k] = r[i]; }); return o;
+  });
+}
+
+/** Settlements taken on one day: { total, byBill: {billId: amount}, rows } */
+function labb_settlementsOn_(dayStr, tz) {
+  var out = { total: 0, byBill: {}, rows: [] };
+  labb_settlements_().forEach(function (r) {
+    var dt = (typeof cresc_parseDate_ === 'function') ? cresc_parseDate_(r.SettledAt) : new Date(r.SettledAt);
+    if (!dt || isNaN(dt.getTime())) return;
+    if (Utilities.formatDate(dt, tz, 'yyyy-MM-dd') !== dayStr) return;
+    var amt = Number(r.Amount) || 0;
+    out.total += amt;
+    out.byBill[r.BillID] = (out.byBill[r.BillID] || 0) + amt;
+    out.rows.push({ billId: String(r.BillID), amount: amt, mode: String(r.PaymentMode || ''),
+                    at: dt.toLocaleString('en-IN'), by: String(r.SettledBy || '') });
+  });
+  return out;
+}
+
+/**
+ * The write. Adds `amount` to the bill's paid figure, reduces its balance,
+ * and logs the collection. The caller has checked permission and the lock.
+ * @return {{success, message, balance?}}
+ */
+function labb_settle_(billId, amount, mode, who, note) {
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('LAB_BILLING');
+  if (!sh) return { success: false, message: 'LAB_BILLING is missing.' };
+  var values = sh.getDataRange().getValues();
+  var col = {};
+  values[0].forEach(function (x, i) { col[String(x).trim()] = i; });
+  ['BillID', 'NetAmount', 'PaidAmount', 'BalanceAmount', 'PaymentStatus'].forEach(function (k) {
+    if (col[k] === undefined) throw new Error('LAB_BILLING has no ' + k + ' column.');
+  });
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][col.BillID]).trim() !== String(billId).trim()) continue;
+    var status = String(values[i][col.PaymentStatus] || '').toUpperCase();
+    if (status === 'CANCELLED') return { success: false, message: 'Bill ' + billId + ' was cancelled.' };
+    if (status === 'PAID') return { success: false, message: 'Bill ' + billId + ' is already settled.' };
+    var net = Number(values[i][col.NetAmount]) || 0;
+    var paid = Number(values[i][col.PaidAmount]) || 0;
+    var bal = Number(values[i][col.BalanceAmount]) || (status === 'ON_ACCOUNT' ? net : Math.max(0, net - paid));
+    var amt = Math.round((Number(amount) || 0) * 100) / 100;
+    if (!(amt > 0)) return { success: false, message: 'Enter the amount received.' };
+    if (amt > bal + 0.009) {
+      return { success: false, message: 'That is more than the ₹' + bal.toFixed(2) + ' still owed on this bill.' };
+    }
+    var newPaid = Math.round((paid + amt) * 100) / 100;
+    var newBal = Math.round((bal - amt) * 100) / 100;
+    var row = i + 1;
+    sh.getRange(row, col.PaidAmount + 1).setValue(newPaid);
+    sh.getRange(row, col.BalanceAmount + 1).setValue(newBal);
+    sh.getRange(row, col.PaymentStatus + 1).setValue(newBal <= 0 ? 'PAID' : 'PARTIAL');
+    var now = new Date();
+    labb_settlementSheet_().appendRow([
+      'LSET-' + Utilities.formatDate(now, 'Asia/Kolkata', 'yyMMdd-HHmmss') + '-' +
+        Utilities.getUuid().substring(0, 4).toUpperCase(),
+      String(billId), String(values[i][col.PatientID !== undefined ? col.PatientID : 0] || ''),
+      amt, String(mode || 'CASH').toUpperCase(), now, String(who || ''), String(note || '')
+    ]);
+    SpreadsheetApp.flush();
+    try { labAudit_('BILL_SETTLED', 'BILL', billId, null, { amount: amt, mode: mode, by: who, balance: newBal }); }
+    catch (e) {}
+    return { success: true, balance: newBal,
+             message: newBal <= 0 ? 'Bill ' + billId + ' is now fully paid.'
+                                  : '₹' + amt.toFixed(2) + ' received. ₹' + newBal.toFixed(2) + ' still owed.' };
+  }
+  return { success: false, message: 'Bill ' + billId + ' was not found.' };
+}
+
+/**
+ * FRONTEND ENTRY (lab billing desk). Collects all or part of what is owed on
+ * an OP lab bill. IP on-account bills are settled at discharge, not here.
+ * @param {{billId, amount, payMode, note?}} payload
+ */
+function settleLabBillBalance(payload, sessionToken) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var actor = crescRequire_(sessionToken, ['billing.write', 'accounts.settle']);
+    payload = payload || {};
+    var mode = String(payload.payMode || 'CASH').toUpperCase();
+    if (['CASH', 'UPI', 'CARD', 'BANK'].indexOf(mode) === -1) {
+      return { success: false, message: 'Choose how it was paid: cash, UPI, card or bank.' };
+    }
+    if (typeof acc_isLocked_ === 'function' && typeof acc_period_ === 'function' &&
+        acc_isLocked_(acc_period_(new Date()))) {
+      return { success: false, message: 'This month is locked in the Finance Hub; settlements are frozen.' };
+    }
+    return labb_settle_(payload.billId, payload.amount, mode,
+                        actor.displayName || actor.username, payload.note);
+  } catch (err) {
+    return { success: false, message: cresc_reason_(err) };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
   }
 }
 
@@ -195,7 +351,10 @@ function lab_dailyCollection_() {
     let dayBills = ws.bills.filter(b => (b.tabType === 'PAID' || b.tabType === 'IP') && b.isStrictlyToday === true);
     dayBills.sort((a, b) => new Date(a.billedAt) - new Date(b.billedAt));
 
-    return { success: true, bills: dayBills, totalNet: ws.stats.todayOP };
+    // settlements: balances of earlier bills collected today — part of the
+    // day's takings, with their own mode.
+    return { success: true, bills: dayBills, totalNet: ws.stats.todayOP,
+             settlements: ws.settlementsToday || [] };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
