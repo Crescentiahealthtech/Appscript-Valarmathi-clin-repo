@@ -429,7 +429,7 @@
             </select>
             <!-- Wrapped the input so dropdowns anchor exactly to the text box -->
             <div class="position-relative w-100">
-                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="clin-diagnosis" oninput="queueDiagnosisAssist()" onchange="onDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();opAddDx();}">
+                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="clin-diagnosis" autocomplete="off" onfocus="onOPTemplateType(this, 'DX', true)" oninput="onOPTemplateType(this, 'DX'); queueDiagnosisAssist()" onchange="onDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();opAddDx();}">
             </div>
             <button type="button" class="btn btn-outline-info" style="padding: 0.35rem 0.8rem;"
                     onclick="opAddDx()" title="Add this as an additional diagnosis">
@@ -629,43 +629,7 @@
      The grid is now built from a table rather than forty hand-written
      divs, so adding a key is one line and the layout cannot drift.
      ═══════════════════════════════════════════════════════════════════ -->
-<div class="modal fade" id="opDialPadModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered" style="max-width: 300px;">
-    <div class="modal-content text-white shadow-lg" style="background-color: var(--bg-input); border: 1px solid var(--border-hover);">
-      <div class="modal-body p-3">
-        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-2">
-          <h6 class="text-info m-0" style="font-size:0.8rem;" id="op-dial-title">Smart Input</h6>
-          <div class="d-flex gap-1">
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;"
-                    title="Delete the last entry" onclick="backspaceOPDial()"><i class="fa-solid fa-delete-left"></i></button>
-            <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.7rem;"
-                    onclick="clearOPDial()"><i class="fa-solid fa-eraser"></i></button>
-          </div>
-        </div>
-
-        <!-- What the field will say. Without this every press was blind. -->
-        <div id="op-dial-display"
-             style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;
-                    padding:.45rem .6rem;margin-bottom:.6rem;min-height:2.1rem;
-                    font-family:monospace;font-size:.95rem;font-weight:700;
-                    color:var(--warning-fg);word-break:break-word;">&nbsp;</div>
-        <div id="op-dial-hint" class="text-muted mb-2" style="font-size:.66rem;min-height:1rem;"></div>
-
-        <div id="op-dial-rx-grid" class="row g-1 mb-2 d-none"></div>
-        <div id="op-dial-dur-grid" class="row g-1 mb-2 d-none"></div>
-
-        <div id="op-dial-taper-host" class="border-top border-secondary pt-2 d-none">
-          <button class="btn btn-outline-warning w-100 py-1 fw-bold" style="font-size:0.7rem;"
-                  onclick="openTaperFromDial()"><i class="fa-solid fa-stairs"></i> Taper Mode</button>
-        </div>
-
-        <button class="btn btn-primary w-100 mt-2 py-1 fw-bold text-white on-accent"
-                style="font-size:0.8rem; background-color: var(--info-solid); border:none;"
-                data-bs-dismiss="modal">Confirm</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- The dosage / duration pad is shared with the IP case sheet: Dial_Pad.html, in the shell. -->
 
 <!-- ===================== TAPER BUILDER ===================== -->
 <div class="modal fade" id="opTaperModal" tabindex="-1">
@@ -1001,8 +965,6 @@ var opLabMaster = { internal: [], external: [] };
 var opComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
 var opConsultTemplates = [];
 var opPatientAllergies = { recorded: false, raw: "", list: [] };
-var currentOPDialTarget = null;
-var currentOPDialMode = 'rx';
 var activeOpEncounterId = "";
 /* opDoseTargetRow / _opDoseSig retired with the local calculator; the
    shared one in Dose_Calculator.html keeps its own target row. */
@@ -1231,18 +1193,56 @@ function opPhraseMatch(list, query) {
     return starts.concat(contains, viaAlias).slice(0, 10);
 }
 
-function onOPTemplateType(inputEl, cat) {
+/**
+ * The phrases offered for one box.
+ *   HX  history AND the diagnosis list: a comorbidity is a diagnosis, and the
+ *       history pool alone was too thin to match most of what is typed.
+ *   DX  the seed diagnoses, plus every diagnosis the complaint workups name.
+ */
+function opPhrasePool(cat) {
+    const ph = (opComposer.phrases || {});
+    if (cat === 'HX' || cat === 'DX') {
+        const seen = {}, out = [];
+        const add = function (p) {
+            const k = String(p && p.text || '').toLowerCase();
+            if (!k || seen[k]) return;
+            seen[k] = true; out.push(p);
+        };
+        (cat === 'HX' ? (ph.HX || []) : []).forEach(add);
+        (ph.DX || []).forEach(add);
+        if (cat === 'DX') {
+            Object.keys(opComposer.workup || {}).forEach(function (k) {
+                const dx = (opComposer.workup[k] || {}).dx;
+                if (dx) add({ text: dx, scope: 'SEED', aliases: '' });
+            });
+        }
+        return out;
+    }
+    return ph[cat] || [];
+}
+
+/**
+ * Suggestions under a complaint, history or diagnosis box.
+ * `showAll` (on focus): with nothing typed, the most-used first eight — so a
+ * box shows what it can offer before a letter is typed. Arrow keys, Enter
+ * and Escape work on the list (crescSuggestKeys, Shell_UX.html).
+ */
+function onOPTemplateType(inputEl, cat, showAll) {
     let dd = inputEl.parentElement.querySelector('.autocomplete-items');
-    if (!dd) { dd = document.createElement('div'); dd.className = 'autocomplete-items d-none'; inputEl.parentElement.appendChild(dd); }
+    if (!dd) {
+        dd = document.createElement('div'); dd.className = 'autocomplete-items d-none';
+        inputEl.parentElement.appendChild(dd);
+        // Hidden when the box is left; the delay lets a click on an item land first.
+        inputEl.addEventListener('blur', function () { setTimeout(function () { dd.classList.add('d-none'); }, 180); });
+    }
 
     let val = inputEl.value.trim();
     const isSlash = val.charAt(0) === '/';
     if (isSlash) val = val.substring(1);
 
     dd.innerHTML = '';
-    if (!val) { dd.classList.add('d-none'); return; }
-
-    const list = opPhraseMatch((opComposer.phrases && opComposer.phrases[cat]) || [], val);
+    const pool = opPhrasePool(cat);
+    const list = val ? opPhraseMatch(pool, val) : (showAll === true ? pool.slice(0, 8) : []);
     if (!list.length) { dd.classList.add('d-none'); return; }
 
     dd.classList.remove('d-none');
@@ -1253,12 +1253,30 @@ function onOPTemplateType(inputEl, cat) {
                        '<small><span class="op-scope-tag op-scope-' + opEsc(x.scope) + '">' + opEsc(x.scope) + '</span> ' +
                        '<span class="op-evidence">' + opEsc(meta) + '</span></small>';
         it.onclick = function () {
-            inputEl.value = x.text;
             dd.classList.add('d-none');
+            if (cat === 'DX') { opPickDx(x.text); return; }
+            inputEl.value = x.text;
             if (cat === 'CC') showWorkupHint(x.text);
         };
         dd.appendChild(it);
     });
+}
+
+/**
+ * A diagnosis chosen from a suggestion — the dropdown or a complaint's
+ * "Dx:" hint. It becomes a chip, and the treatment assist runs for it.
+ * The hint used to fill the box ONLY when the box was empty and do nothing
+ * otherwise, which read as "diagnosis suggestions are not picked up".
+ */
+function opPickDx(text, keepTyped) {
+    const el = document.getElementById('clin-diagnosis');
+    if (!el || !text) return;
+    // From a hint, whatever the doctor had typed is a diagnosis of its own;
+    // from the dropdown it is only the search that found this one.
+    if (keepTyped && el.value.trim()) opAddDx();
+    el.value = text;
+    try { onDiagnosisChanged(); } catch (e) { /* the assist is a convenience */ }
+    opAddDx();
 }
 
 function onSlashSearch(inputEl, cat) {
@@ -1328,8 +1346,7 @@ function addWorkupLab(name) {
 }
 
 function setDiagnosisFromHint(dx) {
-    const el = document.getElementById('clin-diagnosis');
-    if (!el.value.trim()) { el.value = dx; onDiagnosisChanged(); }
+    opPickDx(dx, true);
 }
 
 // ============================================================================
@@ -2738,7 +2755,7 @@ function addOPDynamicRow(tbodyId, type) {
         '<td style="width: ' + (type === 'HX' ? 'auto' : '0') + '; display: ' + (type === 'HX' ? 'table-cell' : 'none') + ';">' + prefixHtml + '</td>' +
         '<td class="w-100" style="position:relative;">' +
             '<input type="text" class="hd-input op-array-text" placeholder="' + (type === 'CC' ? 'Symptom... (type / to search)' : 'Condition...') + '" ' +
-            'autocomplete="off" oninput="onOPTemplateType(this, \'' + type + '\')"></td>' +
+            'autocomplete="off" oninput="onOPTemplateType(this, \'' + type + '\')" onfocus="onOPTemplateType(this, \'' + type + '\', true)"></td>' +
         '<td><input type="text" class="hd-input dial-trigger op-array-dur text-center" style="width: 55px;" placeholder="Dur" onclick="openOPDialPad(this, \'dur\')"></td>' +
         '<td class="text-end no-print"><button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.6rem;" onclick="this.closest(\'tr\').remove()"><i class="fa-solid fa-xmark"></i></button></td>';
     tbody.appendChild(tr);
@@ -3024,243 +3041,18 @@ function markOPAllWNL() { ['cvs', 'rs', 'pa', 'cns'].forEach(s => setOPSysExam(s
 // ============================================================================
 // DIAL PAD
 // ============================================================================
-/* ═══════════════════════════════════════════════════════════════════════
-   THE DIAL PAD — keys, and what each one does
-
-   The grid is data. Adding a key is one row here; before this it was a
-   hand-written <div class="col-3"> in the markup, and the two grids had
-   already drifted apart on sizing.
-
-   `group` is what makes a key EXCLUSIVE. Pressing Days then Months means
-   the doctor changed their mind, so the new token replaces the old one
-   rather than appending — "3 Days Months" was the bug this solves, and
-   the same rule now covers the dose units and the frequencies, which had
-   it only for duration.
-   ═══════════════════════════════════════════════════════════════════ */
-var OP_DIAL_KEYS = {
-  rx: [
-    // digits and fractions — these accumulate, that is how a number is typed
-    { k: '0',   w: 3 }, { k: '1/4', w: 3 }, { k: '1/2', w: 3 }, { k: '1', w: 3 },
-    { k: '2',   w: 3 }, { k: '3',   w: 3 }, { k: '5',   w: 3 }, { k: '10', w: 3 },
-
-    // the 1-0-1 patterns. HS and the hourly schedules were missing, and a
-    // night-only dose is one of the commonest prescriptions there is.
-    { k: 'OD',  w: 3, style: 'info' }, { k: 'BD',  w: 3, style: 'info' },
-    { k: 'TDS', w: 3, style: 'info' }, { k: 'QID', w: 3, style: 'info' },
-    { k: 'HS',  w: 3, style: 'info', title: 'At bedtime' },
-    { k: 'Q6H', w: 3, style: 'info', title: '6-hourly' },
-    { k: 'Q8H', w: 3, style: 'info', title: '8-hourly' },
-    { k: 'Q12H',w: 3, style: 'info', title: '12-hourly' },
-    { k: 'Alt day', w: 6, style: 'info', title: 'Alternate days' },
-    { k: 'Weekly',  w: 6, style: 'info' },
-
-    { k: 'STAT', w: 3, style: 'warning' }, { k: 'SOS', w: 3, style: 'warning' },
-    { k: 'BF',   w: 3, style: 'success', title: 'Before food' },
-    { k: 'AF',   w: 3, style: 'success', title: 'After food' },
-
-    // units. mg, tablets, puffs, nebulisation and insulin units all had to
-    // be typed by hand, which on a phone is the whole problem.
-    { k: 'mg',   w: 3, style: 'secondary' }, { k: 'ml',    w: 3, style: 'secondary' },
-    { k: 'tab',  w: 3, style: 'secondary' }, { k: 'Drops', w: 3, style: 'secondary' },
-    { k: 'puff', w: 3, style: 'secondary' }, { k: 'neb',   w: 3, style: 'secondary', title: 'Per nebulisation' },
-    { k: 'unit', w: 3, style: 'secondary', title: 'Insulin units' },
-    { k: 'Oint', w: 3, style: 'secondary' }
-  ],
-  dur: [
-    { k: '1', w: 4 }, { k: '2',  w: 4 }, { k: '3',  w: 4 },
-    { k: '4', w: 4 }, { k: '5',  w: 4 }, { k: '6',  w: 4 },
-    { k: '7', w: 4 }, { k: '10', w: 4 }, { k: '14', w: 4 },
-    { k: '21', w: 4 }, { k: '30', w: 4 }, { k: '90', w: 4 },
-    { k: 'Days',  w: 6, style: 'info' }, { k: 'Wks', w: 6, style: 'info' },
-    { k: 'Mths',  w: 6, style: 'info' }, { k: 'Yrs', w: 6, style: 'info' },
-    // A course that ends at review, and a single dose, are both durations
-    // and neither could be entered without the keyboard.
-    { k: 'Once',        w: 6, style: 'warning', title: 'A single dose' },
-    { k: 'Till review', w: 6, style: 'warning' },
-    { k: 'Continue',    w: 12, style: 'warning', title: 'Long-term / ongoing' }
-  ]
-};
-
-/** Token groups that REPLACE rather than append. */
-var OP_DIAL_GROUPS = {
-  DURATION: ['Days', 'Wks', 'Mths', 'Yrs', 'Once', 'Till review', 'Continue'],
-  DOSEUNIT: ['mg', 'ml', 'tab', 'Drops', 'puff', 'neb', 'unit', 'Oint'],
-  URGENCY:  ['STAT', 'SOS'],
-  SCHEDULE: ['HS', 'Q6H', 'Q8H', 'Q12H', 'Alt day', 'Weekly']
-};
-
-function opDialGrid(hostId, keys) {
-  var host = document.getElementById(hostId);
-  if (!host) return;
-  host.innerHTML = keys.map(function (key) {
-    var cls = key.style
-      ? 'btn btn-outline-' + key.style + ' dial-btn w-100 text-' +
-        (key.style === 'secondary' ? 'light' : key.style)
-      : 'btn dial-btn w-100 text-white';
-    return '<div class="col-' + key.w + '">' +
-      '<button type="button" class="' + cls + '" style="font-size:.72rem;padding:.3rem .1rem;"' +
-      (key.title ? ' title="' + opEsc(key.title) + '"' : '') +
-      ' onclick="appendOPDial(' + JSON.stringify(key.k) + ')">' + opEsc(key.k) + '</button></div>';
-  }).join('');
-}
-
+/* The dosage and duration pad lives in the shell (Dial_Pad.html) and is the
+   same one the IP case sheet opens. This file's copy never worked: every key
+   put JSON.stringify(k) inside a double-quoted onclick attribute, and the
+   double quotes JSON.stringify adds closed the attribute early. */
 function openOPDialPad(inputEl, mode) {
-    if (inputEl.disabled) return;
-    currentOPDialTarget = inputEl;
-    currentOPDialMode = mode;
-
-    document.getElementById('op-dial-title').innerText =
-      mode === 'rx' ? 'Smart Dosage' : 'Select Duration';
-
-    // Built on open rather than once at parse time: this module is injected
-    // by the loader, and building here means the grid cannot be missing
-    // because the markup arrived after the script did.
-    opDialGrid('op-dial-rx-grid',  OP_DIAL_KEYS.rx);
-    opDialGrid('op-dial-dur-grid', OP_DIAL_KEYS.dur);
-
-    document.getElementById('op-dial-rx-grid').classList.toggle('d-none', mode !== 'rx');
-    document.getElementById('op-dial-dur-grid').classList.toggle('d-none', mode === 'rx');
-
-    // Taper only belongs on a dosage, and only on a real prescription row.
-    var taperHost = document.getElementById('op-dial-taper-host');
-    if (taperHost) {
-      taperHost.classList.toggle('d-none', mode !== 'rx' || !inputEl.closest('tr'));
+    if (!window.crescDialPad) {
+      if (window.crescAlert) crescAlert('Dial_Pad.html is missing from this deployment.', 'err');
+      return;
     }
-
-    paintOPDial();
-    new bootstrap.Modal(document.getElementById('opDialPadModal')).show();
-}
-
-/**
- * Shows what the field will say.
- *
- * The pad is a modal and the field is behind it, so every press used to be
- * blind: 1, BD, AF gave no sight of "1(AF)-0-1(AF)" until the pad closed,
- * and a wrong press could only be undone by clearing everything.
- */
-function paintOPDial() {
-  var d = document.getElementById('op-dial-display');
-  var h = document.getElementById('op-dial-hint');
-  if (!d) return;
-  var v = currentOPDialTarget ? String(currentOPDialTarget.value || '').trim() : '';
-  d.textContent = v || '—';
-  d.style.color = v ? 'var(--warning-fg)' : 'var(--text-muted)';
-
-  if (!h) return;
-  if (currentOPDialMode === 'rx') {
-    h.textContent = v
-      ? 'A pattern key (OD, BD…) replaces the dose; a number typed first fills it in.'
-      : 'Type a number, then a pattern: 1 then BD gives 1-0-1.';
-  } else {
-    h.textContent = 'A number, then a unit. Pressing a second unit replaces the first.';
-  }
-}
-
-function appendOPDial(val) {
-    if (!currentOPDialTarget) return;
-    let cVal = currentOPDialTarget.value.trim();
-    const v = val.trim();
-    const rxPatterns = {
-      'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1',
-      'HS': '0-0-1'
-    };
-
-    const swapToken = function (text, group, token) {
-        // Strip every member of the group (with its separating space), then
-        // append the one just pressed. Word-boundary anchored so "ml" does not
-        // eat the "ml" inside "5ml" typed by hand.
-        let out = text;
-        group.forEach(function (g) {
-            out = out.replace(new RegExp('\\s*\\b' + g.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), '');
-        });
-        out = out.trim();
-        return out ? out + ' ' + token : token;
-    };
-
-    if (rxPatterns[v]) {
-        let base = rxPatterns[v];
-        if (cVal && !isNaN(cVal)) base = base.replace(/1/g, cVal);
-        currentOPDialTarget.value = base;
-
-    } else if (v === 'AF' || v === 'BF') {
-        // AF and BF are also exclusive: clear the other before applying.
-        const other = (v === 'AF') ? 'BF' : 'AF';
-        cVal = cVal.replace(new RegExp('\\(' + other + '\\)', 'g'), '');
-        if (cVal.includes('-')) {
-            currentOPDialTarget.value = cVal.split('-').map(function (p) {
-                const clean = p.replace(/\((?:AF|BF)\)/g, '').trim();
-                return (clean !== '0' && clean !== '') ? clean + '(' + v + ')' : (clean || '0');
-            }).join('-');
-        } else {
-            cVal = cVal.replace(/\((?:AF|BF)\)/g, '').trim();
-            currentOPDialTarget.value = cVal ? cVal + ' (' + v + ')' : '(' + v + ')';
-        }
-
-    } else if (OP_DIAL_GROUPS.DURATION.indexOf(v) !== -1) {
-        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.DURATION, v);
-    } else if (OP_DIAL_GROUPS.DOSEUNIT.indexOf(v) !== -1) {
-        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.DOSEUNIT, v);
-    } else if (OP_DIAL_GROUPS.SCHEDULE.indexOf(v) !== -1) {
-        // A schedule is exclusive too: 8-hourly and 12-hourly are a change of
-        // mind, not two instructions.
-        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.SCHEDULE, v);
-    } else if (OP_DIAL_GROUPS.URGENCY.indexOf(v) !== -1) {
-        // Pressing STAT twice clears it: it is a toggle, not an accumulator.
-        const had = new RegExp('\\b' + v + '\\b', 'i').test(cVal);
-        let out = cVal;
-        OP_DIAL_GROUPS.URGENCY.forEach(function (g) {
-            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
-        });
-        out = out.trim();
-        currentOPDialTarget.value = had ? out : (out ? out + ' ' + v : v);
-
-    } else {
-        // Digits and fractions still accumulate — that is how a number is typed.
-        currentOPDialTarget.value = cVal + val;
-    }
-
-    currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
-    paintOPDial();
-}
-
-/**
- * Removes the last thing entered, not the last character.
- *
- * "1-0-1 Days" backspaced a character at a time is five presses to undo one
- * mistake, and the field spends four of them holding "1-0-1 Day", "1-0-1 Da"
- * — values that mean nothing. A whole token goes at once.
- */
-function backspaceOPDial() {
-  if (!currentOPDialTarget) return;
-  var v = String(currentOPDialTarget.value || '').trim();
-  if (!v) return;
-
-  // A trailing word (unit, schedule, urgency) goes whole; otherwise one
-  // character, because a number is built a digit at a time.
-  var m = /\s+\S+$/.exec(v);
-  if (m && /[A-Za-z)]$/.test(v)) v = v.slice(0, m.index);
-  else v = v.slice(0, -1);
-
-  currentOPDialTarget.value = v.trim();
-  currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
-  paintOPDial();
-}
-
-function clearOPDial() {
-  if (!currentOPDialTarget) return;
-  currentOPDialTarget.value = '';
-  currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
-  paintOPDial();
-}
-
-// ============================================================================
-// TAPER MODE
-// ============================================================================
-function openTaperFromDial() {
-    if (!currentOPDialTarget) return;
-    opTaperTargetRow = currentOPDialTarget.closest('tr');
-    bootstrap.Modal.getInstance(document.getElementById('opDialPadModal'))?.hide();
-    openTaperBuilder(opTaperTargetRow);
+    window.crescDialPad.open(inputEl, mode, {
+      onTaper: function (row) { if (row) openTaperBuilder(row); }
+    });
 }
 
 function openTaperBuilder(row) {

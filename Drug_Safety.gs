@@ -187,12 +187,16 @@ function checkDuplicateTherapy_(meds, genericMap) {
   var out = { alerts: [], checked: 0, identified: 0 };
   try {
     meds = (meds || []).filter(function (m) { return ds_str_(m && m.drugName); });
-    if (meds.length < 2) { out.checked = meds.length; return out; }
 
+    // Identify FIRST, whatever the count. This used to return before
+    // identifying anything when there was one drug, leaving identified at 0 —
+    // so every single-drug prescription reported "1 of the 1 drugs ... are in
+    // neither Pharmacy_Inventory nor Drug_Dose_Reference", in stock or not.
     var gm = genericMap || (typeof rx_genericMap_ === "function" ? rx_genericMap_() : null);
     var ids = meds.map(function (m) { return ds_identify_(m.drugName, gm); });
     out.checked = ids.length;
     out.identified = ids.filter(function (i) { return i.source !== "typed"; }).length;
+    if (meds.length < 2) return out;
 
     // ---- 1. the same drug, listed twice ---------------------------------
     // Matched on the NORMALISED stem, so "Tab Paracetamol 500" and

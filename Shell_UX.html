@@ -635,3 +635,80 @@
 })();
 </script>
 
+
+<style>
+  .autocomplete-items > .cresc-active { background-color: var(--border-hover) !important;
+                                        outline: 1px solid var(--accent); outline-offset: -1px; }
+</style>
+<script>
+/* ====================================================================
+   SUGGESTION LISTS FROM THE KEYBOARD — crescSuggestKeys
+
+   Every typeahead in the app (complaints, history, diagnosis, drug search,
+   pharmacy billing) draws its matches into an .autocomplete-items box
+   beside the input, and every one of them could only be used with the
+   mouse. One handler, here, for all of them:
+
+     ArrowDown / ArrowUp   move through the matches
+     Enter                 takes the highlighted match (when one is
+                           highlighted; otherwise Enter does what the box
+                           always did)
+     Escape                closes the list and keeps what is typed
+
+   Capture phase, so it runs before a box's own onkeydown — "Enter adds the
+   diagnosis" still works, but not when a suggestion is highlighted.
+   ==================================================================== */
+(function () {
+  'use strict';
+  function listFor(input) {
+    var p = input && input.parentElement;
+    var dd = p && p.querySelector('.autocomplete-items');
+    if (!dd || dd.hidden || dd.classList.contains('d-none')) return null;
+    var items = Array.prototype.filter.call(dd.children, function (el) {
+      return el.offsetParent !== null && !el.classList.contains('autocomplete-empty');
+    });
+    return items.length ? { box: dd, items: items } : null;
+  }
+  function take(item) {
+    if (item.onmousedown || item.getAttribute('onmousedown')) {
+      item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    } else {
+      item.click();
+    }
+  }
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!t || (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA')) return;
+    var k = e.key;
+    if (k !== 'ArrowDown' && k !== 'ArrowUp' && k !== 'Enter' && k !== 'Escape') return;
+    var l = listFor(t);
+    if (!l) return;
+    var i = -1;
+    l.items.forEach(function (el, n) { if (el.classList.contains('cresc-active')) i = n; });
+
+    if (k === 'ArrowDown' || k === 'ArrowUp') {
+      e.preventDefault();
+      if (i !== -1) l.items[i].classList.remove('cresc-active');
+      i = k === 'ArrowDown' ? (i + 1) % l.items.length : (i <= 0 ? l.items.length - 1 : i - 1);
+      l.items[i].classList.add('cresc-active');
+      l.items[i].scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (k === 'Escape') {
+      e.preventDefault(); e.stopPropagation();
+      l.box.classList.add('d-none');
+      return;
+    }
+    if (k === 'Enter' && i !== -1) {
+      e.preventDefault(); e.stopPropagation();
+      take(l.items[i]);
+    }
+  }, true);
+  // Typing again starts the highlight over.
+  document.addEventListener('input', function (e) {
+    var l = listFor(e.target);
+    if (l) l.items.forEach(function (el) { el.classList.remove('cresc-active'); });
+  }, true);
+  window.crescSuggestKeys = true;
+})();
+</script>

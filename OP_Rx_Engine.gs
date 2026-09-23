@@ -219,7 +219,10 @@ function getComposerContext(doctorId, sessionToken) {
     var learned = getScopedTemplates(me, sessionToken);
 
     // --- tier 1: seed library, department-filtered -------------------------
-    var seed = { CC: [], HX: [], ADVICE: [] };
+    // DX: the seed library's diagnoses. Fifty rows sat in Clinical_Seed_Library
+    // and nothing read them; they now drive the diagnosis box's suggestions and
+    // widen History (a comorbidity is a diagnosis).
+    var seed = { CC: [], HX: [], ADVICE: [], DX: [] };
     var workup = {};
     var sh = rx_seedSheet_();
     var data = sh.getDataRange().getDisplayValues();
@@ -258,7 +261,7 @@ function getComposerContext(doctorId, sessionToken) {
     }
 
     // Department matches float to the top of the seed tier.
-    ["CC", "HX", "ADVICE"].forEach(function (c) {
+    ["CC", "HX", "ADVICE", "DX"].forEach(function (c) {
       seed[c].sort(function (a, b) {
         if (a.inDepartment !== b.inDepartment) return a.inDepartment ? -1 : 1;
         return a.text < b.text ? -1 : 1;
@@ -266,8 +269,8 @@ function getComposerContext(doctorId, sessionToken) {
     });
 
     // --- merge: PERSONAL > CLINIC > SEED ----------------------------------
-    var phrases = { CC: [], HX: [], ADVICE: [] };
-    ["CC", "HX", "ADVICE"].forEach(function (c) {
+    var phrases = { CC: [], HX: [], ADVICE: [], DX: [] };
+    ["CC", "HX", "ADVICE", "DX"].forEach(function (c) {
       var seen = {};
       var merged = [];
       (learned[c] || []).forEach(function (p) {

@@ -399,11 +399,14 @@ function checkDrugInteractions_(meds, genericMap) {
   var result = { alerts: [], rulesLoaded: 0 };
   try {
     meds = (meds || []).filter(function (m) { return dc_str_(m.drugName); });
-    if (meds.length < 2) return result;
 
+    // Count the rules BEFORE the one-drug shortcut. It used to return first,
+    // so a one-drug prescription always reported rulesLoaded = 0 — and the
+    // composer then said "No drug interaction pairs are loaded ... NO
+    // interaction checking is happening" on a fully set-up clinic.
     var rules = di_rules_();
     result.rulesLoaded = rules.length;
-    if (!rules.length) return result;
+    if (meds.length < 2 || !rules.length) return result;
 
     var gm = genericMap || rx_genericMap_();
     var aliases = meds.map(function (m) { return di_aliases_(m.drugName, gm); });

@@ -1,0 +1,294 @@
+<!-- =====================================================================
+     🔢 DIAL PAD — dosage and duration, one pad for OPD and IPD
+
+     There were two. The IP case sheet's worked; the OP consult's had a
+     richer key set and a live preview, and NOT ONE of its keys did
+     anything: each button's handler put JSON.stringify(key) inside a
+     double-quoted onclick attribute, and the double quotes JSON.stringify
+     adds closed the attribute early — a syntax error on every press.
+     The two pads had also drifted apart on keys (no HS, no hourly
+     schedules, no mg/tab on the ward).
+
+     Now there is one, in the shell, opened by both:
+
+         window.crescDialPad.open(inputEl, 'rx' | 'dur', { onTaper(row) })
+
+     Keyboard: digits and "/" type; Backspace removes the last entry (a
+     whole word at a time); Delete clears; Enter confirms; Escape puts
+     the field back as it was. Arrow keys and Tab move between keys.
+     ===================================================================== -->
+<style>
+  #cresc-dial { position: fixed; inset: 0; z-index: 3700; display: flex;
+                align-items: center; justify-content: center;
+                background: var(--overlay-scrim); }
+  #cresc-dial[hidden] { display: none !important; }
+  #cresc-dial .cd-card { background: var(--bg-input); color: var(--text-main);
+                border: 1px solid var(--border-hover); border-radius: 14px;
+                width: 94%; max-width: 310px; padding: .8rem; box-shadow: var(--shadow-lg); }
+  #cresc-dial .cd-head { display: flex; justify-content: space-between; align-items: center;
+                border-bottom: 1px solid var(--divider-color); padding-bottom: .45rem; margin-bottom: .5rem; }
+  #cresc-dial .cd-title { font-size: .8rem; font-weight: 700; color: var(--info-fg); }
+  #cresc-dial .cd-display { background: var(--bg-card); border: 1px solid var(--border-color);
+                border-radius: 8px; padding: .45rem .6rem; min-height: 2.1rem;
+                font-family: ui-monospace, monospace; font-size: .95rem; font-weight: 700;
+                color: var(--warning-fg); word-break: break-word; }
+  #cresc-dial .cd-hint { font-size: .66rem; color: var(--text-muted); min-height: 1rem; margin: .3rem 0 .45rem; }
+  #cresc-dial .cd-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: .25rem; }
+  #cresc-dial .cd-key { grid-column: span 3; border-radius: 7px; border: 1px solid var(--border-color);
+                background: var(--bg-card); color: var(--text-main); font-size: .74rem; font-weight: 600;
+                padding: .38rem .1rem; cursor: pointer; }
+  #cresc-dial .cd-key:hover { border-color: var(--border-hover); }
+  #cresc-dial .cd-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #cresc-dial .cd-key.w4 { grid-column: span 4; }
+  #cresc-dial .cd-key.w6 { grid-column: span 6; }
+  #cresc-dial .cd-key.w12 { grid-column: span 12; }
+  #cresc-dial .cd-key.info    { color: var(--info-fg);    border-color: var(--info); }
+  #cresc-dial .cd-key.warning { color: var(--warning-fg); border-color: var(--warning); }
+  #cresc-dial .cd-key.success { color: var(--success-fg); border-color: var(--success); }
+  #cresc-dial .cd-key.unit    { color: var(--text-secondary); }
+  #cresc-dial .cd-tools button { background: none; border: 1px solid var(--border-color); color: var(--text-muted);
+                border-radius: 6px; font-size: .7rem; padding: .1rem .45rem; margin-left: .25rem; }
+  #cresc-dial .cd-tools button:hover { color: var(--text-main); }
+  #cresc-dial .cd-foot { display: grid; grid-template-columns: 1fr 2fr; gap: .35rem; margin-top: .55rem; }
+  #cresc-dial .cd-ok { background: var(--info-solid); color: var(--text-on-accent); border: 0;
+                border-radius: 8px; font-weight: 700; font-size: .8rem; padding: .4rem; }
+  #cresc-dial .cd-taper { background: none; border: 1px solid var(--warning); color: var(--warning-fg);
+                border-radius: 8px; font-weight: 700; font-size: .72rem; padding: .35rem; }
+</style>
+
+<div id="cresc-dial" hidden role="dialog" aria-modal="true" aria-labelledby="cd-title">
+  <div class="cd-card">
+    <div class="cd-head">
+      <span class="cd-title" id="cd-title">Smart input</span>
+      <span class="cd-tools">
+        <button type="button" title="Remove the last entry (Backspace)" aria-label="Remove the last entry"
+                onclick="crescDialPad.back()"><i class="fa-solid fa-delete-left"></i></button>
+        <button type="button" title="Clear (Delete)" aria-label="Clear"
+                onclick="crescDialPad.clear()"><i class="fa-solid fa-eraser"></i></button>
+      </span>
+    </div>
+    <div class="cd-display" id="cd-display" aria-live="polite">&nbsp;</div>
+    <div class="cd-hint" id="cd-hint"></div>
+    <div class="cd-grid" id="cd-grid"></div>
+    <div class="cd-foot" id="cd-foot">
+      <button type="button" class="cd-taper" id="cd-taper" onclick="crescDialPad.taper()">
+        <i class="fa-solid fa-stairs me-1"></i>Taper
+      </button>
+      <button type="button" class="cd-ok" onclick="crescDialPad.close(true)">Done · Enter</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var KEYS = {
+    rx: [
+      // digits and fractions — these accumulate, that is how a number is typed
+      { k: '0' }, { k: '1/4' }, { k: '1/2' }, { k: '1' },
+      { k: '2' }, { k: '3' }, { k: '5' }, { k: '10' },
+      // the 1-0-1 patterns and the schedules
+      { k: 'OD', s: 'info' }, { k: 'BD', s: 'info' }, { k: 'TDS', s: 'info' }, { k: 'QID', s: 'info' },
+      { k: 'HS', s: 'info', t: 'At bedtime' }, { k: 'Q6H', s: 'info', t: '6-hourly' },
+      { k: 'Q8H', s: 'info', t: '8-hourly' }, { k: 'Q12H', s: 'info', t: '12-hourly' },
+      { k: 'Alt day', w: 6, s: 'info', t: 'Alternate days' }, { k: 'Weekly', w: 6, s: 'info' },
+      { k: 'STAT', s: 'warning' }, { k: 'SOS', s: 'warning' },
+      { k: 'BF', s: 'success', t: 'Before food' }, { k: 'AF', s: 'success', t: 'After food' },
+      // units
+      { k: 'mg', s: 'unit' }, { k: 'ml', s: 'unit' }, { k: 'tab', s: 'unit' }, { k: 'Drops', s: 'unit' },
+      { k: 'puff', s: 'unit' }, { k: 'neb', s: 'unit', t: 'Per nebulisation' },
+      { k: 'unit', s: 'unit', t: 'Insulin units' }, { k: 'Oint', s: 'unit' }
+    ],
+    dur: [
+      { k: '1', w: 4 }, { k: '2', w: 4 }, { k: '3', w: 4 },
+      { k: '4', w: 4 }, { k: '5', w: 4 }, { k: '6', w: 4 },
+      { k: '7', w: 4 }, { k: '10', w: 4 }, { k: '14', w: 4 },
+      { k: '21', w: 4 }, { k: '30', w: 4 }, { k: '90', w: 4 },
+      { k: 'Days', w: 6, s: 'info' }, { k: 'Wks', w: 6, s: 'info' },
+      { k: 'Mths', w: 6, s: 'info' }, { k: 'Yrs', w: 6, s: 'info' },
+      { k: 'Once', w: 6, s: 'warning', t: 'A single dose' },
+      { k: 'Till review', w: 6, s: 'warning' },
+      { k: 'Continue', w: 12, s: 'warning', t: 'Long-term / ongoing' }
+    ]
+  };
+
+  /** Tokens that REPLACE rather than append: pressing Days then Mths is a change of mind. */
+  var GROUPS = {
+    DURATION: ['Days', 'Wks', 'Mths', 'Yrs', 'Once', 'Till review', 'Continue'],
+    DOSEUNIT: ['mg', 'ml', 'tab', 'Drops', 'puff', 'neb', 'unit', 'Oint'],
+    URGENCY:  ['STAT', 'SOS'],
+    SCHEDULE: ['HS', 'Q6H', 'Q8H', 'Q12H', 'Alt day', 'Weekly']
+  };
+  var PATTERNS = { OD: '1-0-0', BD: '1-0-1', TDS: '1-1-1', QID: '1-1-1-1' };
+
+  var target = null, mode = 'rx', before = '', opts = {}, lastFocus = null;
+
+  function el(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function reEsc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function swapToken(text, group, token) {
+    var out = text;
+    group.forEach(function (g) {
+      out = out.replace(new RegExp('\\s*\\b' + reEsc(g) + '\\b', 'gi'), '');
+    });
+    out = out.trim();
+    return out ? out + ' ' + token : token;
+  }
+
+  /** The value after pressing `val` on a field holding `cur`. Pure, so it can be tested. */
+  function apply(cur, val) {
+    var c = String(cur || '').trim();
+    var v = String(val).trim();
+    if (PATTERNS[v]) {
+      var base = PATTERNS[v];
+      return (c && !isNaN(c)) ? base.replace(/1/g, c) : base;
+    }
+    if (v === 'AF' || v === 'BF') {
+      var other = v === 'AF' ? 'BF' : 'AF';
+      c = c.replace(new RegExp('\\(' + other + '\\)', 'g'), '');
+      if (c.indexOf('-') !== -1) {
+        return c.split('-').map(function (p) {
+          var clean = p.replace(/\((?:AF|BF)\)/g, '').trim();
+          return (clean !== '0' && clean !== '') ? clean + '(' + v + ')' : (clean || '0');
+        }).join('-');
+      }
+      c = c.replace(/\((?:AF|BF)\)/g, '').trim();
+      return c ? c + ' (' + v + ')' : '(' + v + ')';
+    }
+    if (GROUPS.DURATION.indexOf(v) !== -1) return swapToken(c, GROUPS.DURATION, v);
+    if (GROUPS.DOSEUNIT.indexOf(v) !== -1) return swapToken(c, GROUPS.DOSEUNIT, v);
+    if (GROUPS.SCHEDULE.indexOf(v) !== -1) return swapToken(c, GROUPS.SCHEDULE, v);
+    if (GROUPS.URGENCY.indexOf(v) !== -1) {
+      var had = new RegExp('\\b' + v + '\\b', 'i').test(c);
+      var out = c;
+      GROUPS.URGENCY.forEach(function (g) { out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), ''); });
+      out = out.trim();
+      return had ? out : (out ? out + ' ' + v : v);
+    }
+    // A number after a word starts a new part ("5 Days" then 1 -> "5 Days 1"
+    // is never meant; "1-0-1" then 5 is a mistake too), so after a letter or
+    // bracket a space separates it.
+    if (/[A-Za-z)]$/.test(c) && /^[0-9]/.test(v)) return c + ' ' + v;
+    return c + v;
+  }
+
+  /** Removes the last entry: a trailing word whole, otherwise one character. */
+  function backOf(cur) {
+    var v = String(cur || '').trim();
+    if (!v) return '';
+    var m = /\s+\S+$/.exec(v);
+    if (m && /[A-Za-z)]$/.test(v)) return v.slice(0, m.index).trim();
+    return v.slice(0, -1).trim();
+  }
+
+  function set(v) {
+    if (!target) return;
+    target.value = v;
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+    paint();
+  }
+
+  function paint() {
+    var v = target ? String(target.value || '').trim() : '';
+    var d = el('cd-display');
+    d.textContent = v || '—';
+    d.style.color = v ? 'var(--warning-fg)' : 'var(--text-muted)';
+    el('cd-hint').textContent = mode === 'rx'
+      ? (v ? 'A pattern (OD, BD…) replaces the dose; a number pressed first fills it in.'
+           : 'Type a number, then a pattern: 1 then BD gives 1-0-1.')
+      : 'A number, then a unit. A second unit replaces the first.';
+  }
+
+  function build() {
+    el('cd-grid').innerHTML = KEYS[mode].map(function (key) {
+      return '<button type="button" class="cd-key' + (key.w ? ' w' + key.w : '') +
+        (key.s ? ' ' + key.s : '') + '" data-k="' + esc(key.k) + '"' +
+        (key.t ? ' title="' + esc(key.t) + '"' : '') + '>' + esc(key.k) + '</button>';
+    }).join('');
+  }
+
+  var api = {
+    apply: apply, backOf: backOf,
+
+    open: function (inputEl, m, o) {
+      if (!inputEl || inputEl.disabled || inputEl.readOnly && !inputEl.classList.contains('dial-trigger')) return;
+      target = inputEl; mode = m === 'rx' ? 'rx' : 'dur'; opts = o || {};
+      before = String(inputEl.value || '');
+      lastFocus = document.activeElement;
+      el('cd-title').textContent = mode === 'rx' ? 'Smart dosage' : 'Duration';
+      build();
+      var canTaper = mode === 'rx' && typeof opts.onTaper === 'function' && !!inputEl.closest('tr');
+      el('cd-taper').style.display = canTaper ? '' : 'none';
+      el('cd-foot').style.gridTemplateColumns = canTaper ? '1fr 2fr' : '1fr';
+      paint();
+      el('cresc-dial').hidden = false;
+      var first = el('cd-grid').querySelector('.cd-key');
+      if (first) first.focus();
+    },
+
+    close: function (keep) {
+      if (!target) { el('cresc-dial').hidden = true; return; }
+      if (keep === false) set(before);                 // Escape: as it was
+      else target.dispatchEvent(new Event('change', { bubbles: true }));
+      el('cresc-dial').hidden = true;
+      var t = target; target = null;
+      // Back to the field, and on to the next one on Enter — the pad is part
+      // of a keyboard flow, not the end of it.
+      try { (t || lastFocus).focus(); } catch (e) {}
+    },
+
+    press: function (k) { set(apply(target ? target.value : '', k)); },
+    back:  function () { set(backOf(target ? target.value : '')); },
+    clear: function () { set(''); },
+
+    taper: function () {
+      if (!target || typeof opts.onTaper !== 'function') return;
+      var row = target.closest('tr'), cb = opts.onTaper;
+      api.close(true);
+      cb(row);
+    }
+  };
+  window.crescDialPad = api;
+
+  el('cd-grid').addEventListener('click', function (e) {
+    var b = e.target.closest('.cd-key');
+    if (b) api.press(b.getAttribute('data-k'));
+  });
+  el('cresc-dial').addEventListener('mousedown', function (e) {
+    if (e.target === el('cresc-dial')) api.close(true);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (el('cresc-dial').hidden) return;
+    var k = e.key;
+    if (k === 'Escape') { e.preventDefault(); api.close(false); return; }
+    if (k === 'Enter') {
+      // Enter on a focused key presses it; Ctrl/Meta+Enter, or Enter on the
+      // Done button, confirms.
+      var f = document.activeElement;
+      if (!e.ctrlKey && !e.metaKey && f && f.classList && f.classList.contains('cd-key')) {
+        e.preventDefault(); api.press(f.getAttribute('data-k')); return;
+      }
+      if (f && f.classList && f.classList.contains('cd-taper')) return;
+      e.preventDefault(); api.close(true); return;
+    }
+    if (k === 'Backspace') { e.preventDefault(); api.back(); return; }
+    if (k === 'Delete') { e.preventDefault(); api.clear(); return; }
+    if (/^[0-9]$/.test(k) || k === '/') { e.preventDefault(); set(String(target.value || '') + k); return; }
+    if (k.indexOf('Arrow') === 0) {
+      var keys = Array.prototype.slice.call(el('cd-grid').querySelectorAll('.cd-key'));
+      var i = keys.indexOf(document.activeElement);
+      if (i === -1) { keys[0] && keys[0].focus(); e.preventDefault(); return; }
+      var cols = mode === 'rx' ? 4 : 3;
+      var n = k === 'ArrowRight' ? i + 1 : k === 'ArrowLeft' ? i - 1 : k === 'ArrowDown' ? i + cols : i - cols;
+      n = Math.max(0, Math.min(keys.length - 1, n));
+      keys[n].focus(); e.preventDefault();
+    }
+  });
+})();
+</script>

@@ -103,16 +103,16 @@
     // string — `innerHTML +=` per row re-parsed the whole table each time.
     const esc = window.crescEsc || (s => String(s == null ? '' : s));
     const js = s => esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
-    tbody.innerHTML = data.map(p => `
+    tbody.innerHTML = data.map(p => { const idArg = js(p.id); return `
         <tr class="align-middle">
           <td class="text-info fw-bold">${esc(p.id)}</td>
           <td class="text-white fw-bold">${esc(p.name)}</td>
           <td class="text-light">${esc(p.gender || '-')} / ${esc(p.age || '-')} Yrs</td>
           <td class="text-light"><i class="fa-solid fa-phone fa-xs text-muted me-1"></i> ${esc(p.mobile || '-')}</td>
           <td>
-            <button class="btn btn-sm btn-outline-info py-0" onclick="viewPatientProfile('${js(p.id)}')">View</button>
+            <button class="btn btn-sm btn-outline-info py-0" onclick="viewPatientProfile('${idArg}')">View</button>
           </td>
-        </tr>`).join('');
+        </tr>`; }).join('');
   }
 
   // 3. Instant Search Engine (Runs as you type)
