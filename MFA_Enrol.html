@@ -1,0 +1,221 @@
+<!-- ══════════════════════════════════════════════════════════════════════
+     MFA_Enrol.html — setting up two-step sign-in from inside the app
+
+     Opened from the account menu (your own phone) and from Staff Accounts
+     (an administrator, with the member of staff and their phone at the
+     desk). In the shell because both of those live in the shell.
+
+     Three steps, one dialog:
+       1. your password — only when it is your own account
+       2. scan the QR (drawn on the server; nothing goes to a QR website),
+          or type the key; then enter the six digits the phone shows
+       3. done
+     The server saves the new secret only at step 2's confirmation, so a scan
+     that goes wrong leaves the account exactly as it was.
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="crescMfaModal" tabindex="-1" aria-hidden="true" aria-labelledby="mfa-title">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force" id="mfa-title">
+          <i class="fa-solid fa-shield-halved me-2" style="color:var(--accent-fg);"></i>Two-step sign-in
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="small label-bright mb-3" id="mfa-who"></div>
+
+        <!-- step 1 -->
+        <div id="mfa-step-pwd" class="d-none">
+          <label class="form-label small label-bright mb-1" for="mfa-pwd">Your current password</label>
+          <input id="mfa-pwd" type="password" class="form-control form-control-sm" autocomplete="current-password">
+          <div class="form-text small label-bright">Asked so that a computer left signed in cannot move your sign-in to another phone.</div>
+        </div>
+
+        <!-- step 2 -->
+        <div id="mfa-step-scan" class="d-none">
+          <ol class="small ps-3 mb-3" style="line-height:1.6;">
+            <li>Open <strong>Google Authenticator</strong> (or Microsoft Authenticator) on the phone.</li>
+            <li id="mfa-replace-tip" class="d-none text-warning">Delete the old <span class="mfa-issuer"></span> entry first — two entries with one name is how the wrong code gets typed.</li>
+            <li>Tap <strong>+</strong> → <strong>Scan a QR code</strong>, and scan this:</li>
+          </ol>
+          <div class="text-center mb-2">
+            <img id="mfa-qr" alt="QR code for the authenticator app" style="background:#fff;padding:8px;border-radius:8px;width:196px;height:196px;image-rendering:pixelated;">
+          </div>
+          <details class="small mb-3">
+            <summary class="label-bright" style="cursor:pointer;">Cannot scan? Type the key instead</summary>
+            <div class="mt-2">Account: <strong class="mfa-account"></strong> · Time based</div>
+            <div class="font-monospace fw-bold mt-1" id="mfa-secret" style="font-size:1.05rem;letter-spacing:.08em;user-select:all;"></div>
+          </details>
+          <label class="form-label small label-bright mb-1" for="mfa-code">Now enter the 6-digit code the phone shows</label>
+          <input id="mfa-code" class="form-control form-control-lg text-center font-monospace"
+                 inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000000"
+                 style="letter-spacing:.35em;max-width:220px;margin:0 auto;">
+        </div>
+
+        <!-- step 3 -->
+        <div id="mfa-step-done" class="d-none text-center py-2">
+          <i class="fa-solid fa-circle-check fa-2x mb-2" style="color:var(--success-fg, #4ade80);"></i>
+          <div id="mfa-done-msg" class="small"></div>
+        </div>
+
+        <div id="mfa-msg" class="small mt-3" role="status" aria-live="polite"></div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal" id="mfa-close">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary fw-bold" id="mfa-next" onclick="crescMfaNext()">Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var S = { username: '', self: false, step: '', ticket: '', onDone: null, busy: false };
+
+  function $(id) { return document.getElementById(id); }
+  function say(text, kind) {
+    var m = $('mfa-msg');
+    if (!m) return;
+    m.textContent = text || '';
+    m.className = 'small mt-3 ' + (kind === 'ok' ? 'text-success' : kind ? 'text-warning' : '');
+  }
+  function show(step) {
+    S.step = step;
+    ['pwd', 'scan', 'done'].forEach(function (k) {
+      $('mfa-step-' + k).classList.toggle('d-none', k !== step);
+    });
+    var next = $('mfa-next');
+    next.classList.toggle('d-none', step === 'done');
+    next.textContent = step === 'scan' ? 'Confirm' : 'Continue';
+    $('mfa-close').textContent = step === 'done' ? 'Close' : 'Cancel';
+    setTimeout(function () {
+      var f = step === 'pwd' ? $('mfa-pwd') : step === 'scan' ? $('mfa-code') : $('mfa-close');
+      if (f) f.focus();
+    }, 250);
+  }
+  function busy(on, label) {
+    S.busy = on;
+    var b = $('mfa-next');
+    b.disabled = on;
+    if (on) { b.dataset.label = b.textContent; b.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (label || 'Working…'); }
+    else b.textContent = b.dataset.label || b.textContent;
+  }
+
+  /**
+   * @param {{username?:string, onDone?:function}} opts
+   *        username  somebody else's account (admin). Blank = your own.
+   */
+  window.crescMfaOpen = function (opts) {
+    opts = opts || {};
+    var me = String(window.loggedInUser || '');
+    S.username = String(opts.username || me);
+    S.self = !opts.username || S.username.toUpperCase() === me.toUpperCase();
+    S.ticket = '';
+    S.onDone = opts.onDone || null;
+    $('mfa-pwd').value = '';
+    $('mfa-code').value = '';
+    $('mfa-qr').removeAttribute('src');
+    ['pwd', 'scan', 'done'].forEach(function (k) { $('mfa-step-' + k).classList.add('d-none'); });
+    say('');
+    $('mfa-who').textContent = S.self
+      ? 'Your account (' + S.username + '). After this, signing in asks for your password and then a 6-digit code from your phone.'
+      : 'Account: ' + S.username + '. Have them here with their phone — the code has to be read off it.';
+    (bootstrap.Modal.getInstance($('crescMfaModal')) || new bootstrap.Modal($('crescMfaModal'))).show();
+    if (S.self) show('pwd'); else begin();
+  };
+
+  function begin() {
+    busy(true, 'Preparing…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        busy(false);
+        if (!res || !res.success) {
+          say((res && res.message) || 'Could not start.', 'warn');
+          if (S.self) { show('pwd'); $('mfa-pwd').select(); }
+          return;
+        }
+        S.ticket = res.ticket;
+        document.querySelectorAll('#crescMfaModal .mfa-issuer').forEach(function (n) { n.textContent = res.issuer; });
+        document.querySelectorAll('#crescMfaModal .mfa-account').forEach(function (n) { n.textContent = res.issuer + ':' + res.username; });
+        $('mfa-secret').textContent = res.secret;
+        $('mfa-replace-tip').classList.toggle('d-none', !res.replacing);
+        // No QR (the encoder failed): the typed key is the way in, so open it.
+        var keyBox = document.querySelector('#mfa-step-scan details');
+        if (res.qr) { $('mfa-qr').src = res.qr; $('mfa-qr').classList.remove('d-none'); if (keyBox) keyBox.open = false; }
+        else { $('mfa-qr').classList.add('d-none'); if (keyBox) keyBox.open = true; }
+        say('');
+        show('scan');
+      })
+      .withFailureHandler(function (err) { busy(false); say('Network error: ' + ((err && err.message) || err), 'warn'); })
+      .mfaBeginEnrolment({ username: S.self ? '' : S.username,
+                           currentPassword: S.self ? $('mfa-pwd').value : '' },
+                         window.sessionToken || '');
+  }
+
+  function confirmCode() {
+    var code = String($('mfa-code').value || '').replace(/\s/g, '');
+    if (!/^\d{6}$/.test(code)) { say('Enter the six digits the phone shows.', 'warn'); $('mfa-code').focus(); return; }
+    busy(true, 'Checking…');
+    google.script.run
+      .withSuccessHandler(function (res) {
+        busy(false);
+        if (res && res.success) {
+          $('mfa-done-msg').textContent = res.message || 'Two-step sign-in is on.';
+          show('done');
+          if (typeof S.onDone === 'function') { try { S.onDone(res); } catch (e) {} }
+          return;
+        }
+        say((res && res.message) || 'That code did not match.', 'warn');
+        if (res && res.code === 'EXPIRED') { S.ticket = ''; if (S.self) show('pwd'); else begin(); return; }
+        $('mfa-code').select();
+      })
+      .withFailureHandler(function (err) { busy(false); say('Network error: ' + ((err && err.message) || err), 'warn'); })
+      .mfaConfirmEnrolment(S.ticket, code, window.sessionToken || '');
+  }
+
+  window.crescMfaNext = function () {
+    if (S.busy) return;
+    if (S.step === 'pwd') {
+      if (!$('mfa-pwd').value) { say('Enter your current password.', 'warn'); return; }
+      begin();
+    } else if (S.step === 'scan') {
+      confirmCode();
+    }
+  };
+
+  /** Administrators: switch it off for somebody who has lost their phone. */
+  window.crescMfaRemove = function (username, onDone) {
+    var ask = window.crescPrompt
+      ? window.crescPrompt('Switch off two-step sign-in for ' + username + '? They will sign in with the ' +
+                           'password alone until a new phone is set up.\n\nReason (goes in the audit log):',
+                           'Lost phone', { title: 'Two-step sign-in', okLabel: 'Switch off' })
+      : Promise.resolve(window.prompt('Reason for removing two-step sign-in from ' + username + ':', 'Lost phone'));
+    Promise.resolve(ask).then(function (reason) {
+      if (reason === null || reason === undefined) return;
+      google.script.run
+        .withSuccessHandler(function (res) { if (typeof onDone === 'function') onDone(res); })
+        .withFailureHandler(function (err) {
+          if (typeof onDone === 'function') onDone({ success: false, message: 'Network error: ' + ((err && err.message) || err) });
+        })
+        .mfaRemove(username, reason, window.sessionToken || '');
+    });
+  };
+
+  // Enter moves the dialog on, from either field.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var t = e.target;
+    if (!t || (t.id !== 'mfa-pwd' && t.id !== 'mfa-code')) return;
+    e.preventDefault();
+    window.crescMfaNext();
+  });
+  // Six digits typed or pasted is the whole answer; do not make them reach for Enter.
+  document.addEventListener('input', function (e) {
+    if (!e.target || e.target.id !== 'mfa-code') return;
+    var v = String(e.target.value || '').replace(/\D/g, '').slice(0, 6);
+    if (e.target.value !== v) e.target.value = v;
+    if (v.length === 6 && S.step === 'scan' && !S.busy) window.crescMfaNext();
+  });
+})();
+</script>

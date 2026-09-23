@@ -76,7 +76,7 @@ const env = {
   UrlFetchApp: { fetch() { throw new Error('no network in tests'); } }
 };
 vm.createContext(env);
-for (const f of ['Auth_Credentials.gs', 'Auth_Reset.gs', 'AuthLogin.gs']) {
+for (const f of ['Auth_Credentials.gs', 'Auth_Reset.gs', 'AuthLogin.gs', 'Auth_MFA_Admin.gs', 'DS_QR_Lib.gs']) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), env, { filename: f });
 }
 // What the flows call in other files, reduced to what they do here.
@@ -94,6 +94,19 @@ vm.runInContext(`
   function resolveDoctorByUsername_() { return null; }
   function issueSession_(o) { const t = 'SESS-' + Utilities.getUuid(); CacheService.getScriptCache().put('SESS_' + t, JSON.stringify(o)); return t; }
   function cresc_clinic_() { return { name: 'Test Clinic' }; }
+  // Sessions for the in-app MFA set-up: token -> who is asking.
+  var __actors = {
+    'T-NURSE': { username: 'nurse1', role: 'nurse', permissions: ['emr.read'] },
+    'T-ADMIN': { username: 'admin1', role: 'admin', permissions: ['admin.users'] },
+    'T-OWNER': { username: 'owner', role: 'admin', permissions: ['admin.users', 'admin.users.elevated'] }
+  };
+  function crescRequire_(token, perm) {
+    var a = __actors[token];
+    if (!a) throw new Error('FORBIDDEN: your session has expired. Please sign in again.');
+    if (perm && a.permissions.indexOf(perm) === -1) throw new Error('FORBIDDEN: you may not do that.');
+    return a;
+  }
+  function crescRole_(r) { return String(r || '').toLowerCase(); }
 `, Object.assign(env, { __audit: audit }));
 
 let SS;
@@ -104,7 +117,8 @@ function fresh(mfaSecret) {
     sheets: {
       Users: makeSheet([
         ['Username', 'Password', 'Role', 'Status', 'Email', 'MFA_Secret'],
-        ['nurse1', enc('Old-password-123'), 'nurse', 'Active', 'nurse1@example.com', mfaSecret || '']
+        ['nurse1', enc('Old-password-123'), 'nurse', 'Active', 'nurse1@example.com', mfaSecret || ''],
+        ['drA', enc('Doctor-pass-321'), 'doctor', 'Active', '', '']
       ]),
       Patients: makeSheet([
         Array.from({ length: 17 }, (_, i) => ['Patient_ID', 'Password', 'Name'][i] || 'C' + i),
@@ -182,5 +196,43 @@ check('no MFA enrolled: the password signs straight in', r.success === true && !
 r = env.verifyGoogleLogin('nurse1@example.com');
 check('an email address alone is not a Google sign-in', r.success === false && !r.sessionToken, r);
 
+// --- 6. MFA set up in the app: saved only once the phone proves it ----------
+const codeFor = sec => env.generateTOTPAlgorithm_(env.base32ToBytes_(sec.replace(/\s/g, '')), Math.floor(Date.now() / 30000));
+const users = () => SS.sheets.Users.data;
+fresh();
+let b = env.mfaBeginEnrolment({}, 'T-NURSE');
+check('your own set-up asks for your password', b.success === false && b.code === 'BAD_PASSWORD', b);
+b = env.mfaBeginEnrolment({ currentPassword: 'Old-password-123' }, 'T-NURSE');
+check('your own set-up starts with the right password', b.success === true && !!b.ticket && /^otpauth:\/\/totp\//.test(b.otpauthUrl), b);
+check('the QR is drawn on the server', /^data:image\/gif;base64,/.test(b.qr || ''), (b.qr || '').slice(0, 40));
+check('nothing is saved before the phone confirms', !users()[1][5]);
+let c = env.mfaConfirmEnrolment(b.ticket, '000000', 'T-NURSE');
+check('a wrong code saves nothing', c.success === false && !users()[1][5], c);
+c = env.mfaConfirmEnrolment(b.ticket, codeFor(b.secret), 'T-ADMIN');
+check('another session cannot finish your set-up', c.success === false && !users()[1][5], c);
+c = env.mfaConfirmEnrolment(b.ticket, codeFor(b.secret), 'T-NURSE');
+check('the phone\'s code saves the secret', c.success === true && users()[1][5] === b.secret.replace(/\s/g, ''), c);
+r = env.verifyLogin({ username: 'nurse1', password: 'Old-password-123' });
+check('...and the next sign-in asks for the code', r.mfaRequired === true && !r.sessionToken, r);
+let x = env.mfaConfirmEnrolment(b.ticket, codeFor(b.secret), 'T-NURSE');
+check('the enrolment ticket is single use', x.success === false && x.code === 'EXPIRED', x);
+b = env.mfaBeginEnrolment({ username: 'drA' }, 'T-NURSE');
+check('a nurse cannot set up somebody else', b.success === false, b);
+b = env.mfaBeginEnrolment({ username: 'drA' }, 'T-ADMIN');
+check('an ordinary admin cannot set up a doctor', b.success === false && b.code === 'ELEVATION_REQUIRED', b);
+b = env.mfaBeginEnrolment({ username: 'drA' }, 'T-OWNER');
+check('the owner can set up a doctor, no password asked', b.success === true, b);
+b = env.mfaBeginEnrolment({ username: 'nurse1' }, 'T-ADMIN');
+check('an admin can move a nurse to a new phone', b.success === true && b.replacing === true, b);
+x = env.mfaRemove('nurse1', '', 'T-ADMIN');
+check('removing needs a reason', x.success === false && !!users()[1][5], x);
+x = env.mfaRemove('nurse1', 'lost phone', 'T-NURSE');
+check('a nurse cannot remove it', x.success === false && !!users()[1][5], x);
+x = env.mfaRemove('nurse1', 'lost phone', 'T-ADMIN');
+check('an admin can remove it for a nurse', x.success === true && !users()[1][5], x);
+r = env.verifyLogin({ username: 'nurse1', password: 'Old-password-123' });
+check('...after which the password signs straight in', r.success === true && !!r.sessionToken, r);
+check('set-up and removal are audited', audit.some(a => a === 'MFA_ENROLLED nurse1') && audit.some(a => a === 'MFA_REMOVED nurse1'), audit.slice(-4));
+
 if (failed) { console.log(`${failed} of ${ran} sign-in checks FAILED.`); process.exit(1); }
-console.log(`${ran} sign-in checks passed (reset keeps the old password, temp works once, MFA gates the session, Google needs a token).`);
+console.log(`${ran} sign-in checks passed (reset keeps the old password, temp works once, MFA gates the session, Google needs a token, in-app MFA set-up saves only a confirmed secret).`);

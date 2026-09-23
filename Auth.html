@@ -1168,8 +1168,9 @@
         var msg = (mfaRes && mfaRes.message) || 'Invalid or expired code. Try again.';
         if (mfaRes && mfaRes.code === 'BAD_SECRET') {
           msg += '\n\nThis is a problem with the enrolment on file, not with the ' +
-                 'code you typed. Ask an administrator to re-enrol your ' +
-                 'authenticator (enrolMFA in the Apps Script editor).';
+                 'code you typed. Ask an administrator to switch two-step sign-in ' +
+                 'off for you (Admin Dashboard → Staff Accounts), then set it up ' +
+                 'again from your account menu.';
         }
         crescAlert(msg);
         document.getElementById('in-mfa-code').value = '';

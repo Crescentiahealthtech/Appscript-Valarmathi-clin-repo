@@ -598,8 +598,9 @@ function base32ToBytes_(base32) {
 
 // ==========================================
 // MFA ADMINISTRATION
-// Run these from the Apps Script editor. They are the supported way to fix a
-// login that cannot get past two-factor.
+// Run these from the Apps Script editor. Day to day, use the Staff Accounts
+// screen instead (Auth_MFA_Admin.gs): it draws the QR on this server and only
+// saves a secret the phone has proved it holds.
 // ==========================================
 
 /**
@@ -704,18 +705,8 @@ function enrolMFA(username) {
   }
   if (rowNo === -1) throw new Error('No row in Users has username "' + want + '".');
 
-  // 160 bits, the RFC 4226 recommendation, drawn from the alphabet only.
-  // From Utilities.getUuid(), not Math.random(): the second is a predictable
-  // PRNG, and this secret is the whole second factor. One byte per character,
-  // and 256 is a multiple of 32, so the mapping has no bias.
-  var alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  var secret = '';
-  while (secret.length < 32) {
-    var raw = Utilities.getUuid().replace(/-/g, '');
-    for (var k = 0; k + 1 < raw.length && secret.length < 32; k += 2) {
-      secret += alphabet.charAt(parseInt(raw.substr(k, 2), 16) % alphabet.length);
-    }
-  }
+  // Auth_MFA_Admin.gs: 160 bits from Utilities.getUuid(), never Math.random().
+  var secret = mfa_newSecret_();
 
   if (sh.getLastColumn() < 6) sh.getRange(1, 6).setValue('MFA_Secret');
   // Force text, or a secret that happens to look numeric is reformatted by
@@ -723,15 +714,7 @@ function enrolMFA(username) {
   sh.getRange(rowNo, 6).setNumberFormat('@').setValue(secret);
   SpreadsheetApp.flush();
 
-  var issuer = 'CresRx';
-  try {
-    issuer = PropertiesService.getScriptProperties().getProperty('CLINIC_NAME') || issuer;
-  } catch (e) {}
-
-  var url = 'otpauth://totp/' + encodeURIComponent(issuer + ':' + want) +
-            '?secret=' + secret +
-            '&issuer=' + encodeURIComponent(issuer) +
-            '&algorithm=SHA1&digits=6&period=30';
+  var url = mfa_otpauthUrl_(want, secret);
 
   var report = [
     'MFA re-enrolled for ' + want + ' (Users row ' + rowNo + ').',

@@ -108,6 +108,8 @@ var DEP_MAP = {
   ],
   "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
   "External_Lab.gs":        ["saveExternalLabResult", "voidExternalLabResult", "getExternalLabFormContext", "exl_ordersFor_"],
+  "Auth_MFA_Admin.gs":      ["mfaBeginEnrolment", "mfaConfirmEnrolment", "mfaRemove", "mfa_newSecret_"],
+  "Audit_Viewer.gs":        ["crescGetAuditLog", "audv_when_"],
   // IP Records reads the discharge summary's own sections through the
   // discharge engine's version resolver rather than parsing DS_Snapshots
   // itself. Optional at runtime — a deployment without the discharge module

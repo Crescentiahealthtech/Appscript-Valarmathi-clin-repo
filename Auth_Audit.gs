@@ -49,6 +49,10 @@ var CRESC_AUTH_EVENTS = {
   UNKNOWN_USER: 'LOGIN_UNKNOWN_USER',
   MFA_FAILED:   'LOGIN_MFA_FAILED',
   MFA_PASSED:   'LOGIN_MFA_PASSED',
+  // Two-step sign-in set up or taken off an account (Auth_MFA_Admin.gs).
+  // Removing it is the one change that makes a stolen password enough.
+  MFA_ENROLLED: 'MFA_ENROLLED',
+  MFA_REMOVED:  'MFA_REMOVED',
   SIGNOUT:      'LOGOUT',
 
   // Credential lifecycle (Auth_Credentials.gs). A password that changes is a

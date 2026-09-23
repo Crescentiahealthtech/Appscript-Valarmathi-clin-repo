@@ -915,7 +915,12 @@ function crescListStaffAccounts(sessionToken) {
         // what it cannot change rather than offering buttons that refuse.
         manageable: (elevated || !cresc_roleIsElevated_(role)) &&
                     username.toUpperCase() !== String(actor.username || '').toUpperCase(),
-        isSelf: username.toUpperCase() === String(actor.username || '').toUpperCase()
+        isSelf: username.toUpperCase() === String(actor.username || '').toUpperCase(),
+        // Whether two-step sign-in is on, and whether what is stored is a
+        // usable secret. Never the secret itself.
+        hasMfa: !!String(data[i][5] || '').replace(/\s/g, ''),
+        mfaBroken: !!String(data[i][5] || '').replace(/\s/g, '') &&
+                   !mfa_normaliseSecret_(data[i][5]).ok
       });
     }
 
