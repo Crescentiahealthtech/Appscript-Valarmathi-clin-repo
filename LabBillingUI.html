@@ -322,7 +322,9 @@ var LabBill=(function(){
       :b.tabType==='CANCELLED'
       ?'<span style="'+CHIP+'background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger);">CANCELLED</span>'
       :b.tabType==='UNSETTLED'
-      ?'<span style="'+CHIP+'background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning);">'+(b.isIP?'IP · SETTLES AT DISCHARGE':(Number(b.paid)>0?'PART-PAID':'UNPAID'))+'</span>'
+      ?(b.ipSettledWithout
+        ?'<span style="'+CHIP+'background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger);" title="The admission was settled without this bill. Collect it here, or void it with a reason.">ADMISSION SETTLED WITHOUT THIS BILL</span>'
+        :'<span style="'+CHIP+'background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning);">'+(b.isIP?'IP · SETTLES AT DISCHARGE':(Number(b.paid)>0?'PART-PAID':'UNPAID'))+'</span>')
       :(Number(b.balance)>0
         ?'<span style="'+CHIP+'background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning);">PART-PAID</span>'
         :'<span style="'+CHIP+'background:var(--success-bg);color:var(--success-fg);border:1px solid var(--success);">PAID</span>');
@@ -332,9 +334,10 @@ var LabBill=(function(){
       // Nothing to do to a cancellation. The reason is the record.
       actions='';
     } else if(b.tabType==='UNSETTLED'){
-      actions=b.isIP
+      actions=(b.isIP&&!b.ipSettledWithout)
         ?'<div class="label-bright" style="font-size:.7rem;">On '+e(b.admissionId||'the IP account')+'</div>'
-        :'<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="event.stopPropagation(); LabBill.openSettle(\''+e(b.billId)+'\')"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Collect</button>';
+        :'<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="event.stopPropagation(); LabBill.openSettle(\''+e(b.billId)+'\')"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Collect</button>'
+         +'<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" title="Cancel / void this bill" onclick="event.stopPropagation(); LabBill.cancelBill(\''+e(b.billId)+'\',\''+e(b.patientName).replace(/\'/g,"\\\'")+'\','+(Number(b.net)||0)+')"><i class="fa-solid fa-ban"></i></button>';
     } else if(b.tabType==='PENDING'){
       actions='<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabBill.openOrder(\''+e(b.orderId)+'\')"><i class="fa-solid fa-arrow-right me-1"></i>Process</button>'
         +'<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" title="Cancel this order" onclick="event.stopPropagation(); LabBill.cancelOrder(\''+e(b.orderId)+'\',\''+e(b.patientName).replace(/\'/g,"\\\'")+'\')"><i class="fa-solid fa-ban"></i></button>';

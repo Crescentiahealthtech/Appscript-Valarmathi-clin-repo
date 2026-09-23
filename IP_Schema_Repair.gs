@@ -278,3 +278,39 @@ function normaliseSheetDates(apply) {
   Logger.log(report);
   return report;
 }
+
+
+// ---------------------------------------------------------------------------
+// OP_ENCOUNTERS: THE VITALS HEADERS
+//
+// saveOPEncounter_ writes columns D-J positionally (systolic, diastolic,
+// pulse, SpO2, temperature, weight, BMI), and every reader in this project
+// reads them by position too — so the data is fine. But the clinic's sheet
+// has "Sys_BP" written over all seven headers, which is what any export,
+// any data-principal request and anybody reading the sheet sees. This puts
+// the right names back. It changes row 1 only, and only where a header in
+// D-J is a duplicate "Sys_BP" or blank.
+// ---------------------------------------------------------------------------
+
+var OPE_VITALS_HEADERS = ['Sys_BP', 'Dia_BP', 'PR', 'SpO2', 'Temp', 'Weight', 'BMI'];   // D..J
+
+/** Editor. dryRun defaults to TRUE: pass false to write. */
+function repairOPEncounterHeaders(dryRun) {
+  crescEditorOnly_('repairOPEncounterHeaders');
+  dryRun = (dryRun !== false);
+  var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('OP_Encounters');
+  if (!sh) return 'OP_Encounters: absent.';
+  var cur = sh.getRange(1, 4, 1, OPE_VITALS_HEADERS.length).getValues()[0].map(function (x) { return String(x || '').trim(); });
+  var changes = [];
+  cur.forEach(function (h, i) {
+    var want = OPE_VITALS_HEADERS[i];
+    if (h === want) return;
+    var damaged = !h || (h === 'Sys_BP' && i > 0);
+    if (!damaged) { changes.push('  column ' + String.fromCharCode(68 + i) + ': "' + h + '" left alone (not a damaged header)'); return; }
+    changes.push('  column ' + String.fromCharCode(68 + i) + ': "' + h + '" -> "' + want + '"');
+    if (!dryRun) sh.getRange(1, 4 + i).setValue(want);
+  });
+  if (!changes.length) return 'OP_Encounters vitals headers are correct.';
+  return (dryRun ? 'DRY RUN — nothing written. Run repairOPEncounterHeaders(false) to apply.\n' : 'Written:\n') +
+         changes.join('\n');
+}

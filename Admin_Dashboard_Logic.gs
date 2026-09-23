@@ -332,7 +332,10 @@ function _dashRevenue_(ss, tz, todayKey, memo) {
     for (var l = 1; l < lb.length; l++) {
       if (!lb[l][0]) continue;
       var lstat = String(_dashCell_(lb[l], lIdx, "paymentstatus") || "").toUpperCase();
-      if (lstat === "PAID") continue;
+      // Only a bill that is still open is owed: IP_SETTLED (paid on the
+      // discharge bill) and CANCELLED used to count, which is most of the
+      // "₹2,400 credit" nobody could find on the lab desk.
+      if (["PENDING", "PARTIAL", "ON_ACCOUNT", "CREDIT"].indexOf(lstat) === -1) continue;
       var lbal = parseFloat(_dashCell_(lb[l], lIdx, "balanceamount")) || 0;
       var lnet = parseFloat(_dashCell_(lb[l], lIdx, "netamount")) || 0;
       var labDue = (lbal || (lstat === "ON_ACCOUNT" ? lnet : 0));

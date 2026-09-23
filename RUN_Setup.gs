@@ -206,6 +206,23 @@ function RUN_11b_eraseUnusedFields_FOR_REAL() {
 }
 
 
+/**
+ * 11c. The OP_Encounters vitals headers (D-J) read "Sys_BP" seven times on
+ *      the clinic's sheet. The data underneath is right; this renames the
+ *      headers. Reports only.
+ */
+function RUN_11c_fixOPEncounterHeaders_DRYRUN() {
+  crescEditorOnly_('RUN_11c_fixOPEncounterHeaders_DRYRUN');
+  return repairOPEncounterHeaders(true);
+}
+
+/** 11d. **CHANGES DATA** (row 1 of OP_Encounters only). */
+function RUN_11d_fixOPEncounterHeaders_FOR_REAL() {
+  crescEditorOnly_('RUN_11d_fixOPEncounterHeaders_FOR_REAL');
+  return repairOPEncounterHeaders(false);
+}
+
+
 // ---------------------------------------------------------------------------
 // PART 4 — WHERE YOU STAND  (read-only, run these any time)
 // ---------------------------------------------------------------------------

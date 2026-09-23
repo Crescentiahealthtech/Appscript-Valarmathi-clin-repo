@@ -42,6 +42,17 @@ function lab_billingWorkspace_() {
     // Today's settlements of older balances count toward today's collection.
     const settledToday = labb_settlementsOn_(todayStr, tz);
 
+    // Admissions already settled: an on-account lab bill against one of these
+    // missed the discharge bill and is flagged, not quietly carried.
+    const settledIPs = {};
+    try {
+      const ss2 = ss.getSheetByName('IP_Settlements');
+      if (ss2 && ss2.getLastRow() > 1) {
+        ss2.getRange(2, 2, ss2.getLastRow() - 1, 1).getValues()
+          .forEach(function (r) { if (r[0]) settledIPs[String(r[0]).trim()] = true; });
+      }
+    } catch (e) {}
+
     // 2. Fetch & Parse Billing Data
     const bData = billingSheet.getDataRange().getValues();
     const bHeaders = bData.length > 0 ? bData.shift() : [];
@@ -93,6 +104,7 @@ function lab_billingWorkspace_() {
           net: net, paid: paid, balance: balance,
           discount: Number(b.DiscountAmount) || 0,
           isIP: isIP,
+          ipSettledWithout: isIP && status === 'ON_ACCOUNT' && !!settledIPs[String(b.AdmissionID || '').trim()],
           isStrictlyToday: isStrictlyToday
         };
       };
