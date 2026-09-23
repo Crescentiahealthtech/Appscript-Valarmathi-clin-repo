@@ -9,6 +9,7 @@
 // =========================================================================
 
 function repairLedgerInOut() {
+  crescEditorOnly_('repairLedgerInOut');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);

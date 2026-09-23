@@ -172,7 +172,7 @@ function saveDoctorSchedule(payload, sessionToken) {
 }
 
 /** Seeds the legacy 10:00–13:00 / 17:00–21:00 pattern, Mon–Sat, 15-min slots. */
-function seedDefaultScheduleForDoctor(doctorId) {
+function seedDefaultScheduleForDoctor_(doctorId) {
   var rows = [];
   for (var wd = 1; wd <= 6; wd++) {
     rows.push({ weekday: wd, sessionLabel: "MORNING", startTime: "10:00",

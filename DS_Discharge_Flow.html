@@ -313,7 +313,7 @@
         crescAlert('Discharge failed: ' + (err && err.message ? err.message : err));
         render();
       })
-      .processPatientDischarge(DF.ip, DF.bed, overrideReason || '');
+      .processPatientDischarge(DF.ip, DF.bed, overrideReason || '', window.sessionToken || '');
   }
 
   window.crescOpenDischargeFlow  = openDischargeFlow;

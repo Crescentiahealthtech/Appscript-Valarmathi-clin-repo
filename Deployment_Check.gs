@@ -115,7 +115,7 @@ var DEP_MAP = {
   "DS_Workflow.gs": ["dsx_resolveRef_"],
   "Deployment_Probe.gs": [
     "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
-    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence"
+    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence_"
   ],
   "Patient_Portal.gs": [
     "portalHome", "portalBookableDoctors", "portalDoctorSlots",
@@ -135,8 +135,8 @@ var DEP_MAP = {
   ],
   "DPDP_Consent_Backfill.gs": [
     "dpdpBackfillConsent", "dpdpConsentQueue", "dpdp_consentMatrix_",
-    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN",
-    "RUN_consentBackfill_FOR_REAL", "RUN_consentQueue"
+    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN_",
+    "RUN_consentBackfill_FOR_REAL_", "RUN_consentQueue_"
   ],
   "DPDP_Dispatch.gs": [
     "dpdpRequireDispatchConsent_", "dpdp_resolvePatientFor_", "dpdp_consentState_",
@@ -208,7 +208,7 @@ var DEP_MAP = {
   "OP_Templates_Engine.gs": ["getScopedTemplates", "learnTemplatesScoped_", "listConsultTemplates",
                              "applyConsultTemplate", "getExamDefaults", "getAssistForDiagnosis",
                              "opt_seedAssistFor_", "opt_parseList_", "opt_dxTokens_"],
-  "OP_Database_Engine.gs":  ["fetchOPDrugMaster", "fetchUniversalDrugs", "saveOPEncounter"],
+  "OP_Database_Engine.gs":  ["fetchOPDrugMaster", "fetchUniversalDrugs", "saveOPEncounter_"],
   "Lab_OPD_Bridge.gs":      ["getOPDOrderableTests", "createOPDLabOrder"],
   "LabIntegrationEngine.gs":["createLabRequest", "getOrderableTests"],
   "IP_Admissions_Logic.gs": ["getActiveIPWard", "saveNewAdmissionLedger"],

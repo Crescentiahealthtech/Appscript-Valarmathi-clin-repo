@@ -130,6 +130,7 @@ function getClinicProfile() {
  * field; omitting a key leaves it alone.
  */
 function setClinicProfile(values) {
+  crescEditorOnly_('setClinicProfile');
   try {
     values = values || {};
     var props = PropertiesService.getScriptProperties();

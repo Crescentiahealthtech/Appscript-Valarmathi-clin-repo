@@ -2,7 +2,8 @@
 // 🧠 SYSTEM CORE & ROUTER (Code.gs)
 // ==========================================
 
-function getPatientNameById(patientId) {
+function getPatientNameById(patientId, sessionToken) {
+  crescRequire_(sessionToken, 'patient.read');
   try {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Patients');
     const data = sheet.getDataRange().getValues();

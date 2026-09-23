@@ -314,8 +314,11 @@ function acc_hospitalRowsSafe_() {
 // =========================================================================
 // READ: Dashboard Payload (Virtual Merge of Ledger + Clinical Sources)
 // =========================================================================
-function getAccountsDashboard() {
+function getAccountsDashboard(sessionToken) {
   try {
+    // Was unguarded while Accounts_Scripts.html called it: the whole ledger
+    // and the month's figures went to anyone holding the URL.
+    crescRequire_(sessionToken, 'accounts.read');
     var thisPeriod = acc_period_(new Date());
     var todayStr = Utilities.formatDate(new Date(), ACC_CFG.TZ, "yyyy-MM-dd");
     var masterList = [];

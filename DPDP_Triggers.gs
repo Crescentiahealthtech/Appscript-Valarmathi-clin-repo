@@ -39,6 +39,7 @@ var DPDP_TRIGGER_FUNCTIONS = ['dpdpDailyMaintenance', 'dpdpWeeklyReview',
  * first of the month.
  */
 function dpdpInstallTriggers() {
+  crescEditorOnly_('dpdpInstallTriggers');
   var removed = dpdpRemoveTriggers();
 
   ScriptApp.newTrigger('dpdpDailyMaintenance')
@@ -73,6 +74,7 @@ function dpdpInstallTriggers() {
 
 /** ADMIN. Removes the triggers this file installs, and reports how many. */
 function dpdpRemoveTriggers() {
+  crescEditorOnly_('dpdpRemoveTriggers');
   var n = 0;
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (DPDP_TRIGGER_FUNCTIONS.indexOf(t.getHandlerFunction()) !== -1) {

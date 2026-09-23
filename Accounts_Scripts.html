@@ -507,7 +507,7 @@ var AccX = (function () {
         renderLedger();
       })
       .withFailureHandler(function (err) { hubBusy(false); LEDGER_CACHE = []; renderLedger(); toast(err.message || 'Server error.', false); })
-      .getAccountsDashboard();
+      .getAccountsDashboard(window.sessionToken);
   }
   /**
    * The per-counter cash breakdown under the drawer KPI.

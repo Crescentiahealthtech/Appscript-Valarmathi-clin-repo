@@ -348,6 +348,7 @@ function dc_backfillColumn_(ss, sheetName, header, value) {
  * Removes the legacy 'Blocked' pseudo-appointment rows once schedules are live.
  */
 function purgeLegacyBlockedRows() {
+  crescEditorOnly_('purgeLegacyBlockedRows');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);

@@ -489,7 +489,7 @@ function depDeploymentFinding() {
 }
 
 /** ADMIN, from the editor. What the probe has seen, in words. */
-function RUN_deploymentEvidence() {
+function RUN_deploymentEvidence_() {
   var f = depDeploymentFinding();
   var out = f.severity + ' · Deployment\n\n' + f.text + '\n\nWhat to do:\n' + f.fix;
   Logger.log(out);

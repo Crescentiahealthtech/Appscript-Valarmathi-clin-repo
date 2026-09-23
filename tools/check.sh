@@ -38,7 +38,7 @@ hr "7. Auth.html CRESC_SYMBOL_HOME vs the same"
 node tools/sym.js
 
 hr "8. Endpoints the browser can call with no permission check"
-node tools/rbac.js | head -n 4
+node tools/rbac.js
 
 hr "9. Calls that do not pass the session token their endpoint asks for"
 node tools/token.js

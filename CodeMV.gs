@@ -287,7 +287,8 @@ function getAllPatients(sessionToken) {
   return roster;
 }
 
-function saveAdminAvailability(dateStr, blockedSlots) {
+function saveAdminAvailability(dateStr, blockedSlots, sessionToken) {
+  crescRequire_(sessionToken, 'schedule.write');
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -317,7 +318,8 @@ function saveAdminAvailability(dateStr, blockedSlots) {
   } catch(e) { return {success: false, message: 'Failed to save availability.'}; } finally { lock.releaseLock(); }
 }
 
-function saveEMRRecord(data) {
+function saveEMRRecord(data, sessionToken) {
+  crescRequire_(sessionToken, 'emr.write');
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('EMR_Records');
   if(!sheet) return {success: false, message: "Create 'EMR_Records' sheet first."};
   let timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
@@ -328,6 +330,7 @@ function saveEMRRecord(data) {
 // Drop these updated functions into CodeMV.gs
 
 function initializeDatabase() {
+  crescEditorOnly_('initializeDatabase');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const requiredSheets = [
     { name: "Users", headers: ["Username", "Password", "Role"] },
