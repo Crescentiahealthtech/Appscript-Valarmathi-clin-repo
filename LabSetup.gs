@@ -3,7 +3,7 @@
  * CRESCENTIA HEALTHTECH — LAB MODULE SETUP  (v5 — PRODUCTION)
  * ============================================================================
  * THIS FILE MUST BE FIRST IN THE APPS SCRIPT PROJECT FILE ORDER.
- * Defines: LAB constant, LAB_SCHEMA, labHeaderMap(), labAudit(),
+ * Defines: LAB constant, LAB_SCHEMA, labHeaderMap_(), labAudit_(),
  * LAB_ORDER_STATUS_OK, LAB_TEST_STATUS_OK
  * All consumed by LabIntegrationEngine.gs
  * ============================================================================
@@ -98,7 +98,7 @@ var LAB_SCHEMA = {
 };
 
 /** Returns {headerName: colIndex} map for any LAB_* sheet. */
-function labHeaderMap(sheet) {
+function labHeaderMap_(sheet) {
   var name = sheet.getName();
   if (LAB_SCHEMA[name]) {
     var m = {};
@@ -112,11 +112,11 @@ function labHeaderMap(sheet) {
 }
 
 /** Appends one row to LAB_AUDIT_LOG. All strings. Never throws. */
-function labAudit(action, entityType, entityId, oldVal, newVal) {
+function labAudit_(action, entityType, entityId, oldVal, newVal) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var s = ss.getSheetByName(LAB.AUDIT_LOG); if (!s) return;
-    var m = labHeaderMap(s); var nc = LAB_SCHEMA.LAB_AUDIT_LOG.length;
+    var m = labHeaderMap_(s); var nc = LAB_SCHEMA.LAB_AUDIT_LOG.length;
     var row = new Array(nc).fill('');
     row[m['AuditID']]     = 'AUD-' + Utilities.getUuid().substring(0,8).toUpperCase();
     row[m['Timestamp']]   = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
@@ -127,7 +127,7 @@ function labAudit(action, entityType, entityId, oldVal, newVal) {
     row[m['NewValue']]    = newVal==null?'':(typeof newVal==='object'?JSON.stringify(newVal):String(newVal));
     row[m['PerformedBy']] = Session.getActiveUser().getEmail()||'SYSTEM';
     s.appendRow(row);
-  } catch(e) { Logger.log('labAudit: '+e.message); }
+  } catch(e) { Logger.log('labAudit_: '+e.message); }
 }
 
 /** Order-level status machine. */
@@ -184,14 +184,15 @@ function setupLabDatabase(sessionToken) {
 }
 
 function seedStarterCatalog() {
+  crescEditorOnly_('seedStarterCatalog', ['lab.catalog', 'admin.config']);
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sh = ss.getSheetByName(LAB.CATALOG);
     if (!sh) return { success:false, message:'Run setupLabDatabase() first.' };
     if (sh.getLastRow() > 1) return { success:true, message:'Catalog already has data — skipped.' };
-    var m = labHeaderMap(sh); var nc = LAB_SCHEMA.LAB_TEST_CATALOG.length;
+    var m = labHeaderMap_(sh); var nc = LAB_SCHEMA.LAB_TEST_CATALOG.length;
     var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    function R(d) { return _catRow(m, nc, d, now); }
+    function R(d) { return _catRow_(m, nc, d, now); }
     var rows = [
       // CBC
       R({id:'LABTEST-CBC001',code:'CBC',  name:'Complete Blood Count',   type:'PANEL',     dept:'HAEMATOLOGY',  sample:'BLOOD_EDTA',    price:250,tat:60, sort:1}),
@@ -245,7 +246,7 @@ function seedStarterCatalog() {
   } catch(e) { return { success:false, message:'seedStarterCatalog: '+e.message }; }
 }
 
-function _catRow(m, nc, d, now) {
+function _catRow_(m, nc, d, now) {
   var row = new Array(nc).fill('');
   function n(v) { return (v===''||v==null)?'':Number(v); }
   row[m['TestID']]            = String(d.id);

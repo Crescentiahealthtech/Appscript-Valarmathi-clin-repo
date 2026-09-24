@@ -34,6 +34,7 @@ function di_sheet_() {
  * Curate and extend this in the sheet — it is meant to be the clinic's own.
  */
 function setupDrugInteractions() {
+  crescEditorOnly_('setupDrugInteractions');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);
@@ -394,15 +395,18 @@ function di_matches_(aliases, term) {
  * @param {Array} meds  [{ drugName }]
  * @return {{alerts:[], rulesLoaded:number}}
  */
-function checkDrugInteractions(meds, genericMap) {
+function checkDrugInteractions_(meds, genericMap) {
   var result = { alerts: [], rulesLoaded: 0 };
   try {
     meds = (meds || []).filter(function (m) { return dc_str_(m.drugName); });
-    if (meds.length < 2) return result;
 
+    // Count the rules BEFORE the one-drug shortcut. It used to return first,
+    // so a one-drug prescription always reported rulesLoaded = 0 — and the
+    // composer then said "No drug interaction pairs are loaded ... NO
+    // interaction checking is happening" on a fully set-up clinic.
     var rules = di_rules_();
     result.rulesLoaded = rules.length;
-    if (!rules.length) return result;
+    if (meds.length < 2 || !rules.length) return result;
 
     var gm = genericMap || rx_genericMap_();
     var aliases = meds.map(function (m) { return di_aliases_(m.drugName, gm); });
@@ -460,6 +464,7 @@ function checkDrugInteractions(meds, genericMap) {
  * clinic actually stocks.
  */
 function testDrugInteraction(drugA, drugB) {
+  crescEditorOnly_('testDrugInteraction');
   var out = [];
   var gm = rx_genericMap_();
   var rules = di_rules_();
@@ -487,7 +492,7 @@ function testDrugInteraction(drugA, drugB) {
     out.push("  NOTE: no generic found for B. Same fix.");
   }
 
-  var res = checkDrugInteractions([{ drugName: drugA }, { drugName: drugB }], gm);
+  var res = checkDrugInteractions_([{ drugName: drugA }, { drugName: drugB }], gm);
   out.push("");
   if (res.alerts.length) {
     out.push("MATCHED " + res.alerts.length + " rule(s):");
@@ -524,6 +529,7 @@ function testDrugInteraction(drugA, drugB) {
  * looks like coverage.
  */
 function auditDrugInteractionCoverage() {
+  crescEditorOnly_('auditDrugInteractionCoverage');
   var gm = rx_genericMap_();
   var rules = di_rules_();
   if (!rules.length) return "No interaction rules loaded. Run setupDrugInteractions() first.";

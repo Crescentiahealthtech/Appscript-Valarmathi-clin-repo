@@ -15,7 +15,7 @@
   <div class="card p-4">
     <div class="table-responsive">
       <table class="table table-dark table-hover mb-0" style="background-color: var(--bg-card);">
-        <thead style="font-size: 0.85rem;">
+        <thead style="font-size: var(--fs-sm);">
           <tr>
             <th>PATIENT ID</th>
             <th>NAME</th>
@@ -58,10 +58,15 @@
   var globalPatientDirectory = []; // Stores data locally for instant search speeds
 
   // 1. Core Load Function (Preserved Original Name: loadRoster)
-  function loadRoster() {
+  // quiet: the background refresh (crescAutoRefresh below). It keeps the
+  // table on screen while it fetches, and re-applies whatever is typed in
+  // the search box, so a refresh never undoes a search.
+  function loadRoster(quiet) {
     const tbody = document.getElementById('roster-table');
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i> Fetching patient database...</td></tr>';
-    
+    if (!(quiet === true && globalPatientDirectory.length)) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i> Fetching patient database...</td></tr>';
+    }
+
     google.script.run.withSuccessHandler(res => {
       globalPatientDirectory = res || [];
       if (!globalPatientDirectory.length && window.crescCan && !window.crescCan('patient.read')) {
@@ -69,8 +74,11 @@
           'Your account is not permitted to see the patient directory.</td></tr>';
         return;
       }
-      renderPatientDirectoryTable(globalPatientDirectory);
+      const q = document.getElementById('patient-search-input');
+      if (q && q.value.trim()) filterPatientDirectory();
+      else renderPatientDirectoryTable(globalPatientDirectory);
     }).withFailureHandler(err => {
+      if (quiet === true && globalPatientDirectory.length) return;   // keep what is on screen
       // The "Fetching patient database..." row spun for ever when this
       // failed, which reads as a slow server rather than a failed call.
       tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">' +
@@ -90,19 +98,21 @@
       return;
     }
     
-    data.forEach(p => {
-      tbody.innerHTML += `
+    // Escaped: a patient's name is typed at registration, and markup in it
+    // used to run in every staff browser that opened this list. Built as one
+    // string — `innerHTML +=` per row re-parsed the whole table each time.
+    const esc = window.crescEsc || (s => String(s == null ? '' : s));
+    const js = s => esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+    tbody.innerHTML = data.map(p => { const idArg = js(p.id); return `
         <tr class="align-middle">
-          <td class="text-info fw-bold">${p.id}</td>
-          <td class="text-white fw-bold">${p.name}</td>
-          <td class="text-light">${p.gender || '-'} / ${p.age || '-'} Yrs</td>
-          <td class="text-light"><i class="fa-solid fa-phone fa-xs text-muted me-1"></i> ${p.mobile || '-'}</td>
+          <td class="text-info fw-bold">${esc(p.id)}</td>
+          <td class="text-white fw-bold">${esc(p.name)}</td>
+          <td class="text-light">${esc(p.gender || '-')} / ${esc(p.age || '-')} Yrs</td>
+          <td class="text-light"><i class="fa-solid fa-phone fa-xs text-muted me-1"></i> ${esc(p.mobile || '-')}</td>
           <td>
-            <button class="btn btn-sm btn-outline-info py-0" onclick="viewPatientProfile('${p.id}')">View</button>
+            <button class="btn btn-sm btn-outline-info py-0" onclick="viewPatientProfile('${idArg}')">View</button>
           </td>
-        </tr>
-      `;
-    });
+        </tr>`; }).join('');
   }
 
   // 3. Instant Search Engine (Runs as you type)
@@ -381,4 +391,10 @@
       .updatePatientProfile(currentProfile.id, patch, window.sessionToken);
   }
 
+
+  // Keeps the directory current while it is on screen (Shell_UX.html).
+  if (window.crescAutoRefresh) {
+    window.crescAutoRefresh('patient-search', { section: 'tab-admin-search', every: 60,
+                                                run: function () { loadRoster(true); } });
+  }
 </script>

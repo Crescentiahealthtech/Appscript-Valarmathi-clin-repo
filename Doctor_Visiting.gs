@@ -150,6 +150,141 @@ function dv_signature_(name, qualification, regNo) {
 }
 
 // ---------------------------------------------------------------------------
+// WHEN A DECLARATION ENDS
+//
+// A row used to close only when the consultant pressed "End session". Signing
+// out, or simply letting the session run out, left it ACTIVE for ever — so the
+// register said "still signed in" about somebody who had gone home hours ago,
+// and the next note written for the slot on their behalf would have carried
+// their name. A declaration now lives exactly as long as the sign-in it was
+// made under: sign-out ends it (crescLogSignOut), and an expired or revoked
+// session closes it the next time anything reads the register.
+// ---------------------------------------------------------------------------
+
+/**
+ * Which of these session tokens are still signed in. One read of Sessions.
+ * @return {Object} token -> {live:boolean, endedAt:Date|null}
+ */
+function dv_sessionStates_(tokens) {
+  var out = {};
+  var want = {};
+  (tokens || []).forEach(function (t) { if (t) want[t] = true; });
+  if (!Object.keys(want).length) return out;
+  var now = Date.now();
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Sessions");
+    var data = sh ? sh.getDataRange().getValues() : [];
+    var m = sh ? dc_headerMap_(sh) : {};
+    for (var i = 1; i < data.length; i++) {
+      var tok = dv_str_(data[i][m["Token"] !== undefined ? m["Token"] : 0]);
+      if (!want[tok]) continue;
+      var status = dc_upper_(data[i][m["Status"]]);
+      var exp = data[i][m["Expires_At"]];
+      exp = (exp instanceof Date) ? exp : new Date(exp);
+      var seen = data[i][m["Last_Seen"]];
+      seen = (seen instanceof Date) ? seen : new Date(seen);
+      var live = status === "ACTIVE" && !isNaN(exp.getTime()) && exp.getTime() > now;
+      out[tok] = { live: live,
+                   endedAt: live ? null : (!isNaN(seen.getTime()) ? seen : (isNaN(exp.getTime()) ? new Date() : exp)) };
+    }
+  } catch (e) { /* unreadable: say nothing rather than guess */ return {}; }
+  // A token the Sessions sheet has never seen may still be in the cache.
+  Object.keys(want).forEach(function (t) {
+    if (out[t]) return;
+    var cached = null;
+    try { cached = CacheService.getScriptCache().get("SESS_" + t); } catch (e) {}
+    out[t] = cached ? { live: true, endedAt: null } : { live: false, endedAt: new Date() };
+  });
+  return out;
+}
+
+/** Closes every ACTIVE declaration whose sign-in has ended. Returns how many. */
+function dv_closeStale_() {
+  try {
+    var sh = dv_sheet_();
+    var data = dc_sheetValues_(sh);
+    if (!data || data.length < 2) return 0;
+    var m = dc_headerMap_(sh);
+    var active = [];
+    for (var i = 1; i < data.length; i++) {
+      if (dc_upper_(data[i][m["Status"]]) === "ACTIVE") active.push(i);
+    }
+    if (!active.length) return 0;
+    var states = dv_sessionStates_(active.map(function (i) { return dv_str_(data[i][m["Session_Token"]]); }));
+    var closed = 0;
+    active.forEach(function (i) {
+      var st = states[dv_str_(data[i][m["Session_Token"]])];
+      if (!st || st.live) return;
+      sh.getRange(i + 1, m["Status"] + 1).setValue("EXPIRED");
+      sh.getRange(i + 1, m["Ended_At"] + 1).setValue(st.endedAt || new Date());
+      closed++;
+    });
+    if (closed) dc_invalidate_(DV_SHEET);
+    return closed;
+  } catch (e) { return 0; }
+}
+
+/** Ends this token's declaration, if it has one. Called at sign-out. Never throws. */
+function dv_endForToken_(token, why) {
+  try {
+    token = dv_str_(token);
+    if (!token) return 0;
+    var sh = dv_sheet_();
+    var data = dc_sheetValues_(sh);
+    var m = dc_headerMap_(sh);
+    var closed = 0, now = new Date();
+    for (var i = 1; i < data.length; i++) {
+      if (dv_str_(data[i][m["Session_Token"]]) !== token) continue;
+      if (dc_upper_(data[i][m["Status"]]) !== "ACTIVE") continue;
+      sh.getRange(i + 1, m["Status"] + 1).setValue(why || "ENDED");
+      sh.getRange(i + 1, m["Ended_At"] + 1).setValue(now);
+      closed++;
+    }
+    if (closed) dc_invalidate_(DV_SHEET);
+    try { CacheService.getScriptCache().remove(dv_cacheKey_(token)); } catch (e) {}
+    return closed;
+  } catch (e) { return 0; }
+}
+
+/**
+ * Who is on (or was last on) this visiting slot — for somebody ELSE recording
+ * for it: the ward adding the slot's note on the consultant's behalf, an
+ * administrator transcribing a verbal order.
+ *
+ * The consultant signed in and declared themselves; the recorder should not
+ * be asked to type that again. Prefers a declaration whose sign-in is still
+ * live; otherwise the most recent one in the last `hours` (default 24), so a
+ * note transcribed after the consultant left still carries their name.
+ *
+ * @return {{name,regNo,qualification,specialty,signature,doctorId,live:boolean}|null}
+ */
+function dv_latestIdentityForSlot_(doctorId, hours) {
+  try {
+    dv_closeStale_();
+    var sh = dv_sheet_();
+    var data = dc_sheetValues_(sh);
+    if (!data || data.length < 2) return null;
+    var m = dc_headerMap_(sh);
+    var id = dc_upper_(doctorId);
+    var cutoff = Date.now() - (hours || 24) * 3600 * 1000;
+    var recent = null;
+    for (var i = data.length - 1; i >= 1; i--) {
+      if (dc_upper_(data[i][m["Doctor_ID"]]) !== id) continue;
+      var st = dc_upper_(data[i][m["Status"]]);
+      var at = data[i][m["Declared_At"]];
+      at = (at instanceof Date) ? at : new Date(at);
+      if (st === "ACTIVE") {
+        var live = dv_recordFrom_(data[i], m); live.live = true; return live;
+      }
+      if (!recent && !isNaN(at.getTime()) && at.getTime() >= cutoff && st !== "SUPERSEDED") {
+        recent = dv_recordFrom_(data[i], m); recent.live = false;
+      }
+    }
+    return recent;
+  } catch (e) { return null; }
+}
+
+// ---------------------------------------------------------------------------
 // FRONTEND ENTRY POINTS
 // ---------------------------------------------------------------------------
 
@@ -357,6 +492,7 @@ function endVisitingConsultant(sessionToken) {
 function listVisitingConsultants(sessionToken, limit) {
   try {
     var actor = crescRequire_(sessionToken, ["admin.audit", "admin.users"]);
+    dv_closeStale_();
     var sh = dv_sheet_();
     var data = dc_sheetValues_(sh);
     if (!data || data.length < 2) return { success: true, rows: [], message: "" };
@@ -398,6 +534,7 @@ function listVisitingConsultants(sessionToken, limit) {
  * for any other staff login.
  */
 function setupVisitingConsultant() {
+  crescEditorOnly_('setupVisitingConsultant');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);

@@ -33,39 +33,50 @@
 
   <div id="lbFlash"></div>
 
-  <div class="row g-3 mb-4">
-    <div class="col-md-3 col-6">
+  <div class="row g-3 mb-4 row-cols-2 row-cols-md-5">
+    <div class="col">
       <div class="lbKpi">
         <div class="lbKn" id="lbKpending">–</div>
         <div class="lbKl"><i class="fa-solid fa-hourglass-half me-1" style="color:var(--warning-fg);"></i>Pending Bills</div>
       </div>
     </div>
-    <div class="col-md-3 col-6">
+    <div class="col">
       <div class="lbKpi">
         <div class="lbKn" id="lbKtoday" style="color:var(--success-fg);">₹0</div>
         <div class="lbKl"><i class="fa-solid fa-coins me-1" style="color:var(--success-fg);"></i>Today Collection</div>
       </div>
     </div>
-    <div class="col-md-3 col-6">
+    <div class="col">
       <div class="lbKpi">
         <div class="lbKn" id="lbKcount">0</div>
         <div class="lbKl"><i class="fa-solid fa-receipt me-1" style="color:var(--teal-fg);"></i>Bills Raised Today</div>
       </div>
     </div>
-    <div class="col-md-3 col-6">
+    <!-- Everything still owed, whenever it was billed: the lab's share of the
+         dashboard's Pending Credit. Click to list it. -->
+    <div class="col">
+      <div class="lbKpi" role="button" tabindex="0" onclick="LabBill.setTab('UNSETTLED')"
+           onkeydown="if(event.key==='Enter')LabBill.setTab('UNSETTLED')" title="Show every unsettled lab bill">
+        <div class="lbKn" id="lbKunsettled" style="color:var(--warning-fg);">–</div>
+        <div class="lbKl"><i class="fa-solid fa-hand-holding-dollar me-1" style="color:var(--warning-fg);"></i>Unsettled · all dates</div>
+        <div class="label-bright" style="font-size:var(--fs-2xs);margin-top:2px;" id="lbKunsettledSplit">&nbsp;</div>
+      </div>
+    </div>
+    <div class="col">
       <div class="lbKpi">
         <div class="lbKn" id="lbKip" style="color:var(--accent-fg);">–</div>
-        <div class="lbKl"><i class="fa-solid fa-bed me-1" style="color:var(--accent-fg);"></i>IP On-Account</div>
+        <div class="lbKl"><i class="fa-solid fa-bed me-1" style="color:var(--accent-fg);"></i>IP On-Account today</div>
       </div>
     </div>
   </div>
 
   <div class="d-flex gap-2 flex-wrap mb-3">
     <span class="lbTab on" id="lbTabPend" onclick="LabBill.setTab('PENDING')">⏳ Pending <span id="lbNpend" class="lbTN">0</span></span>
+    <span class="lbTab" id="lbTabUnsettled" onclick="LabBill.setTab('UNSETTLED')">💳 Unsettled <span id="lbNunsettled" class="lbTN">0</span></span>
     <span class="lbTab" id="lbTabPaid" onclick="LabBill.setTab('PAID')">✅ Paid Today <span id="lbNpaid" class="lbTN">0</span></span>
     <span class="lbTab" id="lbTabIP" onclick="LabBill.setTab('IP')">🏥 IP Account <span id="lbNip" class="lbTN">0</span></span>
-    <!-- Cancellations are shown, not hidden. A pending count is only
-         trustworthy if what left the queue can still be accounted for. -->
+    <!-- The last week's cancellations; older ones leave the desk and are
+         read back with "Find older cancellations" (labListCancelled). -->
     <span class="lbTab" id="lbTabCancel" onclick="LabBill.setTab('CANCELLED')">🚫 Cancelled <span id="lbNcancel" class="lbTN">0</span></span>
   </div>
 
@@ -76,28 +87,56 @@
 
   <div id="lbList"></div>
 
+  <!-- Collecting what is owed on a bill. -->
+  <div id="lbSettle" class="lbModal" hidden role="dialog" aria-modal="true" aria-labelledby="lbSettleTitle">
+    <div class="lbModalCard">
+      <div class="fw-bold mb-1" id="lbSettleTitle">Collect payment</div>
+      <div class="label-bright small mb-3" id="lbSettleSub"></div>
+      <label class="small fw-semibold label-bright" for="lbSettleAmt">Amount received (₹)</label>
+      <input id="lbSettleAmt" type="number" min="0" step="0.01" class="form-control form-control-sm mb-2" inputmode="decimal">
+      <label class="small fw-semibold label-bright" for="lbSettleMode">Paid by</label>
+      <select id="lbSettleMode" class="form-select form-select-sm mb-2">
+        <option value="CASH">Cash</option><option value="UPI">UPI</option>
+        <option value="CARD">Card</option><option value="BANK">Bank transfer</option>
+      </select>
+      <label class="small fw-semibold label-bright" for="lbSettleNote">Note (optional)</label>
+      <input id="lbSettleNote" class="form-control form-control-sm mb-3" placeholder="UPI reference, who paid…">
+      <div class="d-flex justify-content-end gap-2">
+        <button class="btn btn-sm btn-outline-secondary" onclick="LabBill.closeSettle()">Cancel</button>
+        <button class="btn btn-sm btn-success" id="lbSettleGo" onclick="LabBill.doSettle()">Record payment</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <style>
 .lbKpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:14px 16px;text-align:center;}
 .lbKn{font-size:1.6rem;font-weight:800;color:var(--text-main);line-height:1;}
-.lbKl{font-size:.67rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
-.lbTab{background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:.78rem;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.lbKl{font-size:var(--fs-2xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
+.lbTab{background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);border-radius:20px;padding:5px 14px;font-size:var(--fs-xs);cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;}
 .lbTab:hover{border-color:var(--border-hover);color:var(--text-main);}
 .lbTab.on{background:var(--success-bg);border-color:var(--success);color:var(--success-fg);}
-.lbTN{background:var(--surface-active);border-radius:10px;padding:0 7px;font-size:.67rem;font-weight:700;}
+.lbTN{background:var(--surface-active);border-radius:10px;padding:0 7px;font-size:var(--fs-2xs);font-weight:700;}
 .lbCard{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:14px;transition:.18s;}
 .lbCard:hover{border-color:var(--border-hover);}
 .lbCard.PAID{border-left:3px solid var(--success);}
 .lbCard.PENDING{border-left:3px solid var(--warning);}
 .lbCard.IP{border-left:3px solid var(--accent-purple);}
+.lbCard.UNSETTLED{border-left:3px solid var(--warning);}
+.lbCard.CANCELLED{border-left:3px solid var(--danger);opacity:.85;}
+.lbKpi[role=button]{cursor:pointer;}
+.lbKpi[role=button]:hover,.lbKpi[role=button]:focus{border-color:var(--warning);outline:none;}
+.lbModal{position:fixed;inset:0;z-index:3400;background:var(--overlay-scrim);display:flex;align-items:center;justify-content:center;}
+.lbModal[hidden]{display:none!important;}
+.lbModalCard{background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;padding:18px 20px;width:94%;max-width:380px;box-shadow:var(--shadow-lg);}
 </style>
 
 <script>
 var LabBill=(function(){
   'use strict';
 
-  var _bills=[], _stats={}, _tab='PENDING';
+  var _bills=[], _stats={}, _tab='PENDING', _older=null, _settleBill=null;
 
   /* ─── UTILS ─── */
   function g(id){return document.getElementById(id);}
@@ -164,6 +203,13 @@ var LabBill=(function(){
     if(g('lbKtoday'))g('lbKtoday').textContent='₹'+(Number(_stats.todayOP)||0).toFixed(0);
     if(g('lbKcount'))g('lbKcount').textContent=_stats.todayCount||0;
     if(g('lbKip'))g('lbKip').textContent='₹'+(Number(_stats.todayIP)||0).toFixed(0);
+    if(g('lbKunsettled'))g('lbKunsettled').textContent='₹'+(Number(_stats.unsettledTotal)||0).toFixed(0);
+    if(g('lbKunsettledSplit')){
+      var parts=[];
+      if(_stats.unsettledOP)parts.push('₹'+Number(_stats.unsettledOP).toFixed(0)+' OP');
+      if(_stats.unsettledIP)parts.push('₹'+Number(_stats.unsettledIP).toFixed(0)+' IP');
+      g('lbKunsettledSplit').textContent=parts.join(' · ')||'\u00a0';
+    }
   }
 
   function _tabCounts(){
@@ -172,13 +218,15 @@ var LabBill=(function(){
     if(g('lbNpaid'))g('lbNpaid').textContent=n('PAID');
     if(g('lbNip'))g('lbNip').textContent=n('IP');
     if(g('lbNcancel'))g('lbNcancel').textContent=n('CANCELLED');
+    if(g('lbNunsettled'))g('lbNunsettled').textContent=n('UNSETTLED');
   }
 
-  var TABS=['PENDING','PAID','IP','CANCELLED'];
-  var TAB_IDS=['lbTabPend','lbTabPaid','lbTabIP','lbTabCancel'];
+  var TABS=['PENDING','UNSETTLED','PAID','IP','CANCELLED'];
+  var TAB_IDS=['lbTabPend','lbTabUnsettled','lbTabPaid','lbTabIP','lbTabCancel'];
 
   function setTab(t){
     _tab=t;
+    if(t!=='CANCELLED')_older=null;
     TAB_IDS.forEach(function(id,i){
       var el=g(id);if(el)el.classList.toggle('on',TABS[i]===t);
     });
@@ -188,22 +236,81 @@ var LabBill=(function(){
   function render(){
     var h=g('lbList');if(!h)return;
     var q=((g('lbSearch')&&g('lbSearch').value)||'').toLowerCase().trim();
-    var list=_bills.filter(function(b){
+    var source=(_tab==='CANCELLED'&&_older)?_older:_bills;
+    var list=source.filter(function(b){
       if(b.tabType!==_tab)return false;
       if(!q)return true;
-      return(b.patientName+' '+b.orderId+' '+b.receiptNumber+' '+b.patientId).toLowerCase().indexOf(q)!==-1;
+      return(b.patientName+' '+b.orderId+' '+b.receiptNumber+' '+b.patientId+' '+(b.admissionId||'')).toLowerCase().indexOf(q)!==-1;
     });
+    if(_tab==='UNSETTLED')list.sort(function(a,b){return (Number(b.balance)||0)-(Number(a.balance)||0);});
+    // Cancellations older than a week have left the desk. They are kept, and
+    // read back here on request.
+    var cancelNote='';
+    if(_tab==='CANCELLED'){
+      cancelNote=_older
+        ?'<div class="label-bright small mb-2">Showing every cancellation on record. '
+          +'<a href="#" onclick="LabBill.hideOlder();return false;">Back to the last '+(_stats.cancelledDays||7)+' days</a></div>'
+        :'<div class="label-bright small mb-2">The last '+(_stats.cancelledDays||7)+' days. '
+          +(_stats.olderCancelled?_stats.olderCancelled+' older cancellation(s) are kept on record. ':'')
+          +'<a href="#" onclick="LabBill.findOlder();return false;">Find older cancellations</a></div>';
+    }
     if(!list.length){
-      h.innerHTML='<div class="text-center label-bright py-5"><i class="fa-solid fa-receipt fa-2x mb-3 d-block"></i>'
+      h.innerHTML=cancelNote+'<div class="text-center label-bright py-5"><i class="fa-solid fa-receipt fa-2x mb-3 d-block"></i>'
         +(_tab==='PENDING'?'No pending bills right now.'
+          :_tab==='UNSETTLED'?'Nothing is owed on any lab bill.'
           :_tab==='PAID'?'No recent payments collected.'
-          :_tab==='CANCELLED'?'Nothing has been cancelled.'
+          :_tab==='CANCELLED'?'Nothing cancelled in this period.'
           :'No recent IP account postings.')
         +'</div>';
       return;
     }
-    h.innerHTML=list.map(_card).join('');
+    h.innerHTML=cancelNote+list.map(_card).join('');
   }
+
+  /* Older cancellations, read back on request. */
+  function findOlder(){
+    run('labListCancelled',[window.sessionToken||'',500],function(res){
+      if(!res||!res.success){flash((res&&res.message)||'Could not read the cancellations.',false);return;}
+      _older=(res.rows||[]).map(function(r){
+        return {tabType:'CANCELLED',orderId:r.orderId,billId:r.kind==='BILL'?r.id:'',paymentMode:'',
+                patientName:r.patientName||'Unknown',patientId:r.patientId||'',testNames:r.kind==='BILL'?'Voided bill':'Cancelled order',
+                receiptNumber:r.kind==='BILL'?r.id:'',billedAt:String(r.at||''),net:Number(r.amount)||0,paid:0,balance:0,discount:0,
+                cancelReason:r.reason||'',cancelledBy:r.by||''};
+      });
+      render();
+    },'Reading older cancellations…');
+  }
+  function hideOlder(){_older=null;render();}
+
+  /* Collecting what is owed. */
+  function openSettle(billId){
+    var b=_bills.filter(function(x){return x.billId===billId&&x.tabType==='UNSETTLED';})[0];
+    if(!b)return;
+    _settleBill=b;
+    g('lbSettleSub').textContent=b.patientName+' · '+b.billId+' · owes ₹'+Number(b.balance).toFixed(2)+' of ₹'+Number(b.net).toFixed(2);
+    g('lbSettleAmt').value=Number(b.balance).toFixed(2);
+    g('lbSettleMode').value='CASH';
+    g('lbSettleNote').value='';
+    g('lbSettle').hidden=false;
+    g('lbSettleAmt').focus();g('lbSettleAmt').select();
+  }
+  function closeSettle(){g('lbSettle').hidden=true;_settleBill=null;}
+  function doSettle(){
+    if(!_settleBill)return;
+    var amt=Number(g('lbSettleAmt').value);
+    if(!(amt>0)){flash('Enter the amount received.',false);return;}
+    var btn=g('lbSettleGo');btn.disabled=true;
+    run('settleLabBillBalance',[{billId:_settleBill.billId,amount:amt,payMode:g('lbSettleMode').value,note:g('lbSettleNote').value.trim()}],function(res){
+      btn.disabled=false;
+      if(!res||!res.success){flash((res&&res.message)||'Could not record the payment.',false);return;}
+      closeSettle();flash(res.message,true);load();
+    },'Recording payment…');
+  }
+  document.addEventListener('keydown',function(ev){
+    var m=g('lbSettle');if(!m||m.hidden)return;
+    if(ev.key==='Escape'){ev.preventDefault();closeSettle();}
+    else if(ev.key==='Enter'&&ev.target&&ev.target.tagName!=='BUTTON'){ev.preventDefault();doSettle();}
+  });
 
   function _card(b){
     var payIcon=b.paymentMode==='CASH'?'💵':b.paymentMode==='UPI'?'📱':b.paymentMode==='CARD'?'💳':b.paymentMode==='IP_ACCOUNT'?'🏥':'💰';
@@ -214,12 +321,23 @@ var LabBill=(function(){
       ?'<span style="'+CHIP+'background:var(--accent-glow);color:var(--accent-fg);border:1px solid var(--accent-purple);">IP ACCOUNT</span>'
       :b.tabType==='CANCELLED'
       ?'<span style="'+CHIP+'background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger);">CANCELLED</span>'
-      :'<span style="'+CHIP+'background:var(--success-bg);color:var(--success-fg);border:1px solid var(--success);">PAID</span>';
+      :b.tabType==='UNSETTLED'
+      ?(b.ipSettledWithout
+        ?'<span style="'+CHIP+'background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger);" title="The admission was settled without this bill. Collect it here, or void it with a reason.">ADMISSION SETTLED WITHOUT THIS BILL</span>'
+        :'<span style="'+CHIP+'background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning);">'+(b.isIP?'IP · SETTLES AT DISCHARGE':(Number(b.paid)>0?'PART-PAID':'UNPAID'))+'</span>')
+      :(Number(b.balance)>0
+        ?'<span style="'+CHIP+'background:var(--warning-bg);color:var(--warning-fg);border:1px solid var(--warning);">PART-PAID</span>'
+        :'<span style="'+CHIP+'background:var(--success-bg);color:var(--success-fg);border:1px solid var(--success);">PAID</span>');
 
     var actions='';
     if(b.tabType==='CANCELLED'){
       // Nothing to do to a cancellation. The reason is the record.
       actions='';
+    } else if(b.tabType==='UNSETTLED'){
+      actions=(b.isIP&&!b.ipSettledWithout)
+        ?'<div class="label-bright" style="font-size:.7rem;">On '+e(b.admissionId||'the IP account')+'</div>'
+        :'<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="event.stopPropagation(); LabBill.openSettle(\''+e(b.billId)+'\')"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Collect</button>'
+         +'<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" title="Cancel / void this bill" onclick="event.stopPropagation(); LabBill.cancelBill(\''+e(b.billId)+'\',\''+e(b.patientName).replace(/\'/g,"\\\'")+'\','+(Number(b.net)||0)+')"><i class="fa-solid fa-ban"></i></button>';
     } else if(b.tabType==='PENDING'){
       actions='<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabBill.openOrder(\''+e(b.orderId)+'\')"><i class="fa-solid fa-arrow-right me-1"></i>Process</button>'
         +'<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" title="Cancel this order" onclick="event.stopPropagation(); LabBill.cancelOrder(\''+e(b.orderId)+'\',\''+e(b.patientName).replace(/\'/g,"\\\'")+'\')"><i class="fa-solid fa-ban"></i></button>';
@@ -251,7 +369,11 @@ var LabBill=(function(){
           :'')
       +'</div>'
       +'<div class="text-end flex-shrink-0">'
-        +'<div style="font-size:1.1rem;font-weight:800;color:'+(b.tabType==='IP'?'var(--accent-fg)':b.tabType==='PAID'?'var(--success-fg)':'var(--warning-fg)')+';">₹'+Number(b.net).toFixed(2)+'</div>'
+        +(b.tabType==='UNSETTLED'
+          ?'<div style="font-size:1.1rem;font-weight:800;color:var(--warning-fg);">₹'+Number(b.balance).toFixed(2)+'</div>'
+            +'<div class="label-bright" style="font-size:.67rem;">owed of ₹'+Number(b.net).toFixed(2)+(Number(b.paid)>0?' · ₹'+Number(b.paid).toFixed(2)+' paid':'')+'</div>'
+          :'<div style="font-size:1.1rem;font-weight:800;color:'+(b.tabType==='IP'?'var(--accent-fg)':b.tabType==='PAID'?'var(--success-fg)':'var(--warning-fg)')+';">₹'+Number(b.net).toFixed(2)+'</div>'
+            +(b.tabType==='PAID'&&Number(b.balance)>0?'<div class="label-bright" style="font-size:.67rem;">₹'+Number(b.balance).toFixed(2)+' still owed</div>':''))
         +(b.discount>0?'<div class="label-bright" style="font-size:.67rem;">Disc: ₹'+Number(b.discount).toFixed(0)+'</div>':'')
         +actions
       +'</div>'
@@ -338,6 +460,13 @@ var LabBill=(function(){
     var todayStr = new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     var cashTotal=0, upiTotal=0, cardTotal=0, ipTotal=0;
     
+    // Money TAKEN: an OP bill counts what was paid, not what was billed, and
+    // today's collections on older bills are added as their own lines.
+    bills = bills.map(function(b){ return Object.assign({}, b, { net: b.isIP ? b.net : (Number(b.paid) || 0) }); })
+      .concat((res.settlements || []).map(function(s){
+        return { receiptNumber: s.billId, billId: s.billId, patientName: 'Balance collected', testNames: 'Earlier bill ' + s.billId,
+                 paymentMode: s.mode, billedAt: s.at, net: s.amount };
+      }));
     bills.forEach(function(b){
       var n = Number(b.net) || 0;
       if(b.paymentMode === 'CASH') cashTotal += n;
@@ -472,7 +601,9 @@ var LabBill=(function(){
     load:load, render:render, setTab:setTab, openOrder:openOrder, 
     printReceiptDirectly:printReceiptDirectly, generateAndPrintDayReport:generateAndPrintDayReport,
     waInvoice:waInvoice, emailInvoice:emailInvoice,
-    cancelOrder:cancelOrder, cancelBill:cancelBill
+    cancelOrder:cancelOrder, cancelBill:cancelBill,
+    openSettle:openSettle, closeSettle:closeSettle, doSettle:doSettle,
+    findOlder:findOlder, hideOlder:hideOlder
   };
 })();
 </script>

@@ -49,6 +49,10 @@ var CRESC_AUTH_EVENTS = {
   UNKNOWN_USER: 'LOGIN_UNKNOWN_USER',
   MFA_FAILED:   'LOGIN_MFA_FAILED',
   MFA_PASSED:   'LOGIN_MFA_PASSED',
+  // Two-step sign-in set up or taken off an account (Auth_MFA_Admin.gs).
+  // Removing it is the one change that makes a stolen password enough.
+  MFA_ENROLLED: 'MFA_ENROLLED',
+  MFA_REMOVED:  'MFA_REMOVED',
   SIGNOUT:      'LOGOUT',
 
   // Credential lifecycle (Auth_Credentials.gs). A password that changes is a
@@ -124,14 +128,19 @@ function crescLogSignOut(token) {
     crescAuthAudit_(CRESC_AUTH_EVENTS.SIGNOUT,
                     actor ? actor.username : '(expired session)',
                     actor ? actor.role : '', {});
-    // revokeSession() has carried the comment "Call from your sign-out
+    // revokeSession_() has carried the comment "Call from your sign-out
     // handler to revoke server-side. Optional." since it was written, and
     // nothing ever called it. So a sign-out only cleared localStorage: the
     // token stayed valid in the cache and in the durable Sessions sheet for
     // its full eight hours, and anyone who had it could keep using it after
     // the user believed they had left.
-    if (typeof revokeSession === 'function') {
-      try { revokeSession(token); } catch (e) {}
+    if (typeof revokeSession_ === 'function') {
+      try { revokeSession_(token); } catch (e) {}
+    }
+    // A visiting consultant's declaration ends with the sign-in it was made
+    // under, or the register says "still signed in" about somebody who left.
+    if (typeof dv_endForToken_ === 'function') {
+      try { dv_endForToken_(token, 'ENDED'); } catch (e) {}
     }
     return { success: true };
   } catch (err) {

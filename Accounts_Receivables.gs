@@ -57,8 +57,10 @@ function settleReceivableBill(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'accounts.settle');
+    var actor = crescRequire_(sessionToken, 'accounts.settle');
     if (!payload || !payload.billId) return { success: false, message: "Missing bill reference." };
+    // Recorded as the signed-in user, whatever the browser put in loggedBy.
+    payload.loggedBy = actor.displayName || actor.username;
     var source = acc_str_(payload.source).toUpperCase();
     var mode = acc_str_(payload.payMode) || 'Cash';
 
@@ -73,6 +75,18 @@ function settleReceivableBill(payload, sessionToken) {
       if (res && res.success)
         acc_audit_(payload.loggedBy, 'SETTLE_RECEIVABLE', 'Pharmacy', payload.billId, 'PENDING', 'PAID', 'Mode: ' + mode);
       return res;
+    }
+
+    if (source === 'LAB' && typeof labb_settle_ === 'function') {
+      // The same write the lab desk uses, so the collection is logged with
+      // its own date and mode and the lab till counts it that day.
+      var rows = acc_labRows_().filter(function (r) { return r.billId === acc_str_(payload.billId) && !r.settlementOf; });
+      if (!rows.length) return { success: false, message: "Lab bill " + payload.billId + " not found." };
+      var lres = labb_settle_(payload.billId, rows[0].balance, mode, payload.loggedBy || 'Finance Hub', 'Settled from receivables');
+      if (lres && lres.success) {
+        acc_audit_(payload.loggedBy, 'SETTLE_RECEIVABLE', 'Lab', payload.billId, 'OPEN', 'PAID', 'Mode: ' + mode);
+      }
+      return lres;
     }
 
     if (source === 'LAB') {

@@ -389,6 +389,12 @@ function crescChangePassword(payload) {
         if (String(udata[i][0]).trim().toUpperCase() !== username.toUpperCase()) continue;
 
         var uv = crescPwdVerify_(current, udata[i][1]);
+        // The emailed temporary password proves the account as well as the
+        // real one does (Auth_Reset.gs keeps it beside the real one).
+        if (!uv.ok && typeof cresc_pendingResetMatches_ === 'function' &&
+            cresc_pendingResetMatches_(users, i + 1, current, false)) {
+          uv = { ok: true, legacy: false };
+        }
         if (uv.legacy) {
           // Deliberately NOT a self-service migration path. A plain-text
           // password has been readable by everyone with access to the
@@ -412,11 +418,18 @@ function crescChangePassword(payload) {
 
         var ush = cresc_usersSheet_();
         cresc_writeCredential_(ush, i + 1, next, false, 'Must_Change', 'Password_Updated_At');
+        if (typeof cresc_clearPendingReset_ === 'function') cresc_clearPendingReset_(ush, i + 1, false);
         SpreadsheetApp.flush();
         crescAuthPassed_(username, String(udata[i][2] || ''), 'password-change');
+        // Everybody else signed in as this account — on another computer,
+        // with the old password — is signed out. keepSession is the session
+        // the change was made from, when it was made in the app.
+        var uOut = (typeof ds_revokeUserSessions_ === 'function')
+          ? ds_revokeUserSessions_(username, payload.keepSession) : 0;
         crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, String(udata[i][2] || ''),
-                        { by: 'self' });
-        return { success: true, message: 'Password changed. Sign in with the new one.' };
+                        { by: 'self', otherSessionsEnded: uOut });
+        return { success: true, otherSessionsEnded: uOut,
+                 message: 'Password changed.' + (uOut ? ' ' + uOut + ' other sign-in(s) of this account were ended.' : '') };
       }
     }
 
@@ -429,6 +442,10 @@ function crescChangePassword(payload) {
         if (String(pdata[j][0]).trim().toUpperCase() !== username.toUpperCase()) continue;
 
         var pv = crescPwdVerify_(current, pdata[j][1]);
+        if (!pv.ok && typeof cresc_pendingResetMatches_ === 'function' &&
+            cresc_pendingResetMatches_(patients, j + 1, current, true)) {
+          pv = { ok: true, legacy: false };
+        }
         if (pv.legacy) {
           // The old portal password was derivable from the patient's name and
           // birth year, both printed on documents they carry. Accepting it
@@ -450,10 +467,15 @@ function crescChangePassword(payload) {
         var psh = cresc_patientsSheet_();
         cresc_writeCredential_(psh, j + 1, next, false,
                                'Portal_Must_Change', 'Portal_Password_Updated_At');
+        if (typeof cresc_clearPendingReset_ === 'function') cresc_clearPendingReset_(psh, j + 1, true);
         SpreadsheetApp.flush();
         crescAuthPassed_(username, 'patient', 'password-change');
-        crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, 'patient', { by: 'self' });
-        return { success: true, message: 'Password changed. Sign in with the new one.' };
+        var pOut = (typeof ds_revokeUserSessions_ === 'function')
+          ? ds_revokeUserSessions_(username, payload.keepSession) : 0;
+        crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_CHANGED, username, 'patient',
+                        { by: 'self', otherSessionsEnded: pOut });
+        return { success: true, otherSessionsEnded: pOut,
+                 message: 'Password changed.' + (pOut ? ' ' + pOut + ' other sign-in(s) of this account were ended.' : '') };
       }
     }
 
@@ -893,7 +915,12 @@ function crescListStaffAccounts(sessionToken) {
         // what it cannot change rather than offering buttons that refuse.
         manageable: (elevated || !cresc_roleIsElevated_(role)) &&
                     username.toUpperCase() !== String(actor.username || '').toUpperCase(),
-        isSelf: username.toUpperCase() === String(actor.username || '').toUpperCase()
+        isSelf: username.toUpperCase() === String(actor.username || '').toUpperCase(),
+        // Whether two-step sign-in is on, and whether what is stored is a
+        // usable secret. Never the secret itself.
+        hasMfa: !!String(data[i][5] || '').replace(/\s/g, ''),
+        mfaBroken: !!String(data[i][5] || '').replace(/\s/g, '') &&
+                   !mfa_normaliseSecret_(data[i][5]).ok
       });
     }
 

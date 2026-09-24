@@ -404,8 +404,8 @@ function dpdpConsentQueue(sessionToken) {
 // ---------------------------------------------------------------------------
 // RUNNABLE FROM THE SCRIPT EDITOR
 //
-// Every name here ends in `_` (see RUN_Setup.gs for why). Each one mints an
-// admin session; without the underscore they were endpoints that handed that
+// Each one mints an admin session, so each one starts with crescEditorOnly_()
+// (see RUN_Setup.gs). Without it they were endpoints that handed that
 // session's powers — the consent worklist with every patient's name, and a
 // real write to the consent register — to anyone holding the URL.
 // ---------------------------------------------------------------------------
@@ -413,7 +413,7 @@ function dpdpConsentQueue(sessionToken) {
 /**
  * A short-lived admin session for a job run from the script editor.
  *
- * Same pattern as RUN_90_resetOnePassword_ in RUN_Setup.gs: the guard on
+ * Same pattern as RUN_90_resetOnePassword in RUN_Setup.gs: the guard on
  * these endpoints is real and is not bypassed for the editor — a session is
  * issued, used, and revoked when the job ends, so the row it writes to the
  * consent register carries a username an audit can follow.
@@ -424,7 +424,7 @@ function dpdp_editorSession_(fn) {
   try {
     return fn(token);
   } finally {
-    try { revokeSession(token); } catch (e) {}
+    try { revokeSession_(token); } catch (e) {}
   }
 }
 
@@ -432,7 +432,8 @@ function dpdp_editorSession_(fn) {
  * ADMIN, from the editor. What the LEGITIMATE backfill would write. Writes
  * nothing.
  */
-function RUN_consentBackfill_DRYRUN_() {
+function RUN_consentBackfill_DRYRUN() {
+  crescEditorOnly_('RUN_consentBackfill_DRYRUN');
   var r = dpdp_editorSession_(function (t) {
     return dpdpBackfillConsent({ mode: 'LEGITIMATE', dryRun: true }, t);
   });
@@ -442,7 +443,8 @@ function RUN_consentBackfill_DRYRUN_() {
 }
 
 /** ADMIN, from the editor. Runs the LEGITIMATE backfill for real. */
-function RUN_consentBackfill_FOR_REAL_() {
+function RUN_consentBackfill_FOR_REAL() {
+  crescEditorOnly_('RUN_consentBackfill_FOR_REAL');
   var r = dpdp_editorSession_(function (t) {
     return dpdpBackfillConsent({ mode: 'LEGITIMATE' }, t);
   });
@@ -452,7 +454,8 @@ function RUN_consentBackfill_FOR_REAL_() {
 }
 
 /** ADMIN, from the editor. The worklist for the front desk. */
-function RUN_consentQueue_() {
+function RUN_consentQueue() {
+  crescEditorOnly_('RUN_consentQueue');
   var r = dpdp_editorSession_(function (t) { return dpdpConsentQueue(t); });
   var lines = (r.rows || []).map(function (x) {
     return '  ' + x.patientId + '  ' + x.name +

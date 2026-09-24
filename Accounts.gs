@@ -235,14 +235,46 @@ function acc_pharmaRows_() {
 
 // 2. Lab Income Normalizer
 function acc_labRows_() {
-  return acc_readObjects_(ACC_CFG.LAB_BILLING).map(function(r) {
+  // Balances collected after the bill was raised (LAB_SETTLEMENTS, written by
+  // the lab desk and by settleReceivableBill). Each is its own receipt, on its
+  // own day, in its own mode — so the till that took it is the one that
+  // counts it.
+  var settled = {}, settlementRows = [];
+  try {
+    if (typeof labb_settlements_ === 'function') {
+      labb_settlements_().forEach(function (s) {
+        var amt = acc_money_(s.Amount);
+        if (amt <= 0) return;
+        var id = acc_str_(s.BillID);
+        settled[id] = acc_money_((settled[id] || 0) + amt);
+        var sd = acc_toDate_(s.SettledAt);
+        settlementRows.push({
+          source: 'Lab', billId: id, patientId: acc_str_(s.PatientID), name: '', admissionId: '',
+          net: amt, balance: 0, mode: acc_str_(s.PaymentMode) || 'Cash',
+          billDate: sd, realizedDate: sd, realized: true, realizedAmount: amt,
+          open: false, settlementOf: id
+        });
+      });
+    }
+  } catch (e) { settled = {}; settlementRows = []; }
+
+  var voided = {};
+  var bills = acc_readObjects_(ACC_CFG.LAB_BILLING).map(function(r) {
     var stat = acc_str_(r['PaymentStatus']).toUpperCase();
+    if (stat === 'CANCELLED') voided[acc_str_(r['BillID'])] = true;
     var net = acc_money_(r['NetAmount']);
     var bal = acc_money_(r['BalanceAmount']);
+    var paid = acc_money_(r['PaidAmount']);
     var d = acc_toDate_(r['BilledAt'] || r['Timestamp'] || r['Date']);
+    var id = acc_str_(r['BillID']);
+    // What was taken AT the counter when the bill was raised: everything paid
+    // so far, less what was collected later. A bill paid in full up front
+    // has no settlements, so this is its net, exactly as before.
+    var upFront = stat === 'CANCELLED' ? 0
+                : acc_money_(Math.max(0, (paid || (stat === 'PAID' ? net : 0)) - (settled[id] || 0)));
     return {
       source: 'Lab',
-      billId: acc_str_(r['BillID']),
+      billId: id,
       patientId: acc_str_(r['PatientID']),
       name: acc_str_(r['PatientName']),
       admissionId: acc_str_(r['AdmissionID']),
@@ -250,11 +282,18 @@ function acc_labRows_() {
       balance: bal || (stat === 'ON_ACCOUNT' ? net : 0),
       mode: acc_str_(r['PaymentMode']) || 'Cash',
       billDate: d, realizedDate: d,
-      realized: (stat === 'PAID'),
-      open: (stat === 'ON_ACCOUNT'),
+      realized: upFront > 0,
+      realizedAmount: upFront,
+      // Every bill with money still owed is a receivable — an unpaid or
+      // part-paid OP bill as much as an IP on-account one. Only ON_ACCOUNT
+      // used to count, so OP lab dues were on the dashboard and nowhere else.
+      open: (stat === 'ON_ACCOUNT' || stat === 'PENDING' || stat === 'PARTIAL' || stat === 'CREDIT'),
       _row: r._row
     };
   });
+  // A voided bill takes its later collections out with it, as it takes the
+  // up-front payment: the void is a reversal of the whole document.
+  return bills.concat(settlementRows.filter(function (s) { return !voided[s.settlementOf]; }));
 }
 
 // 3. OP Consultation Income Normalizer
@@ -629,7 +668,7 @@ function lockFinancialPeriod(period, loggedBy, sessionToken) {
   }
 }
 
-function getLockedPeriods() {
+function getLockedPeriods_() {
   try { return { success: true, periods: acc_lockedSet_() }; }
   catch (e) { return { success: false, message: e.message }; }
 }

@@ -211,7 +211,7 @@ function setDoctorDayBlocks(payload, sessionToken) {
   try {
     lock.waitLock(10000);
 
-    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId);
+    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId, { purpose: "manage" });
     if (!w.ok) return { success: false, message: w.message };
 
     var start = ds_parseDateKey_(dc_dateKey_(payload.startDate));

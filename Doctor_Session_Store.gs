@@ -61,6 +61,7 @@ function dc_validateSession_(sessionToken) {
 
   if (sess) {
     ds_touchSession_(token, sess);     // writes the row if it is missing
+    if (typeof crescNoteSession_ === 'function') crescNoteSession_(sess);
     return sess;
   }
 
@@ -102,6 +103,7 @@ function dc_validateSession_(sessionToken) {
       } catch (e) { /* cache is best-effort; the sheet is the truth */ }
 
       ds_slideExpiry_(sh, i + 1);
+      if (typeof crescNoteSession_ === 'function') crescNoteSession_(revived);
       return revived;
     }
     return null;
@@ -149,7 +151,7 @@ function ds_slideExpiry_(sh, rowNumber) {
 }
 
 /** Call from your sign-out handler to revoke server-side. Optional. */
-function revokeSession(sessionToken) {
+function revokeSession_(sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -180,7 +182,7 @@ function revokeSession(sessionToken) {
  * becomes the largest sheet in the workbook within a year.
  * Attach to a weekly time-driven trigger.
  */
-function purgeExpiredSessions() {
+function purgeExpiredSessions_() {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -201,4 +203,42 @@ function purgeExpiredSessions() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * FRONTEND ENTRY. "Stay signed in": validating the token is what slides its
+ * expiry forward (dc_validateSession_ -> ds_touchSession_), so this is all a
+ * renewal needs. { success:false, expired:true } tells the browser the server
+ * has already let the session go.
+ */
+function crescTouchSession(sessionToken) {
+  var sess = dc_validateSession_(sessionToken);
+  if (!sess) return { success: false, expired: true, message: "Your session has expired." };
+  return { success: true, username: dc_str_(sess.username) };
+}
+
+/**
+ * Signs a user out everywhere except (optionally) one session. Used when a
+ * password changes: whoever else was signed in with the old password stops
+ * being signed in. Never throws; returns how many sessions ended.
+ */
+function ds_revokeUserSessions_(username, keepToken) {
+  try {
+    var who = dc_upper_(username);
+    if (!who) return 0;
+    var sh = ds_sessionSheet_();
+    var data = sh.getDataRange().getDisplayValues();
+    var m = dc_headerMap_(sh);
+    var n = 0;
+    for (var i = 1; i < data.length; i++) {
+      if (dc_upper_(data[i][m["Username"]]) !== who) continue;
+      if (dc_upper_(data[i][m["Status"]]) !== "ACTIVE") continue;
+      var tok = dc_str_(data[i][m["Token"]]);
+      if (keepToken && tok === dc_str_(keepToken)) continue;
+      sh.getRange(i + 1, m["Status"] + 1).setValue("REVOKED");
+      try { CacheService.getScriptCache().remove("SESS_" + tok); } catch (e) {}
+      n++;
+    }
+    return n;
+  } catch (e) { return 0; }
 }

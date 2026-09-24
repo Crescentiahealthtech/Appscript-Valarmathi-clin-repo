@@ -28,7 +28,7 @@
      table rules at all. */
   .lp-scope .lp-order { border: 1px solid var(--border-color); border-radius: 10px;
                    padding: .7rem .85rem; margin-bottom: .7rem; background: var(--surface-2); }
-  .lp-scope table { width: 100%; font-size: .84rem; }
+  .lp-scope table { width: 100%; font-size: var(--fs-sm); }
   .lp-scope th { color: var(--text-label); font-weight: 600; text-align: left;
                    padding: .2rem .4rem; border-bottom: 1px solid var(--border-color); }
   .lp-scope td { padding: .2rem .4rem; border-bottom: 1px solid var(--divider-color); }
@@ -44,7 +44,7 @@
   <div class="lp-card">
     <div class="lp-head">
       <div>
-        <div class="fw-bold" style="font-size:1rem;">
+        <div class="fw-bold" style="font-size:var(--fs-md);">
           <i class="fa-solid fa-flask-vial me-2" style="color: var(--accent-fg);"></i>
           Lab results
         </div>
@@ -196,13 +196,22 @@
           '<td>' + flagCell + '</td></tr>';
       }).join('');
 
+      // An outside lab's values are labelled as such everywhere they appear:
+      // the clinic did not run them and did not verify them.
+      var ext = o.external
+        ? '<span class="badge ms-2" style="background:var(--info-bg);color:var(--info-fg);font-weight:600;">' +
+          'Outside lab · ' + esc(o.labName || '') + '</span>' : '';
+      var who = o.external
+        ? (o.enteredBy ? ' · entered by ' + esc(o.enteredBy) : '') +
+          ' · <a href="#" class="lp-void" data-report="' + esc(o.orderId) + '">remove</a>'
+        : (o.doctor ? ' · ' + esc(o.doctor) : '') +
+          (o.verifiedBy ? ' · verified by ' + esc(o.verifiedBy) : '');
       return '<div class="lp-order' + (crit ? ' lp-crit' : '') + '">' +
         '<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">' +
           '<div>' +
-            '<span class="fw-bold">' + esc(o.testNames || o.orderId) + '</span>' +
-            '<div class="label-bright small">' + esc(o.orderId) +
-              (o.doctor ? ' · ' + esc(o.doctor) : '') +
-              (o.verifiedBy ? ' · verified by ' + esc(o.verifiedBy) : '') + '</div>' +
+            '<span class="fw-bold">' + esc(o.testNames || o.orderId) + '</span>' + ext +
+            '<div class="label-bright small">' + esc(o.orderId) + who + '</div>' +
+            (o.notes ? '<div class="small mt-1">' + esc(o.notes) + '</div>' : '') +
           '</div>' +
           '<div class="text-end">' +
             '<div class="label-bright small">' + esc(o.date) + '</div>' +
@@ -216,6 +225,20 @@
       '</div>';
     }).join('');
   }
+
+  // "remove" on an outside report: voided with a reason, then redrawn.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a.lp-void') : null;
+    if (!a) return;
+    e.preventDefault();
+    var scope = a.closest('[data-lp-token]');
+    var pid = scope ? String(scope.getAttribute('data-lp-token')).split(':').slice(1).join(':') : '';
+    if (typeof window.crescExternalLabVoid === 'function') {
+      window.crescExternalLabVoid(a.getAttribute('data-report'), function () {
+        if (scope && pid) window.crescLabResultsInto(scope, pid);
+      });
+    }
+  });
 
   // Escape closes it, like every other overlay in the app.
   document.addEventListener('keydown', function (e) {

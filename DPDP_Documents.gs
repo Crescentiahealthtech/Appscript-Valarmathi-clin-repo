@@ -65,7 +65,7 @@
 // re-opens only the first of those, and only until the sweep runs:
 //
 //   * Every published file is a row in Document_Grants with an expiry.
-//   * dpdpExpireDocumentGrants() runs daily off dpdpInstallTriggers() and
+//   * dpdpExpireDocumentGrants_() runs daily off dpdpInstallTriggers() and
 //     sets every expired file back to PRIVATE. The link then stops working
 //     for everyone who ever received it, forwarded copies included.
 //   * dpdpRevokeDocumentLink() does the same immediately, on demand.
@@ -546,7 +546,7 @@ function dpdpListDocumentLinks(patientId, sessionToken) {
  * outcome here that leaves a patient's document readable, so it must not
  * disappear into a success message.
  */
-function dpdpExpireDocumentGrants() {
+function dpdpExpireDocumentGrants_() {
   var sh = dpdp_grantSheet_();
   var m = dc_headerMap_(sh);
   var data = dc_sheetValues_(sh);

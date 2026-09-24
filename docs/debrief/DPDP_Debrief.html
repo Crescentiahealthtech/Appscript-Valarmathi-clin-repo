@@ -410,11 +410,10 @@ crescMigrateCredentials()       ← RESETS EVERY PASSWORD IN THE CLINIC</pre>
   reads as a list of instructions in order. Destructive steps are split into a
   <span class="mono">_DRYRUN_</span> and a <span class="mono">_FOR_REAL_</span> so neither can be
   reached by accident.</p>
-  <p class="footnote">Every name in that file ends in an underscore. In Apps Script that makes a
-  function unreachable from the browser while the editor lists it normally. Without it, the file would
-  have published "reset every password" and "mint an administrator session" as endpoints anyone with
-  the web app URL could call by name — which the project's own scanner caught the moment the file was
-  added.</p>
+  <p class="footnote">Every function in that file starts with <span class="mono">crescEditorOnly_()</span>,
+  which lets it run only for the script's owner in the editor and refuses a call from the browser.
+  (They once ended in an underscore instead — that also hides a function from the editor's Run
+  dropdown, which made the runbook unselectable.)</p>
 
   <h3>Running one, and reading the answer</h3>
   <ol>
@@ -446,27 +445,27 @@ crescMigrateCredentials()       ← RESETS EVERY PASSWORD IN THE CLINIC</pre>
     <thead><tr><th style="width:4%">#</th><th style="width:34%" class="mono">RUN_Setup.gs function</th>
       <th style="width:30%">Calls</th><th>Which lives in</th></tr></thead>
     <tbody>
-      <tr><td>1</td><td class="mono">RUN_01_checkFilesArrived_</td><td class="mono">verifyDeployment()</td><td class="mono">Deployment_Check.gs:188</td></tr>
-      <tr><td>2</td><td class="mono">RUN_02_checkRoleMatrix_</td><td class="mono">crescRbacSelfTest()</td><td class="mono">RBAC.gs:482</td></tr>
-      <tr><td>3</td><td class="mono">RUN_03_checkPasswordStorage_</td><td class="mono">crescCredentialStatus()</td><td class="mono">Auth_Credentials.gs:534</td></tr>
-      <tr><td>4</td><td class="mono">RUN_04_timePasswordHashing_</td><td class="mono">crescPwdBenchmark()</td><td class="mono">Auth_Credentials.gs:251</td></tr>
-      <tr><td>4b</td><td class="mono">RUN_04b_makeSignInFaster_</td><td>sets a script property</td><td class="mono">RUN_Setup.gs</td></tr>
-      <tr><td>5</td><td class="mono">RUN_05_createRegisters_</td><td class="mono">dpdpSetup()</td><td class="mono">DPDP_Compliance.gs:201</td></tr>
-      <tr><td>6</td><td class="mono">RUN_06_nameGrievanceOfficer_</td><td class="mono">dpdpSetGrievanceOfficer(…)</td><td class="mono">DPDP_Compliance.gs:228</td></tr>
-      <tr><td>7a</td><td class="mono">RUN_07a_migrateCredentials_DRYRUN_</td><td class="mono">crescMigrateCredentials(true)</td><td class="mono">Auth_Credentials.gs:581</td></tr>
-      <tr><td>7b</td><td class="mono">RUN_07b_migrateCredentials_FOR_REAL_</td><td class="mono">crescMigrateCredentials()</td><td class="mono">Auth_Credentials.gs:581</td></tr>
-      <tr><td>8</td><td class="mono">RUN_08_installScheduledJobs_</td><td class="mono">dpdpInstallTriggers()</td><td class="mono">DPDP_Triggers.gs:41</td></tr>
-      <tr><td>9</td><td class="mono">RUN_09_checkScheduledJobs_</td><td class="mono">dpdpTriggerStatus()</td><td class="mono">DPDP_Triggers.gs:86</td></tr>
-      <tr><td>10a</td><td class="mono">RUN_10a_revokeOldPublicLinks_DRYRUN_</td><td class="mono">dpdpExpireSharedLinks(true)</td><td class="mono">DPDP_Compliance.gs:1258</td></tr>
-      <tr><td>10b</td><td class="mono">RUN_10b_revokeOldPublicLinks_FOR_REAL_</td><td class="mono">dpdpExpireSharedLinks(false)</td><td class="mono">DPDP_Compliance.gs:1258</td></tr>
-      <tr><td>11a</td><td class="mono">RUN_11a_eraseUnusedFields_DRYRUN_</td><td class="mono">dpdpEraseUnusedFields(false)</td><td class="mono">DPDP_Compliance.gs:1314</td></tr>
-      <tr><td>11b</td><td class="mono">RUN_11b_eraseUnusedFields_FOR_REAL_</td><td class="mono">dpdpEraseUnusedFields(true)</td><td class="mono">DPDP_Compliance.gs:1314</td></tr>
-      <tr><td>12</td><td class="mono">RUN_12_readinessCheck_</td><td class="mono">dpdpReadinessCheck()</td><td class="mono">DPDP_Compliance.gs:1594</td></tr>
-      <tr><td>13</td><td class="mono">RUN_13_retentionReport_</td><td class="mono">dpdpRetentionReport()</td><td class="mono">DPDP_Compliance.gs:1366</td></tr>
-      <tr><td>14</td><td class="mono">RUN_14_auditReviewThisWeek_</td><td class="mono">dpdp_anomalyScan_(7)</td><td class="mono">DPDP_Breach.gs:87</td></tr>
-      <tr><td>90</td><td class="mono">RUN_90_resetOnePassword_</td><td class="mono">crescAdminResetPassword(…)</td><td class="mono">Auth_Credentials.gs:478</td></tr>
-      <tr><td>91</td><td class="mono">RUN_91_setVoicePolicy_</td><td class="mono">dpdpSetVoicePolicy(…)</td><td class="mono">DPDP_Compliance.gs:1547</td></tr>
-      <tr><td>99</td><td class="mono">RUN_99_removeScheduledJobs_</td><td class="mono">dpdpRemoveTriggers()</td><td class="mono">DPDP_Triggers.gs:75</td></tr>
+      <tr><td>1</td><td class="mono">RUN_01_checkFilesArrived</td><td class="mono">verifyDeployment()</td><td class="mono">Deployment_Check.gs:188</td></tr>
+      <tr><td>2</td><td class="mono">RUN_02_checkRoleMatrix</td><td class="mono">crescRbacSelfTest()</td><td class="mono">RBAC.gs:482</td></tr>
+      <tr><td>3</td><td class="mono">RUN_03_checkPasswordStorage</td><td class="mono">crescCredentialStatus()</td><td class="mono">Auth_Credentials.gs:534</td></tr>
+      <tr><td>4</td><td class="mono">RUN_04_timePasswordHashing</td><td class="mono">crescPwdBenchmark()</td><td class="mono">Auth_Credentials.gs:251</td></tr>
+      <tr><td>4b</td><td class="mono">RUN_04b_makeSignInFaster</td><td>sets a script property</td><td class="mono">RUN_Setup.gs</td></tr>
+      <tr><td>5</td><td class="mono">RUN_05_createRegisters</td><td class="mono">dpdpSetup()</td><td class="mono">DPDP_Compliance.gs:201</td></tr>
+      <tr><td>6</td><td class="mono">RUN_06_nameGrievanceOfficer</td><td class="mono">dpdpSetGrievanceOfficer(…)</td><td class="mono">DPDP_Compliance.gs:228</td></tr>
+      <tr><td>7a</td><td class="mono">RUN_07a_migrateCredentials_DRYRUN</td><td class="mono">crescMigrateCredentials(true)</td><td class="mono">Auth_Credentials.gs:581</td></tr>
+      <tr><td>7b</td><td class="mono">RUN_07b_migrateCredentials_FOR_REAL</td><td class="mono">crescMigrateCredentials()</td><td class="mono">Auth_Credentials.gs:581</td></tr>
+      <tr><td>8</td><td class="mono">RUN_08_installScheduledJobs</td><td class="mono">dpdpInstallTriggers()</td><td class="mono">DPDP_Triggers.gs:41</td></tr>
+      <tr><td>9</td><td class="mono">RUN_09_checkScheduledJobs</td><td class="mono">dpdpTriggerStatus()</td><td class="mono">DPDP_Triggers.gs:86</td></tr>
+      <tr><td>10a</td><td class="mono">RUN_10a_revokeOldPublicLinks_DRYRUN</td><td class="mono">dpdpExpireSharedLinks(true)</td><td class="mono">DPDP_Compliance.gs:1258</td></tr>
+      <tr><td>10b</td><td class="mono">RUN_10b_revokeOldPublicLinks_FOR_REAL</td><td class="mono">dpdpExpireSharedLinks(false)</td><td class="mono">DPDP_Compliance.gs:1258</td></tr>
+      <tr><td>11a</td><td class="mono">RUN_11a_eraseUnusedFields_DRYRUN</td><td class="mono">dpdpEraseUnusedFields(false)</td><td class="mono">DPDP_Compliance.gs:1314</td></tr>
+      <tr><td>11b</td><td class="mono">RUN_11b_eraseUnusedFields_FOR_REAL</td><td class="mono">dpdpEraseUnusedFields(true)</td><td class="mono">DPDP_Compliance.gs:1314</td></tr>
+      <tr><td>12</td><td class="mono">RUN_12_readinessCheck</td><td class="mono">dpdpReadinessCheck()</td><td class="mono">DPDP_Compliance.gs:1594</td></tr>
+      <tr><td>13</td><td class="mono">RUN_13_retentionReport</td><td class="mono">dpdpRetentionReport()</td><td class="mono">DPDP_Compliance.gs:1366</td></tr>
+      <tr><td>14</td><td class="mono">RUN_14_auditReviewThisWeek</td><td class="mono">dpdp_anomalyScan_(7)</td><td class="mono">DPDP_Breach.gs:87</td></tr>
+      <tr><td>90</td><td class="mono">RUN_90_resetOnePassword</td><td class="mono">crescAdminResetPassword(…)</td><td class="mono">Auth_Credentials.gs:478</td></tr>
+      <tr><td>91</td><td class="mono">RUN_91_setVoicePolicy</td><td class="mono">dpdpSetVoicePolicy(…)</td><td class="mono">DPDP_Compliance.gs:1547</td></tr>
+      <tr><td>99</td><td class="mono">RUN_99_removeScheduledJobs</td><td class="mono">dpdpRemoveTriggers()</td><td class="mono">DPDP_Triggers.gs:75</td></tr>
     </tbody>
   </table>
 

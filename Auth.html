@@ -123,16 +123,80 @@
   <button class="btn btn-link text-muted w-100 mt-2 small" onclick="cancelPasswordChange()">Back to sign in</button>
 </div>
 
+<!-- The inactivity warning. See section 0 below. -->
+<div id="cresc-idle-warn" hidden role="alertdialog" aria-modal="true" aria-labelledby="cresc-idle-title"
+     style="position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;background:var(--overlay-scrim, rgba(2,6,23,.62));">
+  <div style="background:var(--bg-card);color:var(--text-main);border:1px solid var(--border-color);border-radius:14px;max-width:380px;width:92%;padding:1.25rem 1.3rem;box-shadow:var(--shadow-lg);">
+    <div class="fw-bold mb-1" id="cresc-idle-title"><i class="fa-regular fa-clock me-2" style="color:var(--warning-fg);"></i>Still there?</div>
+    <p class="small mb-3" style="color:var(--text-secondary);">You will be signed out in <strong id="cresc-idle-count">2:00</strong> because nothing has been typed or clicked for a while. Anything you are working on is kept as a draft either way.</p>
+    <div class="d-flex justify-content-end gap-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="logoutUser('Signed out.')">Sign out now</button>
+      <button type="button" class="btn btn-sm btn-primary" id="cresc-idle-stay" onclick="crescStaySignedIn()">Stay signed in</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ==========================================
-  // 0. SESSION TIMEOUT CONFIGURATION
+  // 0. SESSION TIMEOUT — BY INACTIVITY, WITH A WARNING
   // ------------------------------------------
-  // Matched to the SERVER-SIDE CacheService token TTL (6h) set in
-  // issueSession_(). Keeping the client longer than the server produces a
-  // window where the UI looks logged in but every scoped call is refused.
+  // It used to sign everybody out exactly six hours after they signed in,
+  // busy or not, with no warning: a doctor mid-consultation lost the screen
+  // and whatever was typed on it. The server's session slides forward with
+  // every call (Doctor_Session_Store.gs, 8 h), so the fixed clock only ever
+  // disagreed with it.
+  //
+  // Now the clock is INACTIVITY: 45 minutes with no key, click or touch in
+  // any tab. Two minutes before, a countdown says so, and "Stay signed in"
+  // renews the server session too. Before any automatic sign-out every open
+  // form is saved as a draft (crescDraft, Shell_UX.html) and offered back
+  // after signing in again.
   // ==========================================
-  const SESSION_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+  const SESSION_IDLE_MS = 45 * 60 * 1000;
+  const SESSION_WARN_MS = 2 * 60 * 1000;
   let sessionInterval;
+
+  /** Any activity, in any tab of this browser, restarts the clock. */
+  (function () {
+    var last = 0;
+    var mark = function (e) {
+      // A click on the warning itself is an answer to it, not activity.
+      if (e && e.target && e.target.closest && e.target.closest('#cresc-idle-warn')) return;
+      var now = Date.now();
+      if (now - last < 15000) return;        // at most every 15 s
+      last = now;
+      try { if (localStorage.getItem('isLoggedIn') === 'true') localStorage.setItem('lastActivity', String(now)); } catch (e) {}
+      var w = document.getElementById('cresc-idle-warn');
+      if (w && !w.hidden) crescStaySignedIn();
+    };
+    ['mousedown', 'keydown', 'touchstart', 'wheel'].forEach(function (ev) {
+      document.addEventListener(ev, mark, { capture: true, passive: true });
+    });
+  })();
+
+  function crescIdleMs() {
+    var t = parseInt(localStorage.getItem('lastActivity') || localStorage.getItem('loginTimestamp') || '0', 10);
+    return t ? Date.now() - t : Infinity;
+  }
+
+  /** "Stay signed in": restarts the clock here and renews the server session. */
+  function crescStaySignedIn() {
+    try { localStorage.setItem('lastActivity', String(Date.now())); } catch (e) {}
+    var w = document.getElementById('cresc-idle-warn');
+    if (w) w.hidden = true;
+    var stayToken = window.sessionToken || localStorage.getItem('sessionToken') || '';
+    if (!stayToken) return;
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success === false && res.expired) {
+          logoutUser('Your session had already ended on the server. Please sign in again — ' +
+                     'anything you were typing has been kept as a draft.');
+        }
+      })
+      .withFailureHandler(function () { /* offline for a moment; the next check tries again */ })
+      .crescTouchSession(stayToken);
+  }
+  window.crescStaySignedIn = crescStaySignedIn;
 
   window.addEventListener('DOMContentLoaded', function () {
     checkSession();
@@ -145,10 +209,8 @@
     const savedRole     = localStorage.getItem('loggedInRole');
 
     if (isLoggedIn === 'true' && loginTime && savedUsername && savedRole) {
-      const timeElapsed = Date.now() - parseInt(loginTime, 10);
-
-      if (timeElapsed > SESSION_TIMEOUT_MS) {
-        logoutUser("Your session has expired. Please log in again.");
+      if (crescIdleMs() > SESSION_IDLE_MS) {
+        logoutUser("You were signed out after 45 minutes without activity. Please sign in again.");
       } else {
         // Restore the FULL session, not just the role. Without sessionToken
         // every doctor-scoped backend call would be refused after a refresh.
@@ -166,20 +228,38 @@
 
   function startBackgroundTimer() {
     clearInterval(sessionInterval);
+    try { if (!localStorage.getItem('lastActivity')) localStorage.setItem('lastActivity', String(Date.now())); } catch (e) {}
     sessionInterval = setInterval(function () {
-      const loginTime = localStorage.getItem('loginTimestamp');
-      if (loginTime) {
-        const timeElapsed = Date.now() - parseInt(loginTime, 10);
-        if (timeElapsed > SESSION_TIMEOUT_MS) {
-          logoutUser("You have been automatically logged out.");
-        }
+      if (localStorage.getItem('isLoggedIn') !== 'true') return;
+      var idle = crescIdleMs();
+      var w = document.getElementById('cresc-idle-warn');
+      if (idle >= SESSION_IDLE_MS) {
+        logoutUser("You were signed out after 45 minutes without activity. Anything you were " +
+                   "typing was kept as a draft and will be offered back when you open it again.");
+        return;
       }
-    }, 60000);
+      if (idle >= SESSION_IDLE_MS - SESSION_WARN_MS) {
+        if (w) {
+          var left = Math.max(0, Math.ceil((SESSION_IDLE_MS - idle) / 1000));
+          var c = document.getElementById('cresc-idle-count');
+          if (c) c.textContent = Math.floor(left / 60) + ':' + ('0' + (left % 60)).slice(-2);
+          if (w.hidden) {
+            w.hidden = false;
+            // Keep the work safe NOW, not only at the last second.
+            if (window.crescDraft) window.crescDraft.saveAll();
+            var b = document.getElementById('cresc-idle-stay');
+            if (b) b.focus();
+          }
+        }
+      } else if (w && !w.hidden) {
+        w.hidden = true;               // activity in another tab
+      }
+    }, 1000);
   }
 
   /** Single place that wipes every stored session key. */
   function clearStoredSession() {
-    ['isLoggedIn', 'loggedInUser', 'loggedInRole', 'loginTimestamp',
+    ['isLoggedIn', 'loggedInUser', 'loggedInRole', 'loginTimestamp', 'lastActivity',
      'sessionToken', 'doctorId', 'displayName'].forEach(function (k) {
       localStorage.removeItem(k);
     });
@@ -192,6 +272,11 @@
   }
 
   function logoutUser(message) {
+    // Every open form is kept as a draft first — while the user name that
+    // keys the drafts is still known.
+    try { document.dispatchEvent(new Event('cresc:before-signout')); } catch (e) {}
+    var iw = document.getElementById('cresc-idle-warn');
+    if (iw) iw.hidden = true;
     if (window.CrescScan) window.CrescScan.stop();   // before the token is cleared
     clearInterval(sessionInterval);
     try {
@@ -408,7 +493,7 @@
     ipc_admissionRow_: 'IP_Clinical_Access.gs', ipc_authorLabel_: 'IP_Clinical_Access.gs',
     ipc_wardVisibilityFilter_: 'IP_Clinical_Access.gs',
     ipc_currentCasesheet_: 'IP_Casesheet_Engine.gs', ipc_writeCasesheetRow_: 'IP_Casesheet_Engine.gs',
-    checkDrugInteractions: 'Drug_Interaction.gs', di_rules_: 'Drug_Interaction.gs',
+    checkDrugInteractions_: 'Drug_Interaction.gs', di_rules_: 'Drug_Interaction.gs',
     _normDrug_: 'IP_Notes_Logic.gs',
     createLabRequest: 'LabIntegrationEngine.gs'
   };
@@ -808,8 +893,11 @@
 
     auth.signInWithPopup(provider)
       .then(function (result) {
-        const userEmail = result.user.email;
-
+        // The server is sent Google's ID token, never the email: it asks
+        // Google whose token it is (AuthLogin.gs, cresc_verifyGoogleIdToken_).
+        return result.user.getIdToken();
+      })
+      .then(function (idToken) {
         google.script.run
           .withSuccessHandler(function (res) {
             btn.innerHTML = originalHtml;
@@ -822,7 +910,7 @@
             btn.disabled = false;
             crescAlert("Network Verification Error: " + err.message);
           })
-          .verifyGoogleLogin(userEmail);
+          .verifyGoogleLogin({ idToken: idToken });
       })
       .catch(function () {
         btn.innerHTML = originalHtml;
@@ -1034,14 +1122,19 @@
   // 5. THE INTERCEPTOR (MFA CHECKER)
   // ==========================================
   function triggerMFAOrRoute(res, username) {
-    if (res.role === 'patient') {
-      executeUIRouting(res, username);
-    } else {
-      pendingAuthRes = res;
-      pendingAuthName = username;
-      document.getElementById('auth-screen').classList.add('d-none');
-      document.getElementById('mfa-screen').classList.remove('d-none');
+    // The server decides whether a second factor is needed. When it is, the
+    // reply carries a short-lived ticket and NO session token; only
+    // verifyMFA turns the ticket and a correct code into a session.
+    if (!res.mfaRequired) {
+      executeUIRouting(res, res.username || username);
+      return;
     }
+    pendingAuthRes = res;
+    pendingAuthName = res.username || username;
+    document.getElementById('auth-screen').classList.add('d-none');
+    document.getElementById('mfa-screen').classList.remove('d-none');
+    var codeBox = document.getElementById('in-mfa-code');
+    if (codeBox) { codeBox.value = ''; codeBox.focus(); }
   }
 
   function submitMFA() {
@@ -1057,9 +1150,15 @@
       .withSuccessHandler(function (mfaRes) {
         btn.innerHTML = 'Verify & Login';
         btn.disabled = false;
-        if (mfaRes && mfaRes.success) {
+        if (mfaRes && mfaRes.success && mfaRes.sessionToken) {
           document.getElementById('mfa-screen').classList.add('d-none');
-          executeUIRouting(pendingAuthRes, pendingAuthName);
+          executeUIRouting(mfaRes, mfaRes.username || pendingAuthName);
+          pendingAuthRes = null;
+          return;
+        }
+        if (mfaRes && mfaRes.code === 'TICKET_EXPIRED') {
+          crescAlert(mfaRes.message);
+          cancelMFA();
           return;
         }
         // Say what actually went wrong. The old blanket "Invalid or Expired
@@ -1069,8 +1168,9 @@
         var msg = (mfaRes && mfaRes.message) || 'Invalid or expired code. Try again.';
         if (mfaRes && mfaRes.code === 'BAD_SECRET') {
           msg += '\n\nThis is a problem with the enrolment on file, not with the ' +
-                 'code you typed. Ask an administrator to re-enrol your ' +
-                 'authenticator (enrolMFA in the Apps Script editor).';
+                 'code you typed. Ask an administrator to switch two-step sign-in ' +
+                 'off for you (Admin Dashboard → Staff Accounts), then set it up ' +
+                 'again from your account menu.';
         }
         crescAlert(msg);
         document.getElementById('in-mfa-code').value = '';
@@ -1081,7 +1181,7 @@
         btn.disabled = false;
         crescAlert("Network error: " + err.message);
       })
-      .verifyMFA(pendingAuthName, code);
+      .verifyMFA(pendingAuthName, code, pendingAuthRes && pendingAuthRes.mfaTicket);
   }
 
   function cancelMFA() {
@@ -1111,6 +1211,7 @@
       localStorage.setItem('loggedInUser', loggedInName);
       localStorage.setItem('loggedInRole', window.loggedInRole);
       localStorage.setItem('loginTimestamp', Date.now().toString());
+      localStorage.setItem('lastActivity', Date.now().toString());
       localStorage.setItem('sessionToken', window.sessionToken);
       localStorage.setItem('doctorId', window.currentDoctorId);
       localStorage.setItem('displayName', window.currentDoctorName);

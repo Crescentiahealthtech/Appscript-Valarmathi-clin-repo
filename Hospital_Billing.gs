@@ -249,6 +249,7 @@ function hb_appendRow_(sheet, obj) {
  * edited rates survive an upgrade.
  */
 function setupHospitalBilling() {
+  crescEditorOnly_('setupHospitalBilling');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000);
@@ -320,8 +321,8 @@ function hb_getBootstrap(token) {
     // rides along, because it is what an OP bill starts from.
     var doctors = [];
     try {
-      if (typeof getActiveDoctors === 'function') {
-        doctors = (getActiveDoctors() || []).map(function (d) {
+      if (typeof getActiveDoctors_ === 'function') {
+        doctors = (getActiveDoctors_() || []).map(function (d) {
           var full = (typeof dc_getDoctorById_ === 'function') ? dc_getDoctorById_(d.doctorId) : null;
           return {
             doctorId: hb_str_(d.doctorId),
@@ -927,7 +928,7 @@ function hb_audit_(actor, action, refId, oldVal, newVal, reason) {
 }
 
 function hb_invalidateDashboard_() {
-  try { if (typeof invalidateDashboardCache === 'function') invalidateDashboardCache(); } catch (e) {}
+  try { if (typeof invalidateDashboardCache_ === 'function') invalidateDashboardCache_(); } catch (e) {}
 }
 
 /**

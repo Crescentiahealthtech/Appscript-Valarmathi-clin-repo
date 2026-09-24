@@ -38,7 +38,7 @@ var DEP_MAP = {
     "removeIPCareTeamMember", "dc_isOnCareTeam_",
     "dc_normaliseTeamRole_", "getIPTeamRoles"
   ],
-  "Doctor_Session_Store.gs": ["dc_validateSession_", "dc_sessionName_", "revokeSession"],
+  "Doctor_Session_Store.gs": ["dc_validateSession_", "dc_sessionName_", "revokeSession_"],
   // Pharmacy.gs reads the signed discharge script through these, so the
   // take-home prescription reaches the counter. Both are optional at runtime
   // (a project without the discharge module just contributes nothing), but
@@ -47,7 +47,7 @@ var DEP_MAP = {
                  "dsx_upgradePayload_", "dsx_toDate_", "dsx_getHeader_",
                  "dsx_getWorking_", "dsx_sectionIsEmpty_"],
   "Appointment.gs":          ["apt_newId_", "submitNewAppointment", "getAppointmentsByDate"],
-  "Doctors_Engine.gs":       ["getTenantId_", "validateSession_", "issueSession_", "logAudit_", "getActiveDoctors"],
+  "Doctors_Engine.gs":       ["getTenantId_", "validateSession_", "issueSession_", "logAudit_", "getActiveDoctors_"],
   // The permission matrix and the guard. Every module that carries a
   // crescRequire_() call depends on this file being present, so a deployment
   // missing it must be named rather than discovered one refusal at a time.
@@ -86,7 +86,7 @@ var DEP_MAP = {
     "repairCasesheetHeaderDrift", "runIPHealthCheck", "repairDuplicatePharmacyQueueRows"
   ],
   "Drug_Interaction.gs": [
-    "di_sheet_", "setupDrugInteractions", "checkDrugInteractions", "di_rules_"
+    "di_sheet_", "setupDrugInteractions", "checkDrugInteractions_", "di_rules_"
   ],
   "Accounts_Shifts.gs": [
     "acc_cashSince_", "acc_counterKey_", "getShiftState", "openShift",
@@ -96,7 +96,7 @@ var DEP_MAP = {
     "dpdpSetup", "dpdpSetGrievanceOfficer", "getDPDPNotice", "recordConsent",
     "getConsentStatus", "withdrawConsent", "raiseDPDPRequest",
     "listDPDPRequests", "closeDPDPRequest", "exportPatientData",
-    "dpdpRegisterSharedFile", "dpdpExpireSharedLinks", "dpdpRetentionReport",
+    "dpdpRegisterSharedFile_", "dpdpExpireSharedLinks", "dpdpRetentionReport",
     "dpdpReadinessCheck", "dpdpVerifyRequester", "dpdpSubmitPublicRequest",
     "recordNomination", "getNomination", "revokeNomination", "dpdpLogRead_",
     "dpdpSaveGrievanceOfficer", "dpdpConsoleSnapshot", "dpdpConsoleHousekeeping",
@@ -104,9 +104,16 @@ var DEP_MAP = {
   ],
   "DPDP_Documents.gs": [
     "dpdpIssueDocumentLink_", "dpdpServeDocument_", "dpdpRevokeDocumentLink",
-    "dpdpListDocumentLinks", "dpdpExpireDocumentGrants", "dpdp_unpublish_"
+    "dpdpListDocumentLinks", "dpdpExpireDocumentGrants_", "dpdp_unpublish_"
   ],
   "Lab_Patient_View.gs": ["getPatientLabResults", "lpv_resultsFor_"],
+  "External_Lab.gs":        ["saveExternalLabResult", "voidExternalLabResult", "getExternalLabFormContext", "exl_ordersFor_"],
+  "Auth_MFA_Admin.gs":      ["mfaBeginEnrolment", "mfaConfirmEnrolment", "mfaRemove", "mfa_newSecret_"],
+  "Audit_Viewer.gs":        ["crescGetAuditLog", "audv_when_"],
+  "Master_Cache.gs":        ["crescMasterGet_", "crescMasterBust_", "crescMasterReload"],
+  "Stock_Alerts.gs":        ["getStockAlerts", "stk_analyse_"],
+  "Patient_Reminders.gs":   ["getReminderQueue", "markReminderSent", "sendRemindersNow", "remindersDaily", "rem_collect_"],
+  "Ops_Daily.gs":           ["ownerDailySummary", "opsNightlyBackup", "opsInstallTriggers", "getBackupStatus", "runBackupNow", "getOwnerSummary"],
   // IP Records reads the discharge summary's own sections through the
   // discharge engine's version resolver rather than parsing DS_Snapshots
   // itself. Optional at runtime — a deployment without the discharge module
@@ -115,7 +122,7 @@ var DEP_MAP = {
   "DS_Workflow.gs": ["dsx_resolveRef_"],
   "Deployment_Probe.gs": [
     "depProbeRecord_", "dep_probeSummary_", "depDeploymentFinding",
-    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence_"
+    "dep_attestation_", "dpdpConfirmDeploymentAccess", "RUN_deploymentEvidence"
   ],
   "Patient_Portal.gs": [
     "portalHome", "portalBookableDoctors", "portalDoctorSlots",
@@ -135,12 +142,12 @@ var DEP_MAP = {
   ],
   "DPDP_Consent_Backfill.gs": [
     "dpdpBackfillConsent", "dpdpConsentQueue", "dpdp_consentMatrix_",
-    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN_",
-    "RUN_consentBackfill_FOR_REAL_", "RUN_consentQueue_"
+    "dpdp_allPatients_", "RUN_consentBackfill_DRYRUN",
+    "RUN_consentBackfill_FOR_REAL", "RUN_consentQueue"
   ],
   "DPDP_Dispatch.gs": [
     "dpdpRequireDispatchConsent_", "dpdp_resolvePatientFor_", "dpdp_consentState_",
-    "getDispatchChannelNotice", "dpdpDispatchChannels", "getDispatchConsent",
+    "getDispatchChannelNotice", "dpdpDispatchChannels_", "getDispatchConsent",
     "recordDispatchConsent", "dpdpDispatchReadiness"
   ],
   "DPDP_Breach.gs": [
@@ -149,15 +156,15 @@ var DEP_MAP = {
     "dpdpListBreaches", "dpdpBreachNotice"
   ],
   "RUN_Setup.gs": [
-    "RUN_01_checkFilesArrived_", "RUN_02_checkRoleMatrix_", "RUN_03_checkPasswordStorage_",
-    "RUN_04_timePasswordHashing_", "RUN_04b_makeSignInFaster_", "RUN_05_createRegisters_",
-    "RUN_06_nameGrievanceOfficer_", "RUN_07a_migrateCredentials_DRYRUN_",
-    "RUN_07b_migrateCredentials_FOR_REAL_", "RUN_08_installScheduledJobs_",
-    "RUN_09_checkScheduledJobs_", "RUN_10a_revokeOldPublicLinks_DRYRUN_",
-    "RUN_10b_revokeOldPublicLinks_FOR_REAL_", "RUN_11a_eraseUnusedFields_DRYRUN_",
-    "RUN_11b_eraseUnusedFields_FOR_REAL_", "RUN_12_readinessCheck_",
-    "RUN_13_retentionReport_", "RUN_14_auditReviewThisWeek_",
-    "RUN_90_resetOnePassword_", "RUN_91_setVoicePolicy_", "RUN_99_removeScheduledJobs_"
+    "RUN_01_checkFilesArrived", "RUN_02_checkRoleMatrix", "RUN_03_checkPasswordStorage",
+    "RUN_04_timePasswordHashing", "RUN_04b_makeSignInFaster", "RUN_05_createRegisters",
+    "RUN_06_nameGrievanceOfficer", "RUN_07a_migrateCredentials_DRYRUN",
+    "RUN_07b_migrateCredentials_FOR_REAL", "RUN_08_installScheduledJobs",
+    "RUN_09_checkScheduledJobs", "RUN_10a_revokeOldPublicLinks_DRYRUN",
+    "RUN_10b_revokeOldPublicLinks_FOR_REAL", "RUN_11a_eraseUnusedFields_DRYRUN",
+    "RUN_11b_eraseUnusedFields_FOR_REAL", "RUN_12_readinessCheck",
+    "RUN_13_retentionReport", "RUN_14_auditReviewThisWeek",
+    "RUN_90_resetOnePassword", "RUN_91_setVoicePolicy", "RUN_99_removeScheduledJobs"
   ],
   "DPDP_Triggers.gs": [
     "dpdpInstallTriggers", "dpdpRemoveTriggers", "dpdpTriggerStatus",
@@ -195,7 +202,7 @@ var DEP_MAP = {
     "listMyOPReferrals", "getOPReferralLetter"
   ],
   "Drug_Safety.gs": [
-    "ds_identify_", "checkDuplicateTherapy", "checkAllergyConflicts",
+    "ds_identify_", "checkDuplicateTherapy_", "checkAllergyConflicts_",
     "testDrugSafety"
   ],
   "Dose_Reference.gs": [
@@ -247,6 +254,7 @@ var DEP_MAP = {
  * Returns a human-readable report; also logs it.
  */
 function verifyDeployment() {
+  crescEditorOnly_('verifyDeployment');
   var missingByFile = {};
   var totalMissing = 0, totalChecked = 0;
 
@@ -300,6 +308,7 @@ function verifyDeployment() {
  * data — a schema repair against a half-deployed project reports nonsense.
  */
 function runFullHealthCheck() {
+  crescEditorOnly_('runFullHealthCheck');
   var dep = verifyDeployment();
   if (dep.indexOf("INCOMPLETE DEPLOYMENT") !== -1) {
     var msg = dep + "\n\nSTOPPING: data repairs were not run. Fix the deployment first.";
@@ -312,71 +321,11 @@ function runFullHealthCheck() {
 // ---------------------------------------------------------------------------
 // DUPLICATE DEFINITIONS
 //
-// Apps Script has one global scope across every .gs file. When two files define
-// the same function, the one loaded LAST silently wins and the other is dead
-// code — with no warning anywhere. This project has several, including doGet,
-// the web app's entry point.
+// Apps Script has one global scope across every .gs file: when two files
+// define the same function, the one loaded LAST silently wins. This file used
+// to carry whichDefinitionWins(), a hand-kept list of suspected pairs that
+// had gone stale — none of them are duplicated any more. The check now runs
+// against the source itself, before anything is pasted in:
 //
-// This does not guess: it prints the first line of the body that is actually
-// live, so you can see which file won.
+//     node tools/dupes.js        (part of ./tools/check.sh)
 // ---------------------------------------------------------------------------
-
-var DUP_SUSPECTS = [
-  "doGet", "include",
-  "getAppointmentsByDate", "submitNewAppointment", "updateAppointmentStatus",
-  "getAvailableTimeSlots", "getPatientDemographics", "fetchDailyLedger",
-  "formatTimeSafely", "getPatientDashboardStats", "saveAdminAvailability",
-  "getFinanceDashboard", "recordBankTransfer",
-  "accd_day_", "accd_month_", "accd_income_", "accd_isCash_", "accd_ipSettlements_",
-  "getPendingCreditBills", "searchLabRecords", "_esc"
-];
-
-/**
- * Reports which definition of each duplicated function is live.
- * Run it, then delete the losing copy from the file that is NOT shown.
- */
-function whichDefinitionWins() {
-  var out = ["LIVE DEFINITIONS OF DUPLICATED FUNCTIONS", ""];
-  out.push("Each of these names is defined in more than one .gs file. Only the");
-  out.push("body shown below is running; the other copy is dead code. Delete the");
-  out.push("copy that does NOT match, so future edits land where they take effect.");
-  out.push("");
-
-  DUP_SUSPECTS.forEach(function (name) {
-    var src;
-    try { src = eval(name + ".toString()"); }
-    catch (e) { out.push(name + "  ->  NOT DEFINED"); return; }
-
-    // First two non-empty lines of the body identify which copy this is.
-    var lines = String(src).split("\n")
-      .map(function (l) { return l.trim(); })
-      .filter(function (l) { return l && l.indexOf("//") !== 0; })
-      .slice(0, 3);
-    out.push(name + "()");
-    lines.forEach(function (l) {
-      out.push("    " + (l.length > 110 ? l.substring(0, 110) + "..." : l));
-    });
-    out.push("");
-  });
-
-  out.push("KNOWN PAIRS IN THIS PROJECT:");
-  out.push("  doGet, include, getPatientDashboardStats, saveAdminAvailability");
-  out.push("      -> CodeMV.gs  vs  PatientDetails.gs");
-  out.push("  getAppointmentsByDate, submitNewAppointment, updateAppointmentStatus,");
-  out.push("  getAvailableTimeSlots, getPatientDemographics, fetchDailyLedger,");
-  out.push("  formatTimeSafely");
-  out.push("      -> Appointment.gs  vs  CodeMV.gs");
-  out.push("  getFinanceDashboard, recordBankTransfer, accd_*");
-  out.push("      -> AccountsDashboard.gs  vs  Accounts_Dashboard.gs   (whole file duplicated)");
-  out.push("  getPendingCreditBills  -> Pharmacy.gs vs PharmacyReturnsBackend.gs");
-  out.push("  searchLabRecords       -> LabIntegrationEngine.gs vs LabRecordsLogic.gs");
-  out.push("  _esc                   -> LabBillingLogic.gs vs LabIntegrationEngine.gs");
-  out.push("");
-  out.push("doGet matters most: CodeMV.gs takes (e) and serves WhatsApp lab-report");
-  out.push("links; PatientDetails.gs takes no argument and cannot. If the second is");
-  out.push("live, those links are broken.");
-
-  var report = out.join("\n");
-  Logger.log(report);
-  return report;
-}

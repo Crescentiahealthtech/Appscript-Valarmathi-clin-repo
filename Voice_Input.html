@@ -49,7 +49,7 @@
     background: var(--bg-elevated, #1e293b); color: var(--text-muted);
     border: 1px solid var(--border-color); cursor: pointer;
     box-shadow: var(--shadow-md, 0 4px 10px rgba(0,0,0,.25));
-    font-size: .85rem; padding: 0; transition: background .15s, color .15s;
+    font-size: var(--fs-sm); padding: 0; transition: background .15s, color .15s;
   }
   #cresc-voice-btn.on { display: inline-flex; }
   #cresc-voice-btn:hover { color: var(--text-main); border-color: var(--border-hover); }
@@ -69,13 +69,13 @@
     max-width: min(420px, 80vw);
     background: var(--bg-elevated, #1e293b); color: var(--text-main);
     border: 1px solid var(--border-color); border-radius: 10px;
-    padding: .45rem .7rem; font-size: .8rem; line-height: 1.45;
+    padding: .45rem .7rem; font-size: var(--fs-sm); line-height: 1.45;
     box-shadow: var(--shadow-lg, 0 10px 24px rgba(0,0,0,.35));
   }
   #cresc-voice-live.on { display: block; }
   #cresc-voice-live .cv-interim { color: var(--text-muted); font-style: italic; }
   #cresc-voice-live .cv-hint {
-    display: block; margin-top: .3rem; font-size: .68rem; color: var(--text-muted);
+    display: block; margin-top: .3rem; font-size: var(--fs-2xs); color: var(--text-muted);
   }
 </style>
 

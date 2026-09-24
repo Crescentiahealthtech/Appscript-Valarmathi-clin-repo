@@ -600,7 +600,8 @@ function dsx_folderNamed_(parent, name) {
  * Time-driven handler. Parameterless and idempotent, so it is safe to run by
  * hand from the editor. Retries PENDING and FAILED rows.
  */
-function dsCron_processPdfQueue() {
+function dsCron_processPdfQueue(e) {
+  crescTriggerOnly_(e, 'dsCron_processPdfQueue');
   var done = 0, failed = 0;
   try {
     var sh = dsx_sheet_(DSX_SHEETS.SUMMARIES);
@@ -804,6 +805,7 @@ function dsx_maskIp_(ip) {
  * put an image or Tamil text through the converter, so nothing here is assumed.
  */
 function ds_printSpike() {
+  crescEditorOnly_('ds_printSpike');
   var lines = [];
   var probe = function (label, html) {
     try {

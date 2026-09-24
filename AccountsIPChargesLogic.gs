@@ -82,6 +82,13 @@ function ipc_closeSourceBill_(source, ref, setId) {
   for (var i = 1; i < d.length; i++) {
     if (acc_str_(d[i][idCol]).trim() !== acc_str_(ref).trim()) continue;
     sh.getRange(i + 1, stCol + 1).setValue('IP_SETTLED');
+    // Settled on the IP bill, so nothing is owed on the lab bill any more.
+    // The balance used to stay, and the dashboard counted every settled IP
+    // lab bill as Pending Credit for ever.
+    if (source === 'LAB') {
+      var bc = h.indexOf('BalanceAmount');
+      if (bc >= 0) sh.getRange(i + 1, bc + 1).setValue(0);
+    }
     if (source !== 'LAB') { var sb = h.indexOf('Settled_At'), sy = h.indexOf('Settled_By'); if (sb >= 0) sh.getRange(i + 1, sb + 1).setValue(new Date()); if (sy >= 0) sh.getRange(i + 1, sy + 1).setValue('IP:' + setId); }
     break;
   }
@@ -208,6 +215,47 @@ function collectIpAdvance(payload, sessionToken) {
   finally { lock.releaseLock(); }
 }
 
+/**
+ * Every on-account lab bill for this admission, on its tab.
+ *
+ * A lab bill raised against an admission is marked ON_ACCOUNT and is meant
+ * to be posted to the IP tab (billChargeToIp). Two of the clinic's June bills
+ * never were, so the admissions were settled without them and the balances
+ * sat on the lab desk for months. Reading the tab now posts any that are
+ * missing, so the discharge bill cannot be drawn up without them.
+ */
+function ipc_postMissingLabBills_(ip) {
+  try {
+    var lab = ipc_ss_().getSheetByName('LAB_BILLING');
+    if (!lab || lab.getLastRow() < 2) return 0;
+    var d = lab.getDataRange().getValues();
+    var h = d[0].map(function (x) { return acc_str_(x).trim(); });
+    var c = {}; h.forEach(function (k, i) { c[k] = i; });
+    if (c.BillID === undefined || c.AdmissionID === undefined || c.PaymentStatus === undefined) return 0;
+    var sh = ipc_charges_();
+    var onTab = {};
+    ipc_objs_(sh).forEach(function (r) {
+      if (acc_str_(r['Source']).toUpperCase() === 'LAB') onTab[acc_str_(r['Source_Ref']).trim()] = true;
+    });
+    var posted = 0;
+    for (var i = 1; i < d.length; i++) {
+      if (acc_str_(d[i][c.AdmissionID]).trim() !== ip) continue;
+      if (acc_str_(d[i][c.PaymentStatus]).toUpperCase() !== 'ON_ACCOUNT') continue;
+      var ref = acc_str_(d[i][c.BillID]).trim();
+      if (!ref || onTab[ref]) continue;
+      var tests = '';
+      try { tests = JSON.parse(d[i][c.TestsJSON] || '[]').map(function (t) { return t.testName; }).join(', '); } catch (e) {}
+      sh.appendRow([ipc_id_('CHG'), ip, new Date(), 'LAB', tests ? 'Lab: ' + tests : 'Lab charge', 'LAB', ref,
+                    acc_money_(d[i][c.NetAmount]), 0, 'FALSE', 'ON_TAB', '', 'SYSTEM (missed posting)', 'Posted when the tab was read']);
+      acc_audit_('SYSTEM', 'IP_BILL_TO_TAB', 'LAB', ref, '', acc_money_(d[i][c.NetAmount]), ip + ' (missed posting)');
+      onTab[ref] = true;
+      posted++;
+    }
+    if (posted) SpreadsheetApp.flush();
+    return posted;
+  } catch (e) { return 0; }
+}
+
 // ---- running tab (feeds the discharge simulator) --------------------------
 function getRunningTab(ipNumber, sessionToken) {
   try {
@@ -215,6 +263,7 @@ function getRunningTab(ipNumber, sessionToken) {
     var ip = acc_str_(ipNumber).trim();
     var adm = ipc_admission_(ip);
     if (!adm) return { success: false, message: "Admission " + ip + " not found." };
+    ipc_postMissingLabBills_(ip);
     adm.doaFmt = (function () { var d = acc_toDate_(adm.doa); return d ? Utilities.formatDate(d, ACC_CFG.TZ, 'dd-MMM-yyyy') : acc_str_(adm.doa); })();
     adm.lengthOfStay = ipc_los_(adm.doa);
 

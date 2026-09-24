@@ -5,7 +5,7 @@
 // DEPENDS ON (already present in Doctors_Engine.gs — do NOT redefine here):
 //   getTenantId_()            validateSession_(token)
 //   issueSession_(obj)        resolveDoctorByUsername_(username)
-//   logAudit_(sess, ...)      getActiveDoctors()
+//   logAudit_(sess, ...)      getActiveDoctors_()
 //
 // ADD THIS AS A NEW FILE. It does not overwrite anything.
 // ============================================================================
@@ -40,6 +40,8 @@ function dc_invalidate_(sheetName) {
   var k = String(sheetName || "");
   delete DC_CACHE.headers[k];
   delete DC_CACHE.sheets[k];
+  // The cross-user copy of a reference list built from this sheet, too.
+  if (typeof MCACHE_SOURCES !== 'undefined' && MCACHE_SOURCES[k]) crescMasterBust_(k);
 }
 
 /** Clears everything. Call at the top of a long entry point that writes. */
@@ -228,6 +230,7 @@ function dc_dateKey_(v) {
  * Returns a human-readable report. Verify the report before shipping Phase 3.
  */
 function runMultiDoctorMigration() {
+  crescEditorOnly_('runMultiDoctorMigration');
   var lock = LockService.getScriptLock();
   var report = [];
   try {
@@ -281,7 +284,7 @@ function runMultiDoctorMigration() {
     });
 
     SpreadsheetApp.flush();
-    report.push("--- Columns done. Now run backfillDoctorAttribution() ---");
+    report.push("--- Columns done. Now run backfillDoctorAttribution_() ---");
     return report.join("\n");
 
   } catch (e) {
@@ -296,7 +299,7 @@ function runMultiDoctorMigration() {
  * as inferred, never as recorded. Run AFTER runMultiDoctorMigration().
  * Only writes to cells that are currently blank — safe to re-run.
  */
-function backfillDoctorAttribution() {
+function backfillDoctorAttribution_() {
   var lock = LockService.getScriptLock();
   var report = [];
   try {
@@ -419,7 +422,7 @@ function getDoctorPickerContext(sessionToken) {
     var scope = resolveScope_(sessionToken, null);
     if (!scope.ok) return { success: false, message: scope.message, doctors: [] };
 
-    var all = getActiveDoctors();
+    var all = getActiveDoctors_();
     var visible = (scope.mode === "ALL")
       ? all
       : all.filter(function (d) { return scope.doctorIds.indexOf(d.doctorId) !== -1; });
@@ -545,7 +548,8 @@ function dc_inScope_(scope, doctorId) {
  * a named doctor, but must name one.
  * @return {{ok, doctorId, signature, name, sess, message}}
  */
-function resolveWriteDoctor_(sessionToken, targetDoctorId) {
+function resolveWriteDoctor_(sessionToken, targetDoctorId, opts) {
+  opts = opts || {};
   var sess = dc_validateSession_(sessionToken);
   if (!sess) {
     return { ok: false, message: "Your session has expired. Please sign in again." };
@@ -586,13 +590,34 @@ function resolveWriteDoctor_(sessionToken, targetDoctorId) {
   // signed by nobody is worse than a note that was not saved, and the remedy
   // is fifteen seconds of typing.
   // ------------------------------------------------------------------------
+  //
+  // WHO DECLARES DEPENDS ON WHO IS WRITING:
+  //   * the consultant on the slot's own login declared at sign-in, and that
+  //     session's declaration is used;
+  //   * anybody else writing FOR the slot (the ward, an administrator) gets
+  //     the consultant who is signed in on it — or was, within the day — and
+  //     is never asked to type the consultant's details themselves.
+  //   * opts.purpose === "manage" (care team, schedule, blocks, templates)
+  //     signs nothing, so needs no declaration at all.
+  // ------------------------------------------------------------------------
   if (typeof dv_isVisitingSlot_ === "function" && dv_isVisitingSlot_(d.doctorId)) {
-    var visiting = dv_identityFor_(sessionToken);
+    if (opts.purpose === "manage") {
+      return { ok: true, sess: sess, doctorId: d.doctorId, name: d.name,
+               signature: d.signature || d.name, visiting: true, message: "" };
+    }
+    var ownSlot = dc_upper_(self) === dc_upper_(d.doctorId);
+    var visiting = ownSlot ? dv_identityFor_(sessionToken)
+                           : (typeof dv_latestIdentityForSlot_ === "function"
+                                ? dv_latestIdentityForSlot_(d.doctorId) : null);
     if (!visiting || !visiting.name) {
       return { ok: false, code: "VISITING_IDENTITY_REQUIRED",
-               message: "Enter the visiting consultant's name and registration " +
-                        "number before recording anything. Nothing can be signed " +
-                        "as \"" + d.name + "\"." };
+               message: ownSlot
+                 ? "Enter your name and registration number in the visiting-consultant " +
+                   "box before recording anything (it opens after sign-in; click the " +
+                   "blue name chip at the top to open it again)."
+                 : "No visiting consultant has signed in on \"" + d.name + "\" in the " +
+                   "last 24 hours, so there is nobody to sign this as. Ask the consultant " +
+                   "to sign in on the visiting login, or choose a named doctor." };
     }
     return {
       ok: true, sess: sess,
@@ -732,13 +757,39 @@ function getIPCareTeam(ipNumber, sessionToken) {
   }
 }
 
-/** Adds a cross-consult / surgeon / anaesthetist to an admission. */
+/**
+ * Adds a cross-consult / surgeon / anaesthetist to an admission.
+ *
+ * WHO MAY is the care-team panel's canManageTeam (the primary consultant or
+ * an administrator), not resolveWriteDoctor_. That function answers "may this
+ * session SIGN as that doctor", which is the wrong question here: it refused a
+ * primary consultant adding anybody but themselves, and for the visiting slot
+ * it demanded the adder's own name and registration number.
+ */
 function addIPCareTeamMember(payload, sessionToken) {
+  payload = payload || {};
+  var panel = (typeof getIPCareTeamPanel === "function")
+    ? getIPCareTeamPanel(dc_upper_(payload.ipNumber), sessionToken) : null;
+  if (!panel || !panel.success) {
+    return { success: false, message: (panel && panel.message) || "Your session has expired." };
+  }
+  if (!panel.canManageTeam) {
+    return { success: false,
+             message: "Only the primary consultant or an administrator can change the care team." };
+  }
+  return dc_addCareTeamMember_(payload, dc_validateSession_(sessionToken));
+}
+
+/** The write itself. The caller has already decided this session may. */
+function dc_addCareTeamMember_(payload, sess) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var w = resolveWriteDoctor_(sessionToken, payload.doctorId);
-    if (!w.ok) return { success: false, message: w.message };
+    if (!sess) return { success: false, message: "Your session has expired." };
+    var d = dc_getDoctorById_(dc_str_(payload.doctorId));
+    if (!d) return { success: false, message: "Doctor '" + dc_str_(payload.doctorId) + "' not found." };
+    if (d.status !== "ACTIVE") return { success: false, message: d.name + " is not an active doctor." };
+    var w = { doctorId: d.doctorId, name: d.name, sess: sess };
 
     var ip = dc_upper_(payload.ipNumber);
     if (!ip) return { success: false, message: "IP number is required." };

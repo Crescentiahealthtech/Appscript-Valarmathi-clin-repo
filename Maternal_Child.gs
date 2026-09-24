@@ -151,6 +151,7 @@ function mc_immunSheet_() {
 
 /** ONE-OFF. Creates both registers. Safe to re-run. */
 function mcSetup() {
+  crescEditorOnly_('mcSetup');
   mc_ancSheet_();
   mc_ancVisitSheet_();
   mc_immunSheet_();
@@ -215,6 +216,7 @@ var MC_SCHEDULE = [
 
 /** FRONTEND ENTRY. The schedule itself, for a picker. No patient data. */
 function mcGetSchedule() {
+  crescEditorOnly_('mcGetSchedule');
   return { success: true, schedule: MC_SCHEDULE.map(function (v) {
     return { code: v.code, label: v.label, at: v.at, dueDays: v.dueDays };
   }) };

@@ -870,7 +870,7 @@ function getPatientReferralHistory(patientId, sessionToken) {
 function listMyOPReferrals(sessionToken, opts) {
   try {
     opts = opts || {};
-    var w = resolveWriteDoctor_(sessionToken, opts.doctorId);
+    var w = resolveWriteDoctor_(sessionToken, opts.doctorId, { purpose: "manage" });
     if (!w.ok) return { success: false, rows: [], message: w.message };
 
     var sh = op_referralSheet_();

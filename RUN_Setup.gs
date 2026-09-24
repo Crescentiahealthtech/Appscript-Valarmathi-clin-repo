@@ -31,16 +31,16 @@
 // STEPS MARKED **CHANGES DATA** CANNOT BE UNDONE. They are named so you have
 // to mean it.
 //
-// WHY EVERY NAME ENDS IN AN UNDERSCORE
+// WHY EVERY FUNCTION STARTS WITH crescEditorOnly_()
 //
-// In Apps Script, a top-level function whose name ends in `_` is NOT exposed
-// to google.script.run — the browser cannot call it, at all. The editor's Run
-// dropdown lists it just the same, so the underscore costs nothing here and
-// buys the only thing that matters: without it, this file would publish
-// "reset every password in the clinic" and "mint an administrator session" as
-// endpoints that anyone with the web app URL could call by name. A runbook is
-// exactly the kind of convenience that turns into a back door, and the fix is
-// one character per function.
+// These used to end in `_`, which keeps a function away from google.script.run
+// — and also out of the editor's Run dropdown, which made the whole runbook
+// impossible to select. So the names are plain again, and each one's first
+// line is crescEditorOnly_(): it lets the call through only when the person
+// running it is the account the script belongs to (the editor), and refuses a
+// browser. Without that line this file would publish "reset every password in
+// the clinic" and "mint an administrator session" as endpoints anyone with the
+// web app URL could call by name.
 // ============================================================================
 
 
@@ -49,12 +49,14 @@
 // ---------------------------------------------------------------------------
 
 /** 1. Did every .gs file get pasted in? Lists anything missing. */
-function RUN_01_checkFilesArrived_() {
+function RUN_01_checkFilesArrived() {
+  crescEditorOnly_('RUN_01_checkFilesArrived');
   return verifyDeployment();
 }
 
 /** 2. Is the role matrix internally consistent? Typos in it grant nothing. */
-function RUN_02_checkRoleMatrix_() {
+function RUN_02_checkRoleMatrix() {
+  crescEditorOnly_('RUN_02_checkRoleMatrix');
   return crescRbacSelfTest();
 }
 
@@ -62,26 +64,29 @@ function RUN_02_checkRoleMatrix_() {
  * 3. What do passwords look like today? Prints COUNTS, never a password.
  *    Expect: "N in PLAIN TEXT" before step 7, "0 in PLAIN TEXT" after.
  */
-function RUN_03_checkPasswordStorage_() {
+function RUN_03_checkPasswordStorage() {
+  crescEditorOnly_('RUN_03_checkPasswordStorage');
   return crescCredentialStatus();
 }
 
 /**
  * 4. What does hashing cost on this runtime? Read the milliseconds.
  *    If 10,000 iterations takes more than ~1.5 seconds, run
- *    RUN_04b_makeSignInFaster_() below — a sign-in people call slow is one
+ *    RUN_04b_makeSignInFaster() below — a sign-in people call slow is one
  *    they stop signing out of, which is worse than a lower iteration count.
  */
-function RUN_04_timePasswordHashing_() {
+function RUN_04_timePasswordHashing() {
+  crescEditorOnly_('RUN_04_timePasswordHashing');
   return crescPwdBenchmark();
 }
 
 /** 4b. OPTIONAL. Halves the hashing cost. Only if step 4 said it is slow. */
-function RUN_04b_makeSignInFaster_() {
+function RUN_04b_makeSignInFaster() {
+  crescEditorOnly_('RUN_04b_makeSignInFaster');
   PropertiesService.getScriptProperties().setProperty('CRESC_PWD_ITERATIONS', '5000');
   return 'Hashing set to 5,000 iterations. Passwords already stored keep the ' +
          'count they were written with, so nobody is locked out. Re-run ' +
-         'RUN_04_timePasswordHashing_() to see the new cost.';
+         'RUN_04_timePasswordHashing() to see the new cost.';
 }
 
 
@@ -90,7 +95,8 @@ function RUN_04b_makeSignInFaster_() {
 // ---------------------------------------------------------------------------
 
 /** 5. Creates every DPDP register. Safe to re-run; it never overwrites. */
-function RUN_05_createRegisters_() {
+function RUN_05_createRegisters() {
+  crescEditorOnly_('RUN_05_createRegisters');
   var out = [dpdpSetup()];
   // The antenatal and immunisation registers. Idempotent, and the patient
   // portal's pregnancy and vaccination panels stay hidden until these exist
@@ -107,7 +113,8 @@ function RUN_05_createRegisters_() {
  *    notice the patient is given, so they must be a real person who will
  *    actually answer.
  */
-function RUN_06_nameGrievanceOfficer_() {
+function RUN_06_nameGrievanceOfficer() {
+  crescEditorOnly_('RUN_06_nameGrievanceOfficer');
   return dpdpSetGrievanceOfficer(
     'Dr. [full name]',            // who
     '[officer]@[clinic].in',      // email — the weekly review is sent here
@@ -130,14 +137,16 @@ function RUN_06_nameGrievanceOfficer_() {
  *    refused. That is deliberate: it is what a forced reset means. So do not
  *    run the deployment at the start of a clinic session.
  *
- *    Run RUN_07a_migrateCredentials_DRYRUN_() first to see who is affected.
+ *    Run RUN_07a_migrateCredentials_DRYRUN() first to see who is affected.
  */
-function RUN_07a_migrateCredentials_DRYRUN_() {
+function RUN_07a_migrateCredentials_DRYRUN() {
+  crescEditorOnly_('RUN_07a_migrateCredentials_DRYRUN');
   return crescMigrateCredentials(true);
 }
 
 /** 7b. **CHANGES DATA.** The real thing. See the warning on 7a. */
-function RUN_07b_migrateCredentials_FOR_REAL_() {
+function RUN_07b_migrateCredentials_FOR_REAL() {
+  crescEditorOnly_('RUN_07b_migrateCredentials_FOR_REAL');
   return crescMigrateCredentials();
 }
 
@@ -149,12 +158,14 @@ function RUN_07b_migrateCredentials_FOR_REAL_() {
  *    They run as WHOEVER PRESSES RUN HERE. If that person leaves the clinic,
  *    somebody else has to run this again.
  */
-function RUN_08_installScheduledJobs_() {
+function RUN_08_installScheduledJobs() {
+  crescEditorOnly_('RUN_08_installScheduledJobs');
   return dpdpInstallTriggers();
 }
 
 /** 9. Confirms all three jobs exist. Run it after step 8, and after any change. */
-function RUN_09_checkScheduledJobs_() {
+function RUN_09_checkScheduledJobs() {
+  crescEditorOnly_('RUN_09_checkScheduledJobs');
   return dpdpTriggerStatus();
 }
 
@@ -167,12 +178,14 @@ function RUN_09_checkScheduledJobs_() {
  * 10. How many patient documents are still readable by anyone with the link,
  *     from before this change? Reports only.
  */
-function RUN_10a_revokeOldPublicLinks_DRYRUN_() {
+function RUN_10a_revokeOldPublicLinks_DRYRUN() {
+  crescEditorOnly_('RUN_10a_revokeOldPublicLinks_DRYRUN');
   return dpdpExpireSharedLinks(true);
 }
 
 /** 10b. **CHANGES DATA.** Makes those files private. This is the fix for H1. */
-function RUN_10b_revokeOldPublicLinks_FOR_REAL_() {
+function RUN_10b_revokeOldPublicLinks_FOR_REAL() {
+  crescEditorOnly_('RUN_10b_revokeOldPublicLinks_FOR_REAL');
   return dpdpExpireSharedLinks(false);
 }
 
@@ -181,13 +194,32 @@ function RUN_10b_revokeOldPublicLinks_FOR_REAL_() {
  *     by anything. Section 6(1) allows collection only for a stated purpose,
  *     so there is no reason to keep them. Reports only.
  */
-function RUN_11a_eraseUnusedFields_DRYRUN_() {
+function RUN_11a_eraseUnusedFields_DRYRUN() {
+  crescEditorOnly_('RUN_11a_eraseUnusedFields_DRYRUN');
   return dpdpEraseUnusedFields(false);
 }
 
 /** 11b. **CHANGES DATA.** Clears those three columns for every patient. */
-function RUN_11b_eraseUnusedFields_FOR_REAL_() {
+function RUN_11b_eraseUnusedFields_FOR_REAL() {
+  crescEditorOnly_('RUN_11b_eraseUnusedFields_FOR_REAL');
   return dpdpEraseUnusedFields(true);
+}
+
+
+/**
+ * 11c. The OP_Encounters vitals headers (D-J) read "Sys_BP" seven times on
+ *      the clinic's sheet. The data underneath is right; this renames the
+ *      headers. Reports only.
+ */
+function RUN_11c_fixOPEncounterHeaders_DRYRUN() {
+  crescEditorOnly_('RUN_11c_fixOPEncounterHeaders_DRYRUN');
+  return repairOPEncounterHeaders(true);
+}
+
+/** 11d. **CHANGES DATA** (row 1 of OP_Encounters only). */
+function RUN_11d_fixOPEncounterHeaders_FOR_REAL() {
+  crescEditorOnly_('RUN_11d_fixOPEncounterHeaders_FOR_REAL');
+  return repairOPEncounterHeaders(false);
 }
 
 
@@ -199,18 +231,21 @@ function RUN_11b_eraseUnusedFields_FOR_REAL_() {
  * 12. The technical half of docs/DPDP_READINESS.md, live against this
  *     deployment. Run it after every step above, and once a month afterwards.
  */
-function RUN_12_readinessCheck_() {
+function RUN_12_readinessCheck() {
+  crescEditorOnly_('RUN_12_readinessCheck');
   var res = dpdpReadinessCheck();
   return res && res.report;
 }
 
 /** 13. What is past its retention period. Reports, and deletes NOTHING. */
-function RUN_13_retentionReport_() {
+function RUN_13_retentionReport() {
+  crescEditorOnly_('RUN_13_retentionReport');
   return dpdpRetentionReport();
 }
 
 /** 14. Reads the audit log for the four patterns that precede a disclosure. */
-function RUN_14_auditReviewThisWeek_() {
+function RUN_14_auditReviewThisWeek() {
+  crescEditorOnly_('RUN_14_auditReviewThisWeek');
   var res = dpdp_anomalyScan_(7);
   var out = [res.message, ''];
   (res.findings || []).forEach(function (f, i) {
@@ -240,13 +275,14 @@ function RUN_14_auditReviewThisWeek_() {
  * have; it is a formality to satisfy the same door everyone else comes
  * through, not a way round it.
  */
-function RUN_90_resetOnePassword_() {
+function RUN_90_resetOnePassword() {
+  crescEditorOnly_('RUN_90_resetOnePassword');
   var USERNAME = '[the user id to reset]';
 
   var token = issueSession_({ username: 'SCRIPT_OWNER', role: 'admin',
                               doctorId: '', name: 'Script owner (editor)' });
   var res = crescAdminResetPassword(USERNAME, token);
-  try { revokeSession(token); } catch (e) {}      // the session ends with the job
+  try { revokeSession_(token); } catch (e) {}      // the session ends with the job
 
   Logger.log(res.message);
   return res.message;
@@ -259,13 +295,14 @@ function RUN_90_resetOnePassword_() {
  *
  * This can also be set from the application: Privacy > Posture.
  */
-function RUN_91_setVoicePolicy_() {
+function RUN_91_setVoicePolicy() {
+  crescEditorOnly_('RUN_91_setVoicePolicy');
   var POLICY = 'FORBIDDEN';        // or 'ALLOWED'
 
   var token = issueSession_({ username: 'SCRIPT_OWNER', role: 'admin',
                               doctorId: '', name: 'Script owner (editor)' });
   var res = dpdpSetVoicePolicy(POLICY, token);
-  try { revokeSession(token); } catch (e) {}
+  try { revokeSession_(token); } catch (e) {}
 
   Logger.log(res.message);
   return res.message;
@@ -275,6 +312,7 @@ function RUN_91_setVoicePolicy_() {
  * Takes the three scheduled jobs off again. Only needed if you are moving the
  * script to another account, or stopping the weekly email.
  */
-function RUN_99_removeScheduledJobs_() {
+function RUN_99_removeScheduledJobs() {
+  crescEditorOnly_('RUN_99_removeScheduledJobs');
   return dpdpRemoveTriggers() + ' scheduled job(s) removed.';
 }

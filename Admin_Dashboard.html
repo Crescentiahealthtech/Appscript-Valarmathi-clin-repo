@@ -21,6 +21,16 @@
       <button id="dash-login-audit-btn" class="btn btn-sm btn-outline-info shadow-sm d-none" onclick="openLoginAudit()">
         <i class="fa-solid fa-user-shield me-1"></i> Sign-in Audit
       </button>
+      <!-- Reminders, stock alerts, the owner's day summary and backups. -->
+      <button id="dash-ops-btn" class="btn btn-sm btn-outline-primary shadow-sm d-none" onclick="crescOpsOpen()">
+        <i class="fa-solid fa-gears me-1"></i> Operations
+      </button>
+      <!-- Every audit trail — clinical, billing, lab, schedule — in one list,
+           filtered by user, patient or action and exportable. The three
+           sheets had no screen at all; this is admin.audit like the above. -->
+      <button id="dash-audit-log-btn" class="btn btn-sm btn-outline-info shadow-sm d-none" onclick="openAuditLog()">
+        <i class="fa-solid fa-clipboard-list me-1"></i> Audit Log
+      </button>
       <!-- Same treatment, on admin.users: adding a member of staff used to
            mean typing a row into the Users sheet, and the password column
            holds a PBKDF2 digest that cannot be typed. -->
@@ -244,6 +254,79 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════
+     AUDIT LOG — every trail, one list
+
+     Audit_Log (clinical, sign-in, consent), Audit_Event_Ledger (money),
+     LAB_AUDIT_LOG and the schedule log, merged newest first by
+     crescGetAuditLog. Export writes what is on screen, so the file and the
+     screen can never disagree.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="auditLogModal" tabindex="-1" aria-hidden="true" aria-labelledby="al-title">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force" id="al-title">
+          <i class="fa-solid fa-clipboard-list me-2" style="color:var(--info-fg);"></i>Audit log
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form class="row g-2 align-items-end mb-3" onsubmit="event.preventDefault(); alSearch();" autocomplete="off">
+          <div class="col-6 col-md-2">
+            <label class="form-label small label-bright mb-1" for="al-days">Period</label>
+            <select id="al-days" class="form-select form-select-sm" onchange="alToggleRange()">
+              <option value="1">Last 24 hours</option>
+              <option value="7" selected>Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="range">Dates…</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2 d-none al-range">
+            <label class="form-label small label-bright mb-1" for="al-from">From</label>
+            <input id="al-from" type="date" class="form-control form-control-sm">
+          </div>
+          <div class="col-6 col-md-2 d-none al-range">
+            <label class="form-label small label-bright mb-1" for="al-to">To</label>
+            <input id="al-to" type="date" class="form-control form-control-sm">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small label-bright mb-1" for="al-user">User</label>
+            <input id="al-user" class="form-control form-control-sm" placeholder="any">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small label-bright mb-1" for="al-patient">Patient / record</label>
+            <input id="al-patient" class="form-control form-control-sm" placeholder="Patient ID, IP no., bill no.">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small label-bright mb-1" for="al-action">Action</label>
+            <input id="al-action" class="form-control form-control-sm" placeholder="e.g. REFUND" list="al-actions">
+            <datalist id="al-actions"></datalist>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label small label-bright mb-1" for="al-source">Trail</label>
+            <select id="al-source" class="form-select form-select-sm">
+              <option value="">All trails</option>
+              <option value="app">Clinical &amp; sign-in</option>
+              <option value="finance">Billing &amp; accounts</option>
+              <option value="lab">Laboratory</option>
+              <option value="schedule">Doctor schedule</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-auto d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-primary"><i class="fa-solid fa-magnifying-glass me-1"></i>Search</button>
+            <button type="button" class="btn btn-sm btn-outline-success" id="al-export" onclick="alExport()" disabled>
+              <i class="fa-solid fa-file-csv me-1"></i>Export CSV
+            </button>
+          </div>
+        </form>
+        <div id="al-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="loginAuditModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
@@ -352,7 +435,7 @@
                  onmouseout="this.classList.remove('soft-glow'); this.style.transform='translateY(0)';">
               
               <div class="d-flex justify-content-between align-items-start">
-                <i class="fa-solid fa-hospital-user mb-2" style="color: var(--info-fg); font-size: 1.2rem;"></i>
+                <i class="fa-solid fa-hospital-user mb-2" style="color: var(--info-fg); font-size: var(--fs-lg);"></i>
                 <i class="fa-solid fa-arrow-up-right-from-square small text-muted" style="opacity: 0.5;"></i>
               </div>
               <div class="fw-bold" style="font-size:1.8rem;" id="kpi-inpatients">—</div>
@@ -369,7 +452,7 @@
                  onmouseout="this.classList.remove('soft-glow'); this.style.transform='translateY(0)';">
               
               <div class="d-flex justify-content-between align-items-start">
-                <i class="fa-solid fa-calendar-check mb-2" style="color: var(--success-fg); font-size: 1.2rem;"></i>
+                <i class="fa-solid fa-calendar-check mb-2" style="color: var(--success-fg); font-size: var(--fs-lg);"></i>
                 <i class="fa-solid fa-arrow-up-right-from-square small text-muted" style="opacity: 0.5;"></i>
               </div>
               <div class="fw-bold" style="font-size:1.8rem;" id="kpi-appt-today">—</div>
@@ -455,7 +538,7 @@
     <div class="row g-3 mb-3">
       <div class="col-6 col-xl-3">
         <div class="card p-3 h-100">
-          <i class="fa-solid fa-bed mb-2" style="color: var(--chart-1); font-size:1.1rem;"></i>
+          <i class="fa-solid fa-bed mb-2" style="color: var(--chart-1); font-size:var(--fs-lg);"></i>
           <div class="fw-bold" style="font-size:1.7rem;" id="an-alos">—</div>
           <div class="label-bright small">Avg. length of stay (days)</div>
           <div class="small mt-1 label-bright"><span id="an-alos-n">0</span> discharges &middot; 90 days</div>
@@ -463,7 +546,7 @@
       </div>
       <div class="col-6 col-xl-3">
         <div class="card p-3 h-100">
-          <i class="fa-solid fa-file-circle-check mb-2" style="color: var(--chart-2); font-size:1.1rem;"></i>
+          <i class="fa-solid fa-file-circle-check mb-2" style="color: var(--chart-2); font-size:var(--fs-lg);"></i>
           <div class="fw-bold" style="font-size:1.7rem;" id="an-ds-tat">—</div>
           <div class="label-bright small">Discharge summary turnaround</div>
           <div class="small mt-1 label-bright"><span id="an-ds-pending">0</span> awaiting signature</div>
@@ -471,7 +554,7 @@
       </div>
       <div class="col-6 col-xl-3">
         <div class="card p-3 h-100">
-          <i class="fa-solid fa-calendar-check mb-2" style="color: var(--chart-4); font-size:1.1rem;"></i>
+          <i class="fa-solid fa-calendar-check mb-2" style="color: var(--chart-4); font-size:var(--fs-lg);"></i>
           <div class="fw-bold" style="font-size:1.7rem;" id="an-appt-rate">—</div>
           <div class="label-bright small">Appointments attended</div>
           <div class="small mt-1 label-bright"><span id="an-appt-noshow">0</span> did not attend</div>
@@ -479,7 +562,7 @@
       </div>
       <div class="col-6 col-xl-3" id="an-card-bill">
         <div class="card p-3 h-100">
-          <i class="fa-solid fa-receipt mb-2" style="color: var(--chart-3); font-size:1.1rem;"></i>
+          <i class="fa-solid fa-receipt mb-2" style="color: var(--chart-3); font-size:var(--fs-lg);"></i>
           <div class="fw-bold" style="font-size:1.7rem;" id="an-avg-bill">—</div>
           <div class="label-bright small">Collected, 30 days</div>
           <div class="small mt-1 label-bright" id="an-credit-note">&nbsp;</div>
@@ -1181,6 +1264,8 @@
     LOGIN_MFA_FAILED:   ['MFA failed',         'danger'],
     LOGIN_MFA_PASSED:   ['MFA passed',         'success'],
     LOGIN_UNLOCKED:     ['Unlocked by admin',  'info'],
+    MFA_ENROLLED:       ['Two-step set up',    'info'],
+    MFA_REMOVED:        ['Two-step removed',   'warning'],
     LOGOUT:             ['Signed out',         'secondary']
   };
 
@@ -1280,6 +1365,147 @@
       }
     });
   }
+
+  /* ══════════════════ AUDIT LOG ══════════════════ */
+
+  const AL_SOURCE = {
+    app:      ['Clinical', 'info'],
+    finance:  ['Billing',  'warning'],
+    lab:      ['Lab',      'success'],
+    schedule: ['Schedule', 'secondary']
+  };
+  let __alRows = [];
+  let __alQuery = null;
+
+  function alToggleRange() {
+    const range = document.getElementById('al-days').value === 'range';
+    document.querySelectorAll('#auditLogModal .al-range').forEach(el => el.classList.toggle('d-none', !range));
+    if (range && !document.getElementById('al-from').value) {
+      const d = new Date(), iso = x => new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      document.getElementById('al-to').value = iso(d);
+      document.getElementById('al-from').value = iso(new Date(d.getTime() - 6 * 86400000));
+    }
+  }
+  window.alToggleRange = alToggleRange;
+
+  /**
+   * @param {{user?:string, patient?:string, action?:string}} [preset]
+   *        opens pre-filtered — e.g. from a patient's record.
+   */
+  function openAuditLog(preset) {
+    const modalEl = document.getElementById('auditLogModal');
+    if (preset && typeof preset === 'object') {
+      ['user', 'patient', 'action'].forEach(k => {
+        if (preset[k] !== undefined) document.getElementById('al-' + k).value = preset[k];
+      });
+    }
+    (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+    alSearch();
+    setTimeout(() => { const f = document.getElementById('al-user'); if (f && !f.value) f.focus(); }, 300);
+  }
+  window.openAuditLog = openAuditLog;
+
+  function alSearch() {
+    const box = document.getElementById('al-body');
+    const exp = document.getElementById('al-export');
+    const val = id => (document.getElementById(id).value || '').trim();
+    const days = val('al-days');
+    const src = val('al-source');
+    const q = {
+      user: val('al-user'), patient: val('al-patient'), action: val('al-action'),
+      sources: src ? [src] : [], limit: 1500
+    };
+    if (days === 'range') { q.from = val('al-from'); q.to = val('al-to'); q.days = 366; }
+    else q.days = parseInt(days, 10) || 7;
+    __alQuery = q;
+    exp.disabled = true;
+    box.innerHTML = '<div class="text-center label-bright py-5"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Reading the audit trails…</div>';
+
+    crescRun({
+      fn: 'crescGetAuditLog',
+      args: [window.sessionToken || '', q],
+      key: 'crescGetAuditLog',
+      busy: false,
+      error: 'Could not read the audit log',
+      onSuccess: function (res) {
+        if (!res || !res.success) {
+          box.innerHTML = `<div class="text-danger text-center py-5">${laEsc((res && res.message) || 'Failed.')}</div>`;
+          return;
+        }
+        __alRows = res.rows || [];
+        const dl = document.getElementById('al-actions');
+        if (dl) dl.innerHTML = (res.actions || []).map(a => `<option value="${laEsc(a)}">`).join('');
+        if (!__alRows.length) {
+          box.innerHTML = '<div class="text-center label-bright py-5">Nothing matches in this period.</div>';
+          return;
+        }
+        exp.disabled = false;
+        const per = res.sources || {};
+        const counts = Object.keys(per).filter(k => per[k].rows)
+          .map(k => `${laEsc(per[k].label)} ${per[k].rows}`).join(' · ');
+        box.innerHTML =
+          `<div class="d-flex justify-content-between flex-wrap gap-2 label-bright small mb-2">
+             <span>${__alRows.length} entr${__alRows.length === 1 ? 'y' : 'ies'} since ${laEsc(res.since)}${counts ? ' — ' + counts : ''}</span>
+             ${res.truncated ? `<span class="text-warning">Showing the newest ${res.limit}. Narrow the filters to see older entries.</span>` : ''}
+           </div>
+           <div class="table-responsive" style="max-height:56vh;">
+             <table class="table table-sm align-middle mb-0">
+               <thead style="position:sticky;top:0;z-index:5;background:var(--bg-card);">
+                 <tr style="font-size:.72rem;text-transform:uppercase;">
+                   <th>When</th><th>Trail</th><th>User</th><th>Action</th><th>Record</th><th>Detail</th>
+                 </tr>
+               </thead>
+               <tbody style="font-size:.8rem;">` +
+          __alRows.map(r => {
+            const s = AL_SOURCE[r.source] || [r.source, 'secondary'];
+            return `<tr>
+                <td class="label-bright" style="white-space:nowrap;">${laEsc(r.at)}</td>
+                <td><span class="badge bg-${s[1]} bg-opacity-25 text-${s[1]}">${laEsc(s[0])}</span></td>
+                <td class="fw-semibold text-white-force">${laEsc(r.user)}${r.role ? `<div class="label-bright" style="font-size:.68rem;">${laEsc(r.role)}</div>` : ''}</td>
+                <td><button type="button" class="btn btn-link btn-sm p-0 text-start al-pick" data-k="action" data-v="${laEsc(r.action)}" title="Show only this action">${laEsc(r.action)}</button></td>
+                <td class="label-bright">${laEsc(r.entityType)}${r.entityId ? ` <button type="button" class="btn btn-link btn-sm p-0 al-pick" data-k="patient" data-v="${laEsc(r.entityId)}" title="Show only this record">${laEsc(r.entityId)}</button>` : ''}</td>
+                <td class="label-bright" style="max-width:420px;word-break:break-word;">${laEsc(r.detail)}</td>
+              </tr>`;
+          }).join('') +
+          `</tbody></table></div>`;
+      }
+    });
+  }
+  window.alSearch = alSearch;
+
+  // Clicking an action or a record narrows the list to it.
+  document.addEventListener('click', function (e) {
+    const b = e.target.closest && e.target.closest('#auditLogModal .al-pick');
+    if (!b) return;
+    document.getElementById('al-' + b.dataset.k).value = b.dataset.v;
+    alSearch();
+  });
+
+  function alExport() {
+    if (!__alRows.length) return;
+    const cell = v => {
+      let t = String(v == null ? '' : v);
+      // A cell starting with = + - @ is run as a formula by Excel and Sheets.
+      if (/^[=+\-@]/.test(t)) t = "'" + t;
+      return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    };
+    const head = ['When', 'Trail', 'User', 'Role', 'Action', 'Record type', 'Record', 'Detail'];
+    const lines = [head.join(',')].concat(__alRows.map(r => [
+      r.at, (AL_SOURCE[r.source] || [r.source])[0], r.user, r.role, r.action, r.entityType, r.entityId, r.detail
+    ].map(cell).join(',')));
+    const q = __alQuery || {};
+    const bits = [q.user, q.patient, q.action].filter(Boolean).map(x => String(x).replace(/[^A-Za-z0-9]+/g, '-'));
+    const stamp = new Date().toISOString().slice(0, 10);
+    const name = 'audit-log-' + stamp + (bits.length ? '-' + bits.join('-') : '') + '.csv';
+    // BOM so Excel opens ₹ and names in Tamil correctly.
+    const url = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (window.crescToast) window.crescToast(__alRows.length + ' rows exported.', true);
+  }
+  window.alExport = alExport;
 
   /* ══════════════════════════════════════════════════════════════════
      ADD A MEMBER OF STAFF
@@ -1446,7 +1672,7 @@
     host.innerHTML =
       '<div class="table-responsive"><table class="table table-sm align-middle mb-0">' +
       '<thead><tr>' +
-        '<th>User ID</th><th>Role</th><th>Password</th><th>Status</th><th></th>' +
+        '<th>User ID</th><th>Role</th><th>Password</th><th>Two-step</th><th>Status</th><th></th>' +
       '</tr></thead><tbody>' +
       res.accounts.map(function (a) {
         const e = window.crescEsc;
@@ -1456,6 +1682,23 @@
           : (a.passwordChangedAt
               ? '<span class="label-bright">changed ' + e(a.passwordChangedAt) + '</span>'
               : '<span class="label-bright">—</span>');
+        // Two-step sign-in. Set up for yourself from here too (password
+        // asked); for others only where the row is yours to manage.
+        const canMfa = a.isSelf || a.manageable;
+        const mfaState = a.mfaBroken
+          ? '<span class="badge bg-danger-subtle text-danger-emphasis" title="The stored secret is not valid; this account cannot pass the code step">broken</span>'
+          : a.hasMfa
+            ? '<span class="badge bg-success-subtle text-success-emphasis">on</span>'
+            : '<span class="label-bright small">off</span>';
+        const mfa = mfaState + (canMfa && a.active
+          ? ' <button class="btn btn-link btn-sm p-0 ms-1 align-baseline" ' +
+              'onclick="saMfaSetup(\'' + saJs(a.username) + '\', ' + (!!a.isSelf) + ')">' +
+              (a.hasMfa ? 'new phone' : 'set up') + '</button>' +
+            ((a.hasMfa && !a.isSelf)
+              ? ' <button class="btn btn-link btn-sm p-0 ms-1 align-baseline text-danger" ' +
+                  'onclick="saMfaRemove(\'' + saJs(a.username) + '\')">switch off</button>'
+              : '')
+          : '');
         const status = a.active
           ? '<span class="badge bg-success-subtle text-success-emphasis">Active</span>'
           : '<span class="badge bg-danger-subtle text-danger-emphasis">Switched off</span>';
@@ -1484,6 +1727,7 @@
           '</td>' +
           '<td>' + e(role) + '</td>' +
           '<td class="small">' + pwd + '</td>' +
+          '<td class="small text-nowrap">' + mfa + '</td>' +
           '<td>' + status + '</td>' +
           '<td class="text-end text-nowrap">' + actions + '</td>' +
         '</tr>';
@@ -1532,6 +1776,21 @@
       .crescAdminResetPassword(username, window.sessionToken || '');
   }
   window.saReset = saReset;
+
+  function saMfaSetup(username, isSelf) {
+    if (typeof window.crescMfaOpen !== 'function') { saMsg('Two-step set-up is not loaded on this page.', 'danger'); return; }
+    window.crescMfaOpen({ username: isSelf ? '' : username, onDone: function () { saLoad(); } });
+  }
+  window.saMfaSetup = saMfaSetup;
+
+  function saMfaRemove(username) {
+    if (typeof window.crescMfaRemove !== 'function') return;
+    window.crescMfaRemove(username, function (res) {
+      saMsg((res && res.message) || 'Done.', (res && res.success) ? 'success' : 'danger');
+      if (res && res.success) saLoad();
+    });
+  }
+  window.saMfaRemove = saMfaRemove;
 
   function asCreate() {
     const btn = asEl('as-save');
@@ -1650,7 +1909,11 @@
               '<td class="label-bright">' + laEsc(r.specialty) + '</td>' +
               '<td class="label-bright" style="white-space:nowrap;">' + laEsc(r.declaredAt) + '</td>' +
               '<td class="label-bright" style="white-space:nowrap;">' +
-                (r.endedAt ? laEsc(r.endedAt) : '<span class="text-success">still signed in</span>') + '</td>' +
+                (live ? '<span class="text-success">still signed in</span>'
+                      : laEsc(r.endedAt || '') +
+                        '<div class="small">' + ({ ENDED: 'signed out', EXPIRED: 'session expired',
+                          SUPERSEDED: 're-declared' }[String(r.status || '').toUpperCase()] || '') + '</div>') +
+              '</td>' +
               '<td class="label-bright">' + laEsc(r.declaredBy) + '</td>' +
             '</tr>';
           }).join('') +
@@ -1667,6 +1930,14 @@
   }
   window.openVisitingLog = openVisitingLog;
 
+  // The dashboard keeps itself current while it is on screen. A silent
+  // re-read of the shared cache (60 s on the server), so ten open tabs cost
+  // one recomputation a minute, not ten; the Refresh button still forces one.
+  if (window.crescAutoRefresh) {
+    window.crescAutoRefresh('admin-dashboard', { section: 'tab-admin-dash', every: 60,
+                                                 run: function () { renderAdminDashboard(false); } });
+  }
+
   // The button appears only for a role that holds admin.audit. applyRBAC
   // fetches the permissions asynchronously, so this waits for them rather
   // than reading window.crescPerms before the server has answered.
@@ -1677,6 +1948,10 @@
         clearInterval(t);
         const b = document.getElementById('dash-login-audit-btn');
         if (b && window.crescCan && window.crescCan('admin.audit')) b.classList.remove('d-none');
+        const ob = document.getElementById('dash-ops-btn');
+        if (ob && window.crescCan && ['appointment.read', 'pharmacy.read', 'accounts.read', 'admin.config'].some(p => window.crescCan(p))) ob.classList.remove('d-none');
+        const ab = document.getElementById('dash-audit-log-btn');
+        if (ab && window.crescCan && window.crescCan('admin.audit')) ab.classList.remove('d-none');
         const sb = document.getElementById('dash-add-staff-btn');
         if (sb && window.crescCan && window.crescCan('admin.users')) sb.classList.remove('d-none');
         const sl = document.getElementById('dash-staff-list-btn');

@@ -174,6 +174,11 @@ var CRESC_PUBLIC_BY_DESIGN = {
   'crescGetBundle':     'UI markup only: the same HTML the shell used to inline. No patient data passes through it.',
   'getDPDPNotice':      'Section 5 requires the notice to be given AT OR BEFORE collection. A notice you have to sign in to read is not a notice.',
   'crescRequestPasswordReset': 'Forgot password: the person asking cannot sign in, by definition. Mails a temporary password only to the address already on the record, answers every outcome the same way, and is capped per account and per deployment (Auth_Reset.gs).',
+  'doGet':              'The web app itself. Serves the sign-in page and the anonymous-by-design document and verification links; every data route inside it checks its own token.',
+  'include':            'HTML partials for templates — the same markup the page already ships. No data passes through it.',
+  'fetchIPRecordsLedger': 'Legacy stub: returns a fixed "please reload" message and reads nothing.',
+  'fetchFullIPRecord':  'Legacy stub: returns a fixed "please reload" message and reads nothing.',
+  'onEdit':             'Spreadsheet simple trigger: a hand edit ends the cached copy of a reference list (Master_Cache.gs). From a browser it receives no Range and does nothing.',
   'dpdpSubmitPublicRequest': 'Section 11-13: a data principal must be able to ask without holding a staff login. It writes to a queue that is verified before anything is answered, and is rate-limited per browser.'
 };
 
@@ -463,6 +468,34 @@ function crescEnsureSuperAdminColumn_(sh) {
 var CRESC_CURRENT_ACTOR = null;
 
 /**
+ * Records whoever a session check just accepted as the ambient actor, if
+ * nobody has been recorded yet in this execution.
+ *
+ * crescRequire_ is not the only door. The doctor, IP, portal and billing
+ * screens validate through dc_validateSession_ directly (resolveScope_,
+ * resolveWriteDoctor_, pp_me_, hb_actor_), and before this an inner helper
+ * guarded by crescRequire_(undefined) could not see who they had let in. Now
+ * any successful validation is visible to the helpers it calls — and a direct
+ * google.script.run call to a helper still finds nobody and is refused.
+ *
+ * No elevated-permission lookup here: that costs a Users read and only
+ * crescActor_ needs it, which overwrites this with the full actor.
+ */
+function crescNoteSession_(sess) {
+  if (CRESC_CURRENT_ACTOR || !sess) return;
+  var role = crescRole_(sess.role);
+  CRESC_CURRENT_ACTOR = {
+    username:    crescStr_(sess.username),
+    role:        role,
+    rawRole:     crescStr_(sess.role),
+    elevated:    false,
+    doctorId:    crescStr_(sess.doctorId),
+    displayName: crescStr_(sess.displayName) || crescStr_(sess.name) || crescStr_(sess.username),
+    permissions: crescPermsFor_(role)
+  };
+}
+
+/**
  * Resolves a session token to an actor, or null.
  *
  * Never throws: callers that want a hard stop use crescRequire_(). This is
@@ -608,6 +641,32 @@ function crescEditorOnly_(what, perms) {
 }
 
 /**
+ * FOR TIME-DRIVEN TRIGGER HANDLERS.
+ *
+ * A trigger can only call a public function, so the nightly and monthly jobs
+ * are reachable through google.script.run as well. Apps Script passes every
+ * trigger run an event object carrying the trigger's unique id; this checks
+ * that id against the project's installed triggers. A browser can pass an
+ * object too, but it cannot know a real trigger id. The owner running the job
+ * by hand from the editor is let through by crescEditorOnly_.
+ *
+ * @param {Object} e     the handler's first argument
+ * @param {string} what  the handler's name, for the refusal
+ */
+function crescTriggerOnly_(e, what) {
+  var uid = (e && typeof e === 'object') ? String(e.triggerUid || '') : '';
+  if (uid) {
+    try {
+      var ts = ScriptApp.getProjectTriggers();
+      for (var i = 0; i < ts.length; i++) {
+        if (String(ts[i].getUniqueId()) === uid) return;
+      }
+    } catch (err) {}
+  }
+  crescEditorOnly_(what);
+}
+
+/**
  * A CAUGHT ERROR, SAID IN A SENTENCE THE USER CAN ACT ON.
  *
  * It lives here, beside crescRequire_, because crescRequire_ is what
@@ -694,6 +753,7 @@ function crescGetMyPermissions(token) {
  * role holds (dead, or an oversight), and a role nobody can be.
  */
 function crescRbacSelfTest() {
+  crescEditorOnly_('crescRbacSelfTest');
   var problems = [];
   var granted = {};
 
@@ -761,6 +821,7 @@ function crescRbacSelfTest() {
  * advanced service is enabled; without it, it reports what it can and says so.
  */
 function crescRbacCoverage() {
+  crescEditorOnly_('crescRbacCoverage', ['admin.config', 'dpdp.manage']);
   var GUARDS = /crescRequire_|crescActor_|crescRequireOwnRecord_|dsx_requireRole_|dc_validateSession_|validateSession_/;
   // Private (trailing underscore) functions are not reachable from the client
   // and are guarded by whatever public function called them.

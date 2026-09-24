@@ -1,0 +1,339 @@
+<!-- ══════════════════════════════════════════════════════════════════════
+     Admin_Ops.html — OPERATIONS: reminders, stock, day summary, backups
+
+     In the shell, not a module: reception opens Reminders from the
+     appointments desk, the pharmacy opens Stock from its own screen, and
+     the owner opens all four from the Admin Dashboard. Each tab shows only
+     for a role that holds its permission; the server checks again.
+
+       Reminders    appointment.read  (sending: appointment.write)
+       Stock        pharmacy.read
+       Day summary  accounts.read     (emailing now: admin.config)
+       Backups      admin.config
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="crescOpsModal" tabindex="-1" aria-hidden="true" aria-labelledby="ops-title">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force" id="ops-title">
+          <i class="fa-solid fa-gears me-2" style="color:var(--accent-fg);"></i>Operations
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <ul class="nav nav-tabs mb-3" role="tablist" id="ops-tabs" style="font-size:var(--fs-sm);">
+          <li class="nav-item" data-perm="appointment.read"><button type="button" class="nav-link" role="tab" data-tab="reminders"><i class="fa-brands fa-whatsapp me-1"></i>Reminders</button></li>
+          <li class="nav-item" data-perm="pharmacy.read"><button type="button" class="nav-link" role="tab" data-tab="stock"><i class="fa-solid fa-boxes-stacked me-1"></i>Stock alerts</button></li>
+          <li class="nav-item" data-perm="accounts.read"><button type="button" class="nav-link" role="tab" data-tab="summary"><i class="fa-solid fa-sun me-1"></i>Day summary</button></li>
+          <li class="nav-item" data-perm="admin.config"><button type="button" class="nav-link" role="tab" data-tab="backups"><i class="fa-solid fa-shield-heart me-1"></i>Backups</button></li>
+        </ul>
+        <div id="ops-body" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  #crescOpsModal .ops-kpis { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  #crescOpsModal .ops-kpi { border:1px solid var(--border-color); border-radius:10px; padding:6px 12px; min-width:120px; }
+  #crescOpsModal .ops-kpi b { display:block; font-size:var(--fs-lg); }
+  #crescOpsModal .ops-kpi.warn b { color:var(--warning-fg, #fbbf24); }
+  #crescOpsModal .ops-kpi.bad b { color:var(--danger-fg, #f87171); }
+  #crescOpsModal .ops-kpi span { font-size:var(--fs-xs); color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
+  #crescOpsModal table { font-size:var(--fs-sm); }
+  #crescOpsModal thead th { font-size:var(--fs-2xs); text-transform:uppercase; position:sticky; top:0; background:var(--bg-card); z-index:2; }
+  #crescOpsModal .ops-scroll { max-height:46vh; overflow:auto; }
+  #crescOpsModal .ops-summary { background:#fff; color:#111; border-radius:10px; padding:16px; }
+  #crescOpsModal .nav-link { color:var(--text-muted); }
+  #crescOpsModal .nav-link.active { color:var(--text-main, #fff); background:transparent; border-color:var(--border-color) var(--border-color) transparent; }
+</style>
+
+<script>
+(function () {
+  var TAB = '';
+  var STOCK = null;
+  var esc = function (v) {
+    return window.crescEsc ? window.crescEsc(v)
+      : String(v == null ? '' : v).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+  };
+  var money = function (n) {
+    return '₹' + (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  };
+  var can = function (p) { return !window.crescCan || window.crescCan(p); };
+  var body = function () { return document.getElementById('ops-body'); };
+  var loading = function (text) {
+    body().innerHTML = '<div class="text-center label-bright py-5"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>' + esc(text) + '</div>';
+  };
+  var fail = function (msg) {
+    body().innerHTML = '<div class="text-danger text-center py-5">' + esc(msg || 'Failed.') + '</div>';
+  };
+  function call(fn, args, ok) {
+    var r = google.script.run
+      .withSuccessHandler(function (res) { if (!res || res.success === false) fail(res && res.message); else ok(res); })
+      .withFailureHandler(function (e) { fail('Network error: ' + ((e && e.message) || e)); });
+    r[fn].apply(r, args);
+  }
+  var kpi = function (label, value, cls) {
+    return '<div class="ops-kpi ' + (cls || '') + '"><b>' + esc(value) + '</b><span>' + esc(label) + '</span></div>';
+  };
+  function download(name, rows) {
+    var cell = function (v) {
+      var t = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(t)) t = "'" + t;
+      return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    };
+    var csv = '﻿' + rows.map(function (r) { return r.map(cell).join(','); }).join('\r\n');
+    var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  /* ───────────── REMINDERS ───────────── */
+  var REM_STATE = {
+    READY: ['Ready', 'success'], DONE: ['Sent', 'secondary'],
+    NO_CONSENT: ['No consent to message', 'warning'], NO_PHONE: ['No mobile number', 'danger']
+  };
+  var REM_KIND = { APPT: 'info', FOLLOWUP: 'primary', VACCINE: 'success' };
+
+  function reminders(date) {
+    loading('Working out who to remind…');
+    call('getReminderQueue', [window.sessionToken || '', { date: date || 'tomorrow' }], function (res) {
+      var t = res.tally || {};
+      var items = res.items || [];
+      var html =
+        '<div class="d-flex flex-wrap gap-2 align-items-end mb-3">' +
+          '<div><label class="form-label small label-bright mb-1" for="ops-rem-date">For</label>' +
+          '<select id="ops-rem-date" class="form-select form-select-sm" style="width:170px;">' +
+            '<option value="tomorrow">Tomorrow</option><option value="today">Today</option></select></div>' +
+          '<div class="small label-bright ms-2 mb-1">' + esc(res.dateText) + ' · ' +
+            (res.auto ? 'sent automatically at 6 pm by ' + esc(res.provider)
+                      : 'sent from this desk — each button opens the message on this computer\'s WhatsApp or SMS') + '</div>' +
+          (res.auto && can('appointment.write') && t.READY
+            ? '<button type="button" class="btn btn-sm btn-success ms-auto" id="ops-rem-sendall">Send ' + t.READY + ' now</button>' : '') +
+        '</div>' +
+        '<div class="ops-kpis">' + kpi('To send', t.READY || 0) + kpi('Already sent', t.DONE || 0) +
+          kpi('No consent', t.NO_CONSENT || 0, t.NO_CONSENT ? 'warn' : '') + kpi('No mobile', t.NO_PHONE || 0, t.NO_PHONE ? 'bad' : '') + '</div>';
+      if (!items.length) {
+        html += '<div class="text-center label-bright py-4">Nothing to remind anybody about for ' + esc(res.dateText) + '.</div>';
+      } else {
+        html += '<div class="ops-scroll"><table class="table table-sm align-middle mb-0"><thead><tr>' +
+          '<th>For</th><th>Patient</th><th>When</th><th>Mobile</th><th>Status</th><th class="text-end">Send</th></tr></thead><tbody>' +
+          items.map(function (x, i) {
+            var st = REM_STATE[x.state] || [x.state, 'secondary'];
+            var sendable = x.state === 'READY' && can('appointment.write');
+            var actions = sendable
+              ? '<button type="button" class="btn btn-sm btn-outline-success me-1 ops-rem-send" data-i="' + i + '" data-ch="WHATSAPP" title="Open in WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>' +
+                '<button type="button" class="btn btn-sm btn-outline-secondary ops-rem-send" data-i="' + i + '" data-ch="SMS" title="Open as SMS"><i class="fa-solid fa-comment-sms"></i></button>'
+              : (x.state === 'DONE' && x.logged ? '<span class="label-bright small">' + esc(x.logged.channel) + ' · ' + esc(x.logged.at) + '</span>' : '');
+            return '<tr><td><span class="badge bg-' + REM_KIND[x.kind] + ' bg-opacity-25 text-' + REM_KIND[x.kind] + '">' + esc(x.kindLabel) + '</span></td>' +
+              '<td class="fw-semibold">' + esc(x.name) + '<div class="label-bright" style="font-size:.7rem;">' + esc(x.patientId) + '</div></td>' +
+              '<td>' + esc(x.when) + '<div class="label-bright" style="font-size:.7rem;">' + esc(x.what) + '</div></td>' +
+              '<td class="label-bright">' + esc(x.phone ? '+' + x.phone : '—') + '</td>' +
+              '<td><span class="badge bg-' + st[1] + ' bg-opacity-25 text-' + st[1] + '">' + esc(st[0]) + '</span></td>' +
+              '<td class="text-end text-nowrap">' + actions + '</td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          '<div class="small label-bright mt-2">Only patients who agreed to messages (DPDP consent: "Reports and reminders by WhatsApp or email") can be sent one. ' +
+          'Record consent at the desk to reach the others.</div>';
+      }
+      body().innerHTML = html;
+      var sel = document.getElementById('ops-rem-date');
+      sel.value = date || 'tomorrow';
+      sel.onchange = function () { reminders(sel.value); };
+      var all = document.getElementById('ops-rem-sendall');
+      if (all) all.onclick = function () {
+        all.disabled = true;
+        call('sendRemindersNow', [window.sessionToken || '', { date: sel.value }], function (r) {
+          if (window.crescToast) window.crescToast(r.message, true);
+          reminders(sel.value);
+        });
+      };
+      body().querySelectorAll('.ops-rem-send').forEach(function (b) {
+        b.onclick = function () {
+          var x = items[+b.dataset.i];
+          var link = b.dataset.ch === 'SMS' ? x.smsLink : x.waLink;
+          window.open(link, '_blank', 'noopener');
+          google.script.run.withSuccessHandler(function (r) {
+            if (r && r.success) {
+              var cell = b.parentNode;
+              cell.innerHTML = '<span class="text-success small"><i class="fa-solid fa-check me-1"></i>opened</span>';
+            } else if (window.crescToast) window.crescToast((r && r.message) || 'Not recorded.', false);
+          }).withFailureHandler(function () {
+            if (window.crescToast) window.crescToast('Opened, but not recorded as sent (network).', false);
+          }).markReminderSent(window.sessionToken || '', x.key, b.dataset.ch);
+        };
+      });
+    });
+  }
+
+  /* ───────────── STOCK ───────────── */
+  function stock() {
+    loading('Reading the pharmacy stock…');
+    call('getStockAlerts', [window.sessionToken || ''], function (res) {
+      STOCK = res;
+      var c = res.counts || {}, cfg = res.cfg || {};
+      var html = '<div class="ops-kpis">' +
+        kpi('Running low', c.low || 0, c.low ? 'warn' : '') +
+        kpi('Out of stock', c.outOfStock || 0, c.outOfStock ? 'bad' : '') +
+        kpi('Expire ≤ ' + cfg.urgentDays + ' days', c.urgent || 0, c.urgent ? 'bad' : '') +
+        kpi('Expire ≤ ' + cfg.nearExpiryDays + ' days', c.expiring || 0, c.expiring ? 'warn' : '') +
+        kpi('Expired on shelf', c.expired || 0, c.expired ? 'bad' : '') + '</div>' +
+        '<div class="small label-bright mb-2">Low = fewer than ' + (cfg.leadDays + 7) + ' days left at the rate sold over the last ' + cfg.usageDays +
+        ' days. The order brings each up to ' + cfg.coverDays + ' days plus ' + cfg.leadDays + ' days for delivery. As of ' + esc(res.generatedAt) + '.</div>';
+
+      var section = function (title, head, rows, empty) {
+        return '<h6 class="fw-bold mt-3 mb-2">' + title + '</h6>' + (rows.length
+          ? '<div class="ops-scroll" style="max-height:30vh;"><table class="table table-sm align-middle mb-0"><thead><tr>' +
+            head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
+          : '<div class="label-bright small">' + empty + '</div>');
+      };
+      html += section('Running low', ['Medicine', 'In stock', 'Sells / day', 'Why', 'Order', 'Supplier'],
+        (res.low || []).map(function (x) {
+          return '<tr><td class="fw-semibold">' + esc(x.brand) + '<div class="label-bright" style="font-size:.7rem;">' + esc(x.generic) + '</div></td>' +
+            '<td class="' + (x.stock <= 0 ? 'text-danger fw-bold' : '') + '">' + esc(x.stock) + ' ' + esc(x.unit) + '</td>' +
+            '<td>' + esc(x.perDay || '—') + '</td><td class="label-bright">' + esc(x.reason) + '</td>' +
+            '<td class="fw-bold">' + esc(x.suggestQty) + '</td><td class="label-bright">' + esc(x.supplier) + '</td></tr>';
+        }), 'Nothing is running low.');
+      html += section('Expiring soon', ['Medicine', 'Batch', 'Expires', 'Days', 'Qty', 'Rack', 'Value at cost'],
+        (res.expiring || []).map(function (x) {
+          return '<tr><td class="fw-semibold">' + esc(x.brand) + '</td><td>' + esc(x.batch) + '</td><td>' + esc(x.expiry) + '</td>' +
+            '<td class="' + (x.urgent ? 'text-danger fw-bold' : 'text-warning') + '">' + esc(x.daysLeft) + '</td>' +
+            '<td>' + esc(x.qty) + '</td><td class="label-bright">' + esc(x.rack) + '</td><td>' + money(x.value) + '</td></tr>';
+        }), 'No batch expires in the next ' + cfg.nearExpiryDays + ' days.');
+      if ((res.expired || []).length) {
+        html += section('Expired — take off the shelf', ['Medicine', 'Batch', 'Expired', 'Qty', 'Rack', 'Value at cost'],
+          res.expired.map(function (x) {
+            return '<tr><td class="fw-semibold text-danger">' + esc(x.brand) + '</td><td>' + esc(x.batch) + '</td><td>' + esc(x.expiry) + '</td>' +
+              '<td>' + esc(x.qty) + '</td><td class="label-bright">' + esc(x.rack) + '</td><td>' + money(x.value) + '</td></tr>';
+          }), '');
+      }
+      var po = res.purchaseOrder || [];
+      html += '<div class="d-flex align-items-center mt-3 mb-2"><h6 class="fw-bold m-0">Suggested purchase order</h6>' +
+        (po.length ? '<button type="button" class="btn btn-sm btn-outline-success ms-auto" id="ops-po-csv"><i class="fa-solid fa-file-csv me-1"></i>Export CSV</button>' : '') + '</div>' +
+        (po.length ? po.map(function (s) {
+          return '<div class="border rounded p-2 mb-2" style="border-color:var(--border-color)!important;">' +
+            '<div class="d-flex"><strong>' + esc(s.supplier) + '</strong><span class="ms-auto">' + money(s.total) + '</span></div>' +
+            '<div class="small label-bright">' + s.lines.map(function (l) { return esc(l.brand) + ' × ' + esc(l.qty); }).join(' · ') + '</div></div>';
+        }).join('') : '<div class="label-bright small">Nothing to order.</div>');
+      body().innerHTML = html;
+      var b = document.getElementById('ops-po-csv');
+      if (b) b.onclick = function () {
+        var rows = [['Supplier', 'Medicine', 'Generic', 'Unit', 'Order qty', 'Last buy price', 'Estimated cost']];
+        po.forEach(function (s) { s.lines.forEach(function (l) { rows.push([s.supplier, l.brand, l.generic, l.unit, l.qty, l.buyPrice, l.cost]); }); });
+        download('purchase-order-' + new Date().toISOString().slice(0, 10) + '.csv', rows);
+      };
+    });
+  }
+
+  /* ───────────── DAY SUMMARY ───────────── */
+  function summary(send) {
+    loading(send ? 'Sending…' : 'Adding up today…');
+    call('getOwnerSummary', [window.sessionToken || '', !!send], function (res) {
+      // The server builds this HTML from figures it escapes itself; it is the
+      // same body the owner's email carries.
+      body().innerHTML =
+        '<div class="d-flex align-items-center mb-2 gap-2">' +
+          '<span class="small label-bright">Emailed to the owner at 9 pm when the schedule is installed' +
+          (res.recipients ? '' : ' — <span class="text-warning">no owner email is set (OWNER_EMAIL, or an email on the owner\'s Users row)</span>') + '.</span>' +
+          (can('admin.config') ? '<button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="ops-sum-send"><i class="fa-solid fa-paper-plane me-1"></i>Email it now</button>' : '') +
+        '</div>' +
+        (send ? '<div class="alert alert-' + (res.sent ? 'success' : 'warning') + ' py-2 small">' + esc(res.message) + '</div>' : '') +
+        '<div class="ops-summary">' + res.html + '</div>';
+      var b = document.getElementById('ops-sum-send');
+      if (b) b.onclick = function () { summary(true); };
+    });
+  }
+
+  /* ───────────── BACKUPS ───────────── */
+  function backups() {
+    loading('Reading the backup log…');
+    call('getBackupStatus', [window.sessionToken || ''], function (res) {
+      var last = res.last;
+      var trig = res.triggers || [];
+      var missing = trig.filter(function (t) { return !t.installed; });
+      var html = '<div class="ops-kpis">' +
+        kpi('Last backup', last ? last.at : 'never', !last || last.status !== 'OK' || last.ageHours > 30 ? 'bad' : '') +
+        kpi('Result', last ? (last.status + (last.verified ? ' · verified' : '')) : '—', last && last.status !== 'OK' ? 'bad' : '') +
+        kpi('Daily copies kept', res.keepDays) + '</div>' +
+        (missing.length
+          ? '<div class="alert alert-warning py-2 small">Not scheduled: ' + missing.map(function (t) { return esc(t.fn); }).join(', ') +
+            '. Run <code>opsInstallTriggers()</code> once from the Apps Script editor.</div>'
+          : '<div class="small label-bright mb-2">Scheduled: ' + trig.map(function (t) { return esc(t.what) + ' (' + t.hour + ':00)'; }).join(' · ') + '</div>') +
+        '<div class="d-flex gap-2 mb-2">' +
+          '<button type="button" class="btn btn-sm btn-primary" id="ops-bk-now"><i class="fa-solid fa-cloud-arrow-up me-1"></i>Back up now</button>' +
+          (res.folderUrl ? '<a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="' + esc(res.folderUrl) + '"><i class="fa-brands fa-google-drive me-1"></i>Backup folder</a>' : '') +
+          '<button type="button" class="btn btn-sm btn-outline-secondary" id="ops-master-reload" title="After editing drug, lab-test, package or doctor lists directly in the spreadsheet"><i class="fa-solid fa-rotate me-1"></i>Reload reference lists</button>' +
+        '</div>' +
+        (res.rows.length ? '<div class="ops-scroll" style="max-height:26vh;"><table class="table table-sm align-middle mb-3"><thead><tr><th>When</th><th>Result</th><th>Check</th><th>By</th><th></th></tr></thead><tbody>' +
+          res.rows.map(function (r) {
+            return '<tr><td>' + esc(r.at) + '</td><td class="' + (r.status === 'OK' ? 'text-success' : 'text-danger') + '">' + esc(r.status) + '</td>' +
+              '<td class="label-bright">' + esc(r.detail) + '</td><td class="label-bright">' + esc(r.by) + '</td>' +
+              '<td>' + (r.url ? '<a target="_blank" rel="noopener" href="' + esc(r.url) + '">open</a>' : '') + '</td></tr>';
+          }).join('') + '</tbody></table></div>' : '<div class="label-bright small mb-3">No backup has been taken yet.</div>') +
+        '<h6 class="fw-bold">Restore checklist</h6><ol class="small" style="line-height:1.55;">' +
+          (res.checklist || []).map(function (s) { return '<li class="mb-1">' + esc(s) + '</li>'; }).join('') + '</ol>';
+      body().innerHTML = html;
+      document.getElementById('ops-bk-now').onclick = function () {
+        this.disabled = true;
+        this.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Copying…';
+        call('runBackupNow', [window.sessionToken || ''], function (r) {
+          if (window.crescToast) window.crescToast(r.message, r.status === 'OK');
+          backups();
+        });
+      };
+      document.getElementById('ops-master-reload').onclick = function () {
+        google.script.run.withSuccessHandler(function (r) {
+          if (window.crescToast) window.crescToast((r && r.message) || 'Done.', !!(r && r.success));
+        }).withFailureHandler(function (e) {
+          if (window.crescToast) window.crescToast('Network error: ' + ((e && e.message) || e), false);
+        }).crescMasterReload(window.sessionToken || '');
+      };
+    });
+  }
+
+  var RENDER = { reminders: reminders, stock: stock, summary: summary, backups: backups };
+
+  function show(tab) {
+    TAB = tab;
+    document.querySelectorAll('#ops-tabs .nav-link').forEach(function (b) {
+      var on = b.dataset.tab === tab;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    RENDER[tab]();
+  }
+
+  /** @param {string} [tab] reminders | stock | summary | backups */
+  window.crescOpsOpen = function (tab) {
+    var first = '';
+    document.querySelectorAll('#ops-tabs .nav-item').forEach(function (li) {
+      var ok = can(li.dataset.perm);
+      li.classList.toggle('d-none', !ok);
+      if (ok && !first) first = li.querySelector('.nav-link').dataset.tab;
+    });
+    if (!first) { if (window.crescAlert) window.crescAlert('Your role has no operations screens.'); return; }
+    var want = tab && can(document.querySelector('#ops-tabs [data-tab="' + tab + '"]').parentNode.dataset.perm) ? tab : first;
+    var el = document.getElementById('crescOpsModal');
+    (bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el)).show();
+    show(want);
+  };
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#ops-tabs .nav-link');
+    if (b) show(b.dataset.tab);
+  });
+  // Arrow keys move between the tabs, as a tab list should.
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var cur = e.target.closest && e.target.closest('#ops-tabs .nav-link');
+    if (!cur) return;
+    var tabs = Array.prototype.filter.call(document.querySelectorAll('#ops-tabs .nav-link'), function (x) {
+      return !x.parentNode.classList.contains('d-none');
+    });
+    var i = tabs.indexOf(cur) + (e.key === 'ArrowRight' ? 1 : -1);
+    var next = tabs[(i + tabs.length) % tabs.length];
+    e.preventDefault(); next.focus(); show(next.dataset.tab);
+  });
+})();
+</script>

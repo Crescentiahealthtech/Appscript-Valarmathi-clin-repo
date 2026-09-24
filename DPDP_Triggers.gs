@@ -86,6 +86,7 @@ function dpdpRemoveTriggers() {
 
 /** ADMIN. What is installed, so "we added a trigger" can be checked. */
 function dpdpTriggerStatus() {
+  crescEditorOnly_('dpdpTriggerStatus', ['dpdp.manage', 'admin.config', 'admin.audit']);
   var mine = [], others = [];
   ScriptApp.getProjectTriggers().forEach(function (t) {
     var line = t.getHandlerFunction() + '  (' + t.getEventType() + ')';
@@ -117,20 +118,29 @@ function dpdpTriggerStatus() {
  * are long dead — none of which is clinical data, and all of which is data
  * kept past its purpose if it is left.
  */
-function dpdpDailyMaintenance() {
+function dpdpDailyMaintenance(e) {
+  crescTriggerOnly_(e, 'dpdpDailyMaintenance');
   var out = ['DPDP daily maintenance — ' + dpdp_fmt_(dpdp_now_())];
 
-  try { out.push('  grants:   ' + dpdpExpireDocumentGrants()); }
+  try { out.push('  grants:   ' + dpdpExpireDocumentGrants_()); }
   catch (e) { out.push('  grants:   FAILED ' + e.message); }
 
   // The legacy sweep: files that were published with ANYONE_WITH_LINK before
   // document grants existed. It is a no-op once the backlog is cleared.
-  try { out.push('  legacy:   ' + dpdpExpireSharedLinks(false)); }
+  try { out.push('  legacy:   ' + dpdpExpireSharedLinks_(false)); }
   catch (e) { out.push('  legacy:   FAILED ' + e.message); }
 
+  // Before the purge: a visiting declaration is closed against its session
+  // row, and the purge is what deletes old rows.
   try {
-    if (typeof purgeExpiredSessions === 'function') {
-      out.push('  sessions: ' + purgeExpiredSessions());
+    if (typeof dv_closeStale_ === 'function') {
+      out.push('  visiting: ' + dv_closeStale_() + ' declaration(s) closed after sign-in ended');
+    }
+  } catch (e) { out.push('  visiting: FAILED ' + e.message); }
+
+  try {
+    if (typeof purgeExpiredSessions_ === 'function') {
+      out.push('  sessions: ' + purgeExpiredSessions_());
     }
   } catch (e) { out.push('  sessions: FAILED ' + e.message); }
 
@@ -146,7 +156,8 @@ function dpdpDailyMaintenance() {
  * this emails the grievance officer — and if none is named it says so loudly
  * in the log, because an unnamed officer is itself a s.13 finding.
  */
-function dpdpWeeklyReview() {
+function dpdpWeeklyReview(e) {
+  crescTriggerOnly_(e, 'dpdpWeeklyReview');
   var scan;
   try { scan = dpdp_anomalyScan_(DPDP_BREACH_CFG.REVIEW_DAYS); }
   catch (e) { scan = { success: false, findings: [], message: 'Scan failed: ' + e.message }; }
@@ -221,9 +232,10 @@ function dpdpWeeklyReview() {
 }
 
 /** Monthly. What is past its period — reported, never deleted. */
-function dpdpMonthlyRetentionReport() {
+function dpdpMonthlyRetentionReport(e) {
+  crescTriggerOnly_(e, 'dpdpMonthlyRetentionReport');
   var report;
-  try { report = dpdpRetentionReport(); }
+  try { report = dpdpRetentionReport_(); }
   catch (e) { report = 'Retention report failed: ' + e.message; }
 
   var officer = dpdp_officer_();

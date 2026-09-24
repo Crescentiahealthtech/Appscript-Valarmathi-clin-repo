@@ -78,7 +78,7 @@
       display: flex; align-items: center; gap: .6rem; width: 100%;
       background: transparent; border: 0; border-radius: 7px;
       padding: .45rem .6rem; color: var(--text-main);
-      font-size: .86rem; font-weight: 500; text-align: left;
+      font-size: var(--fs-base); font-weight: 500; text-align: left;
   }
   .sidebar-account-menu .sam-item:hover { background: var(--surface-hover); }
   .sidebar-account-menu .sam-item i { width: 1rem; text-align: center; color: var(--text-muted); }
@@ -158,14 +158,16 @@
              a shared login is forgetting which person you are signed in as,
              so the answer sits next to the name, permanently. -->
         <div id="cresc-visiting-chip" onclick="crescVisitingOpen()"></div>
-        <small><a href="#" onclick="signOut(); return false;" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
+        <small><a href="#" onclick="crescOpenChangePassword(); return false;" style="color: var(--text-muted); text-decoration: none;">Change password</a>
+          <span style="color: var(--text-faint);"> · </span>
+          <a href="#" onclick="signOut(); return false;" style="color: var(--text-muted); text-decoration: none;">Sign Out</a></small>
       </div>
     </div>
 
     <div id="sidebar-account-menu" class="sidebar-account-menu" hidden>
       <div class="sam-who">
         <div class="fw-bold small" id="sam-name">&nbsp;</div>
-        <div class="label-bright" style="font-size:.72rem;" id="sam-role">&nbsp;</div>
+        <div class="label-bright" style="font-size:var(--fs-xs);" id="sam-role">&nbsp;</div>
       </div>
       <button type="button" class="sam-item" onclick="toggleTheme(); crescCloseAccountMenu();">
         <i class="fa-solid fa-circle-half-stroke"></i> Toggle theme
@@ -182,6 +184,15 @@
       <button type="button" class="sam-item"
               onclick="crescCloseAccountMenu(); crescOpenChangePassword();">
         <i class="fa-solid fa-key"></i> Change password
+      </button>
+      <!-- Setting up your own authenticator used to need the owner in the
+           Apps Script editor. Staff accounts only; hidden for a patient. -->
+      <button type="button" class="sam-item" id="sam-mfa"
+              onclick="crescCloseAccountMenu(); crescMfaOpen();">
+        <i class="fa-solid fa-shield-halved"></i> <span id="sam-mfa-label">Two-step sign-in</span>
+      </button>
+      <button type="button" class="sam-item" onclick="crescCloseAccountMenu(); crescShowShortcuts && crescShowShortcuts();">
+        <i class="fa-regular fa-keyboard"></i> Keyboard shortcuts <span class="ms-auto label-bright" style="font-size:var(--fs-2xs);">?</span>
       </button>
       <button type="button" class="sam-item sam-danger" onclick="crescCloseAccountMenu(); signOut();">
         <i class="fa-solid fa-arrow-right-from-bracket"></i> Sign out
@@ -351,6 +362,22 @@
       var role = String(window.loggedInRole || '');
       samRole.textContent = role ? (role.charAt(0).toUpperCase() + role.slice(1)) : '';
     }
+    var samMfa = document.getElementById('sam-mfa');
+    if (samMfa) {
+      samMfa.hidden = /patient/i.test(String(window.loggedInRole || '')) ||
+                      typeof window.crescMfaOpen !== 'function';
+      // Says whether it is on, so "set it up" and "move it to a new phone"
+      // read differently. Best effort: the label stays generic on failure.
+      if (!samMfa.hidden && !samMfa.dataset.checked) {
+        samMfa.dataset.checked = '1';
+        google.script.run.withSuccessHandler(function (r) {
+          var l = document.getElementById('sam-mfa-label');
+          if (l && r && r.success && r.staff) {
+            l.textContent = r.enrolled ? 'Two-step sign-in: on (new phone)' : 'Set up two-step sign-in';
+          }
+        }).withFailureHandler(function () {}).mfaMyStatus(window.sessionToken || '');
+      }
+    }
 
     // Placed beside the avatar and nudged back on screen if it would overflow.
     menu.hidden = false;
@@ -468,12 +495,14 @@
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
     btn.disabled = true;
 
+    // This sign-in stays; every other one of this account is ended.
+    var keepSess = window.sessionToken || '';
     google.script.run
       .withSuccessHandler(function (res) {
         btn.innerHTML = label;
         btn.disabled = false;
         if (res && res.success) {
-          say('Password changed. It takes effect the next time you sign in.', true);
+          say((res.message || 'Password changed.') + ' You stay signed in here.', true);
           ['cpw-current', 'cpw-new', 'cpw-new2'].forEach(function (id) {
             document.getElementById(id).value = '';
           });
@@ -486,7 +515,8 @@
         btn.disabled = false;
         say('Network error: ' + ((err && err.message) || err));
       })
-      .crescChangePassword({ username: who, currentPassword: current, newPassword: next });
+      .crescChangePassword({ username: who, currentPassword: current, newPassword: next,
+                             keepSession: keepSess });
   }
   window.crescSubmitChangePassword = crescSubmitChangePassword;
 

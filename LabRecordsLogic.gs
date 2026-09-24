@@ -70,7 +70,7 @@ function searchLabRecords(query, sessionToken) {
     var oSheet = ss.getSheetByName("LAB_ORDERS");
     if (!oSheet || oSheet.getLastRow() < 2) return { success:true, records:[], patient:patHeader };
 
-    var oMap  = labHeaderMap(oSheet);
+    var oMap  = labHeaderMap_(oSheet);
     var oData = oSheet.getRange(2,1,oSheet.getLastRow()-1,oSheet.getLastColumn()).getValues();
     var matched = {};
 
@@ -109,7 +109,7 @@ function searchLabRecords(query, sessionToken) {
     // ---------------------------------------------------------
     var rSheet = ss.getSheetByName("LAB_RESULTS");
     if (rSheet && rSheet.getLastRow() >= 2) {
-      var rMap  = labHeaderMap(rSheet);
+      var rMap  = labHeaderMap_(rSheet);
       var rData = rSheet.getRange(2,1,rSheet.getLastRow()-1,rSheet.getLastColumn()).getValues();
       
       rData.forEach(function(r){
@@ -317,6 +317,7 @@ function generateAndStoreLabReportPDF(orderId, sessionToken) {
 }
 
 function forceDriveAuthorization() {
+  crescEditorOnly_('forceDriveAuthorization');
   // Run this function ONCE from the editor to approve Drive permissions
   DriveApp.createFolder("Test_Crescentia_Init");
   Logger.log("Drive Authorization Successful!");

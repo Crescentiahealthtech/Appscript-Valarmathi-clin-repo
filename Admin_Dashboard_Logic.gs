@@ -5,7 +5,7 @@
 // Single server round-trip for the whole dashboard.
 // - Reads each source sheet ONCE (perf).
 // - Role-gated: financial keys are never returned to non-finance roles.
-// - CacheService (5 min) so repeat loads are instant.
+// - CacheService (60 s) so repeat loads, and the auto-refresh, are cheap.
 // - No LockService: this module never writes.
 // ============================================================
 
@@ -62,7 +62,9 @@ function getDashboardData(role, bust, sessionToken) {
       data.revenue = _dashRevenue_(ss, tz, todayKey, memo);
     }
 
-    cache.put(cacheKey, JSON.stringify(data), 300); // 5 minutes
+    // 60 s: the dashboard refreshes itself every minute while it is open
+    // (Admin_Dashboard.html), and this is the one copy every tab shares.
+    cache.put(cacheKey, JSON.stringify(data), 60);
     return { success: true, data: data, message: "fresh" };
 
   } catch (e) {
@@ -71,7 +73,7 @@ function getDashboardData(role, bust, sessionToken) {
 }
 
 /** Call this from any write-path module after data changes if you want instant freshness. */
-function invalidateDashboardCache() {
+function invalidateDashboardCache_() {
   try { CacheService.getScriptCache().removeAll(['DASH2_FIN', 'DASH2_CLIN', 'DASH_FIN', 'DASH_CLIN']); } catch (e) {}
 }
 
@@ -219,7 +221,15 @@ function _dashOps_(ss, tz, todayKey, memo) {
     }
   }
 
-  var d = _dashSheet_(ss, "Pharmacy_Inventory", memo);
+  // Same numbers as Operations -> Stock alerts (Stock_Alerts.gs): low is
+  // judged by days of cover, not "ten or fewer in one batch row".
+  var stk = null;
+  try { if (typeof stk_analyse_ === 'function') stk = stk_analyse_(); } catch (e) { stk = null; }
+  if (stk) {
+    out.lowStock = stk.counts.low;
+    out.expiringSoon = stk.counts.urgent + stk.counts.expired;
+  }
+  var d = stk ? [] : _dashSheet_(ss, "Pharmacy_Inventory", memo);
   if (d.length > 1) {
     var nowYM = Utilities.formatDate(new Date(), tz, "yyyy-MM");
     for (var j = 1; j < d.length; j++) {
@@ -330,7 +340,10 @@ function _dashRevenue_(ss, tz, todayKey, memo) {
     for (var l = 1; l < lb.length; l++) {
       if (!lb[l][0]) continue;
       var lstat = String(_dashCell_(lb[l], lIdx, "paymentstatus") || "").toUpperCase();
-      if (lstat === "PAID") continue;
+      // Only a bill that is still open is owed: IP_SETTLED (paid on the
+      // discharge bill) and CANCELLED used to count, which is most of the
+      // "₹2,400 credit" nobody could find on the lab desk.
+      if (["PENDING", "PARTIAL", "ON_ACCOUNT", "CREDIT"].indexOf(lstat) === -1) continue;
       var lbal = parseFloat(_dashCell_(lb[l], lIdx, "balanceamount")) || 0;
       var lnet = parseFloat(_dashCell_(lb[l], lIdx, "netamount")) || 0;
       var labDue = (lbal || (lstat === "ON_ACCOUNT" ? lnet : 0));

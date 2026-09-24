@@ -16,13 +16,13 @@
   /* Theme variables only. Verified in Light and Dark. */
   #ds-desk-view .ds-tab           { border:1px solid var(--border-color); background:transparent;
                                     color:var(--text-secondary); border-radius:8px; padding:.35rem .8rem;
-                                    font-size:.82rem; font-weight:600; }
+                                    font-size:var(--fs-sm); font-weight:600; }
   #ds-desk-view .ds-tab.active    { background:var(--accent); color:var(--text-on-accent);
                                     border-color:var(--accent); }
   #ds-desk-view .ds-tab .badge    { background:var(--surface-3); color:var(--text-main); }
   #ds-desk-view .ds-tab.active .badge { background:rgba(255,255,255,.22); color:var(--text-on-accent); }
 
-  .ds-chip        { display:inline-block; font-size:.68rem; font-weight:700; letter-spacing:.03em;
+  .ds-chip        { display:inline-block; font-size:var(--fs-2xs); font-weight:700; letter-spacing:.03em;
                     padding:.12rem .5rem; border-radius:999px; text-transform:uppercase; }
   .ds-chip-GENERATED             { background:var(--info-bg);    color:var(--info-fg); }
   .ds-chip-IN_PREPARATION        { background:var(--blue-bg);    color:var(--blue-fg); }
@@ -65,7 +65,7 @@
   /* The jump list reads across rather than down, so the strip stays short
      with eighteen sections in it. */
   #ds-ed-nav { display:flex; flex-wrap:wrap; gap:.3rem; max-height:8.5rem; overflow:auto; }
-  #ds-ed-nav .ds-navitem { width:auto; flex:0 0 auto; padding:.25rem .5rem; font-size:.78rem; }
+  #ds-ed-nav .ds-navitem { width:auto; flex:0 0 auto; padding:.25rem .5rem; font-size:var(--fs-xs); }
   #ds-ed-nav .ds-navitem .ds-state { margin-left:.25rem; }
 
   /* A vitals strip: small fixed-width boxes on one line, wrapping. */
@@ -80,11 +80,11 @@
       border-radius:8px; box-shadow:var(--shadow-lg); max-height:15rem; overflow:auto; }
   #ds-editor-view .ds-picklist button { display:block; width:100%; text-align:left;
       background:transparent; border:0; color:var(--text-main);
-      padding:.35rem .6rem; font-size:.82rem; }
+      padding:.35rem .6rem; font-size:var(--fs-sm); }
   #ds-editor-view .ds-picklist button:hover,
   #ds-editor-view .ds-picklist button.ds-pickon { background:var(--surface-hover); }
-  #ds-editor-view .ds-picklist .ds-pickmeta { color:var(--text-muted); font-size:.72rem; }
-  #ds-editor-view .ds-pickempty { color:var(--text-muted); padding:.4rem .6rem; font-size:.8rem; }
+  #ds-editor-view .ds-picklist .ds-pickmeta { color:var(--text-muted); font-size:var(--fs-xs); }
+  #ds-editor-view .ds-pickempty { color:var(--text-muted); padding:.4rem .6rem; font-size:var(--fs-sm); }
 
   /* WHAT THE SHELF HOLDS, UNDER THE NAME THAT WAS TYPED.
      The formulary behind the picker has always carried live counts off
@@ -107,22 +107,22 @@
                    border-radius:12px; padding:.9rem; }
   .ds-navitem    { display:flex; align-items:center; gap:.5rem; width:100%; text-align:left;
                    background:transparent; border:0; border-radius:8px; padding:.4rem .55rem;
-                   color:var(--text-secondary); font-size:.83rem; }
+                   color:var(--text-secondary); font-size:var(--fs-sm); }
   .ds-navitem:hover  { background:var(--surface-hover); color:var(--text-main); }
   .ds-navitem.active { background:var(--accent-glow); color:var(--text-main); font-weight:600; }
-  .ds-navitem .ds-state { margin-left:auto; font-size:.7rem; }
+  .ds-navitem .ds-state { margin-left:auto; font-size:var(--fs-2xs); }
 
   .ds-section    { border:1px solid var(--border-color); border-radius:10px;
                    padding:.85rem; margin-bottom:.9rem; background:var(--bg-card); }
-  .ds-section h6 { font-size:.9rem; font-weight:700; margin:0; color:var(--text-main); }
+  .ds-section h6 { font-size:var(--fs-base); font-weight:700; margin:0; color:var(--text-main); }
   .ds-section textarea,
   .ds-section input,
   .ds-section select { background:var(--bg-input); color:var(--text-main);
                        border:1px solid var(--border-color); border-radius:7px;
-                       padding:.35rem .5rem; font-size:.85rem; width:100%; }
+                       padding:.35rem .5rem; font-size:var(--fs-sm); width:100%; }
   .ds-section textarea { resize:vertical; min-height:80px; }
-  .ds-section table    { width:100%; font-size:.8rem; border-collapse:collapse; }
-  .ds-section table th { color:var(--text-muted); font-weight:600; font-size:.72rem;
+  .ds-section table    { width:100%; font-size:var(--fs-sm); border-collapse:collapse; }
+  .ds-section table th { color:var(--text-muted); font-weight:600; font-size:var(--fs-xs);
                          text-transform:uppercase; letter-spacing:.03em;
                          border-bottom:1px solid var(--border-color); padding:.3rem .35rem; }
   .ds-section table td { border-bottom:1px solid var(--border-soft); padding:.2rem .25rem;
@@ -137,7 +137,7 @@
   .ds-section .ds-rx-table td,
   .ds-section .ds-rx-table th         { word-break:break-word; }
   .ds-section .ds-rx-table input,
-  .ds-section .ds-rx-table select     { padding:.3rem .4rem; font-size:.82rem; }
+  .ds-section .ds-rx-table select     { padding:.3rem .4rem; font-size:var(--fs-sm); }
   .ds-section .ds-rx-table input::placeholder { color:var(--text-faint); opacity:.55; }
   /* Dosage reads as an instruction, so it is set apart the way the OP Rx
      table sets it apart. */
@@ -155,10 +155,10 @@
      Tinted and rule-marked so it reads as REFERENCE beside the sections
      that are being written - nothing in it is editable. */
   .ds-labpanel   { border-left:3px solid var(--info); background:var(--surface-2); }
-  .ds-labpanel h6 { font-size:.85rem; }
+  .ds-labpanel h6 { font-size:var(--fs-sm); }
   .ds-labpanel .lp-order { margin-bottom:.55rem; }
 
-  .ds-srcchip    { display:inline-block; font-size:.65rem; padding:.05rem .4rem; border-radius:6px;
+  .ds-srcchip    { display:inline-block; font-size:var(--fs-2xs); padding:.05rem .4rem; border-radius:6px;
                    background:var(--surface-3); color:var(--text-muted); border:0;
                    margin:.1rem .2rem .1rem 0; cursor:pointer; }
   .ds-srcchip:hover { background:var(--accent-glow); color:var(--text-main); }
@@ -167,17 +167,17 @@
                    border-left:3px solid var(--danger); }
   .ds-ready-soft { background:var(--warning-bg); color:var(--warning-fg);
                    border-left:3px solid var(--warning); }
-  .ds-ready-item { border-radius:6px; padding:.35rem .5rem; margin-bottom:.35rem; font-size:.78rem; }
+  .ds-ready-item { border-radius:6px; padding:.35rem .5rem; margin-bottom:.35rem; font-size:var(--fs-xs); }
 
   .ds-diff-add   { background:var(--success-bg); color:var(--success-fg); border-radius:3px; }
   .ds-diff-del   { background:var(--danger-bg);  color:var(--danger-fg);  border-radius:3px;
                    text-decoration:line-through; }
   .ds-diff-row-changed { background:var(--warning-bg); }
 
-  .ds-pin        { font-size:.75rem; background:var(--danger-bg); color:var(--danger-fg);
+  .ds-pin        { font-size:var(--fs-xs); background:var(--danger-bg); color:var(--danger-fg);
                    border-left:3px solid var(--danger); border-radius:6px;
                    padding:.3rem .5rem; margin-bottom:.4rem; }
-  .ds-muted      { color:var(--text-muted); font-size:.78rem; }
+  .ds-muted      { color:var(--text-muted); font-size:var(--fs-xs); }
 </style>
 
 
@@ -286,19 +286,19 @@
 
     <!-- TOP STRIP: jump list, readiness, workflow -->
     <div class="ds-panel ds-area-nav">
-      <div class="fw-bold mb-2" style="font-size:.85rem">Sections</div>
+      <div class="fw-bold mb-2" style="font-size:var(--fs-sm)">Sections</div>
       <div id="ds-ed-nav"></div>
     </div>
 
     <div class="ds-panel ds-area-ready">
-      <div class="fw-bold mb-2" style="font-size:.85rem">
+      <div class="fw-bold mb-2" style="font-size:var(--fs-sm)">
         <i class="fa-solid fa-clipboard-check me-1"></i> Readiness
       </div>
       <div id="ds-ed-readiness" style="max-height:8.5rem; overflow:auto"></div>
     </div>
 
     <div class="ds-panel ds-area-flow">
-      <div class="fw-bold mb-2" style="font-size:.85rem">
+      <div class="fw-bold mb-2" style="font-size:var(--fs-sm)">
         <i class="fa-solid fa-clock-rotate-left me-1"></i> Workflow
       </div>
       <div id="ds-ed-timeline" style="max-height:8.5rem; overflow:auto"></div>
@@ -376,12 +376,12 @@
       <div class="mb-3" id="ds-sign-who"></div>
 
       <div class="mb-3">
-        <div class="fw-bold mb-2" style="font-size:.9rem">Confirm each block before signing</div>
+        <div class="fw-bold mb-2" style="font-size:var(--fs-base)">Confirm each block before signing</div>
         <div id="ds-sign-attest"></div>
       </div>
 
       <div class="mb-3 d-none" id="ds-sign-softwrap">
-        <div class="fw-bold mb-2" style="font-size:.9rem">Acknowledge these warnings</div>
+        <div class="fw-bold mb-2" style="font-size:var(--fs-base)">Acknowledge these warnings</div>
         <div id="ds-sign-soft"></div>
       </div>
 

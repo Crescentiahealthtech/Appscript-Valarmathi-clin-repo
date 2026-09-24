@@ -116,7 +116,7 @@ function opt_examSheet_() {
 // ============================================================================
 
 /**
- * FRONTEND ENTRY. Replaces fetchClinicalTemplates() in the OP module.
+ * FRONTEND ENTRY. Replaces fetchClinicalTemplates_() in the OP module.
  * Personal phrases rank above clinic phrases; each tier sorted by use count.
  * @return {{success, CC:[], HX:[], ADVICE:[]}}  items = {text, count, scope, id}
  */
@@ -177,8 +177,8 @@ function getScopedTemplates(doctorId, sessionToken) {
 
 /**
  * Records phrases against the doctor who actually used them.
- * Called from saveOPEncounterScoped — replaces the global learnTemplates()
- * for the OP path. Existing callers of learnTemplates() are unaffected.
+ * Called from saveOPEncounterScoped — replaces the global learnTemplates_()
+ * for the OP path. Existing callers of learnTemplates_() are unaffected.
  */
 function learnTemplatesScoped_(items, doctorId) {
   if (!items || !items.length) return;
@@ -240,6 +240,7 @@ function learnTemplatesScoped_(items, doctorId) {
   } catch (e) {
     Logger.log("learnTemplatesScoped_ error: " + e.message);
   } finally {
+    crescMasterBust_('Clinical_Templates');
     lock.releaseLock();
   }
 }
@@ -279,6 +280,7 @@ function deletePhraseTemplate(rowId, sessionToken) {
   } catch (e) {
     return { success: false, message: "Could not remove phrase: " + e.message };
   } finally {
+    crescMasterBust_('Clinical_Templates');
     lock.releaseLock();
   }
 }
@@ -334,6 +336,7 @@ function promotePhraseToClinic(rowId, sessionToken) {
   } catch (e) {
     return { success: false, message: "Could not promote phrase: " + e.message };
   } finally {
+    crescMasterBust_('Clinical_Templates');
     lock.releaseLock();
   }
 }
@@ -460,7 +463,7 @@ function saveConsultTemplate(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId);
+    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId, { purpose: "manage" });
     if (!w.ok) return { success: false, message: w.message };
 
     var name = dc_str_(payload.name);
@@ -639,7 +642,7 @@ function saveExamDefaults(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId);
+    var w = resolveWriteDoctor_(sessionToken, payload && payload.doctorId, { purpose: "manage" });
     if (!w.ok) return { success: false, message: w.message };
 
     var sh = opt_examSheet_();

@@ -17,7 +17,7 @@ var VERIFY_LEGACY_SLOTS = [
  * @param {string} dateStr  "yyyy-MM-dd"
  * @param {string} doctorId defaults to DC_DEFAULT_DOCTOR
  */
-function verifySlotGrid(dateStr, doctorId) {
+function verifySlotGrid_(dateStr, doctorId) {
   var docId = dc_str_(doctorId) || DC_DEFAULT_DOCTOR;
   var dateKey = dc_dateKey_(dateStr);
   if (!dateKey) return "Pass a date as 'yyyy-MM-dd'.";
@@ -102,6 +102,7 @@ function verifySlotGrid(dateStr, doctorId) {
 
 /** Sweeps the next N days and reports only the dates that mismatch. */
 function verifySlotGridRange(startDateStr, days, doctorId) {
+  crescEditorOnly_('verifySlotGridRange');
   var start = ds_parseDateKey_(dc_dateKey_(startDateStr));
   if (!start) return "Pass a start date as 'yyyy-MM-dd'.";
   var n = dc_int_(days) || 14;
@@ -111,7 +112,7 @@ function verifySlotGridRange(startDateStr, days, doctorId) {
   var cursor = new Date(start.getTime());
   for (var i = 0; i < n; i++) {
     var key = Utilities.formatDate(cursor, Session.getScriptTimeZone(), "yyyy-MM-dd");
-    var res = verifySlotGrid(key, doctorId);
+    var res = verifySlotGrid_(key, doctorId);
     var verdict = (res.indexOf("RESULT: MATCH") !== -1) ? "MATCH" : "MISMATCH";
     var warn = (res.indexOf("WARNING:") !== -1) ? "  <-- has off-schedule bookings" : "";
     lines.push(key + "  " + DS_WEEKDAYS[cursor.getDay()].substring(0, 3) + "  " + verdict + warn);

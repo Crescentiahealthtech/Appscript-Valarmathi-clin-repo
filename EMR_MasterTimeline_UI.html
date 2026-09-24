@@ -12,9 +12,9 @@
      above the consult and the case sheet. One base font-size rescales them
      together, and 1.05em goes back to meaning "slightly larger than the app".
      ------------------------------------------------------------------ */
-  #emr-workspace-records                { font-size: 0.85rem; }
-  #emr-workspace-records h4             { font-size: 1.05rem; }
-  #emr-workspace-records h5             { font-size: 0.95rem; }
+  #emr-workspace-records                { font-size: var(--fs-sm); }
+  #emr-workspace-records h4             { font-size: var(--fs-md); }
+  #emr-workspace-records h5             { font-size: var(--fs-md); }
   #emr-workspace-records .emr-rec-panel { background-color: var(--bg-card);
                                           border: 1px solid var(--border-color);
                                           border-radius: 10px; }
@@ -124,11 +124,16 @@
      directory each time Patient Records is opened rather than once per page
      load. */
 
-  function loadMasterLedger() {
-    document.getElementById('emr-timeline-ledger-tbody').innerHTML = '<tr><td colspan="5" class="text-center py-4" style="color: var(--text-main) !important; font-weight: bold;"><div class="spinner-border text-light mb-2"></div><br>Synchronizing Database...</td></tr>';
+  // quiet: the background refresh. Keeps the list on screen and the search
+  // applied (filterMasterLedger reads the box), and says nothing on failure.
+  function loadMasterLedger(quiet) {
+    if (!(quiet === true && masterLedgerData.length)) {
+      document.getElementById('emr-timeline-ledger-tbody').innerHTML = '<tr><td colspan="5" class="text-center py-4" style="color: var(--text-main) !important; font-weight: bold;"><div class="spinner-border text-light mb-2"></div><br>Synchronizing Database...</td></tr>';
+    }
     google.script.run
       .withSuccessHandler(renderMasterLedger)
       .withFailureHandler(err => {
+         if (quiet === true && masterLedgerData.length) return;
          mtLedgerProblem(window.crescWhyFailed
            ? window.crescWhyFailed(err, 'Reading the patient directory')
            : ((err && err.message) || 'The directory could not be read.'));
@@ -170,16 +175,20 @@
     let html = '';
     let sno = 1;
 
+    const esc = window.crescEsc || (s => String(s == null ? '' : s));
+    const low = v => String(v == null ? '' : v).toLowerCase();
     masterLedgerData.forEach(pt => {
-      if (pt.id.toLowerCase().includes(query) || pt.name.toLowerCase().includes(query) || pt.mobile.includes(query)) {
+      // A patient with no mobile number used to stop the whole list here.
+      if (low(pt.id).includes(query) || low(pt.name).includes(query) || low(pt.mobile).includes(query)) {
+        const idJs = esc(String(pt.id || '').replace(/'/g, "\\'"));
         html += `
           <tr style="border-bottom: 1px solid var(--border-hover);">
             <td style="color: var(--text-main) !important; font-weight: bold;" class="sno-col">${sno++}</td>
-            <td style="color: var(--text-main) !important; font-weight: bold;">${pt.id}</td>
-            <td style="color: var(--text-main) !important; font-weight: 600;">${pt.name}</td>
-            <td style="color: var(--text-main) !important; font-weight: 500;">${pt.age} / ${pt.sex}</td>
+            <td style="color: var(--text-main) !important; font-weight: bold;">${esc(pt.id)}</td>
+            <td style="color: var(--text-main) !important; font-weight: 600;">${esc(pt.name)}</td>
+            <td style="color: var(--text-main) !important; font-weight: 500;">${esc(pt.age)} / ${esc(pt.sex)}</td>
             <td class="text-end pe-4">
-              <button class="btn btn-sm rounded-pill px-3 fw-bold shadow-sm" style="background-color: var(--success-solid); color: var(--text-on-accent); border: none;" onclick="openPatientTimeline('${pt.id}')">
+              <button class="btn btn-sm rounded-pill px-3 fw-bold shadow-sm" style="background-color: var(--success-solid); color: var(--text-on-accent); border: none;" onclick="openPatientTimeline('${idJs}')">
                 View Records
               </button>
             </td>
@@ -944,4 +953,10 @@ function buildIPCard(ev) {
       }, 100);
   }
 
+
+  // Keeps the patient directory current while its list is on screen.
+  if (window.crescAutoRefresh) {
+    window.crescAutoRefresh('patient-records', { section: 'timeline-ledger-section', every: 60,
+                                                 run: function () { loadMasterLedger(true); } });
+  }
 </script>

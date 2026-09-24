@@ -29,7 +29,7 @@ function apt_newId_() {
   return 'APT-' + stamp + '-' + rand;
 }
 
-function formatTimeSafely(timeVal) {
+function formatTimeSafely_(timeVal) {
   if(!timeVal) return "";
   if(timeVal instanceof Date) {
     return Utilities.formatDate(timeVal, Session.getScriptTimeZone(), "hh:mm a").toUpperCase();
@@ -74,7 +74,7 @@ function getAvailableTimeSlots(dateStr, sessionToken) {
       let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
 
       if (rowDate === dateStr && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') {
-        takenSlots.push(formatTimeSafely(data[i][4]));
+        takenSlots.push(formatTimeSafely_(data[i][4]));
       }
     }
 
@@ -102,12 +102,12 @@ function getAppointmentsByDate(dateStr, sessionToken) {
       else if(dObj) rowDate = dObj.toString().substring(0,10);
 
       if(rowDate === dateStr) {
-        // BUG 2 FIX: formatTimeSafely forces identical strings so the UI toggle arrays match perfectly
+        // BUG 2 FIX: formatTimeSafely_ forces identical strings so the UI toggle arrays match perfectly
         appts.push({ 
             apptId: data[i][0], 
             patientId: data[i][1], 
             patientName: data[i][2], 
-            time: formatTimeSafely(data[i][4]), 
+            time: formatTimeSafely_(data[i][4]), 
             purpose: data[i][5], 
             status: data[i][6], 
             fee: data[i][7] 
@@ -189,7 +189,7 @@ function fetchDailyLedger(dateStr, sessionToken) {
     const nm = x.r[2] || (p ? p.name : '-');
     return {
       apptId: x.r[0],
-      time: formatTimeSafely(x.r[4]),
+      time: formatTimeSafely_(x.r[4]),
       patientId: x.pId,
       // both keys on purpose: older screens read .name, newer ones read .patientName
       name: nm,
@@ -238,7 +238,7 @@ function submitNewAppointment(apptObj, sessionToken) {
             return { success: false, message: "This patient already has an active appointment on that date." };
           }
         }
-        if (formatTimeSafely(data[i][4]) === apptObj.time && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') {
+        if (formatTimeSafely_(data[i][4]) === apptObj.time && data[i][6] !== 'Cancelled' && data[i][6] !== 'DELETE') {
           return { success: false, message: "Slot collision. That time was just booked by another user." };
         }
       }
@@ -386,7 +386,7 @@ function saveEnterpriseAvailability(payload, sessionToken) {
       let dObj = data[i][3];
       let rowDate = (dObj instanceof Date) ? Utilities.formatDate(dObj, Session.getScriptTimeZone(), "yyyy-MM-dd") : dObj.toString().substring(0,10);
       let pId = data[i][1];
-      let time = formatTimeSafely(data[i][4]);
+      let time = formatTimeSafely_(data[i][4]);
       let status = data[i][6];
 
       if (datesToProcess.includes(rowDate) && blockedSlots.includes(time) && pId !== 'ADMIN' && status !== 'Cancelled' && status !== 'DELETE') {

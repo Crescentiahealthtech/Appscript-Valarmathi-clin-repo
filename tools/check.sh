@@ -3,7 +3,7 @@
 # Static checks for this Apps Script project.
 #
 # There is no build step here and no test runner - the code is pasted into an
-# Apps Script editor, where a typo is discovered by a user. These eleven checks
+# Apps Script editor, where a typo is discovered by a user. These checks
 # are what can be verified without a Google account, and they each exist
 # because the thing they look for was actually found in this codebase.
 #
@@ -31,6 +31,9 @@ node tools/rpc.js
 hr "5. Server calls with no failure handler (they fail silently)"
 node tools/nofail.js && echo "(nothing listed above = every call has a failure path)"
 
+hr "5b. The same top-level name defined in two .gs files (last one wins)"
+node tools/dupes.js || FAILED=1
+
 hr "6. Deployment_Check.gs DEP_MAP vs the functions that actually exist"
 node tools/dep.js
 
@@ -45,6 +48,9 @@ node tools/token.js
 
 hr "10. The password code, exercised against Node's own HMAC"
 node tools/credtest.js || FAILED=1
+
+hr "10b. Sign-in flows: reset, MFA, Google, against a pretend spreadsheet"
+node tools/authflow.js || FAILED=1
 
 hr "11. CSS classes used but never defined"
 echo "   (review by hand — template literals produce false positives)"

@@ -197,6 +197,7 @@ function getDoseReference(drugName, sessionToken) {
  * @return {{success:boolean, count:number, rows:Array<Object>, message:string}}
  */
 function listDoseReference() {
+  crescEditorOnly_('listDoseReference');
   try {
     var all = dref_all_();
     return { success: true, count: all.rows.length, rows: all.rows, message: "" };
@@ -221,6 +222,7 @@ function listDoseReference() {
  * Columns are ordered to match DREF_HEADERS.
  */
 function setupDoseReference() {
+  crescEditorOnly_('setupDoseReference');
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);
@@ -391,6 +393,7 @@ function setupDoseReference() {
  * finite list of rows to add.
  */
 function auditDoseReferenceCoverage() {
+  crescEditorOnly_('auditDoseReferenceCoverage');
   try {
     var known = dref_all_().byKey;
     var seen = {}, missing = {};

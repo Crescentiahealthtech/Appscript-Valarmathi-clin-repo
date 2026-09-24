@@ -1,7 +1,7 @@
 <style>
   .indicator-dot { width: 10px; height: 10px; transition: all 0.2s ease; box-shadow: 0 0 5px rgba(var(--shadow-rgb), 0.3); }
   .hover-bg-dark:hover { background-color: var(--surface-hover); }
-  .slot-booked-tag { font-size: .6rem; color: var(--warning-fg); }
+  .slot-booked-tag { font-size: var(--fs-2xs); color: var(--warning-fg); }
   .av-sess-row { border: 1px solid var(--border-color); border-radius: 10px; }
 </style>
 
@@ -76,7 +76,7 @@
     <div id="avail-container" class="row g-3 pb-4"></div>
 
     <div class="text-center mt-2 pt-4 border-top border-secondary">
-      <button id="btn-save-avail" class="btn btn-success fw-bold px-5 py-3 shadow-lg" style="border-radius: 12px; font-size: 1.1rem; width: 100%; max-width: 400px;" onclick="saveAvailabilitySettings(false)">
+      <button id="btn-save-avail" class="btn btn-success fw-bold px-5 py-3 shadow-lg" style="border-radius: 12px; font-size: var(--fs-lg); width: 100%; max-width: 400px;" onclick="saveAvailabilitySettings(false)">
         <i class="fa-solid fa-floppy-disk me-2"></i> Update Availability
       </button>
     </div>

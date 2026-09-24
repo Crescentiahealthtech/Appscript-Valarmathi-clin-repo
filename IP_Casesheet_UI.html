@@ -5,32 +5,32 @@
   .hd-workspace { background-color: var(--bg-main) !important; color: var(--text-main); }
   .hd-panel { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.05); }
 
-  .hd-panel-title { color: var(--accent-fg); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
+  .hd-panel-title { color: var(--accent-fg); font-size: var(--fs-sm); font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
   .hd-panel-title:hover { color: var(--accent-purple); }
-  .hd-label { font-size: 0.7rem; color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
+  .hd-label { font-size: var(--fs-2xs); color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
 
-  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: 0.75rem; padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
+  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: var(--fs-xs); padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
   .hd-input:focus { border-color: var(--accent-purple) !important; outline: none; box-shadow: 0 0 0 2px var(--accent-glow, rgba(99, 91, 255, 0.2)); }
   .hd-input:disabled { background-color: var(--bg-card) !important; color: var(--text-muted) !important; cursor: not-allowed; opacity: 0.7; }
 
   .table-tight td, .table-tight th { padding: 6px 4px !important; vertical-align: middle; border-bottom: 1px solid var(--border-color); background-color: transparent !important; color: var(--text-main);}
-  .table-tight th { font-size: 0.7rem; color: var(--text-label); text-transform: uppercase; }
+  .table-tight th { font-size: var(--fs-2xs); color: var(--text-label); text-transform: uppercase; }
 
   .bg-abnormal-high { background-color: var(--danger-bg, var(--danger-bg)) !important; border: 1px solid var(--danger) !important; color: var(--danger-fg) !important; }
   .bg-abnormal-low { background-color: var(--info-bg, var(--info-bg)) !important; border: 1px solid var(--info) !important; color: var(--info-fg) !important; }
 
   .dial-trigger { cursor: pointer; text-align: center; font-weight: bold; }
   .dial-trigger:hover { background-color: var(--accent-glow, var(--accent-glow)) !important; }
-  .dial-btn { font-size: 0.75rem; font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
+  .dial-btn { font-size: var(--fs-xs); font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
   .dial-btn:active { transform: scale(0.95); }
 
   .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card); border: 1px solid var(--border-color); width: 100%; max-height: 220px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.4); }
-  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
+  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
   .autocomplete-items div strong { color: var(--accent-fg); }
   .autocomplete-items div:hover { background-color: var(--border-hover); }
 
   .wnl-group { background: var(--bg-input); border-radius: 999px; display: inline-flex; border: 1px solid var(--border-color); overflow: hidden; }
-  .wnl-btn { padding: 4px 14px; font-size: 0.65rem; font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
+  .wnl-btn { padding: 4px 14px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
   .btn-check:checked + .wnl-btn-success { background-color: var(--success-solid); color: var(--text-on-accent); }
   .btn-check:checked + .wnl-btn-danger { background-color: var(--danger); color: var(--text-on-accent); }
   .wnl-group button.wnl-btn:hover { background-color: var(--surface-hover); color: var(--text-main); }
@@ -42,7 +42,7 @@
   /* ========================================= */
   /* SAFETY BAR — always visible               */
   /* ========================================= */
-  .ipc-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
+  .ipc-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: var(--fs-xs); }
   .ipc-safety-danger { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); }
   .ipc-safety-warn   { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning-fg); }
   .ipc-safety-info   { background: var(--surface-hover); border: 1px solid var(--border-color); color: var(--text-muted); }
@@ -53,9 +53,9 @@
   /* ========================================= */
   .ipc-assist { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; }
   .ipc-assist-sec + .ipc-assist-sec { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
-  .ipc-assist-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
+  .ipc-assist-head { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
 
-  .ipc-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; transition: 0.15s; }
+  .ipc-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: var(--fs-2xs); cursor: pointer; transition: 0.15s; }
   .ipc-chip:hover { border-color: var(--accent-purple); }
   .ipc-chip .ipc-chip-add { color: var(--success-fg); font-weight: 700; }
   .ipc-chip-muted { color: var(--text-muted); }
@@ -66,17 +66,17 @@
      the assist panel that was never reliable, and a dropdown you cannot see is
      indistinguishable from a search that found nothing. */
   .ipc-assist-results { margin-top: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; max-height: 260px; overflow-y: auto; background: var(--bg-input); }
-  .ipc-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
+  .ipc-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
   .ipc-assist-hit:last-child { border-bottom: none; }
   .ipc-assist-hit:hover { background: var(--border-hover); }
-  .ipc-assist-empty { padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted); }
+  .ipc-assist-empty { padding: 8px 10px; font-size: var(--fs-xs); color: var(--text-muted); }
 
   /* Kind colours — the same hue identifies a kind in the result list, in the
      "most used" chips and on the preview card. */
   .ipc-kind-TPL { border-left-color: var(--accent-purple); }
   .ipc-kind-BND { border-left-color: var(--success); }
   .ipc-kind-LAB { border-left-color: var(--warning); }
-  .ipc-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .ipc-tag { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
   .ipc-tag-TPL { background: var(--accent-glow); color: var(--accent-fg); border: 1px solid var(--accent-purple); }
   .ipc-tag-BND { background: var(--success-bg); color: var(--success-fg); border: 1px solid var(--success); }
   .ipc-tag-LAB { background: var(--warning-bg); color: var(--warning-fg); border: 1px solid var(--warning); }
@@ -91,13 +91,13 @@
   .ipc-scope-SEED     { background: var(--surface-hover); color: var(--text-muted); }
   .ipc-scope-PRESET   { background: var(--info-bg); color: var(--info-fg); }
 
-  .ipc-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.73rem; }
+  .ipc-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: var(--fs-xs); }
   .ipc-suggest-strip { display: flex; flex-wrap: wrap; gap: 6px; }
-  .ipc-evidence { font-size: 0.6rem; color: var(--text-muted); }
-  .ipc-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
-  .ipc-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
+  .ipc-evidence { font-size: var(--fs-2xs); color: var(--text-muted); }
+  .ipc-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; }
+  .ipc-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); cursor: pointer; }
   .ipc-taper-tag { font-size: 0.55rem; background: var(--warning-bg); color: var(--warning-fg); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
-  .ipc-peds-hint { font-size: 0.6rem; color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
+  .ipc-peds-hint { font-size: var(--fs-2xs); color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
 
   /* ========================================= */
   /* IP CASESHEET HEADER                       */
@@ -117,10 +117,10 @@
   #emr-workspace-ip-casesheet .ipc-hdr-row .badge,
   #emr-workspace-ip-casesheet .ipc-hdr-row .btn,
   #emr-workspace-ip-casesheet .ipc-hdr-row .form-select { padding-top: .2rem; padding-bottom: .2rem; }
-  #emr-workspace-ip-casesheet .ipc-hdr-row .badge { font-size: .68rem; }
+  #emr-workspace-ip-casesheet .ipc-hdr-row .badge { font-size: var(--fs-2xs); }
   #emr-workspace-ip-casesheet .ipc-hdr-row .hd-label { white-space: nowrap; }
   #emr-workspace-ip-casesheet > .mb-3.pb-2 { margin-bottom: .6rem !important; padding-bottom: .4rem !important; }
-  .ipc-care-chip { font-size: .62rem !important; padding: .12rem .4rem !important; }
+  .ipc-care-chip { font-size: var(--fs-2xs) !important; padding: .12rem .4rem !important; }
 
   /* Row 1 clears the floating "signed in as" badge the shell overlays. */
   #emr-workspace-ip-casesheet .ipc-hdr-row:first-of-type .ipc-hdr-right { padding-right: 14rem; }
@@ -160,7 +160,7 @@
 
       <div class="ipc-hdr-ident">
         <span class="fw-bold text-truncate" id="ipc-hd-pat-name"
-              style="color: var(--text-main); font-size: 1rem;">Select a bed</span>
+              style="color: var(--text-main); font-size: var(--fs-md);">Select a bed</span>
         <span class="badge bg-dark border border-secondary text-light px-2 py-1 flex-shrink-0" id="ipc-hd-pat-id">ID: --</span>
         <span class="badge bg-danger px-2 py-1 flex-shrink-0" id="ipc-hd-bed">Bed: --</span>
         <span class="text-warning fw-bold small flex-shrink-0" id="ipc-hd-pat-demo">-- Y | -</span>
@@ -172,7 +172,8 @@
              sheet. Reading them used to mean leaving the ward, opening the
              Lab module and searching for the patient by name. -->
         <button class="btn btn-sm btn-outline-info py-1 px-2 flex-shrink-0" onclick="crescLabPeek(window.currentPatientId, document.getElementById('ipc-hd-pat-name').textContent)" title="This patient's verified lab results, without leaving this screen"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
-        <span class="text-muted" style="font-size:.7rem;">
+        <button class="btn btn-sm btn-outline-info py-1 px-2 flex-shrink-0" onclick="window.crescExternalLabOpen && crescExternalLabOpen({ patientId: window.currentPatientId, ipNumber: window.ipcCurrentIP, name: document.getElementById('ipc-hd-pat-name').textContent })" title="Enter values from an outside lab report"><i class="fa-solid fa-file-circle-plus me-1"></i>Outside lab</button>
+        <span class="text-muted" style="font-size:var(--fs-2xs);">
           <span id="ipc-hd-current-date" class="text-warning fw-bold"></span>
         </span>
       </div>
@@ -181,17 +182,17 @@
     <!-- Row 2: attribution, care team, actions -->
     <div class="ipc-hdr-row">
       <div class="ipc-hdr-left">
-        <span class="hd-label m-0 flex-shrink-0" style="font-size:.68rem;">Signing as</span>
+        <span class="hd-label m-0 flex-shrink-0" style="font-size:var(--fs-2xs);">Signing as</span>
         <span class="badge bg-dark border border-info text-info px-2 py-1 text-truncate" id="ipc-signing-as"
-              style="font-size:.72rem; max-width: 200px;">
+              style="font-size:var(--fs-xs); max-width: 200px;">
           <i class="fa-solid fa-id-badge me-1"></i>--
         </span>
         <!-- Administrators record a casesheet for a named doctor. Hidden for
              a doctor, who signs as themselves. -->
         <span class="d-none align-items-center gap-1 flex-shrink-0" id="ipc-actas-wrap">
-          <span class="hd-label m-0" style="font-size:.68rem;">Acting as</span>
+          <span class="hd-label m-0" style="font-size:var(--fs-2xs);">Acting as</span>
           <select id="ipc-actas" class="form-select form-select-sm bg-dark text-white border-secondary"
-                  style="width:180px; font-size:.72rem;" onchange="ipcSetActingDoctor(this.value)"></select>
+                  style="width:180px; font-size:var(--fs-xs);" onchange="ipcSetActingDoctor(this.value)"></select>
         </span>
         <select id="ipc-triage-status" class="form-select form-select-sm bg-dark text-white fw-bold border-secondary flex-shrink-0"
                 style="width: 118px;" onchange="ipcUpdateTriageUI()">
@@ -202,7 +203,7 @@
       </div>
 
       <div class="ipc-hdr-ident">
-        <span class="hd-label m-0 flex-shrink-0" style="font-size:.68rem;">
+        <span class="hd-label m-0 flex-shrink-0" style="font-size:var(--fs-2xs);">
           <i class="fa-solid fa-user-group me-1"></i>Care team
         </span>
         <span id="ipc-care-team-chips" class="d-flex gap-1 flex-wrap"></span>
@@ -249,14 +250,14 @@
     <div id="ipc-assist-dx-section" class="ipc-assist-sec d-none">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="ipc-assist-head m-0" id="ipc-assist-dx-head">Treatment assist</div>
-        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:0.7rem;" id="ipc-btn-add-selected" onclick="ipcAddSelectedAssist()">Add selected</button>
+        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:var(--fs-2xs);" id="ipc-btn-add-selected" onclick="ipcAddSelectedAssist()">Add selected</button>
       </div>
       <div id="ipc-assist-body"></div>
     </div>
 
     <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top border-secondary">
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="ipcOpenSaveTemplateModal()">Save as template</button>
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="ipcOpenSaveBundleModal()">Save Rx as bundle</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcOpenSaveTemplateModal()">Save as template</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcOpenSaveBundleModal()">Save Rx as bundle</button>
     </div>
   </div>
 
@@ -271,7 +272,7 @@
         <div class="mb-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">Chief Complaints</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="ipcAddIPCDynamicRow('ipc-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcAddIPCDynamicRow('ipc-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="ipc-cc-tbody"></tbody></table></div>
           <div id="ipc-workup-hint" class="mt-2"></div>
@@ -279,7 +280,7 @@
         <div class="border-top border-secondary pt-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">History / Comorbidities</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="ipcAddIPCDynamicRow('ipc-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcAddIPCDynamicRow('ipc-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="ipc-hx-tbody"></tbody></table></div>
         </div>
@@ -400,7 +401,7 @@
             </select>
             <!-- Wrapped the input so dropdowns anchor exactly to the text box -->
             <div class="position-relative w-100">
-                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="ipc-diagnosis" oninput="ipcQueueDiagnosisAssist()" onchange="ipcOnDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();ipcAddDx();}">
+                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="ipc-diagnosis" autocomplete="off" onfocus="ipcOnIPCTemplateType(this, 'DX', true)" oninput="ipcOnIPCTemplateType(this, 'DX'); ipcQueueDiagnosisAssist()" onchange="ipcOnDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();ipcAddDx();}">
             </div>
             <button type="button" class="btn btn-outline-info" style="padding: 0.35rem 0.8rem;"
                     onclick="ipcAddDx()" title="Add this as an additional diagnosis">
@@ -481,7 +482,7 @@
       <div class="hd-panel mb-3 py-2">
           <div class="hd-panel-title border-0 m-0 mb-3">Pathology / Lab Orders</div>
           <div class="d-flex flex-column gap-2 mb-3">
-              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:0.75rem;" data-bs-toggle="modal" data-bs-target="#ipc-opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
+              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:var(--fs-xs);" data-bs-toggle="modal" data-bs-target="#ipc-opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
           </div>
           <label class="hd-label m-0">Advise Future Labs</label>
           <input type="text" class="hd-input" id="ipc-future-labs" placeholder="e.g., Fasting Sugar...">
@@ -499,7 +500,7 @@
       <div class="hd-panel mb-3 py-2" style="border-color: var(--info) !important;">
         <div class="hd-panel-title d-flex justify-content-between align-items-center m-0 border-0">
             <span class="text-info">External Lab Results</span>
-            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.7rem;" onclick="ipcAddIPCLabResultRow()"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:var(--fs-2xs);" onclick="ipcAddIPCLabResultRow()"><i class="fa-solid fa-plus"></i></button>
         </div>
         <div class="table-responsive mt-2">
             <table class="table table-borderless table-tight m-0">
@@ -512,60 +513,7 @@
   </div>
 </div>
 
-<!-- ===================== DIAL PAD ===================== -->
-<div class="modal fade" id="ipc-opDialPadModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered" style="max-width: 270px;">
-    <div class="modal-content text-white shadow-lg" style="background-color: var(--bg-input); border: 1px solid var(--border-hover);">
-      <div class="modal-body p-3">
-        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3">
-          <h6 class="text-info m-0" style="font-size:0.8rem;" id="ipc-dial-title">Smart Input</h6>
-          <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.7rem;" onclick="ipcClearIPCDial()"><i class="fa-solid fa-eraser"></i> Clear</button>
-        </div>
-
-        <div id="ipc-dial-rx-grid" class="row g-1 mb-2 d-none">
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('0')">0</button></div>
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('1/2')">1/2</button></div>
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('1')">1</button></div>
-          <div class="col-3"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('2')">2</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="ipcAppendIPCDial('OD')">OD</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="ipcAppendIPCDial('BD')">BD</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="ipcAppendIPCDial('TDS')">TDS</button></div>
-          <div class="col-3"><button class="btn btn-outline-info dial-btn w-100 text-info" onclick="ipcAppendIPCDial('QID')">QID</button></div>
-          <div class="col-3"><button class="btn btn-outline-warning dial-btn w-100 text-warning" onclick="ipcAppendIPCDial('STAT')">STAT</button></div>
-          <div class="col-3"><button class="btn btn-outline-warning dial-btn w-100 text-warning" onclick="ipcAppendIPCDial('SOS')">SOS</button></div>
-          <div class="col-3"><button class="btn btn-outline-success dial-btn w-100 text-success" onclick="ipcAppendIPCDial('BF')">BF</button></div>
-          <div class="col-3"><button class="btn btn-outline-success dial-btn w-100 text-success" onclick="ipcAppendIPCDial('AF')">AF</button></div>
-          <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="ipcAppendIPCDial('ml')">ml</button></div>
-          <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="ipcAppendIPCDial('Drops')">Drops</button></div>
-          <div class="col-4"><button class="btn btn-outline-secondary dial-btn w-100 text-light" onclick="ipcAppendIPCDial('Oint')">Oint</button></div>
-          <div class="col-12 mt-2 border-top border-secondary pt-2">
-            <button class="btn btn-outline-warning w-100 py-1 fw-bold" style="font-size:0.7rem;" onclick="ipcOpenTaperFromDial()"><i class="fa-solid fa-stairs"></i> Taper Mode</button>
-          </div>
-        </div>
-
-        <div id="ipc-dial-dur-grid" class="row g-1 mb-2 d-none">
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('1')">1</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('2')">2</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('3')">3</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('4')">4</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('5')">5</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('6')">6</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('7')">7</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('14')">14</button></div>
-          <div class="col-4"><button class="btn dial-btn w-100 text-white" onclick="ipcAppendIPCDial('30')">30</button></div>
-          <div class="col-12 mt-2 border-top border-secondary pt-2"></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="ipcAppendIPCDial(' Days')">Days</button></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="ipcAppendIPCDial(' Wks')">Weeks</button></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="ipcAppendIPCDial(' Mths')">Months</button></div>
-          <div class="col-6"><button class="btn btn-outline-info dial-btn w-100 text-info fw-bold" onclick="ipcAppendIPCDial(' Yrs')">Years</button></div>
-        </div>
-
-        <button class="btn btn-primary w-100 mt-3 py-1 fw-bold text-white on-accent" style="font-size:0.8rem; background-color: var(--info-solid); border:none;" data-bs-dismiss="modal">Confirm</button>
-      </div>
-    </div>
-  </div>
-</div>
-
+<!-- The dosage / duration pad is shared with the OP consult: Dial_Pad.html, in the shell. -->
 <!-- ===================== TAPER BUILDER ===================== -->
 <div class="modal fade" id="ipc-opTaperModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -881,7 +829,6 @@ var ipcLabMaster = { internal: [], external: [] };
 var ipcComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
 var ipcConsultTemplates = [];
 var ipcPatientAllergies = { recorded: false, raw: "", list: [] };
-var currentIPCDialTarget = null;
 var activeIpcEncounterId = "";
 /* ipcDoseTargetRow / _ipcDoseSig retired with the local calculator; the
    shared one in Dose_Calculator.html keeps its own target row. */
@@ -1086,8 +1033,6 @@ function ipcApplyAdmissionContext(ctx) {
     ipcRecallPrevious(ctx.lastCasesheet);
     ipcRestoreDraft(p.ipNumber);
 
-    if (ipcDraftTimer) clearInterval(ipcDraftTimer);
-    ipcDraftTimer = setInterval(ipcSaveDraft, 30000);
 
     ipcQueueSafetyCheck();
 }
@@ -1179,51 +1124,40 @@ function ipcApplyPrevious(includeMeds) {
 // ============================================================================
 // DRAFTS — a ward round is interrupted constantly
 // ============================================================================
-function ipcDraftKey(ip) { return 'ipc_draft_' + (ip || window.ipcCurrentIP || ''); }
-
-function ipcSaveDraft() {
-    if (!ipcAdmission) return;
-    try {
-        localStorage.setItem(ipcDraftKey(), JSON.stringify(ipcBuildIPCFlatPayload()));
-        const el = document.getElementById('ipc-draft-status');
-        if (el) {
-            el.innerHTML = '<i class="fa-solid fa-check text-success"></i> Draft saved ' +
-                           new Date().toLocaleTimeString();
-            setTimeout(function () {
-                el.innerHTML = '<i class="fa-solid fa-cloud"></i> Up to date';
-            }, 3000);
+// Kept in this browser per user for 24 h (crescDraft, Shell_UX.html). It used
+// to restore only the diagnosis, advice, vitals and examination: complaints,
+// history and every medicine typed on the round were lost. It is a snapshot
+// of the whole form now, and it is kept per user, not per bed, so a colleague
+// opening the same bed on this machine is never offered someone else's draft.
+var IPC_DRAFT_SPEC = {
+    status: 'ipc-draft-status',
+    rows: {
+        'ipc-cc-tbody': { add: function () { ipcAddIPCDynamicRow('ipc-cc-tbody', 'CC'); }, field: /^ipc-array-/ },
+        'ipc-hx-tbody': { add: function () { ipcAddIPCDynamicRow('ipc-hx-tbody', 'HX'); }, field: /^ipc-array-/ },
+        'ipc-rx-tbody': { add: function () { ipcAddIPCRxRow(); }, field: /^ipc-rx-/ },
+        'ipc-lab-results-tbody': { add: function () { ipcAddIPCLabResultRow(); }, field: /^ipc-lab-res-/ }
+    },
+    extra: {
+        get: function () { return { dx: ipcDxList.slice(), labs: ipcSelectedLabs.slice() }; },
+        set: function (x) {
+            if (x.dx && x.dx.length) ipcSetDx(x.dx.join(', '));
+            (x.labs || []).forEach(function (l) { ipcLabSelect(l.testId, l.testName); });
+            if (typeof ipcCompileIPCLabs === 'function') ipcCompileIPCLabs();
+            if (typeof ipcQueueSafetyCheck === 'function') ipcQueueSafetyCheck();
         }
-    } catch (e) { /* a full localStorage must not break the round */ }
+    }
+};
+function ipcDraftKey(ip) {
+    var id = String(ip || window.ipcCurrentIP || '').trim();
+    return id ? 'ipc|' + id : '';
 }
-
+if (window.crescDraft) {
+    window.crescDraft.watch(function () { return ipcAdmission ? ipcDraftKey() : ''; },
+                            'emr-workspace-ip-casesheet', IPC_DRAFT_SPEC);
+}
+function ipcSaveDraft() { if (window.crescDraft) window.crescDraft.saveAll(); }
 function ipcRestoreDraft(ip) {
-    let raw = null;
-    try { raw = localStorage.getItem(ipcDraftKey(ip)); } catch (e) { return; }
-    if (!raw) return;
-    ipc_confirm('An unsaved casesheet draft exists for this bed. Recover it?',
-        function (ok) {
-            if (!ok) { try { localStorage.removeItem(ipcDraftKey(ip)); } catch (e) {} return; }
-            ipcApplyDraft(raw);
-        }, { okLabel: 'Recover draft' });
-}
-
-function ipcApplyDraft(raw) {
-    try {
-        const d = JSON.parse(raw);
-        ipcSetDx(d.provDiagnosis);
-        ipcSetVal('ipc-advice-free', d.advice);
-        if (d.vitals) {
-            ipcSetVal('ipc-vit-sys', d.vitals.sys);   ipcSetVal('ipc-vit-dia', d.vitals.dia);
-            ipcSetVal('ipc-vit-pr', d.vitals.hr);     ipcSetVal('ipc-vit-spo2', d.vitals.spo2);
-            ipcSetVal('ipc-vit-temp', d.vitals.temp); ipcSetVal('ipc-vit-wt', d.vitals.weight);
-        }
-        if (d.sysExam) {
-            ipcSetVal('ipc-se-cvs-text', d.sysExam.cvs); ipcSetVal('ipc-se-rs-text', d.sysExam.rs);
-            ipcSetVal('ipc-se-pa-text', d.sysExam.pa);   ipcSetVal('ipc-se-cns-text', d.sysExam.cns);
-        }
-        document.getElementById('ipc-draft-status').innerHTML =
-            '<i class="fa-solid fa-rotate-left text-warning"></i> Draft restored';
-    } catch (e) { /* a corrupt draft is not worth an error dialog */ }
+    if (window.crescDraft) window.crescDraft.offer(ipcDraftKey(ip), 'emr-workspace-ip-casesheet', IPC_DRAFT_SPEC);
 }
 
 function ipcUpdateTriageUI() {
@@ -1401,18 +1335,56 @@ function ipcPhraseMatch(list, query) {
     return starts.concat(contains, viaAlias).slice(0, 10);
 }
 
-function ipcOnIPCTemplateType(inputEl, cat) {
+/**
+ * The phrases offered for one box.
+ *   HX  history AND the diagnosis list: a comorbidity is a diagnosis, and the
+ *       history pool alone was too thin to match most of what is typed.
+ *   DX  the seed diagnoses, plus every diagnosis the complaint workups name.
+ */
+function ipcPhrasePool(cat) {
+    const ph = (ipcComposer.phrases || {});
+    if (cat === 'HX' || cat === 'DX') {
+        const seen = {}, out = [];
+        const add = function (p) {
+            const k = String(p && p.text || '').toLowerCase();
+            if (!k || seen[k]) return;
+            seen[k] = true; out.push(p);
+        };
+        (cat === 'HX' ? (ph.HX || []) : []).forEach(add);
+        (ph.DX || []).forEach(add);
+        if (cat === 'DX') {
+            Object.keys(ipcComposer.workup || {}).forEach(function (k) {
+                const dx = (ipcComposer.workup[k] || {}).dx;
+                if (dx) add({ text: dx, scope: 'SEED', aliases: '' });
+            });
+        }
+        return out;
+    }
+    return ph[cat] || [];
+}
+
+/**
+ * Suggestions under a complaint, history or diagnosis box.
+ * `showAll` (on focus): with nothing typed, the most-used first eight — so a
+ * box shows what it can offer before a letter is typed. Arrow keys, Enter
+ * and Escape work on the list (crescSuggestKeys, Shell_UX.html).
+ */
+function ipcOnIPCTemplateType(inputEl, cat, showAll) {
     let dd = inputEl.parentElement.querySelector('.autocomplete-items');
-    if (!dd) { dd = document.createElement('div'); dd.className = 'autocomplete-items d-none'; inputEl.parentElement.appendChild(dd); }
+    if (!dd) {
+        dd = document.createElement('div'); dd.className = 'autocomplete-items d-none';
+        inputEl.parentElement.appendChild(dd);
+        // Hidden when the box is left; the delay lets a click on an item land first.
+        inputEl.addEventListener('blur', function () { setTimeout(function () { dd.classList.add('d-none'); }, 180); });
+    }
 
     let val = inputEl.value.trim();
     const isSlash = val.charAt(0) === '/';
     if (isSlash) val = val.substring(1);
 
     dd.innerHTML = '';
-    if (!val) { dd.classList.add('d-none'); return; }
-
-    const list = ipcPhraseMatch((ipcComposer.phrases && ipcComposer.phrases[cat]) || [], val);
+    const pool = ipcPhrasePool(cat);
+    const list = val ? ipcPhraseMatch(pool, val) : (showAll === true ? pool.slice(0, 8) : []);
     if (!list.length) { dd.classList.add('d-none'); return; }
 
     dd.classList.remove('d-none');
@@ -1423,12 +1395,30 @@ function ipcOnIPCTemplateType(inputEl, cat) {
                        '<small><span class="ipc-scope-tag ipc-scope-' + ipcEsc(x.scope) + '">' + ipcEsc(x.scope) + '</span> ' +
                        '<span class="ipc-evidence">' + ipcEsc(meta) + '</span></small>';
         it.onclick = function () {
-            inputEl.value = x.text;
             dd.classList.add('d-none');
+            if (cat === 'DX') { ipcPickDx(x.text); return; }
+            inputEl.value = x.text;
             if (cat === 'CC') ipcShowWorkupHint(x.text);
         };
         dd.appendChild(it);
     });
+}
+
+/**
+ * A diagnosis chosen from a suggestion — the dropdown or a complaint's
+ * "Dx:" hint. It becomes a chip, and the treatment assist runs for it.
+ * The hint used to fill the box ONLY when the box was empty and do nothing
+ * otherwise, which read as "diagnosis suggestions are not picked up".
+ */
+function ipcPickDx(text, keepTyped) {
+    const el = document.getElementById('ipc-diagnosis');
+    if (!el || !text) return;
+    // From a hint, whatever the doctor had typed is a diagnosis of its own;
+    // from the dropdown it is only the search that found this one.
+    if (keepTyped && el.value.trim()) ipcAddDx();
+    el.value = text;
+    try { ipcOnDiagnosisChanged(); } catch (e) { /* the assist is a convenience */ }
+    ipcAddDx();
 }
 
 function ipcOnSlashSearch(inputEl, cat) {
@@ -1498,8 +1488,7 @@ function ipcAddWorkupLab(name) {
 }
 
 function ipcSetDiagnosisFromHint(dx) {
-    const el = document.getElementById('ipc-diagnosis');
-    if (!el.value.trim()) { el.value = dx; ipcOnDiagnosisChanged(); }
+    ipcPickDx(dx, true);
 }
 
 // ============================================================================
@@ -2389,7 +2378,7 @@ function ipcAddIPCDynamicRow(tbodyId, type) {
         '<td style="width: ' + (type === 'HX' ? 'auto' : '0') + '; display: ' + (type === 'HX' ? 'table-cell' : 'none') + ';">' + prefixHtml + '</td>' +
         '<td class="w-100" style="position:relative;">' +
             '<input type="text" class="hd-input ipc-array-text" placeholder="' + (type === 'CC' ? 'Symptom... (type / to search)' : 'Condition...') + '" ' +
-            'autocomplete="off" oninput="ipcOnIPCTemplateType(this, \'' + type + '\')"></td>' +
+            'autocomplete="off" oninput="ipcOnIPCTemplateType(this, \'' + type + '\')" onfocus="ipcOnIPCTemplateType(this, \'' + type + '\', true)"></td>' +
         '<td><input type="text" class="hd-input dial-trigger ipc-array-dur text-center" style="width: 55px;" placeholder="Dur" onclick="ipcOpenIPCDialPad(this, \'dur\')"></td>' +
         '<td class="text-end no-print"><button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.6rem;" onclick="this.closest(\'tr\').remove()"><i class="fa-solid fa-xmark"></i></button></td>';
     tbody.appendChild(tr);
@@ -2665,91 +2654,16 @@ function ipcMarkIPCAllWNL() { ['cvs', 'rs', 'pa', 'cns'].forEach(s => ipcSetIPCS
 // DIAL PAD
 // ============================================================================
 function ipcOpenIPCDialPad(inputEl, mode) {
-    if (inputEl.disabled) return;
-    currentIPCDialTarget = inputEl;
-    document.getElementById('ipc-dial-title').innerText = mode === 'rx' ? "Smart Dosage" : "Select Duration";
-    document.getElementById('ipc-dial-rx-grid').classList.toggle('d-none', mode !== 'rx');
-    document.getElementById('ipc-dial-dur-grid').classList.toggle('d-none', mode === 'rx');
-    new bootstrap.Modal(document.getElementById('ipc-opDialPadModal')).show();
+    // One pad for the ward and the OP consult: Dial_Pad.html, in the shell.
+    if (!window.crescDialPad) return;
+    window.crescDialPad.open(inputEl, mode, {
+      onTaper: function (row) { if (row) ipcOpenTaperBuilder(row); }
+    });
 }
-
-function ipcAppendIPCDial(val) {
-    if (!currentIPCDialTarget) return;
-    let cVal = currentIPCDialTarget.value.trim();
-    const v = val.trim();
-    const rxPatterns = { 'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1' };
-
-    // Mutually exclusive token groups. Pressing Days then Months means the
-    // doctor changed their mind, so the new unit REPLACES the old one —
-    // appending gave "3 Days Months", and pressing the same unit twice gave
-    // "3 Days Days".
-    const DURATION = ['Days', 'Wks', 'Mths', 'Yrs'];
-    const DOSEUNIT = ['ml', 'Drops', 'Oint'];
-    const URGENCY  = ['STAT', 'SOS'];
-
-    const swapToken = function (text, group, token) {
-        // Strip every member of the group (with its separating space), then
-        // append the one just pressed. Word-boundary anchored so "ml" does not
-        // eat the "ml" inside "5ml" typed by hand.
-        let out = text;
-        group.forEach(function (g) {
-            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
-        });
-        out = out.trim();
-        return out ? out + ' ' + token : token;
-    };
-
-    if (rxPatterns[v]) {
-        let base = rxPatterns[v];
-        if (cVal && !isNaN(cVal)) base = base.replace(/1/g, cVal);
-        currentIPCDialTarget.value = base;
-
-    } else if (v === 'AF' || v === 'BF') {
-        // AF and BF are also exclusive: clear the other before applying.
-        const other = (v === 'AF') ? 'BF' : 'AF';
-        cVal = cVal.replace(new RegExp('\\(' + other + '\\)', 'g'), '');
-        if (cVal.includes('-')) {
-            currentIPCDialTarget.value = cVal.split('-').map(function (p) {
-                const clean = p.replace(/\((?:AF|BF)\)/g, '').trim();
-                return (clean !== '0' && clean !== '') ? clean + '(' + v + ')' : (clean || '0');
-            }).join('-');
-        } else {
-            cVal = cVal.replace(/\((?:AF|BF)\)/g, '').trim();
-            currentIPCDialTarget.value = cVal ? cVal + ' (' + v + ')' : '(' + v + ')';
-        }
-
-    } else if (DURATION.indexOf(v) !== -1) {
-        currentIPCDialTarget.value = swapToken(cVal, DURATION, v);
-    } else if (DOSEUNIT.indexOf(v) !== -1) {
-        currentIPCDialTarget.value = swapToken(cVal, DOSEUNIT, v);
-    } else if (URGENCY.indexOf(v) !== -1) {
-        // Pressing STAT twice clears it: it is a toggle, not an accumulator.
-        const had = new RegExp('\\b' + v + '\\b', 'i').test(cVal);
-        let out = cVal;
-        URGENCY.forEach(function (g) {
-            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
-        });
-        out = out.trim();
-        currentIPCDialTarget.value = had ? out : (out ? out + ' ' + v : v);
-
-    } else {
-        // Digits and fractions still accumulate — that is how a number is typed.
-        currentIPCDialTarget.value = cVal + val;
-    }
-}
-
-function ipcClearIPCDial() { if (currentIPCDialTarget) currentIPCDialTarget.value = ''; }
 
 // ============================================================================
 // TAPER MODE
 // ============================================================================
-function ipcOpenTaperFromDial() {
-    if (!currentIPCDialTarget) return;
-    ipcTaperTargetRow = currentIPCDialTarget.closest('tr');
-    bootstrap.Modal.getInstance(document.getElementById('ipc-opDialPadModal'))?.hide();
-    ipcOpenTaperBuilder(ipcTaperTargetRow);
-}
-
 function ipcOpenTaperBuilder(row) {
     ipcTaperTargetRow = row;
     const nameEl = row.querySelector('.ipc-rx-name');
@@ -3176,7 +3090,7 @@ function ipcSubmitConfirmed() {
             }
             activeIpcEncounterId = res.encounterId;
             ipcLoadWard();   // the bed leaves the picker now it has a casesheet
-            try { localStorage.removeItem(ipcDraftKey()); } catch (e) {}
+            if (window.crescDraft) window.crescDraft.clear(ipcDraftKey());
 
             ipcToast(res.message, res.warnings && res.warnings.length ? 'warn' : 'ok');
             ipc_confirm('Casesheet saved. Print it now?',

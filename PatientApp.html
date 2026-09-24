@@ -75,7 +75,7 @@
   .pp-row:last-child { border-bottom: 0; }
 
   /* THE TWO CLASSES THAT REPLACE FORTY INLINE FONT SIZES.
-     The render functions below carried `style="font-size:.85rem; color:
+     The render functions below carried `style="font-size:var(--fs-sm); color:
      var(--text-main)"` on nearly every line of detail they produced, and a
      handful of them said .84rem, .88rem or .9rem instead — the same kind of
      text, four sizes, depending on which function happened to draw it. One
@@ -213,6 +213,162 @@
   .pp-bar { height: 8px; border-radius: 4px; background: var(--border-color); overflow: hidden; }
   .pp-bar > div { height: 100%; background: var(--success); }
 
+
+  /* ==================================================================
+     THE REDESIGN — one visual language for the four patient screens.
+
+     Home      a hero for the next appointment, quick actions, health at a
+               glance, recent activity.
+     Reports   a summary head, filters, and report cards that say how many
+               tests they hold and whether anything is outside range.
+     Records   one chronological timeline; a prescription is its own event.
+     Book      three steps (doctor → date → time) with a summary bar that
+               always shows what is about to be booked.
+
+     Colour carries meaning only where the laboratory or the calendar says
+     so. A value a little outside its range is a soft amber note; red is
+     kept for a critical value and an overdue visit, and nothing else.
+     ================================================================== */
+  .pp-wrap { --pp-radius: 16px; --pp-soft: color-mix(in srgb, var(--accent-purple) 14%, transparent); }
+  .pp-wrap .pp-card { border-radius: var(--pp-radius); }
+  .pp-section-title { font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: .08em;
+                      text-transform: uppercase; color: var(--text-muted); margin: 22px 0 10px;
+                      display: flex; align-items: center; gap: 8px; }
+  .pp-section-title .pp-sec-count { text-transform: none; letter-spacing: 0; }
+
+  /* Home: hero + quick actions */
+  .pp-home-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem; }
+  @media (min-width: 992px) { .pp-home-grid { grid-template-columns: 1.7fr 1fr; } }
+  .pp-hero { position: relative; overflow: hidden; border-radius: var(--pp-radius); padding: 22px 24px;
+             border: 1px solid var(--border-color); background: var(--bg-card);
+             background: linear-gradient(135deg, color-mix(in srgb, var(--accent-purple) 26%, var(--bg-card)) 0%,
+                                                 var(--bg-card) 70%); }
+  .pp-hero::after { content: ''; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px;
+                    border-radius: 50%; background: var(--accent-purple); opacity: .10; filter: blur(30px);
+                    pointer-events: none; }
+  .pp-hero-kicker { font-size: var(--fs-2xs); font-weight: var(--fw-bold); letter-spacing: .1em;
+                    text-transform: uppercase; color: var(--accent-fg); }
+  .pp-hero-date { font-size: 1.7rem; font-weight: var(--fw-heavy); line-height: 1.15; color: var(--text-main);
+                  margin: 6px 0 4px; }
+  .pp-hero-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--fs-sm); color: var(--text-muted); }
+  .pp-hero-meta i { color: var(--accent-fg); margin-right: 5px; }
+  .pp-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; position: relative; z-index: 1; }
+  .pp-btn-accent { background: var(--accent-purple); color: var(--text-on-accent, #fff); border: 0;
+                   font-weight: var(--fw-bold); border-radius: 10px; padding: 8px 14px; font-size: var(--fs-sm); }
+  .pp-btn-accent:hover, .pp-btn-accent:focus-visible { filter: brightness(1.1); color: var(--text-on-accent, #fff); }
+  .pp-btn-accent:disabled { opacity: .5; }
+  .pp-btn-ghost { background: transparent; color: var(--text-main); border: 1px solid var(--border-color);
+                  border-radius: 10px; padding: 8px 14px; font-size: var(--fs-sm); font-weight: var(--fw-semi); }
+  .pp-btn-ghost:hover, .pp-btn-ghost:focus-visible { border-color: var(--accent-purple); color: var(--text-main); }
+  .pp-more-appts { margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 10px; position: relative; z-index: 1; }
+
+  .pp-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 100%; }
+  .pp-action { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 10px;
+               text-align: left; border: 1px solid var(--border-color); border-radius: 14px; padding: 14px;
+               background: var(--bg-card); color: var(--text-main); font-size: var(--fs-sm);
+               font-weight: var(--fw-semi); min-height: 92px; transition: .15s; text-decoration: none; }
+  .pp-action:hover, .pp-action:focus-visible { border-color: var(--accent-purple); transform: translateY(-1px); color: var(--text-main); }
+  .pp-action i { font-size: var(--fs-lg); width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+                 background: var(--pp-soft); color: var(--accent-fg); }
+  .pp-action small { display: block; font-weight: var(--fw-normal); color: var(--text-muted); font-size: var(--fs-2xs); }
+
+  /* Health at a glance */
+  .pp-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+  .pp-metric { border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 14px; background: var(--bg-card); }
+  .pp-metric .pp-m-lbl { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted);
+                         font-weight: var(--fw-bold); display: flex; align-items: center; gap: 6px; }
+  .pp-metric .pp-m-lbl i { color: var(--accent-fg); }
+  .pp-metric .pp-m-val { font-size: 1.35rem; font-weight: var(--fw-heavy); color: var(--text-main); line-height: 1.2; margin-top: 4px; }
+  .pp-metric .pp-m-val small { font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-muted); margin-left: 3px; }
+  .pp-metric .pp-m-sub { font-size: var(--fs-2xs); color: var(--text-muted); margin-top: 2px; }
+
+  /* Timelines (home activity and records) */
+  .pp-tl { position: relative; padding-left: 26px; }
+  .pp-tl::before { content: ''; position: absolute; left: 9px; top: 4px; bottom: 4px; width: 2px; background: var(--border-color); }
+  .pp-tl-item { position: relative; padding: 0 0 16px; }
+  .pp-tl-item:last-child { padding-bottom: 0; }
+  .pp-tl-dot { position: absolute; left: -26px; top: 2px; width: 20px; height: 20px; border-radius: 50%;
+               display: grid; place-items: center; font-size: var(--fs-2xs); background: var(--bg-elevated);
+               border: 2px solid var(--border-color); color: var(--text-muted); }
+  .pp-tl-dot.info { border-color: var(--info-fg); color: var(--info-fg); }
+  .pp-tl-dot.accent { border-color: var(--accent-purple); color: var(--accent-fg); }
+  .pp-tl-dot.ok { border-color: var(--success-fg); color: var(--success-fg); }
+  .pp-tl-dot.warn { border-color: var(--warning-fg); color: var(--warning-fg); }
+  .pp-tl-link { background: none; border: 0; padding: 0; margin: 0; width: 100%; text-align: left; color: inherit; border-radius: 6px; }
+  .pp-tl-link:hover .pp-tl-title { color: var(--accent-fg); }
+  .pp-tl-link:focus-visible { outline: 2px solid var(--accent-purple); outline-offset: 3px; }
+  .pp-tl-title { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--text-main); }
+  .pp-tl-sub { font-size: var(--fs-xs); color: var(--text-muted); }
+  .pp-tl-when { font-size: var(--fs-2xs); color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  .pp-tl-month { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--text-muted); text-transform: uppercase;
+                 letter-spacing: .08em; margin: 6px 0 12px -26px; }
+  .pp-event { border: 1px solid var(--border-color); border-radius: 14px; padding: 14px 16px; background: var(--bg-card); }
+  .pp-event-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .pp-kv { display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px; font-size: var(--fs-sm); margin-top: 10px; }
+  .pp-kv dt { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: var(--fw-bold); padding-top: 2px; }
+  .pp-kv dd { margin: 0; color: var(--text-main); white-space: pre-wrap; }
+  @media (max-width: 575px) { .pp-kv { grid-template-columns: 1fr; } .pp-kv dd { margin-bottom: 6px; } }
+  .pp-chipset { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pp-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-color); border-radius: 999px;
+             padding: 3px 10px; font-size: var(--fs-xs); color: var(--text-main); background: var(--bg-elevated); }
+  .pp-chip b { font-weight: var(--fw-bold); }
+
+  /* Filter bars (reports, records) */
+  .pp-filterbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pp-seg { display: inline-flex; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; }
+  .pp-seg button { background: transparent; border: 0; color: var(--text-muted); font-size: var(--fs-xs);
+                   font-weight: var(--fw-semi); padding: 7px 12px; }
+  .pp-seg button + button { border-left: 1px solid var(--border-color); }
+  .pp-seg button[aria-pressed="true"] { background: var(--pp-soft); color: var(--accent-fg); }
+  .pp-seg button:focus-visible { outline: 2px solid var(--accent-purple); outline-offset: -2px; }
+  .pp-select { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-color);
+               border-radius: 10px; padding: 7px 10px; font-size: var(--fs-xs); }
+
+  /* Reports */
+  .pp-rep-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 12px 0; }
+  .pp-rep-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+  @media (min-width: 1200px) { .pp-rep-grid { grid-template-columns: 1fr 1fr; } }
+  .pp-status { font-size: var(--fs-2xs); font-weight: var(--fw-bold); padding: 2px 8px; border-radius: 999px;
+               display: inline-flex; align-items: center; gap: 4px; }
+  .pp-status.verified { background: var(--success-bg); color: var(--success-fg); }
+  .pp-status.released { background: var(--info-bg); color: var(--info-fg); }
+  .pp-note-soft { font-size: var(--fs-xs); color: var(--warning-fg); background: color-mix(in srgb, var(--warning-bg) 60%, transparent);
+                  border-radius: 10px; padding: 8px 10px; margin-top: 10px; }
+  .pp-note-urgent { font-size: var(--fs-xs); color: var(--danger-fg); background: var(--danger-bg);
+                    border-radius: 10px; padding: 8px 10px; margin-top: 10px; font-weight: var(--fw-semi); }
+  #tab-pat-meds .ppr-chip.warn { background: transparent; border-color: color-mix(in srgb, var(--warning-fg) 45%, transparent); }
+
+  /* Booking: steps and the summary bar */
+  .pp-steps { display: flex; gap: 8px; list-style: none; padding: 0; margin: 0 0 16px; flex-wrap: wrap; }
+  .pp-steps button { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border-color); border-radius: 999px;
+                     background: var(--bg-card); color: var(--text-muted); padding: 6px 14px 6px 6px; font-size: var(--fs-sm);
+                     font-weight: var(--fw-semi); }
+  .pp-steps button b { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+                       background: var(--bg-elevated); font-size: var(--fs-xs); }
+  .pp-steps button[aria-current="step"] { border-color: var(--accent-purple); color: var(--text-main); }
+  .pp-steps button[aria-current="step"] b { background: var(--accent-purple); color: var(--text-on-accent, #fff); }
+  .pp-steps button.done b { background: var(--success-bg); color: var(--success-fg); }
+  .pp-steps button:disabled { opacity: .55; }
+  .pp-step-panel[hidden] { display: none !important; }
+  .pp-docgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .pp-doc, .pp-day, .pp-slot { font: inherit; width: 100%; color: var(--text-main); }
+  .pp-doc { text-align: left; display: flex; gap: 12px; align-items: flex-start; }
+  .pp-doc-av { flex: 0 0 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+               background: var(--pp-soft); color: var(--accent-fg); font-weight: var(--fw-heavy); }
+  .pp-doc:focus-visible, .pp-day:focus-visible, .pp-slot:focus-visible { outline: 2px solid var(--accent-purple); outline-offset: 2px; }
+  .pp-day-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+  .pp-sumbar { position: sticky; bottom: 0; z-index: 5; margin-top: 18px; border: 1px solid var(--border-color);
+               border-radius: var(--pp-radius); background: var(--bg-card); padding: 12px 14px;
+               box-shadow: 0 -8px 24px rgba(0,0,0,.25); display: grid; gap: 10px;
+               grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; }
+  @media (min-width: 992px) { .pp-sumbar { grid-template-columns: 1.2fr 1fr .8fr 1.2fr auto; } }
+  .pp-sum-cell .pp-lbl { margin-bottom: 1px; }
+  .pp-sum-val { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--text-main); white-space: nowrap;
+                overflow: hidden; text-overflow: ellipsis; }
+  .pp-sum-val.empty { color: var(--text-muted); font-weight: var(--fw-medium); }
+  .pp-sumbar .pp-sum-go { grid-column: 1 / -1; }
+  @media (min-width: 992px) { .pp-sumbar .pp-sum-go { grid-column: auto; } }
+
   @media (max-width: 575px) {
     .pp-card { padding: 14px 15px; }
     .pp-big { font-size: var(--fs-lg); }
@@ -274,7 +430,7 @@
   <div class="cresc-page-head">
     <div>
       <h1 class="cph-title">Book an appointment</h1>
-      <p class="cph-sub">Choose a doctor, a day and a time</p>
+      <p class="cph-sub">Three steps: doctor, date, time</p>
     </div>
     <div class="cph-actions">
       <button class="btn btn-sm btn-outline-secondary fw-bold" onclick="ppGo('tab-pat-home')">
@@ -283,48 +439,73 @@
     </div>
   </div>
 
-  <div class="row g-3">
-    <div class="col-lg-4">
-      <div class="pp-card">
-        <h6><i class="fa-solid fa-user-doctor" style="color: var(--accent-fg);"></i> 1. Choose your doctor</h6>
-        <div id="pp-doctors" class="d-flex flex-column gap-2">
-          <span class="pp-note"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Loading…</span>
-        </div>
+  <!-- THREE STEPS, ONE AT A TIME. The ids inside are the ones the booking
+       code has always drawn into (pp-doctors, pp-days, pp-date-any, pp-slots,
+       pp-purpose, pp-book-btn); only their arrangement changed. The summary
+       bar stays on screen through all three, so the patient always sees what
+       is about to be booked before they press Confirm. -->
+  <ol class="pp-steps" id="pp-steps" aria-label="Booking steps">
+    <li><button type="button" data-step="1" onclick="ppSetStep(1)"><b>1</b>Doctor</button></li>
+    <li><button type="button" data-step="2" onclick="ppSetStep(2)"><b>2</b>Date</button></li>
+    <li><button type="button" data-step="3" onclick="ppSetStep(3)"><b>3</b>Time</button></li>
+  </ol>
+
+  <section class="pp-step-panel" data-step="1" aria-labelledby="pp-step1-h">
+    <div class="pp-card">
+      <h6 id="pp-step1-h"><i class="fa-solid fa-user-doctor" style="color: var(--accent-fg);"></i> Choose your doctor</h6>
+      <div id="pp-doctors" class="pp-docgrid" data-pp-roving>
+        <span class="pp-note"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Loading…</span>
       </div>
     </div>
+  </section>
 
-    <div class="col-lg-4">
-      <div class="pp-card">
-        <h6><i class="fa-solid fa-calendar-day" style="color: var(--warning-fg);"></i> 2. Choose a day</h6>
-        <div id="pp-days" style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 8px;"></div>
-        <div class="mt-3">
-          <label class="pp-lbl">Or pick any date</label>
+  <section class="pp-step-panel" data-step="2" aria-labelledby="pp-step2-h" hidden>
+    <div class="pp-card">
+      <h6 id="pp-step2-h"><i class="fa-solid fa-calendar-day" style="color: var(--warning-fg);"></i> Choose a date</h6>
+      <div id="pp-days" class="pp-day-grid" data-pp-roving></div>
+      <div class="d-flex flex-wrap align-items-end gap-3 mt-3">
+        <div>
+          <label class="pp-lbl" for="pp-date-any">Or pick any date</label>
           <input type="date" id="pp-date-any" class="form-control form-control-sm text-white-force"
                  onchange="ppPickDate(this.value)">
         </div>
-        <div class="mt-3">
-          <label class="pp-lbl">Reason</label>
-          <select id="pp-purpose" class="form-select form-select-sm text-white-force premium-select">
-            <option value="Consultation">General consultation</option>
-            <option value="Follow-up">Follow-up / review</option>
-            <option value="Routine Checkup">Routine checkup</option>
-            <option value="Antenatal check-up">Antenatal check-up</option>
-            <option value="Immunisation">Immunisation</option>
-          </select>
-        </div>
+        <button type="button" class="pp-btn-ghost ms-auto" onclick="ppSetStep(1)">
+          <i class="fa-solid fa-arrow-left me-1"></i>Doctor</button>
+        <button type="button" class="pp-btn-accent" id="pp-step2-next" onclick="ppSetStep(3)" disabled>
+          Choose a time <i class="fa-solid fa-arrow-right ms-1"></i></button>
       </div>
     </div>
+  </section>
 
-    <div class="col-lg-4">
-      <div class="pp-card d-flex flex-column">
-        <h6><i class="fa-regular fa-clock" style="color: var(--info-fg);"></i> 3. Choose a time</h6>
-        <div id="pp-slots" class="flex-grow-1 mb-3" style="min-height: 190px;">
-          <span class="pp-note">Choose a doctor and a day first.</span>
-        </div>
-        <button class="btn w-100 text-white fw-bold py-2 on-accent" id="pp-book-btn" disabled
-                style="background-color: var(--accent-purple); border-radius: 10px;"
-                onclick="ppBook()">Select a time</button>
+  <section class="pp-step-panel" data-step="3" aria-labelledby="pp-step3-h" hidden>
+    <div class="pp-card">
+      <h6 id="pp-step3-h"><i class="fa-regular fa-clock" style="color: var(--info-fg);"></i> Choose a time</h6>
+      <div id="pp-slots" style="min-height: 120px;" data-pp-roving>
+        <span class="pp-note">Choose a doctor and a day first.</span>
       </div>
+      <div class="d-flex mt-2">
+        <button type="button" class="pp-btn-ghost" onclick="ppSetStep(2)">
+          <i class="fa-solid fa-arrow-left me-1"></i>Date</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="pp-sumbar" id="pp-sumbar" aria-live="polite">
+    <div class="pp-sum-cell"><span class="pp-lbl">Doctor</span><div class="pp-sum-val empty" id="pp-sum-doc">Not chosen</div></div>
+    <div class="pp-sum-cell"><span class="pp-lbl">Date</span><div class="pp-sum-val empty" id="pp-sum-date">Not chosen</div></div>
+    <div class="pp-sum-cell"><span class="pp-lbl">Time</span><div class="pp-sum-val empty" id="pp-sum-time">Not chosen</div></div>
+    <div class="pp-sum-cell">
+      <label class="pp-lbl" for="pp-purpose">Reason</label>
+      <select id="pp-purpose" class="form-select form-select-sm text-white-force premium-select">
+        <option value="Consultation">General consultation</option>
+        <option value="Follow-up">Follow-up / review</option>
+        <option value="Routine Checkup">Routine checkup</option>
+        <option value="Antenatal check-up">Antenatal check-up</option>
+        <option value="Immunisation">Immunisation</option>
+      </select>
+    </div>
+    <div class="pp-sum-go">
+      <button class="pp-btn-accent w-100 py-2" id="pp-book-btn" disabled onclick="ppBook()">Select a doctor</button>
     </div>
   </div>
 </div>
@@ -336,7 +517,7 @@
   <div class="cresc-page-head">
     <div>
       <h1 class="cph-title">My records</h1>
-      <p class="cph-sub">Consultations and admissions, newest first</p>
+      <p class="cph-sub">Every visit, prescription and hospital stay, newest first</p>
     </div>
     <div class="cph-actions">
       <!-- Records are cached for the session so switching tabs is instant.
@@ -517,6 +698,8 @@ var PPState = {
   // draws before that reply arrives.
   horizonDays: 7,
   pick: { doctorId: '', doctorName: '', date: '', time24: '', time12: '' },
+  // Which of the three booking steps is on screen (1 doctor, 2 date, 3 time).
+  step: 1,
   records: null,
   reports: null,
   charts: {}
@@ -644,15 +827,8 @@ function ppRenderHome() {
 
   ppRenderBanner(h);
 
-  var col = function (inner, cls) {
-    return '<div class="' + (cls || 'col-md-6 col-xl-4') + '">' + inner + '</div>';
-  };
-
-  // portalHome now reads each panel under its own guard and reports the ones
-  // it could not read, instead of letting a single unreadable panel replace
-  // the whole screen with an error. Saying which part is missing is the
-  // difference between a patient trusting what IS on the screen and not
-  // trusting any of it.
+  // portalHome reads each panel under its own guard and reports the ones it
+  // could not read, instead of letting one unreadable panel blank the screen.
   var html = '';
   if (h.warnings && h.warnings.length) {
     html += '<div class="pp-card mb-3" style="border-color:var(--warning-fg);">' +
@@ -667,27 +843,223 @@ function ppRenderHome() {
       '</div></div>';
   }
 
-  html += '<div class="row g-3 mb-3">' +
-      col(ppCardAppointments(h)) +
-      col(ppCardMeds(h)) +
-      col(ppCardVitals(h)) +
+  // 1. What happens next, and the four things a patient comes here to do.
+  html += '<div class="pp-home-grid">' + ppCardNext(h) + ppCardQuickActions(h) + '</div>';
+
+  // 2. Health at a glance.
+  html += ppCardMetrics(h);
+
+  // 3. Recent activity beside what they are taking.
+  html += '<div class="row g-3 mt-1 mb-3">' +
+      '<div class="col-lg-7">' + ppCardActivity(h) + '</div>' +
+      '<div class="col-lg-5">' + ppCardMeds(h) + '</div>' +
     '</div>';
 
+  // 4. The condition panels that apply to this patient.
   var panels = [];
   if (h.conditions.pregnancy)    panels.push(ppCardAntenatal(h));
   if (h.conditions.child)        panels.push(ppCardImmunisation(h));
   if (h.conditions.diabetes)     panels.push(ppCardDiabetes(h));
   if (h.conditions.hypertension) panels.push(ppCardBp(h));
-  panels.push(ppCardLabs(h));
-
+  panels = panels.filter(Boolean);
   if (panels.length) {
-    html += '<div class="row g-3">' +
-            panels.map(function (p) { return col(p, 'col-xl-6'); }).join('') +
+    html += '<div class="pp-section-title">Your care</div>' +
+            '<div class="row g-3">' +
+            panels.map(function (p) { return '<div class="col-xl-6">' + p + '</div>'; }).join('') +
             '</div>';
   }
 
   ppSet('pp-home-body', html);
   ppPaintCharts();
+}
+
+/** A sortable number for any date the payload carries. */
+function ppMs(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  var s = String(v).trim();
+  var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]).getTime();
+  var t = Date.parse(s.replace(/-/g, ' '));
+  return isNaN(t) ? 0 : t;
+}
+
+/**
+ * THE NEXT APPOINTMENT, AS THE FIRST THING ON THE SCREEN.
+ *
+ * With none booked, the review date the doctor set takes its place — the
+ * clinic asking the patient to come back is the next thing that should
+ * happen — and with neither, an invitation to book.
+ */
+function ppCardNext(h) {
+  var a = h.appointments || { upcoming: [] };
+  var next = a.upcoming[0];
+  var bookBtn = '<button type="button" class="pp-btn-accent" onclick="ppGo(\'tab-pat-appt\'); ppInitBooking();">' +
+    '<i class="fa-solid fa-calendar-plus me-1"></i>' + (next ? 'Book another' : 'Book an appointment') + '</button>';
+
+  if (next) {
+    var more = a.upcoming.slice(1, 3);
+    return '<div class="pp-hero">' +
+      '<div class="pp-hero-kicker">Next appointment</div>' +
+      '<div class="pp-hero-date">' + ppEscHtml(next.dateText) + '</div>' +
+      '<div class="pp-hero-meta">' +
+        (next.time ? '<span><i class="fa-regular fa-clock"></i>' + ppEscHtml(next.time) + '</span>' : '') +
+        '<span><i class="fa-solid fa-user-doctor"></i>' + ppEscHtml(next.doctorName) + '</span>' +
+        (next.purpose ? '<span><i class="fa-solid fa-notes-medical"></i>' + ppEscHtml(next.purpose) + '</span>' : '') +
+      '</div>' +
+      '<div class="pp-hero-actions">' + bookBtn +
+        '<button type="button" class="pp-btn-ghost" onclick="ppCancel(\'' + ppEscHtml(next.apptId) + '\')">Cancel</button>' +
+      '</div>' +
+      (more.length
+        ? '<div class="pp-more-appts">' + more.map(function (x) {
+            return '<div class="d-flex justify-content-between align-items-center gap-2 py-1">' +
+              '<span class="pp-body">' + ppEscHtml(x.dateText) + ' · ' + ppEscHtml(x.time) +
+                ' · ' + ppEscHtml(x.doctorName) + '</span>' +
+              '<button type="button" class="btn btn-link btn-sm p-0" onclick="ppCancel(\'' +
+                ppEscHtml(x.apptId) + '\')">Cancel</button></div>';
+          }).join('') + '</div>'
+        : '') +
+      (h.review && !h.review.overdue
+        ? '<div class="pp-note mt-2" style="position:relative;z-index:1;">Your doctor also asked to see you on ' +
+          ppEscHtml(h.review.text) + '.</div>'
+        : '') +
+      '</div>';
+  }
+
+  if (h.review) {
+    var overdue = h.review.overdue;
+    return '<div class="pp-hero" style="' + (overdue ? 'border-color:var(--danger-fg);' : '') + '">' +
+      '<div class="pp-hero-kicker" style="' + (overdue ? 'color:var(--danger-fg);' : '') + '">' +
+        (overdue ? 'Your review was due' : 'Your doctor asked you to come back') + '</div>' +
+      '<div class="pp-hero-date">' + ppEscHtml(h.review.text) + '</div>' +
+      '<div class="pp-hero-meta">' +
+        (h.review.setBy ? '<span><i class="fa-solid fa-user-doctor"></i>set by ' + ppEscHtml(h.review.setBy) + '</span>' : '') +
+        (h.review.setOn ? '<span><i class="fa-regular fa-calendar"></i>on ' + ppEscHtml(h.review.setOn) + '</span>' : '') +
+      '</div>' +
+      '<div class="pp-hero-actions">' +
+        (h.review.date
+          ? '<button type="button" class="pp-btn-accent" onclick="ppBookForReview(\'' + ppEscHtml(h.review.date) + '\')">' +
+            '<i class="fa-solid fa-calendar-plus me-1"></i>Book for this date</button>'
+          : bookBtn) +
+      '</div></div>';
+  }
+
+  return '<div class="pp-hero">' +
+    '<div class="pp-hero-kicker">Appointments</div>' +
+    '<div class="pp-hero-date">No appointment booked</div>' +
+    '<div class="pp-hero-meta">' +
+      (a.lastVisit ? '<span><i class="fa-regular fa-calendar-check"></i>Last visit ' + ppEscHtml(a.lastVisit) + '</span>'
+                   : '<span>Choose a doctor and a time that suits you.</span>') +
+    '</div>' +
+    '<div class="pp-hero-actions">' + bookBtn + '</div></div>';
+}
+
+function ppCardQuickActions(h) {
+  var reports = (h.labs && h.labs.totalOrders) || 0;
+  var act = function (icon, label, sub, onclick) {
+    return '<button type="button" class="pp-action" onclick="' + onclick + '">' +
+      '<i class="fa-solid ' + icon + '"></i>' +
+      '<span>' + label + '<small>' + sub + '</small></span></button>';
+  };
+  return '<div class="pp-actions" role="group" aria-label="Quick actions">' +
+    act('fa-calendar-plus', 'Book', 'a doctor, a day, a time', "ppGo('tab-pat-appt'); ppInitBooking();") +
+    act('fa-flask-vial', 'My reports', reports ? reports + ' released' : 'lab results', "ppGo('tab-pat-meds'); ppLoadReports();") +
+    act('fa-folder-open', 'My records', 'visits and prescriptions', "ppGo('tab-pat-records'); ppLoadRecords();") +
+    act('fa-user-shield', 'Profile', 'details and privacy', "ppGo('tab-pat-profile');") +
+  '</div>';
+}
+
+/**
+ * HEALTH AT A GLANCE. The last measured value of each vital, and how it
+ * moved since the reading before — a plain difference, never a verdict.
+ */
+function ppCardMetrics(h) {
+  var v = h.vitals, tiles = [];
+  var delta = function (series, unit) {
+    if (!series || series.length < 2) return '';
+    var a = parseFloat(series[series.length - 2].value), b = parseFloat(series[series.length - 1].value);
+    if (!isFinite(a) || !isFinite(b)) return '';
+    var d = Math.round((b - a) * 10) / 10;
+    if (!d) return 'same as ' + series[series.length - 2].dateText;
+    return (d > 0 ? '+' : '') + d + (unit ? ' ' + unit : '') + ' since ' + series[series.length - 2].dateText;
+  };
+  var tile = function (icon, label, value, unit, sub) {
+    if (value === null || value === undefined || String(value) === '') return;
+    tiles.push('<div class="pp-metric"><div class="pp-m-lbl"><i class="fa-solid ' + icon + '"></i>' + label + '</div>' +
+      '<div class="pp-m-val">' + ppEscHtml(value) + (unit ? '<small>' + unit + '</small>' : '') + '</div>' +
+      (sub ? '<div class="pp-m-sub">' + ppEscHtml(sub) + '</div>' : '') + '</div>');
+  };
+  if (v && v.vitals) {
+    var bp = h.bpTrend || [];
+    var bpSub = '';
+    if (bp.length > 1) {
+      var d = bp[bp.length - 1].sys - bp[bp.length - 2].sys;
+      bpSub = d ? 'upper ' + (d > 0 ? '+' : '') + d + ' since ' + bp[bp.length - 2].dateText : 'same as last time';
+    }
+    tile('fa-heart-pulse', 'Blood pressure', v.vitals.bp, 'mmHg', bpSub);
+    tile('fa-wave-square', 'Pulse', v.vitals.pulse, '/min');
+    tile('fa-lungs', 'SpO₂', v.vitals.spo2, '%');
+    tile('fa-weight-scale', 'Weight', v.vitals.weight, 'kg', delta(h.weightTrend, 'kg'));
+    tile('fa-person', 'BMI', v.vitals.bmi, '');
+    tile('fa-temperature-half', 'Temperature', v.vitals.temp, '');
+  }
+  var s = (h.conditions && h.conditions.series) || {};
+  var last = function (arr) { return arr && arr.length ? arr[arr.length - 1] : null; };
+  var a1c = last(s.hba1c), fbs = last(s.fbs);
+  if (a1c) tile('fa-droplet', 'HbA1c', a1c.value, '%', a1c.dateText);
+  if (fbs) tile('fa-droplet', 'Fasting sugar', fbs.value, 'mg/dL', fbs.dateText);
+
+  return '<div class="pp-section-title">Health at a glance' +
+      (v && v.source ? '<span class="pp-sec-count">from your ' + ppEscHtml(v.source) + '</span>' : '') + '</div>' +
+    (tiles.length
+      ? '<div class="pp-metrics">' + tiles.join('') + '</div>'
+      : '<div class="pp-empty">No measurements yet. Your vitals are recorded at your next visit.</div>');
+}
+
+/**
+ * RECENT ACTIVITY: what has happened on this record lately, newest first,
+ * with anything booked for the future at the top.
+ */
+function ppCardActivity(h) {
+  var ev = [];
+  ((h.appointments && h.appointments.upcoming) || []).forEach(function (x) {
+    ev.push({ ms: ppMs(x.date), icon: 'fa-calendar-check', tone: 'accent',
+              title: 'Appointment booked', sub: x.dateText + (x.time ? ' · ' + x.time : '') + ' · ' + x.doctorName });
+  });
+  ((h.labs && h.labs.orders) || []).forEach(function (o) {
+    ev.push({ ms: o.ms || ppMs(o.date), icon: 'fa-flask-vial', tone: o.abnormal ? 'warn' : 'ok',
+              title: 'Report released: ' + (o.testNames || 'Investigation'),
+              sub: o.date + ' · ' + (o.abnormal ? o.abnormal + ' value' + (o.abnormal === 1 ? '' : 's') +
+                   ' for your doctor to go through' : 'every value in the usual range'),
+              go: "ppGo('tab-pat-meds'); ppLoadReports();" });
+  });
+  if (h.lastVisitNote) {
+    var n = h.lastVisitNote;
+    ev.push({ ms: ppMs(n.dateText), icon: 'fa-stethoscope', tone: 'info',
+              title: 'Consultation' + (n.diagnosis ? ': ' + n.diagnosis : ''),
+              sub: n.dateText + (n.doctorName ? ' · ' + n.doctorName : ''),
+              go: "ppGo('tab-pat-records'); ppLoadRecords();" });
+  }
+  ((h.appointments && h.appointments.past) || []).slice(0, 3).forEach(function (x) {
+    if (!/cancel/i.test(x.status || '')) return;
+    ev.push({ ms: ppMs(x.date), icon: 'fa-calendar-xmark', tone: '',
+              title: 'Appointment cancelled', sub: x.dateText + ' · ' + x.doctorName });
+  });
+  ev.sort(function (a, b) { return b.ms - a.ms; });
+  ev = ev.slice(0, 6);
+
+  var body = ev.length
+    ? '<div class="pp-tl">' + ev.map(function (e) {
+        var inner = '<div class="pp-tl-title">' + ppEscHtml(e.title) + '</div>' +
+                    '<div class="pp-tl-sub">' + ppEscHtml(e.sub) + '</div>';
+        return '<div class="pp-tl-item"><span class="pp-tl-dot ' + e.tone + '"><i class="fa-solid ' + e.icon + '"></i></span>' +
+          (e.go ? '<button type="button" class="pp-tl-link" onclick="' + e.go + '">' + inner + '</button>'
+                : inner) + '</div>';
+      }).join('') + '</div>'
+    : '<div class="pp-empty">Nothing yet. Your visits, reports and bookings will appear here.</div>';
+
+  return '<div class="pp-card"><h6><i class="fa-solid fa-clock-rotate-left" style="color:var(--accent-fg);"></i> Recent activity</h6>' +
+    body + '</div>';
 }
 
 /**
@@ -732,69 +1104,6 @@ function ppRenderBanner(h) {
     }).join('') + '</div>');
 }
 
-function ppCardAppointments(h) {
-  var a = h.appointments;
-  var body = '';
-
-  if (a.upcoming.length) {
-    body += a.upcoming.slice(0, 3).map(function (x) {
-      return '<div class="pp-tile mb-2">' +
-        '<div class="d-flex justify-content-between align-items-start gap-2">' +
-          '<div><div class="pp-val">' + ppEscHtml(x.dateText) + '</div>' +
-          '<div class="pp-note">' + ppEscHtml(x.time) + ' · ' +
-            ppEscHtml(x.doctorName) + '</div>' +
-          '<div class="pp-note">' + ppEscHtml(x.purpose) + '</div></div>' +
-          '<button class="btn btn-sm btn-outline-secondary"' +
-            ' onclick="ppCancel(\'' + ppEscHtml(x.apptId) + '\')">Cancel</button>' +
-        '</div></div>';
-    }).join('');
-  } else {
-    body += '<div class="pp-empty mb-3">You have no appointment booked.</div>';
-  }
-
-  // THE REVIEW DATE THE DOCTOR SET — from column Z of the consultation, not
-  // parsed out of a free-text plan with a keyword search, which is what the
-  // old portal did and why it so often read "See EMR Plan".
-  //
-  // It leads the card rather than sitting in a row underneath the booked
-  // appointments. It is the clinic telling the patient to come back, and a
-  // patient who has not yet booked has nothing above it to read — so a row
-  // below an empty list was the one place it could not be seen.
-  if (h.review) {
-    var overdue = h.review.overdue;
-    body = '<div class="pp-tile mb-3" style="border-color:' +
-        (overdue ? 'var(--danger-fg)' : 'var(--accent-purple)') + ';">' +
-        '<span class="pp-lbl">' +
-          (overdue ? 'Your review was due' : 'Your doctor asked you to come back on') +
-        '</span>' +
-        '<span class="pp-val">' +
-          ppEscHtml(h.review.text) + '</span>' +
-        '<div class="pp-note">' +
-          (h.review.setBy ? 'set by ' + ppEscHtml(h.review.setBy) : '') +
-          (h.review.setOn ? ' on ' + ppEscHtml(h.review.setOn) : '') +
-        '</div>' +
-        (h.review.date
-          ? '<button class="btn btn-sm btn-outline-secondary mt-2" ' +
-            'onclick="ppBookForReview(\'' + ppEscHtml(h.review.date) + '\')">' +
-            '<i class="fa-solid fa-calendar-plus me-1"></i>Book for this date</button>'
-          : '') +
-      '</div>' + body;
-  }
-  if (a.lastVisit) {
-    body += '<div class="pp-row"><span class="pp-lbl mb-0">Last visit</span>' +
-      '<span class="pp-val pp-val-sm">' + ppEscHtml(a.lastVisit) + '</span></div>';
-  }
-
-  return '<div class="pp-card d-flex flex-column">' +
-    '<h6><i class="fa-regular fa-calendar" style="color:var(--info-fg);"></i> Appointments</h6>' +
-    '<div class="flex-grow-1">' + body + '</div>' +
-    '<button class="btn btn-sm w-100 text-white fw-bold mt-3 on-accent" ' +
-      'style="background-color: var(--accent-purple); border-radius: 9px;" ' +
-      'onclick="ppGo(\'tab-pat-appt\'); ppInitBooking();">' +
-      '<i class="fa-solid fa-calendar-plus me-1"></i> Book an appointment</button>' +
-    '</div>';
-}
-
 function ppCardMeds(h) {
   var m = h.medications;
   var body;
@@ -825,69 +1134,6 @@ function ppCardMeds(h) {
         (m.prescriber ? ', ' + ppEscHtml(m.prescriber) : '') + '.<br>' +
         'If your doctor has changed anything since, follow what they told you.</div>'
       : '') +
-    '</div>';
-}
-
-function ppCardVitals(h) {
-  var v = h.vitals;
-  var body;
-
-  if (!v) {
-    body = '<div class="pp-empty">No vitals recorded yet. They are measured at ' +
-           'your next visit.</div>';
-  } else {
-    var tiles = [
-      ['BP', v.vitals.bp, 'mmHg'],
-      ['Pulse', v.vitals.pulse, '/min'],
-      ['SpO₂', v.vitals.spo2, '%'],
-      ['Temp', v.vitals.temp, ''],
-      ['Weight', v.vitals.weight, 'kg'],
-      ['BMI', v.vitals.bmi, '']
-    ].filter(function (t) {
-      return t[1] !== null && t[1] !== undefined && String(t[1]) !== '';
-    });
-
-    body = tiles.length
-      ? '<div class="row g-2">' + tiles.map(function (t) {
-          return '<div class="col-4"><div class="pp-tile">' +
-            '<span class="pp-lbl">' + t[0] + '</span>' +
-            '<span class="pp-val">' + ppEscHtml(t[1]) +
-            (t[2] ? '<span class="pp-note"> ' + t[2] + '</span>' : '') +
-            '</span></div></div>';
-        }).join('') + '</div>'
-      : '<div class="pp-empty">No vitals recorded yet.</div>';
-  }
-
-  return '<div class="pp-card d-flex flex-column">' +
-    '<h6><i class="fa-solid fa-heart-pulse" style="color:var(--danger-fg);"></i> Last vitals</h6>' +
-    '<div class="flex-grow-1">' + body + '</div>' +
-    (v ? '<div class="pp-note mt-3">Taken at your ' + ppEscHtml(v.source) + '.</div>' : '') +
-    '<button class="btn btn-sm btn-outline-secondary w-100 mt-2" ' +
-      'onclick="ppGo(\'tab-pat-records\'); ppLoadRecords();">See my records</button>' +
-    '</div>';
-}
-
-function ppCardLabs(h) {
-  var orders = h.labs.orders || [];
-  var body = orders.length
-    ? orders.map(function (o) {
-        return '<div class="pp-row align-items-start">' +
-          '<div><div class="pp-val pp-val-sm">' +
-            ppEscHtml(o.testNames || 'Investigation') + '</div>' +
-            '<div class="pp-note">' + ppEscHtml(o.date) + '</div></div>' +
-          (o.abnormal
-            ? '<span class="pp-pill pp-warn">' + o.abnormal + ' to discuss</span>'
-            : '<span class="pp-pill pp-ok">normal</span>') +
-          '</div>';
-      }).join('')
-    : '<div class="pp-empty">No reports released yet. A result appears here ' +
-      'once the laboratory has verified it.</div>';
-
-  return '<div class="pp-card d-flex flex-column">' +
-    '<h6><i class="fa-solid fa-flask-vial" style="color:var(--info-fg);"></i> Reports</h6>' +
-    '<div class="flex-grow-1">' + body + '</div>' +
-    '<button class="btn btn-sm btn-outline-secondary w-100 mt-3" ' +
-      'onclick="ppGo(\'tab-pat-meds\'); ppLoadReports();">See all my reports</button>' +
     '</div>';
 }
 
@@ -1290,6 +1536,7 @@ if (window.onThemeChange) {
 
 function ppInitBooking() {
   ppRenderDays();
+  ppSetStep(PPState.step || 1);
   if (PPState.doctors.length) { ppRenderDoctors(); return; }
 
   ppSet('pp-doctors', '<span class="pp-note"><i class="fa-solid fa-circle-notch fa-spin me-2"></i>Loading…</span>');
@@ -1323,20 +1570,23 @@ function ppRenderDoctors() {
     return;
   }
   ppSet('pp-doctors', PPState.doctors.map(function (d) {
-    var sel = (PPState.pick.doctorId === d.doctorId) ? ' sel' : '';
-    return '<div class="pp-doc' + sel + '" onclick="ppPickDoctor(\'' +
-        ppEscHtml(d.doctorId) + '\')">' +
-      '<div class="pp-val pp-val-sm">' + ppEscHtml(d.name) + '</div>' +
-      (d.specialty ? '<div class="pp-note">' + ppEscHtml(d.specialty) + '</div>' : '') +
-      // The soonest each doctor can see them, so the patient does not have to
-      // click through every name to find out who is free this week.
-      (d.nextFree
-        ? '<div class="pp-note mt-1"><i class="fa-regular fa-clock me-1"></i>' +
-          'Next free ' + ppEscHtml(d.nextFreeText) + ' at ' +
-          ppEscHtml(d.nextFreeTime) + '</div>'
-        : '<div class="pp-note mt-1" style="color:var(--warning-fg);">' +
-          'Nothing free in the next ' + (PPState.horizonDays || 7) + ' days</div>') +
-      '</div>';
+    var sel = (PPState.pick.doctorId === d.doctorId);
+    var initials = String(d.name || '?').replace(/^Dr\.?\s*/i, '').split(/\s+/)
+      .map(function (w) { return w.charAt(0); }).join('').slice(0, 2).toUpperCase();
+    return '<button type="button" class="pp-doc' + (sel ? ' sel' : '') + '" aria-pressed="' + sel + '"' +
+        ' onclick="ppPickDoctor(\'' + ppEscHtml(d.doctorId) + '\')">' +
+      '<span class="pp-doc-av" aria-hidden="true">' + ppEscHtml(initials) + '</span>' +
+      '<span class="d-block">' +
+        '<span class="pp-val pp-val-sm d-block">' + ppEscHtml(d.name) + '</span>' +
+        (d.specialty ? '<span class="pp-note d-block">' + ppEscHtml(d.specialty) + '</span>' : '') +
+        // The soonest each doctor can see them, so the patient does not have
+        // to open every name to find out who is free this week.
+        (d.nextFree
+          ? '<span class="pp-note d-block mt-1"><i class="fa-regular fa-clock me-1"></i>' +
+            'Next free ' + ppEscHtml(d.nextFreeText) + ' at ' + ppEscHtml(d.nextFreeTime) + '</span>'
+          : '<span class="pp-note d-block mt-1" style="color:var(--warning-fg);">' +
+            'Nothing free in the next ' + (PPState.horizonDays || 7) + ' days</span>') +
+      '</span></button>';
   }).join(''));
 }
 
@@ -1369,6 +1619,8 @@ function ppBookForReview(iso) {
     PPState.pick.date = iso;
     ppRenderDays();
   }
+  ppSetStep(PPState.pick.doctorId ? (withinRange ? 3 : 2) : 1);
+  if (withinRange && PPState.pick.doctorId) ppLoadSlots();
 }
 window.ppBookForReview = ppBookForReview;
 
@@ -1383,14 +1635,26 @@ function ppRenderDays() {
     var iso = d.getFullYear() + '-' +
               ('0' + (d.getMonth() + 1)).slice(-2) + '-' +
               ('0' + d.getDate()).slice(-2);
-    var sel = (PPState.pick.date === iso) ? ' sel' : '';
-    html += '<div class="pp-day' + sel + '" onclick="ppPickDate(\'' + iso + '\')">' +
+    var sel = (PPState.pick.date === iso);
+    html += '<button type="button" class="pp-day' + (sel ? ' sel' : '') + '" aria-pressed="' + sel + '"' +
+      ' aria-label="' + d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) + '"' +
+      ' onclick="ppPickDate(\'' + iso + '\')">' +
       '<small>' + (i === 0 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' })) +
-      '</small><strong>' + d.getDate() + '</strong></div>';
+      '</small><strong>' + d.getDate() + '</strong><small>' +
+      d.toLocaleDateString('en-GB', { month: 'short' }) + '</small></button>';
   }
-  host.innerHTML = html +
-    '<div class="pp-note w-100 mt-2">Appointments open ' + days + ' days ahead, ' +
-    'and one a day can be booked here. Telephone the clinic for anything else.</div>';
+  host.innerHTML = html;
+  var note = ppEl('pp-days-note');
+  if (!note) {
+    note = document.createElement('div');
+    note.id = 'pp-days-note';
+    note.className = 'pp-note mt-2';
+    host.parentNode.insertBefore(note, host.nextSibling);
+  }
+  note.textContent = 'Appointments open ' + days + ' days ahead, and one a day can be booked here. ' +
+                     'Telephone the clinic for anything else.';
+  var next = ppEl('pp-step2-next');
+  if (next) next.disabled = !PPState.pick.date;
 }
 
 function ppPickDoctor(id) {
@@ -1400,12 +1664,13 @@ function ppPickDoctor(id) {
   PPState.pick.doctorName = d ? d.name : '';
   PPState.pick.time24 = '';
   PPState.pick.time12 = '';
-  // Jump straight to the day that doctor is actually free, so the commonest
-  // case takes one tap instead of hunting through the week.
+  // The day that doctor is actually free is chosen for them, so the
+  // commonest case is one more tap. They still see it on step 2.
   if (d && d.nextFree && !PPState.pick.date) PPState.pick.date = d.nextFree;
   ppRenderDoctors();
   ppRenderDays();
   ppLoadSlots();
+  ppSetStep(2);
 }
 window.ppPickDoctor = ppPickDoctor;
 
@@ -1418,6 +1683,7 @@ function ppPickDate(iso) {
   if (any) any.value = iso;
   ppRenderDays();
   ppLoadSlots();
+  if (PPState.pick.doctorId) ppSetStep(3);
 }
 window.ppPickDate = ppPickDate;
 
@@ -1440,12 +1706,12 @@ function ppLoadSlots() {
       }
       if (!res.slots.length) {
         ppSet('pp-slots', '<div class="pp-empty">' +
-          ppEscHtml(res.message || 'Nothing free on this day.') + '</div>');
+          ppEscHtml(res.message || 'Nothing free on this day.') +
+          ' <button type="button" class="btn btn-link btn-sm p-0 align-baseline" onclick="ppSetStep(2)">Pick another day</button></div>');
         return;
       }
       // Grouped by the doctor's own session labels — "Morning", "Evening" —
-      // which come from their published schedule rather than from a fixed
-      // list of hours this file would have to keep in step with it.
+      // which come from their published schedule.
       var groups = {}, order = [];
       res.slots.forEach(function (s) {
         var k = s.session || 'Available';
@@ -1455,10 +1721,10 @@ function ppLoadSlots() {
       ppSet('pp-slots', order.map(function (k) {
         return '<div class="mb-3"><div class="pp-lbl">' + ppEscHtml(k) + '</div>' +
           '<div class="pp-slot-grid">' + groups[k].map(function (s) {
-            var sel = (PPState.pick.time24 === s.time24) ? ' sel' : '';
-            return '<div class="pp-slot' + sel + '" onclick="ppPickSlot(\'' +
-              ppEscHtml(s.time24) + '\',\'' + ppEscHtml(s.time12) + '\')">' +
-              ppEscHtml(s.time12) + '</div>';
+            var sel = (PPState.pick.time24 === s.time24);
+            return '<button type="button" class="pp-slot' + (sel ? ' sel' : '') + '" aria-pressed="' + sel + '"' +
+              ' onclick="ppPickSlot(\'' + ppEscHtml(s.time24) + '\',\'' + ppEscHtml(s.time12) + '\')">' +
+              ppEscHtml(s.time12) + '</button>';
           }).join('') + '</div></div>';
       }).join(''));
     })
@@ -1473,7 +1739,10 @@ function ppPickSlot(t24, t12) {
   PPState.pick.time24 = t24;
   PPState.pick.time12 = t12;
   ppLoadSlotsHighlight();
-  ppBookButton();
+  ppSetStep(3, true);
+  // The next thing to do is confirm, so that is where the keyboard goes.
+  var b = ppEl('pp-book-btn');
+  if (b && !b.disabled) b.focus();
 }
 window.ppPickSlot = ppPickSlot;
 
@@ -1481,22 +1750,78 @@ window.ppPickSlot = ppPickSlot;
 function ppLoadSlotsHighlight() {
   Array.prototype.forEach.call(document.querySelectorAll('#pp-slots .pp-slot'),
     function (el) {
-      el.classList.toggle('sel', el.textContent.trim() === PPState.pick.time12);
+      var on = el.textContent.trim() === PPState.pick.time12;
+      el.classList.toggle('sel', on);
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
 }
 
 function ppBookButton() {
   var b = ppEl('pp-book-btn');
-  if (!b) return;
   var p = PPState.pick;
-  if (p.doctorId && p.date && p.time24) {
-    b.disabled = false;
-    b.innerHTML = 'Confirm ' + ppEscHtml(p.time12) + ' with ' + ppEscHtml(p.doctorName);
-  } else {
-    b.disabled = true;
-    b.innerHTML = p.doctorId ? 'Select a time' : 'Select a doctor';
+  if (b) {
+    if (p.doctorId && p.date && p.time24) {
+      b.disabled = false;
+      b.innerHTML = '<i class="fa-solid fa-check me-1"></i>Confirm booking';
+    } else {
+      b.disabled = true;
+      b.innerHTML = !p.doctorId ? 'Select a doctor' : (!p.date ? 'Select a date' : 'Select a time');
+    }
   }
+  ppRenderSummary();
 }
+
+/** The summary bar: what is about to be booked, always on screen. */
+function ppRenderSummary() {
+  var p = PPState.pick;
+  var put = function (id, text) {
+    var el = ppEl(id);
+    if (!el) return;
+    el.textContent = text || 'Not chosen';
+    el.classList.toggle('empty', !text);
+  };
+  var dateText = '';
+  if (p.date) {
+    var d = new Date(p.date + 'T00:00:00');
+    dateText = isNaN(d.getTime()) ? p.date
+      : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  put('pp-sum-doc', p.doctorName);
+  put('pp-sum-date', dateText);
+  put('pp-sum-time', p.time12);
+}
+
+/**
+ * One step on screen at a time. A later step opens only once the one
+ * before it has an answer; an earlier one can always be revisited.
+ */
+function ppSetStep(n, keepFocus) {
+  var p = PPState.pick;
+  if (n >= 2 && !p.doctorId) n = 1;
+  if (n >= 3 && !p.date) n = 2;
+  PPState.step = n;
+  Array.prototype.forEach.call(document.querySelectorAll('#tab-pat-appt .pp-step-panel'), function (el) {
+    el.hidden = (+el.dataset.step !== n);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#pp-steps button'), function (b) {
+    var k = +b.dataset.step;
+    var done = (k === 1 && p.doctorId) || (k === 2 && p.date) || (k === 3 && p.time24);
+    b.classList.toggle('done', !!done && k !== n);
+    b.disabled = (k === 2 && !p.doctorId) || (k === 3 && (!p.doctorId || !p.date));
+    if (k === n) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+  });
+  ppBookButton();
+  // Focus follows the step, so the keyboard lands where the next choice is.
+  if (keepFocus) return;
+  setTimeout(function () {
+    var panel = document.querySelector('#tab-pat-appt .pp-step-panel[data-step="' + n + '"]');
+    if (!panel) return;
+    var f = panel.querySelector('.sel') || panel.querySelector('button:not([disabled]), input, select');
+    if (f && document.activeElement && document.activeElement.closest &&
+        document.activeElement.closest('#tab-pat-appt')) f.focus();
+  }, 30);
+}
+window.ppSetStep = ppSetStep;
 
 function ppBook() {
   var p = PPState.pick;
@@ -1522,6 +1847,7 @@ function ppBook() {
       PPState.pick.time12 = '';
       ppToast(res.message, true);
       ppLoadSlots();
+      ppSetStep(1);
       // The home screen's appointment card is now out of date.
       ppLoadHome(true);
     })
@@ -1597,92 +1923,155 @@ window.ppLoadRecords = ppLoadRecords;
 function ppRenderRecords() {
   var r = PPState.records;
   if (!r) return;
-  var html = '';
-
-  if (r.admissions && r.admissions.length) {
-    html += '<div class="pp-sec-head">Hospital stays' +
-            '<span class="pp-sec-count">' + r.admissions.length + '</span></div>';
-    html += '<div class="pp-cardgrid">' + r.admissions.map(function (a, i) {
-      var id = 'pp-adm-' + i;
-      return '<div class="pp-card mb-3">' +
-        '<div class="d-flex justify-content-between align-items-start gap-2">' +
-          '<div><div class="pp-val">' + ppEscHtml(a.diagnosis || 'Admission') + '</div>' +
-            '<div class="pp-note">' + ppEscHtml(a.admittedText) +
-            (a.stillAdmitted ? ' → still in hospital'
-                             : ' → ' + ppEscHtml(a.dischargedText)) +
-            (a.ward ? ' · ' + ppEscHtml(a.ward) : '') +
-            (a.consultant ? ' · ' + ppEscHtml(a.consultant) : '') + '</div></div>' +
-          '<span class="pp-pill ' + (a.summaryReady ? 'pp-ok' : 'pp-warn') + '">' +
-            (a.summaryReady ? 'summary ready' : 'being prepared') + '</span>' +
-        '</div>' +
-        (a.summaryReady
-          ? '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
-            '<i class="fa-solid fa-chevron-down me-1"></i>Read my discharge summary</button>' +
-            '<div id="' + id + '" class="mt-3" style="display:none;">' +
-              a.sections.map(function (s) {
-                return '<div class="mb-3"><div class="pp-lbl">' + ppEscHtml(s.title) +
-                  '</div><div class="pp-body pp-body-wrap">' +
-                  ppEscHtml(s.text) + '</div></div>';
-              }).join('') +
-              '<div class="pp-note">' + ppEscHtml(a.summaryNote) + '</div>' +
-            '</div>'
-          : '<div class="pp-note mt-3">' + ppEscHtml(a.summaryNote) + '</div>') +
-        '</div>';
-    }).join('') + '</div>';
+  var cons = r.consultations || [], adms = r.admissions || [];
+  if (!cons.length && !adms.length) {
+    ppSet('pp-records', '<div class="pp-card"><div class="pp-empty">' +
+      ppEscHtml(r.message || 'Nothing recorded yet.') + '</div></div>');
+    return;
   }
 
-  if (r.consultations && r.consultations.length) {
-    html += '<div class="pp-sec-head">Consultations' +
-            '<span class="pp-sec-count">' + r.consultations.length + '</span></div>';
-    html += '<div class="pp-cardgrid">' + r.consultations.map(function (c, i) {
-      var id = 'pp-con-' + i;
-      var v = c.vitals || {};
-      var bits = [];
-      if (v.sysBp && v.diaBp) bits.push('BP ' + v.sysBp + '/' + v.diaBp);
-      if (v.pulse) bits.push('Pulse ' + v.pulse);
-      if (v.spo2) bits.push('SpO₂ ' + v.spo2 + '%');
-      if (v.weight) bits.push(v.weight + ' kg');
+  // The doctor list (from booking) knows each doctor's specialty; the
+  // consultation record carries only the name. Fetched once, quietly.
+  var specialtyOf = {};
+  (PPState.doctors || []).forEach(function (d) { specialtyOf[String(d.name || '').toLowerCase()] = d.specialty; });
+  if (!PPState.doctors.length && !PPState.doctorsAsked) {
+    PPState.doctorsAsked = true;
+    google.script.run.withSuccessHandler(function (res) {
+      if (res && res.success && res.doctors && res.doctors.length) {
+        PPState.doctors = res.doctors;
+        if (res.horizonDays) PPState.horizonDays = res.horizonDays;
+        if (PPState.records) ppRenderRecords();
+      }
+    }).withFailureHandler(function () {}).portalBookableDoctors(window.sessionToken);
+  }
 
-      return '<div class="pp-card mb-3">' +
-        '<div class="d-flex justify-content-between align-items-start gap-2">' +
-          '<div><div class="pp-val">' + ppEscHtml(c.diagnosis || 'Consultation') + '</div>' +
-            '<div class="pp-note">' + ppEscHtml(c.dateText) +
-            (c.doctorName ? ' · ' + ppEscHtml(c.doctorName) : '') + '</div></div>' +
-          (c.meds.length ? '<span class="pp-pill pp-info">' + c.meds.length +
-                           ' medicine' + (c.meds.length === 1 ? '' : 's') + '</span>' : '') +
-        '</div>' +
-        '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
-          '<i class="fa-solid fa-chevron-down me-1"></i>See what was recorded</button>' +
-        '<div id="' + id + '" class="mt-3" style="display:none;">' +
-          (bits.length ? '<div class="mb-2"><div class="pp-lbl">Vitals that day</div>' +
-            '<div class="pp-body">' +
-            ppEscHtml(bits.join(' · ')) + '</div></div>' : '') +
-          (c.complaints ? '<div class="mb-2"><div class="pp-lbl">What you came with</div>' +
-            '<div class="pp-body pp-body-wrap">' +
-            ppEscHtml(c.complaints) + '</div></div>' : '') +
-          (c.meds.length ? '<div class="mb-2"><div class="pp-lbl">Prescribed</div>' +
-            c.meds.map(function (m) {
-              return '<div class="pp-body">• ' +
-                ppEscHtml(m.name) + (m.sig ? ' — ' + ppEscHtml(m.sig) : '') +
-                (m.days ? ' × ' + ppEscHtml(m.days) + ' days' : '') +
-                (m.notes ? ' (' + ppEscHtml(m.notes) + ')' : '') + '</div>';
-            }).join('') + '</div>' : '') +
-          (c.advice ? '<div class="mb-2"><div class="pp-lbl">Advice</div>' +
-            '<div class="pp-body pp-body-wrap">' +
-            ppEscHtml(c.advice) + '</div></div>' : '') +
-          (c.reviewDate ? '<div><div class="pp-lbl">Come back on</div>' +
-            '<div class="pp-body">' +
-            ppEscHtml(c.reviewDate) + '</div></div>' : '') +
+  // ONE TIMELINE. A consultation, the prescription written at it, and a
+  // hospital stay are each an event; a prescription is its own entry so a
+  // patient looking for "what was I given in June" finds it without opening
+  // every visit.
+  var events = [];
+  cons.forEach(function (c, i) {
+    var ms = ppMs(c.dateText);
+    events.push({ kind: 'visit', ms: ms, i: i, c: c });
+    if (c.meds && c.meds.length) events.push({ kind: 'rx', ms: ms - 1, i: i, c: c });
+  });
+  adms.forEach(function (a, i) { events.push({ kind: 'stay', ms: ppMs(a.admittedText), i: i, a: a }); });
+  events.sort(function (x, y) { return y.ms - x.ms; });
+
+  var F = PPState.recordsFilter || 'all';
+  var count = { all: events.length, visit: 0, rx: 0, stay: 0 };
+  events.forEach(function (e) { count[e.kind]++; });
+  var shown = events.filter(function (e) { return F === 'all' || e.kind === F; });
+
+  var seg = function (key, label) {
+    return '<button type="button" aria-pressed="' + (F === key) + '" onclick="ppRecordsFilter(\'' + key + '\')">' +
+      label + ' <span class="pp-sec-count">' + count[key] + '</span></button>';
+  };
+  var html = '<div class="pp-filterbar mb-3"><div class="pp-seg" role="group" aria-label="Show">' +
+    seg('all', 'Everything') + seg('visit', 'Visits') + seg('rx', 'Prescriptions') + seg('stay', 'Hospital stays') +
+    '</div></div>';
+
+  var vitalsChips = function (v) {
+    v = v || {};
+    var bits = [];
+    if (v.sysBp && v.diaBp) bits.push(['BP', v.sysBp + '/' + v.diaBp]);
+    if (v.pulse) bits.push(['Pulse', v.pulse]);
+    if (v.spo2) bits.push(['SpO₂', v.spo2 + '%']);
+    if (v.temp) bits.push(['Temp', v.temp]);
+    if (v.weight) bits.push(['Weight', v.weight + ' kg']);
+    return bits.length ? '<div class="pp-chipset mt-2">' + bits.map(function (b) {
+      return '<span class="pp-chip">' + b[0] + ' <b>' + ppEscHtml(b[1]) + '</b></span>';
+    }).join('') + '</div>' : '';
+  };
+
+  var month = '';
+  html += '<div class="pp-tl">' + shown.map(function (e) {
+    var head = '';
+    var m = e.ms ? new Date(e.ms).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : '';
+    if (m && m !== month) { month = m; head = '<div class="pp-tl-month">' + ppEscHtml(m) + '</div>'; }
+
+    if (e.kind === 'visit') {
+      var c = e.c, id = 'pp-con-' + e.i;
+      var spec = specialtyOf[String(c.doctorName || '').toLowerCase()] || '';
+      return head + '<div class="pp-tl-item"><span class="pp-tl-dot info"><i class="fa-solid fa-stethoscope"></i></span>' +
+        '<div class="pp-event">' +
+          '<div class="pp-event-head"><div>' +
+            '<div class="pp-tl-when">' + ppEscHtml(c.dateText) + '</div>' +
+            '<div class="pp-tl-title">' + ppEscHtml(c.diagnosis || 'Consultation') + '</div>' +
+            '<div class="pp-tl-sub">' + ppEscHtml(c.doctorName || 'The clinic') + (spec ? ' · ' + ppEscHtml(spec) : '') + '</div>' +
+          '</div>' +
+          (c.meds.length ? '<span class="pp-pill pp-info">' + c.meds.length + ' medicine' + (c.meds.length === 1 ? '' : 's') + '</span>' : '') +
+          '</div>' +
+          (c.complaints ? '<div class="pp-body mt-2"><span class="pp-lbl d-inline me-1">Came with</span>' + ppEscHtml(c.complaints) + '</div>' : '') +
+          vitalsChips(c.vitals) +
+          '<button type="button" class="pp-btn-ghost btn-sm mt-3" aria-expanded="false" aria-controls="' + id + '" onclick="ppToggle(\'' + id + '\', this)">' +
+            '<i class="fa-solid fa-chevron-down me-1"></i>View details</button>' +
+          '<div id="' + id + '" style="display:none;"><dl class="pp-kv">' +
+            (c.diagnosis ? '<dt>Diagnosis</dt><dd>' + ppEscHtml(c.diagnosis) + '</dd>' : '') +
+            (c.complaints ? '<dt>Chief complaint</dt><dd>' + ppEscHtml(c.complaints) + '</dd>' : '') +
+            (c.meds.length ? '<dt>Prescribed</dt><dd>' + c.meds.map(function (m) {
+              return ppEscHtml(m.name) + (m.sig ? ' — ' + ppEscHtml(m.sig) : '') +
+                     (m.days ? ' × ' + ppEscHtml(m.days) + ' days' : '') + (m.notes ? ' (' + ppEscHtml(m.notes) + ')' : '');
+            }).join('\n') + '</dd>' : '') +
+            (c.advice ? '<dt>Advice</dt><dd>' + ppEscHtml(c.advice) + '</dd>' : '') +
+            (c.reviewDate ? '<dt>Come back on</dt><dd>' + ppEscHtml(c.reviewDate) + '</dd>' : '') +
+          '</dl></div>' +
         '</div></div>';
-    }).join('') + '</div>';
-  }
+    }
 
-  if (!html) {
-    html = '<div class="pp-card"><div class="pp-empty">' +
-      ppEscHtml(r.message || 'Nothing recorded yet.') + '</div></div>';
-  }
+    if (e.kind === 'rx') {
+      var rc = e.c;
+      return head + '<div class="pp-tl-item"><span class="pp-tl-dot accent"><i class="fa-solid fa-prescription"></i></span>' +
+        '<div class="pp-event">' +
+          '<div class="pp-tl-when">' + ppEscHtml(rc.dateText) + '</div>' +
+          '<div class="pp-tl-title">Prescription · ' + rc.meds.length + ' medicine' + (rc.meds.length === 1 ? '' : 's') + '</div>' +
+          '<div class="pp-tl-sub mb-2">by ' + ppEscHtml(rc.doctorName || 'the clinic') + '</div>' +
+          rc.meds.map(function (m) {
+            return '<div class="pp-row align-items-start"><div><div class="pp-val pp-val-sm">' + ppEscHtml(m.name) + '</div>' +
+              (m.notes ? '<div class="pp-note">' + ppEscHtml(m.notes) + '</div>' : '') + '</div>' +
+              '<div class="text-end" style="white-space:nowrap;">' +
+                (m.sig ? '<span class="pp-pill pp-info">' + ppEscHtml(m.sig) + '</span>' : '') +
+                (m.days ? '<div class="pp-note">' + ppEscHtml(m.days) + ' days</div>' : '') +
+              '</div></div>';
+          }).join('') +
+        '</div></div>';
+    }
+
+    var a = e.a, aid = 'pp-adm-' + e.i;
+    return head + '<div class="pp-tl-item"><span class="pp-tl-dot warn"><i class="fa-solid fa-bed-pulse"></i></span>' +
+      '<div class="pp-event">' +
+        '<div class="pp-event-head"><div>' +
+          '<div class="pp-tl-when">' + ppEscHtml(a.admittedText) +
+            (a.stillAdmitted ? ' → still in hospital' : (a.dischargedText ? ' → ' + ppEscHtml(a.dischargedText) : '')) + '</div>' +
+          '<div class="pp-tl-title">Hospital stay' + (a.diagnosis ? ': ' + ppEscHtml(a.diagnosis) : '') + '</div>' +
+          '<div class="pp-tl-sub">' + [a.ward, a.consultant].filter(Boolean).map(ppEscHtml).join(' · ') + '</div>' +
+        '</div>' +
+        '<span class="pp-pill ' + (a.summaryReady ? 'pp-ok' : 'pp-warn') + '">' +
+          (a.summaryReady ? 'summary ready' : 'being prepared') + '</span></div>' +
+        (a.summaryReady
+          ? '<button type="button" class="pp-btn-ghost btn-sm mt-3" aria-expanded="false" aria-controls="' + aid + '" onclick="ppToggle(\'' + aid + '\', this)">' +
+            '<i class="fa-solid fa-chevron-down me-1"></i>Read my discharge summary</button>' +
+            '<div id="' + aid + '" class="mt-3" style="display:none;">' +
+              a.sections.map(function (sct) {
+                return '<div class="mb-3"><div class="pp-lbl">' + ppEscHtml(sct.title) +
+                  '</div><div class="pp-body pp-body-wrap">' + ppEscHtml(sct.text) + '</div></div>';
+              }).join('') +
+              '<div class="pp-note">' + ppEscHtml(a.summaryNote) + '</div></div>'
+          : '<div class="pp-note mt-2">' + ppEscHtml(a.summaryNote) + '</div>') +
+      '</div></div>';
+  }).join('') + '</div>';
+
+  if (!shown.length) html += '<div class="pp-empty">Nothing of this kind on your record.</div>';
   ppSet('pp-records', html);
 }
+
+function ppRecordsFilter(key) {
+  PPState.recordsFilter = key;
+  ppRenderRecords();
+  var b = document.querySelector('#pp-records .pp-seg button[aria-pressed="true"]');
+  if (b) b.focus();
+}
+window.ppRecordsFilter = ppRecordsFilter;
 
 /**
  * Expands or collapses a block, restoring the button's ORIGINAL words.
@@ -1697,6 +2086,7 @@ function ppToggle(id, btn) {
   if (btn && !btn.dataset.shut) btn.dataset.shut = btn.innerHTML;
   var open = (el.style.display !== 'none');
   el.style.display = open ? 'none' : 'block';
+  if (btn) btn.setAttribute('aria-expanded', open ? 'false' : 'true');
   if (btn) {
     btn.innerHTML = open
       ? btn.dataset.shut
@@ -1733,7 +2123,7 @@ function ppLoadReports(force) {
 window.ppLoadReports = ppLoadReports;
 
 /** Everything a patient may type to narrow the list. */
-var PPReports = { filter: '' };
+var PPReports = { filter: '', show: 'all', months: 0 };
 
 /**
  * A flag the laboratory set, read as a tone. NEVER as a meaning.
@@ -1820,7 +2210,15 @@ function ppRenderReports() {
 
   var orders = r.orders;
   var term = String(PPReports.filter || '').toLowerCase().trim();
-  var shown = !term ? orders : orders.filter(function (o) {
+  var cutoff = PPReports.months ? Date.now() - PPReports.months * 30.44 * 86400000 : 0;
+  var flaggedOf = function (o) { return (o.results || []).filter(function (x) { return ppFlagTone(x) !== 'ok'; }); };
+
+  var shown = orders.filter(function (o) {
+    if (cutoff && (o.ms || ppMs(o.date)) < cutoff) return false;
+    var nFlag = flaggedOf(o).length;
+    if (PPReports.show === 'flag' && !nFlag) return false;
+    if (PPReports.show === 'ok' && nFlag) return false;
+    if (!term) return true;
     if (String(o.testNames || '').toLowerCase().indexOf(term) > -1) return true;
     if (String(o.date || '').toLowerCase().indexOf(term) > -1) return true;
     return (o.results || []).some(function (x) {
@@ -1828,32 +2226,43 @@ function ppRenderReports() {
     });
   });
 
-  var toDiscuss = orders.reduce(function (n, o) { return n + (o.abnormal || 0); }, 0);
+  var tests = orders.reduce(function (n, o) { return n + (o.results || []).length; }, 0);
+  var outside = orders.reduce(function (n, o) { return n + flaggedOf(o).length; }, 0);
+  var newest = orders.reduce(function (m, o) { var t = o.ms || ppMs(o.date); return t > m.t ? { t: t, d: o.date } : m; }, { t: 0, d: '' });
 
-  // ---- the head: what is here, and a way to find one thing in it --------
+  // ---- the head: summary, filters, search ------------------------------
+  var seg = function (key, label) {
+    return '<button type="button" aria-pressed="' + (PPReports.show === key) + '" onclick="ppReportsShow(\'' + key + '\')">' + label + '</button>';
+  };
   var head =
     '<div class="pp-card mb-3">' +
-      '<div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">' +
-        '<span class="pp-val">' + orders.length + ' report' + (orders.length === 1 ? '' : 's') +
-          ' released</span>' +
-        (toDiscuss
-          ? '<span class="pp-pill pp-warn">' + toDiscuss + ' value' +
-            (toDiscuss === 1 ? '' : 's') + ' to discuss</span>'
-          : '<span class="pp-pill pp-ok">every value in range</span>') +
+      '<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">' +
+        '<div class="pp-note">Last updated <b>' + ppEscHtml(newest.d || '—') + '</b></div>' +
+        '<div class="pp-note">Values outside the usual range are for your doctor to go through with you.</div>' +
       '</div>' +
-      '<input class="ppr-search" id="pp-rep-search" type="search" ' +
-        'placeholder="Find a test — hba1c, sugar, lipid…" ' +
-        'value="' + ppEscHtml(PPReports.filter) + '">' +
-      (term
-        ? '<div class="pp-note mt-2">' + shown.length + ' of ' + orders.length +
-          ' report(s) mention &ldquo;' + ppEscHtml(term) + '&rdquo;.</div>'
-        : '') +
+      '<div class="pp-rep-summary">' +
+        '<div class="pp-metric"><div class="pp-m-lbl"><i class="fa-solid fa-file-medical"></i>Reports</div><div class="pp-m-val">' + orders.length + '</div></div>' +
+        '<div class="pp-metric"><div class="pp-m-lbl"><i class="fa-solid fa-vials"></i>Tests</div><div class="pp-m-val">' + tests + '</div></div>' +
+        '<div class="pp-metric"><div class="pp-m-lbl"><i class="fa-solid fa-circle-info"></i>Outside range</div><div class="pp-m-val">' + outside +
+          '</div><div class="pp-m-sub">' + (outside ? 'to discuss at your visit' : 'everything in range') + '</div></div>' +
+      '</div>' +
+      '<div class="pp-filterbar">' +
+        '<div class="pp-seg" role="group" aria-label="Show">' + seg('all', 'All') + seg('flag', 'To discuss') + seg('ok', 'All in range') + '</div>' +
+        '<select class="pp-select" aria-label="Period" onchange="ppReportsPeriod(this.value)">' +
+          [[0, 'Any time'], [3, 'Last 3 months'], [6, 'Last 6 months'], [12, 'Last 12 months']].map(function (o) {
+            return '<option value="' + o[0] + '"' + (PPReports.months === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+          }).join('') + '</select>' +
+        '<input class="ppr-search flex-grow-1" style="width:auto;min-width:200px;" id="pp-rep-search" type="search" ' +
+          'aria-label="Find a test" placeholder="Find a test — hba1c, sugar, lipid…" value="' + ppEscHtml(PPReports.filter) + '">' +
+      '</div>' +
+      ((term || PPReports.show !== 'all' || PPReports.months)
+        ? '<div class="pp-note mt-2">Showing ' + shown.length + ' of ' + orders.length + ' report(s).</div>' : '') +
     '</div>';
 
   if (!shown.length) {
     ppSet('pp-reports', head + '<div class="pp-card"><div class="pp-empty">' +
-      'Nothing here mentions &ldquo;' + ppEscHtml(term) + '&rdquo;. Clear the box to see ' +
-      'every report.</div></div>');
+      'No report matches these filters. ' +
+      '<button type="button" class="btn btn-link btn-sm p-0 align-baseline" onclick="ppReportsReset()">Show every report</button></div></div>');
     ppWireReportSearch();
     return;
   }
@@ -1861,14 +2270,26 @@ function ppRenderReports() {
   var body = shown.map(function (o) {
     var i = orders.indexOf(o);
     var id = 'pp-rep-' + i;
+    var flagged = flaggedOf(o);
+    var critical = flagged.filter(function (x) { return ppFlagTone(x) === 'bad'; });
+    var verified = !!o.verifiedBy || /VERIF|REPORT|COMPLET|RELEAS/i.test(String(o.status || ''));
+    var n = (o.results || []).length;
 
-    // ---- the flagged values, ON the card -------------------------------
-    var flagged = (o.results || []).filter(function (x) { return ppFlagTone(x) !== 'ok'; });
+    // A mild abnormality is a note, not an alarm. Only a critical value —
+    // one the laboratory has marked for a call — is shown in red.
+    var summary = critical.length
+      ? '<div class="pp-note-urgent"><i class="fa-solid fa-phone me-1"></i>' +
+        'The laboratory marked ' + (critical.length === 1 ? 'a value' : critical.length + ' values') +
+        ' for the clinic to discuss with you promptly. If nobody has called you, please telephone us.</div>'
+      : flagged.length
+        ? '<div class="pp-note-soft"><i class="fa-solid fa-circle-info me-1"></i>' +
+          flagged.length + ' of ' + n + ' value' + (n === 1 ? '' : 's') + ' outside the usual range. ' +
+          'Your doctor will go through ' + (flagged.length === 1 ? 'it' : 'them') + ' with you.</div>'
+        : '';
     var chips = flagged.length
       ? '<div class="ppr-flagged">' + flagged.map(function (x) {
           return '<span class="ppr-chip ' + ppFlagTone(x) + '">' +
-            ppEscHtml(x.parameterName) + ' <b>' + ppEscHtml(x.value) + ' ' +
-            ppEscHtml(x.unit) + '</b></span>';
+            ppEscHtml(x.parameterName) + ' <b>' + ppEscHtml(x.value) + ' ' + ppEscHtml(x.unit) + '</b></span>';
         }).join('') + '</div>'
       : '';
 
@@ -1900,34 +2321,55 @@ function ppRenderReports() {
       '</div>';
     }).join('');
 
-    return '<div class="pp-card mb-3">' +
+    return '<article class="pp-card" aria-label="' + ppEscHtml(o.testNames || 'Investigation') + '">' +
       '<div class="ppr-head">' +
         '<div>' +
           '<div class="ppr-title">' + ppEscHtml(o.testNames || 'Investigation') + '</div>' +
           '<div class="pp-note">' + ppEscHtml(o.date) +
             (o.doctor ? ' &middot; ordered by ' + ppEscHtml(o.doctor) : '') + '</div>' +
         '</div>' +
-        (o.abnormal
-          ? '<span class="pp-pill pp-warn">' + o.abnormal + ' to discuss</span>'
-          : '<span class="pp-pill pp-ok">all normal</span>') +
+        '<div class="d-flex flex-column align-items-end gap-1">' +
+          '<span class="pp-status ' + (verified ? 'verified' : 'released') + '">' +
+            '<i class="fa-solid ' + (verified ? 'fa-circle-check' : 'fa-paper-plane') + '"></i>' +
+            (verified ? 'Verified' : 'Released') + '</span>' +
+          '<span class="pp-note">' + n + ' test' + (n === 1 ? '' : 's') + '</span>' +
+        '</div>' +
       '</div>' +
-      chips +
-      '<button class="btn btn-sm btn-outline-secondary mt-3" onclick="ppToggle(\'' + id + '\', this)">' +
-        '<i class="fa-solid fa-chevron-down me-1"></i>' +
-        (flagged.length ? 'See every value' : 'See the values') +
-        ' (' + (o.results || []).length + ')</button>' +
+      summary + chips +
+      '<button type="button" class="pp-btn-ghost btn-sm mt-3" aria-expanded="false" aria-controls="' + id + '" onclick="ppToggle(\'' + id + '\', this)">' +
+        '<i class="fa-solid fa-chevron-down me-1"></i>See the values (' + n + ')</button>' +
       '<div id="' + id + '" class="mt-2" style="display:none;">' +
         lines +
         '<div class="pp-note mt-2">Verified by the laboratory' +
           (o.verifiedBy ? ' (' + ppEscHtml(o.verifiedBy) + ')' : '') +
           '. Please do not start or stop any medicine on the strength of a ' +
           'number here — bring it to your appointment.</div>' +
-      '</div></div>';
+      '</div></article>';
   }).join('');
 
-  ppSet('pp-reports', head + body);
+  ppSet('pp-reports', head + '<div class="pp-rep-grid">' + body + '</div>');
   ppWireReportSearch();
 }
+
+function ppReportsShow(key) {
+  PPReports.show = key;
+  ppRenderReports();
+  var b = document.querySelector('#pp-reports .pp-seg button[aria-pressed="true"]');
+  if (b) b.focus();
+}
+function ppReportsPeriod(v) {
+  PPReports.months = parseInt(v, 10) || 0;
+  ppRenderReports();
+  var sel = document.querySelector('#pp-reports .pp-select');
+  if (sel) sel.focus();
+}
+function ppReportsReset() {
+  PPReports.filter = ''; PPReports.show = 'all'; PPReports.months = 0;
+  ppRenderReports();
+}
+window.ppReportsShow = ppReportsShow;
+window.ppReportsPeriod = ppReportsPeriod;
+window.ppReportsReset = ppReportsReset;
 
 /**
  * Keeps the caret where it was.
@@ -2192,6 +2634,28 @@ window.ppRaiseRequest = function () {
       channel: 'PORTAL'
     }, ppTok());
 };
+
+/* Arrow keys move between the choices in a booking grid, as they would in
+   any list of options; Enter or Space picks (they are buttons). */
+document.addEventListener('keydown', function (e) {
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].indexOf(e.key) === -1) return;
+  var host = e.target.closest && e.target.closest('[data-pp-roving]');
+  if (!host || e.target.tagName !== 'BUTTON') return;
+  var items = Array.prototype.slice.call(host.querySelectorAll('button:not([disabled])'));
+  var i = items.indexOf(e.target);
+  if (i < 0) return;
+  var cols = 1;
+  if (items.length > 1) {
+    var top = items[0].getBoundingClientRect().top;
+    while (cols < items.length && Math.abs(items[cols].getBoundingClientRect().top - top) < 4) cols++;
+  }
+  var j = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1
+        : e.key === 'ArrowDown' ? i + cols : e.key === 'ArrowUp' ? i - cols
+        : e.key === 'Home' ? 0 : items.length - 1;
+  if (j < 0 || j >= items.length) return;
+  e.preventDefault();
+  items[j].focus();
+});
 
 // The portal loads its screens once, so this runs on first paint and again
 // whenever the profile tab is opened.

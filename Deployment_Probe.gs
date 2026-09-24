@@ -351,6 +351,7 @@ function dpdpConfirmDeploymentAccess(mode, sessionToken) {
  * @return {{severity:string, text:string, fix:string}}
  */
 function depDeploymentFinding() {
+  crescEditorOnly_('depDeploymentFinding', ['dpdp.manage', 'admin.config', 'admin.audit']);
   var p = dep_probeSummary_();
   var att = dep_attestation_();
   var total = p.identified + p.anonymous;
@@ -489,7 +490,8 @@ function depDeploymentFinding() {
 }
 
 /** ADMIN, from the editor. What the probe has seen, in words. */
-function RUN_deploymentEvidence_() {
+function RUN_deploymentEvidence() {
+  crescEditorOnly_('RUN_deploymentEvidence');
   var f = depDeploymentFinding();
   var out = f.severity + ' · Deployment\n\n' + f.text + '\n\nWhat to do:\n' + f.fix;
   Logger.log(out);

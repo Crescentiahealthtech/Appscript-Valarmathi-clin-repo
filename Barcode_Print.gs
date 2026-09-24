@@ -183,6 +183,7 @@ function bcp_patientBarcodeBlock_(patientId, opts) {
  * the Apps Script editor before a print run. Returns the SVG string.
  */
 function previewPatientBarcode(patientId) {
+  crescEditorOnly_('previewPatientBarcode');
   var id = String(patientId || 'LMTVS0001');
   var svg = bcp_code128Svg_(id, { height: 12, moduleWidth: 0.4, fontSize: 3.2 });
   Logger.log(svg ? ('Encoded ' + id + ' in ' + svg.length + ' bytes of SVG.')

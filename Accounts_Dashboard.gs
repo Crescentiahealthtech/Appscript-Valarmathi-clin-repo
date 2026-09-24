@@ -47,10 +47,13 @@ function getFinanceDashboard(scope, periodKey, sessionToken) {
     // --- counter-paid clinical income (source sheets) ---
     var collected = 0, cashRunIn = 0, bankRunIn = 0;
     accd_income_().forEach(function (r) {
-      if (!r.realized || r.net <= 0) return;     // realized == Pay_Status PAID only
+      // What was actually taken: a part-paid bill realises only its paid
+      // share, and a later collection is its own row (acc_labRows_).
+      var amt = (r.realizedAmount === undefined) ? r.net : r.realizedAmount;
+      if (!r.realized || !(amt > 0)) return;
       var d = r.realizedDate || r.billDate, cash = accd_isCash_(r.mode);
-      if (inWin(d)) collected += r.net;
-      if (upto(d)) { cash ? cashRunIn += r.net : bankRunIn += r.net; }
+      if (inWin(d)) collected += amt;
+      if (upto(d)) { cash ? cashRunIn += amt : bankRunIn += amt; }
     });
 
     // --- IP discharge settlements: recognized revenue (cash-basis portion) ---

@@ -51,6 +51,7 @@ const GUARD_ROOTS = [
   'crescActor_',             // RBAC.gs — resolve, may return null
   'crescRequireOwnRecord_',  // RBAC.gs — a patient, their own record only
   'crescEditorOnly_',        // RBAC.gs — the script owner, or an admin's inner call
+  'crescTriggerOnly_',       // RBAC.gs — an installed trigger, or the owner
   'dsx_requireRole_',        // DS_Workflow.gs — the discharge desk
   'dc_validateSession_',     // Doctor_Session_Store.gs — the durable session
   'validateSession_'         // Doctors_Engine.gs — the cache-only original
@@ -200,7 +201,8 @@ const MINTS_OK = ['verifyLogin', 'verifyGoogleLogin', 'verifyMFA'];
 const minting = [];
 for (const [name, fn] of fns) {
   if (name.endsWith('_') || MINTS_OK.indexOf(name) !== -1) continue;
-  if (fn.calls.has('issueSession_')) minting.push(fn.file + ': ' + name);
+  // Editor-only jobs may mint one: crescEditorOnly_ refuses the browser first.
+  if (fn.calls.has('issueSession_') && !fn.calls.has('crescEditorOnly_')) minting.push(fn.file + ': ' + name);
 }
 
 const openCalled = open.filter(o => o.called);
@@ -226,7 +228,7 @@ if (openCalled.length) {
 if (minting.length) {
   console.log('\n=== public functions that mint a session for their caller (fix these) ===');
   minting.sort().forEach(m => console.log(' ' + m));
-  console.log('End the name in _ so google.script.run cannot reach it.');
+  console.log('Start it with crescEditorOnly_(), or end the name in _, so google.script.run cannot use it.');
 }
 
 // Unreachable from the browser is not the same as safe: the deployment is

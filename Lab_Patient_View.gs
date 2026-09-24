@@ -81,12 +81,18 @@ function lpv_resultsFor_(pid, limit) {
     limit = limit || 40;
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    var oSheet = ss.getSheetByName(LAB.ORDERS);
-    if (!oSheet || oSheet.getLastRow() < 2) {
-      return { success: true, patientId: pid, orders: [], message: '' };
-    }
+    // Outside labs' reports (External_Lab.gs), shown beside the clinic's own.
+    var external = [];
+    try { if (typeof exl_ordersFor_ === 'function') external = exl_ordersFor_(pid); } catch (e) {}
+    var finish = function (internal) {
+      var all = internal.concat(external).sort(function (a, b) { return (b.ms || 0) - (a.ms || 0); });
+      return { success: true, patientId: pid, orders: all.slice(0, limit), message: '' };
+    };
 
-    var oMap = labHeaderMap(oSheet);
+    var oSheet = ss.getSheetByName(LAB.ORDERS);
+    if (!oSheet || oSheet.getLastRow() < 2) return finish([]);
+
+    var oMap = labHeaderMap_(oSheet);
     var oData = oSheet.getRange(2, 1, oSheet.getLastRow() - 1, oSheet.getLastColumn()).getValues();
 
     var byOrder = {}, ids = [];
@@ -98,6 +104,7 @@ function lpv_resultsFor_(pid, limit) {
       byOrder[oid] = {
         orderId: oid,
         date: cresc_formatDate_(r[oMap['CreatedAt']], 'dd-MMM-yyyy'),
+        ms: (typeof cresc_ms_ === 'function') ? (cresc_ms_(r[oMap['CreatedAt']]) || 0) : 0,
         testNames: String(r[oMap['TestNames']] || ''),
         doctor: String(r[oMap['OrderingDoctorName']] || ''),
         source: String(r[oMap['SourceModule']] || ''),
@@ -110,19 +117,19 @@ function lpv_resultsFor_(pid, limit) {
       ids.push(oid);
     });
 
-    if (!ids.length) return { success: true, patientId: pid, orders: [], message: '' };
+    if (!ids.length) return finish([]);
 
     // Newest first, then trim, so the result sheet is only scanned for the
-    // orders that will actually be returned.
-    ids.sort(function (a, b) {
-      return (byOrder[a].date < byOrder[b].date) ? 1 : -1;
-    });
+    // orders that will actually be returned. By timestamp: this used to
+    // compare the "dd-MMM-yyyy" strings, which put 05-Jan-2026 after
+    // 12-Mar-2025.
+    ids.sort(function (a, b) { return (byOrder[b].ms || 0) - (byOrder[a].ms || 0); });
     var keep = {};
     ids.slice(0, limit).forEach(function (id) { keep[id] = true; });
 
     var rSheet = ss.getSheetByName(LAB.RESULTS);
     if (rSheet && rSheet.getLastRow() >= 2) {
-      var rMap = labHeaderMap(rSheet);
+      var rMap = labHeaderMap_(rSheet);
       var rData = rSheet.getRange(2, 1, rSheet.getLastRow() - 1, rSheet.getLastColumn()).getValues();
       rData.forEach(function (r) {
         var oid = String(r[rMap['OrderID']] || '');
@@ -158,7 +165,7 @@ function lpv_resultsFor_(pid, limit) {
                     .map(function (id) { return byOrder[id]; })
                     .filter(function (o) { return o.results.length > 0; });
 
-    return { success: true, patientId: pid, orders: orders, message: '' };
+    return finish(orders);
 
   } catch (err) {
     return { success: false, patientId: pid, orders: [],

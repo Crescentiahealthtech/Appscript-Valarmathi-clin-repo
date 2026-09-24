@@ -5,32 +5,32 @@
   .hd-workspace { background-color: var(--bg-main) !important; color: var(--text-main); }
   .hd-panel { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(var(--shadow-rgb), 0.05); }
 
-  .hd-panel-title { color: var(--accent-fg); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
+  .hd-panel-title { color: var(--accent-fg); font-size: var(--fs-sm); font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 14px; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px;}
   .hd-panel-title:hover { color: var(--accent-purple); }
-  .hd-label { font-size: 0.7rem; color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
+  .hd-label { font-size: var(--fs-2xs); color: var(--text-label); margin-bottom: 4px; font-weight: 600; display: block; }
 
-  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: 0.75rem; padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
+  .hd-input { background-color: var(--bg-input) !important; border: 1px solid var(--border-color) !important; color: var(--text-main) !important; font-size: var(--fs-xs); padding: 0.35rem 0.5rem; border-radius: 4px; transition: 0.2s; width: 100%; }
   .hd-input:focus { border-color: var(--accent-purple) !important; outline: none; box-shadow: 0 0 0 2px var(--accent-glow, rgba(99, 91, 255, 0.2)); }
   .hd-input:disabled { background-color: var(--bg-card) !important; color: var(--text-muted) !important; cursor: not-allowed; opacity: 0.7; }
 
   .table-tight td, .table-tight th { padding: 6px 4px !important; vertical-align: middle; border-bottom: 1px solid var(--border-color); background-color: transparent !important; color: var(--text-main);}
-  .table-tight th { font-size: 0.7rem; color: var(--text-label); text-transform: uppercase; }
+  .table-tight th { font-size: var(--fs-2xs); color: var(--text-label); text-transform: uppercase; }
 
   .bg-abnormal-high { background-color: var(--danger-bg, var(--danger-bg)) !important; border: 1px solid var(--danger) !important; color: var(--danger-fg) !important; }
   .bg-abnormal-low { background-color: var(--info-bg, var(--info-bg)) !important; border: 1px solid var(--info) !important; color: var(--info-fg) !important; }
 
   .dial-trigger { cursor: pointer; text-align: center; font-weight: bold; }
   .dial-trigger:hover { background-color: var(--accent-glow, var(--accent-glow)) !important; }
-  .dial-btn { font-size: 0.75rem; font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
+  .dial-btn { font-size: var(--fs-xs); font-weight: bold; padding: 6px 0; border: 1px solid var(--border-color); color: var(--text-main); background: var(--bg-input);}
   .dial-btn:active { transform: scale(0.95); }
 
   .autocomplete-items { position: absolute; z-index: 1000; background-color: var(--bg-card); border: 1px solid var(--border-color); width: 100%; max-height: 220px; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(var(--shadow-rgb), 0.4); }
-  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
+  .autocomplete-items div { padding: 8px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;}
   .autocomplete-items div strong { color: var(--accent-fg); }
   .autocomplete-items div:hover { background-color: var(--border-hover); }
 
   .wnl-group { background: var(--bg-input); border-radius: 999px; display: inline-flex; border: 1px solid var(--border-color); overflow: hidden; }
-  .wnl-btn { padding: 4px 14px; font-size: 0.65rem; font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
+  .wnl-btn { padding: 4px 14px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; color: var(--text-muted); margin: 0; transition: all 0.2s ease; background: transparent; border: none; text-transform: uppercase; }
   .btn-check:checked + .wnl-btn-success { background-color: var(--success-solid); color: var(--text-on-accent); }
   .btn-check:checked + .wnl-btn-danger { background-color: var(--danger); color: var(--text-on-accent); }
   .wnl-group button.wnl-btn:hover { background-color: var(--surface-hover); color: var(--text-main); }
@@ -42,7 +42,7 @@
   /* ========================================= */
   /* SAFETY BAR — always visible               */
   /* ========================================= */
-  .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.76rem; }
+  .op-safety-bar { border-radius: 8px; padding: 0.5rem 0.85rem; margin-bottom: 0.75rem; font-size: var(--fs-xs); }
   .op-safety-danger { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); }
   .op-safety-warn   { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning-fg); }
   /* The prescription line a safety alert is about. Set by markRxRows(). */
@@ -56,9 +56,9 @@
   /* ========================================= */
   .op-assist { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; }
   .op-assist-sec + .op-assist-sec { margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px solid var(--border-color); }
-  .op-assist-head { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
+  .op-assist-head { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-label); font-weight: 700; margin-bottom: 0.5rem; }
 
-  .op-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: 0.7rem; cursor: pointer; transition: 0.15s; }
+  .op-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 999px; padding: 4px 10px; font-size: var(--fs-2xs); cursor: pointer; transition: 0.15s; }
   .op-chip:hover { border-color: var(--accent-purple); }
   .op-chip .op-chip-add { color: var(--success-fg); font-weight: 700; }
   .op-chip-muted { color: var(--text-muted); }
@@ -69,17 +69,17 @@
      the assist panel that was never reliable, and a dropdown you cannot see is
      indistinguishable from a search that found nothing. */
   .op-assist-results { margin-top: 0.4rem; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; max-height: 260px; overflow-y: auto; background: var(--bg-input); }
-  .op-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
+  .op-assist-hit { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: var(--fs-xs); color: var(--text-main); border-bottom: 1px solid var(--border-color); border-left: 3px solid transparent; }
   .op-assist-hit:last-child { border-bottom: none; }
   .op-assist-hit:hover { background: var(--border-hover); }
-  .op-assist-empty { padding: 8px 10px; font-size: 0.72rem; color: var(--text-muted); }
+  .op-assist-empty { padding: 8px 10px; font-size: var(--fs-xs); color: var(--text-muted); }
 
   /* Kind colours — the same hue identifies a kind in the result list, in the
      "most used" chips and on the preview card. */
   .op-kind-TPL { border-left-color: var(--accent-purple); }
   .op-kind-BND { border-left-color: var(--success); }
   .op-kind-LAB { border-left-color: var(--warning); }
-  .op-tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .op-tag { font-size: var(--fs-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
   .op-tag-TPL { background: var(--accent-glow); color: var(--accent-fg); border: 1px solid var(--accent-purple); }
   .op-tag-BND { background: var(--success-bg); color: var(--success-fg); border: 1px solid var(--success); }
   .op-tag-LAB { background: var(--warning-bg); color: var(--warning-fg); border: 1px solid var(--warning); }
@@ -94,13 +94,13 @@
   .op-scope-SEED     { background: var(--surface-hover); color: var(--text-muted); }
   .op-scope-PRESET   { background: var(--info-bg); color: var(--info-fg); }
 
-  .op-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.73rem; }
+  .op-recall-card { background: var(--bg-input); border: 1px solid var(--border-color); border-left: 3px solid var(--success); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: var(--fs-xs); }
   .op-suggest-strip { display: flex; flex-wrap: wrap; gap: 6px; }
-  .op-evidence { font-size: 0.6rem; color: var(--text-muted); }
-  .op-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; font-weight: 700; cursor: pointer; }
-  .op-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: 0.68rem; cursor: pointer; }
+  .op-evidence { font-size: var(--fs-2xs); color: var(--text-muted); }
+  .op-allergy-chip { background: var(--danger-bg); border: 1px solid var(--danger); color: var(--danger-fg); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); font-weight: 700; cursor: pointer; }
+  .op-allergy-none { background: var(--surface-hover); border: 1px dashed var(--border-color); color: var(--text-muted); border-radius: 999px; padding: 2px 10px; font-size: var(--fs-2xs); cursor: pointer; }
   .op-taper-tag { font-size: 0.55rem; background: var(--warning-bg); color: var(--warning-fg); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
-  .op-peds-hint { font-size: 0.6rem; color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
+  .op-peds-hint { font-size: var(--fs-2xs); color: var(--info-fg); cursor: pointer; margin-top: 2px; display: inline-block; }
 </style>
 
 <div id="emr-workspace-op-consult" class="d-none hd-workspace mt-3 app-view h-100 flex-column px-2">
@@ -131,12 +131,12 @@
            module and searching for the patient by name or number. -->
       <button class="btn btn-outline-info btn-sm py-1 px-2" onclick="crescLabPeek(window.currentPatientId, document.getElementById('hd-pat-name').textContent)" title="This patient's verified lab results, without leaving the consult"><i class="fa-solid fa-flask-vial me-1"></i>Labs</button>
 
-      <span class="ms-auto text-muted small">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></span>
+      <span id="op-draft-status" class="ms-auto text-muted small me-3" title="Unsaved work is kept in this browser for 24 hours"></span><span class="text-muted small">Date: <span id="hd-current-date" class="text-warning fw-bold"></span></span>
     </div>
 
     <!-- Row 2: attribution + actions -->
     <div class="d-flex align-items-center gap-2 flex-wrap">
-      <span class="hd-label m-0" style="font-size:.68rem;">Consulting doctor</span>
+      <span class="hd-label m-0" style="font-size:var(--fs-2xs);">Consulting doctor</span>
       <select id="op-doctor-select" class="form-select form-select-sm text-white-force" style="width: 210px;" onchange="onConsultDoctorChanged()">
         <option value="">Select doctor</option>
       </select>
@@ -231,7 +231,7 @@
 
             <label class="hd-label d-flex justify-content-between align-items-center">
               <span>Clinical summary</span>
-              <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.65rem;"
+              <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:var(--fs-2xs);"
                       onclick="fillReferralSummary()"><i class="fa-solid fa-wand-magic-sparkles"></i> From this consult</button>
             </label>
             <textarea class="hd-input" id="ref-summary" rows="4"
@@ -286,14 +286,14 @@
     <div id="op-assist-dx-section" class="op-assist-sec d-none">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="op-assist-head m-0" id="op-assist-dx-head">Treatment assist</div>
-        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:0.7rem;" id="btn-add-selected" onclick="addSelectedAssist()">Add selected</button>
+        <button class="btn btn-sm btn-success py-0 px-3 d-none" style="font-size:var(--fs-2xs);" id="btn-add-selected" onclick="addSelectedAssist()">Add selected</button>
       </div>
       <div id="op-assist-body"></div>
     </div>
 
     <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top border-secondary">
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveTemplateModal()">Save as template</button>
-      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.65rem;" onclick="openSaveBundleModal()">Save Rx as bundle</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="openSaveTemplateModal()">Save as template</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="openSaveBundleModal()">Save Rx as bundle</button>
     </div>
   </div>
 
@@ -305,7 +305,7 @@
         <div class="mb-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">Chief Complaints</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="addOPDynamicRow('op-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="addOPDynamicRow('op-cc-tbody', 'CC')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="op-cc-tbody"></tbody></table></div>
           <div id="op-workup-hint" class="mt-2"></div>
@@ -313,7 +313,7 @@
         <div class="border-top border-secondary pt-3">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <label class="hd-label m-0 text-uppercase" style="color: var(--text-main);">History / Comorbidities</label>
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;" onclick="addOPDynamicRow('op-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:var(--fs-2xs);" onclick="addOPDynamicRow('op-hx-tbody', 'HX')"><i class="fa-solid fa-plus"></i></button>
           </div>
           <div class="table-responsive" style="overflow: visible;"><table class="table table-borderless table-tight m-0"><tbody id="op-hx-tbody"></tbody></table></div>
         </div>
@@ -429,7 +429,7 @@
             </select>
             <!-- Wrapped the input so dropdowns anchor exactly to the text box -->
             <div class="position-relative w-100">
-                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="clin-diagnosis" oninput="queueDiagnosisAssist()" onchange="onDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();opAddDx();}">
+                <input type="text" class="hd-input fs-6 border-info text-warning" style="padding: 0.5rem;" placeholder="Enter diagnosis, then + to add another..." id="clin-diagnosis" autocomplete="off" onfocus="onOPTemplateType(this, 'DX', true)" oninput="onOPTemplateType(this, 'DX'); queueDiagnosisAssist()" onchange="onDiagnosisChanged()" onkeydown="if(event.key==='Enter'){event.preventDefault();opAddDx();}">
             </div>
             <button type="button" class="btn btn-outline-info" style="padding: 0.35rem 0.8rem;"
                     onclick="opAddDx()" title="Add this as an additional diagnosis">
@@ -575,7 +575,7 @@
       <div class="hd-panel mb-3 py-2">
           <div class="hd-panel-title border-0 m-0 mb-3">Pathology / Lab Orders</div>
           <div class="d-flex flex-column gap-2 mb-3">
-              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:0.75rem;" data-bs-toggle="modal" data-bs-target="#opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
+              <button class="btn btn-outline-info w-100 py-2 fw-bold" style="font-size:var(--fs-xs);" data-bs-toggle="modal" data-bs-target="#opLabRequestModal"><i class="fa-solid fa-flask"></i> Order Labs Now</button>
           </div>
           <label class="hd-label m-0">Advise Future Labs</label>
           <input type="text" class="hd-input" id="op-future-labs" placeholder="e.g., Fasting Sugar...">
@@ -593,7 +593,7 @@
       <div class="hd-panel mb-3 py-2" style="border-color: var(--info) !important;">
         <div class="hd-panel-title d-flex justify-content-between align-items-center m-0 border-0">
             <span class="text-info">External Lab Results</span>
-            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:0.7rem;" onclick="addOPLabResultRow()"><i class="fa-solid fa-plus"></i></button>
+            <button class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:var(--fs-2xs);" onclick="addOPLabResultRow()"><i class="fa-solid fa-plus"></i></button>
         </div>
         <div class="table-responsive mt-2">
             <table class="table table-borderless table-tight m-0">
@@ -629,43 +629,7 @@
      The grid is now built from a table rather than forty hand-written
      divs, so adding a key is one line and the layout cannot drift.
      ═══════════════════════════════════════════════════════════════════ -->
-<div class="modal fade" id="opDialPadModal" tabindex="-1">
-  <div class="modal-dialog modal-sm modal-dialog-centered" style="max-width: 300px;">
-    <div class="modal-content text-white shadow-lg" style="background-color: var(--bg-input); border: 1px solid var(--border-hover);">
-      <div class="modal-body p-3">
-        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-2 mb-2">
-          <h6 class="text-info m-0" style="font-size:0.8rem;" id="op-dial-title">Smart Input</h6>
-          <div class="d-flex gap-1">
-            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:0.7rem;"
-                    title="Delete the last entry" onclick="backspaceOPDial()"><i class="fa-solid fa-delete-left"></i></button>
-            <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.7rem;"
-                    onclick="clearOPDial()"><i class="fa-solid fa-eraser"></i></button>
-          </div>
-        </div>
-
-        <!-- What the field will say. Without this every press was blind. -->
-        <div id="op-dial-display"
-             style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;
-                    padding:.45rem .6rem;margin-bottom:.6rem;min-height:2.1rem;
-                    font-family:monospace;font-size:.95rem;font-weight:700;
-                    color:var(--warning-fg);word-break:break-word;">&nbsp;</div>
-        <div id="op-dial-hint" class="text-muted mb-2" style="font-size:.66rem;min-height:1rem;"></div>
-
-        <div id="op-dial-rx-grid" class="row g-1 mb-2 d-none"></div>
-        <div id="op-dial-dur-grid" class="row g-1 mb-2 d-none"></div>
-
-        <div id="op-dial-taper-host" class="border-top border-secondary pt-2 d-none">
-          <button class="btn btn-outline-warning w-100 py-1 fw-bold" style="font-size:0.7rem;"
-                  onclick="openTaperFromDial()"><i class="fa-solid fa-stairs"></i> Taper Mode</button>
-        </div>
-
-        <button class="btn btn-primary w-100 mt-2 py-1 fw-bold text-white on-accent"
-                style="font-size:0.8rem; background-color: var(--info-solid); border:none;"
-                data-bs-dismiss="modal">Confirm</button>
-      </div>
-    </div>
-  </div>
-</div>
+<!-- The dosage / duration pad is shared with the IP case sheet: Dial_Pad.html, in the shell. -->
 
 <!-- ===================== TAPER BUILDER ===================== -->
 <div class="modal fade" id="opTaperModal" tabindex="-1">
@@ -1001,8 +965,6 @@ var opLabMaster = { internal: [], external: [] };
 var opComposer = { phrases: { CC: [], HX: [], ADVICE: [] }, bundles: [], workup: {}, examDefaults: null };
 var opConsultTemplates = [];
 var opPatientAllergies = { recorded: false, raw: "", list: [] };
-var currentOPDialTarget = null;
-var currentOPDialMode = 'rx';
 var activeOpEncounterId = "";
 /* opDoseTargetRow / _opDoseSig retired with the local calculator; the
    shared one in Dose_Calculator.html keeps its own target row. */
@@ -1231,18 +1193,56 @@ function opPhraseMatch(list, query) {
     return starts.concat(contains, viaAlias).slice(0, 10);
 }
 
-function onOPTemplateType(inputEl, cat) {
+/**
+ * The phrases offered for one box.
+ *   HX  history AND the diagnosis list: a comorbidity is a diagnosis, and the
+ *       history pool alone was too thin to match most of what is typed.
+ *   DX  the seed diagnoses, plus every diagnosis the complaint workups name.
+ */
+function opPhrasePool(cat) {
+    const ph = (opComposer.phrases || {});
+    if (cat === 'HX' || cat === 'DX') {
+        const seen = {}, out = [];
+        const add = function (p) {
+            const k = String(p && p.text || '').toLowerCase();
+            if (!k || seen[k]) return;
+            seen[k] = true; out.push(p);
+        };
+        (cat === 'HX' ? (ph.HX || []) : []).forEach(add);
+        (ph.DX || []).forEach(add);
+        if (cat === 'DX') {
+            Object.keys(opComposer.workup || {}).forEach(function (k) {
+                const dx = (opComposer.workup[k] || {}).dx;
+                if (dx) add({ text: dx, scope: 'SEED', aliases: '' });
+            });
+        }
+        return out;
+    }
+    return ph[cat] || [];
+}
+
+/**
+ * Suggestions under a complaint, history or diagnosis box.
+ * `showAll` (on focus): with nothing typed, the most-used first eight — so a
+ * box shows what it can offer before a letter is typed. Arrow keys, Enter
+ * and Escape work on the list (crescSuggestKeys, Shell_UX.html).
+ */
+function onOPTemplateType(inputEl, cat, showAll) {
     let dd = inputEl.parentElement.querySelector('.autocomplete-items');
-    if (!dd) { dd = document.createElement('div'); dd.className = 'autocomplete-items d-none'; inputEl.parentElement.appendChild(dd); }
+    if (!dd) {
+        dd = document.createElement('div'); dd.className = 'autocomplete-items d-none';
+        inputEl.parentElement.appendChild(dd);
+        // Hidden when the box is left; the delay lets a click on an item land first.
+        inputEl.addEventListener('blur', function () { setTimeout(function () { dd.classList.add('d-none'); }, 180); });
+    }
 
     let val = inputEl.value.trim();
     const isSlash = val.charAt(0) === '/';
     if (isSlash) val = val.substring(1);
 
     dd.innerHTML = '';
-    if (!val) { dd.classList.add('d-none'); return; }
-
-    const list = opPhraseMatch((opComposer.phrases && opComposer.phrases[cat]) || [], val);
+    const pool = opPhrasePool(cat);
+    const list = val ? opPhraseMatch(pool, val) : (showAll === true ? pool.slice(0, 8) : []);
     if (!list.length) { dd.classList.add('d-none'); return; }
 
     dd.classList.remove('d-none');
@@ -1253,12 +1253,30 @@ function onOPTemplateType(inputEl, cat) {
                        '<small><span class="op-scope-tag op-scope-' + opEsc(x.scope) + '">' + opEsc(x.scope) + '</span> ' +
                        '<span class="op-evidence">' + opEsc(meta) + '</span></small>';
         it.onclick = function () {
-            inputEl.value = x.text;
             dd.classList.add('d-none');
+            if (cat === 'DX') { opPickDx(x.text); return; }
+            inputEl.value = x.text;
             if (cat === 'CC') showWorkupHint(x.text);
         };
         dd.appendChild(it);
     });
+}
+
+/**
+ * A diagnosis chosen from a suggestion — the dropdown or a complaint's
+ * "Dx:" hint. It becomes a chip, and the treatment assist runs for it.
+ * The hint used to fill the box ONLY when the box was empty and do nothing
+ * otherwise, which read as "diagnosis suggestions are not picked up".
+ */
+function opPickDx(text, keepTyped) {
+    const el = document.getElementById('clin-diagnosis');
+    if (!el || !text) return;
+    // From a hint, whatever the doctor had typed is a diagnosis of its own;
+    // from the dropdown it is only the search that found this one.
+    if (keepTyped && el.value.trim()) opAddDx();
+    el.value = text;
+    try { onDiagnosisChanged(); } catch (e) { /* the assist is a convenience */ }
+    opAddDx();
 }
 
 function onSlashSearch(inputEl, cat) {
@@ -1328,8 +1346,7 @@ function addWorkupLab(name) {
 }
 
 function setDiagnosisFromHint(dx) {
-    const el = document.getElementById('clin-diagnosis');
-    if (!el.value.trim()) { el.value = dx; onDiagnosisChanged(); }
+    opPickDx(dx, true);
 }
 
 // ============================================================================
@@ -1550,6 +1567,8 @@ function doSearchEMRPatient(pId, isSwitch) {
         loadLastVisit(pId);
         opRefreshCards(pId);
         runSafetyCheck();
+        // Work left unsaved for this patient, in this browser, comes back.
+        if (window.crescDraft) window.crescDraft.offer('op|' + pId, 'emr-workspace-op-consult', OP_DRAFT_SPEC);
     }).withFailureHandler(function (err) {
         document.getElementById('hd-pat-name').innerText = "Search Failed";
         opToast("Backend Network Error: " + err.message, 'err');
@@ -2738,7 +2757,7 @@ function addOPDynamicRow(tbodyId, type) {
         '<td style="width: ' + (type === 'HX' ? 'auto' : '0') + '; display: ' + (type === 'HX' ? 'table-cell' : 'none') + ';">' + prefixHtml + '</td>' +
         '<td class="w-100" style="position:relative;">' +
             '<input type="text" class="hd-input op-array-text" placeholder="' + (type === 'CC' ? 'Symptom... (type / to search)' : 'Condition...') + '" ' +
-            'autocomplete="off" oninput="onOPTemplateType(this, \'' + type + '\')"></td>' +
+            'autocomplete="off" oninput="onOPTemplateType(this, \'' + type + '\')" onfocus="onOPTemplateType(this, \'' + type + '\', true)"></td>' +
         '<td><input type="text" class="hd-input dial-trigger op-array-dur text-center" style="width: 55px;" placeholder="Dur" onclick="openOPDialPad(this, \'dur\')"></td>' +
         '<td class="text-end no-print"><button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:0.6rem;" onclick="this.closest(\'tr\').remove()"><i class="fa-solid fa-xmark"></i></button></td>';
     tbody.appendChild(tr);
@@ -3024,243 +3043,18 @@ function markOPAllWNL() { ['cvs', 'rs', 'pa', 'cns'].forEach(s => setOPSysExam(s
 // ============================================================================
 // DIAL PAD
 // ============================================================================
-/* ═══════════════════════════════════════════════════════════════════════
-   THE DIAL PAD — keys, and what each one does
-
-   The grid is data. Adding a key is one row here; before this it was a
-   hand-written <div class="col-3"> in the markup, and the two grids had
-   already drifted apart on sizing.
-
-   `group` is what makes a key EXCLUSIVE. Pressing Days then Months means
-   the doctor changed their mind, so the new token replaces the old one
-   rather than appending — "3 Days Months" was the bug this solves, and
-   the same rule now covers the dose units and the frequencies, which had
-   it only for duration.
-   ═══════════════════════════════════════════════════════════════════ */
-var OP_DIAL_KEYS = {
-  rx: [
-    // digits and fractions — these accumulate, that is how a number is typed
-    { k: '0',   w: 3 }, { k: '1/4', w: 3 }, { k: '1/2', w: 3 }, { k: '1', w: 3 },
-    { k: '2',   w: 3 }, { k: '3',   w: 3 }, { k: '5',   w: 3 }, { k: '10', w: 3 },
-
-    // the 1-0-1 patterns. HS and the hourly schedules were missing, and a
-    // night-only dose is one of the commonest prescriptions there is.
-    { k: 'OD',  w: 3, style: 'info' }, { k: 'BD',  w: 3, style: 'info' },
-    { k: 'TDS', w: 3, style: 'info' }, { k: 'QID', w: 3, style: 'info' },
-    { k: 'HS',  w: 3, style: 'info', title: 'At bedtime' },
-    { k: 'Q6H', w: 3, style: 'info', title: '6-hourly' },
-    { k: 'Q8H', w: 3, style: 'info', title: '8-hourly' },
-    { k: 'Q12H',w: 3, style: 'info', title: '12-hourly' },
-    { k: 'Alt day', w: 6, style: 'info', title: 'Alternate days' },
-    { k: 'Weekly',  w: 6, style: 'info' },
-
-    { k: 'STAT', w: 3, style: 'warning' }, { k: 'SOS', w: 3, style: 'warning' },
-    { k: 'BF',   w: 3, style: 'success', title: 'Before food' },
-    { k: 'AF',   w: 3, style: 'success', title: 'After food' },
-
-    // units. mg, tablets, puffs, nebulisation and insulin units all had to
-    // be typed by hand, which on a phone is the whole problem.
-    { k: 'mg',   w: 3, style: 'secondary' }, { k: 'ml',    w: 3, style: 'secondary' },
-    { k: 'tab',  w: 3, style: 'secondary' }, { k: 'Drops', w: 3, style: 'secondary' },
-    { k: 'puff', w: 3, style: 'secondary' }, { k: 'neb',   w: 3, style: 'secondary', title: 'Per nebulisation' },
-    { k: 'unit', w: 3, style: 'secondary', title: 'Insulin units' },
-    { k: 'Oint', w: 3, style: 'secondary' }
-  ],
-  dur: [
-    { k: '1', w: 4 }, { k: '2',  w: 4 }, { k: '3',  w: 4 },
-    { k: '4', w: 4 }, { k: '5',  w: 4 }, { k: '6',  w: 4 },
-    { k: '7', w: 4 }, { k: '10', w: 4 }, { k: '14', w: 4 },
-    { k: '21', w: 4 }, { k: '30', w: 4 }, { k: '90', w: 4 },
-    { k: 'Days',  w: 6, style: 'info' }, { k: 'Wks', w: 6, style: 'info' },
-    { k: 'Mths',  w: 6, style: 'info' }, { k: 'Yrs', w: 6, style: 'info' },
-    // A course that ends at review, and a single dose, are both durations
-    // and neither could be entered without the keyboard.
-    { k: 'Once',        w: 6, style: 'warning', title: 'A single dose' },
-    { k: 'Till review', w: 6, style: 'warning' },
-    { k: 'Continue',    w: 12, style: 'warning', title: 'Long-term / ongoing' }
-  ]
-};
-
-/** Token groups that REPLACE rather than append. */
-var OP_DIAL_GROUPS = {
-  DURATION: ['Days', 'Wks', 'Mths', 'Yrs', 'Once', 'Till review', 'Continue'],
-  DOSEUNIT: ['mg', 'ml', 'tab', 'Drops', 'puff', 'neb', 'unit', 'Oint'],
-  URGENCY:  ['STAT', 'SOS'],
-  SCHEDULE: ['HS', 'Q6H', 'Q8H', 'Q12H', 'Alt day', 'Weekly']
-};
-
-function opDialGrid(hostId, keys) {
-  var host = document.getElementById(hostId);
-  if (!host) return;
-  host.innerHTML = keys.map(function (key) {
-    var cls = key.style
-      ? 'btn btn-outline-' + key.style + ' dial-btn w-100 text-' +
-        (key.style === 'secondary' ? 'light' : key.style)
-      : 'btn dial-btn w-100 text-white';
-    return '<div class="col-' + key.w + '">' +
-      '<button type="button" class="' + cls + '" style="font-size:.72rem;padding:.3rem .1rem;"' +
-      (key.title ? ' title="' + opEsc(key.title) + '"' : '') +
-      ' onclick="appendOPDial(' + JSON.stringify(key.k) + ')">' + opEsc(key.k) + '</button></div>';
-  }).join('');
-}
-
+/* The dosage and duration pad lives in the shell (Dial_Pad.html) and is the
+   same one the IP case sheet opens. This file's copy never worked: every key
+   put JSON.stringify(k) inside a double-quoted onclick attribute, and the
+   double quotes JSON.stringify adds closed the attribute early. */
 function openOPDialPad(inputEl, mode) {
-    if (inputEl.disabled) return;
-    currentOPDialTarget = inputEl;
-    currentOPDialMode = mode;
-
-    document.getElementById('op-dial-title').innerText =
-      mode === 'rx' ? 'Smart Dosage' : 'Select Duration';
-
-    // Built on open rather than once at parse time: this module is injected
-    // by the loader, and building here means the grid cannot be missing
-    // because the markup arrived after the script did.
-    opDialGrid('op-dial-rx-grid',  OP_DIAL_KEYS.rx);
-    opDialGrid('op-dial-dur-grid', OP_DIAL_KEYS.dur);
-
-    document.getElementById('op-dial-rx-grid').classList.toggle('d-none', mode !== 'rx');
-    document.getElementById('op-dial-dur-grid').classList.toggle('d-none', mode === 'rx');
-
-    // Taper only belongs on a dosage, and only on a real prescription row.
-    var taperHost = document.getElementById('op-dial-taper-host');
-    if (taperHost) {
-      taperHost.classList.toggle('d-none', mode !== 'rx' || !inputEl.closest('tr'));
+    if (!window.crescDialPad) {
+      if (window.crescAlert) crescAlert('Dial_Pad.html is missing from this deployment.', 'err');
+      return;
     }
-
-    paintOPDial();
-    new bootstrap.Modal(document.getElementById('opDialPadModal')).show();
-}
-
-/**
- * Shows what the field will say.
- *
- * The pad is a modal and the field is behind it, so every press used to be
- * blind: 1, BD, AF gave no sight of "1(AF)-0-1(AF)" until the pad closed,
- * and a wrong press could only be undone by clearing everything.
- */
-function paintOPDial() {
-  var d = document.getElementById('op-dial-display');
-  var h = document.getElementById('op-dial-hint');
-  if (!d) return;
-  var v = currentOPDialTarget ? String(currentOPDialTarget.value || '').trim() : '';
-  d.textContent = v || '—';
-  d.style.color = v ? 'var(--warning-fg)' : 'var(--text-muted)';
-
-  if (!h) return;
-  if (currentOPDialMode === 'rx') {
-    h.textContent = v
-      ? 'A pattern key (OD, BD…) replaces the dose; a number typed first fills it in.'
-      : 'Type a number, then a pattern: 1 then BD gives 1-0-1.';
-  } else {
-    h.textContent = 'A number, then a unit. Pressing a second unit replaces the first.';
-  }
-}
-
-function appendOPDial(val) {
-    if (!currentOPDialTarget) return;
-    let cVal = currentOPDialTarget.value.trim();
-    const v = val.trim();
-    const rxPatterns = {
-      'OD': '1-0-0', 'BD': '1-0-1', 'TDS': '1-1-1', 'QID': '1-1-1-1',
-      'HS': '0-0-1'
-    };
-
-    const swapToken = function (text, group, token) {
-        // Strip every member of the group (with its separating space), then
-        // append the one just pressed. Word-boundary anchored so "ml" does not
-        // eat the "ml" inside "5ml" typed by hand.
-        let out = text;
-        group.forEach(function (g) {
-            out = out.replace(new RegExp('\\s*\\b' + g.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), '');
-        });
-        out = out.trim();
-        return out ? out + ' ' + token : token;
-    };
-
-    if (rxPatterns[v]) {
-        let base = rxPatterns[v];
-        if (cVal && !isNaN(cVal)) base = base.replace(/1/g, cVal);
-        currentOPDialTarget.value = base;
-
-    } else if (v === 'AF' || v === 'BF') {
-        // AF and BF are also exclusive: clear the other before applying.
-        const other = (v === 'AF') ? 'BF' : 'AF';
-        cVal = cVal.replace(new RegExp('\\(' + other + '\\)', 'g'), '');
-        if (cVal.includes('-')) {
-            currentOPDialTarget.value = cVal.split('-').map(function (p) {
-                const clean = p.replace(/\((?:AF|BF)\)/g, '').trim();
-                return (clean !== '0' && clean !== '') ? clean + '(' + v + ')' : (clean || '0');
-            }).join('-');
-        } else {
-            cVal = cVal.replace(/\((?:AF|BF)\)/g, '').trim();
-            currentOPDialTarget.value = cVal ? cVal + ' (' + v + ')' : '(' + v + ')';
-        }
-
-    } else if (OP_DIAL_GROUPS.DURATION.indexOf(v) !== -1) {
-        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.DURATION, v);
-    } else if (OP_DIAL_GROUPS.DOSEUNIT.indexOf(v) !== -1) {
-        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.DOSEUNIT, v);
-    } else if (OP_DIAL_GROUPS.SCHEDULE.indexOf(v) !== -1) {
-        // A schedule is exclusive too: 8-hourly and 12-hourly are a change of
-        // mind, not two instructions.
-        currentOPDialTarget.value = swapToken(cVal, OP_DIAL_GROUPS.SCHEDULE, v);
-    } else if (OP_DIAL_GROUPS.URGENCY.indexOf(v) !== -1) {
-        // Pressing STAT twice clears it: it is a toggle, not an accumulator.
-        const had = new RegExp('\\b' + v + '\\b', 'i').test(cVal);
-        let out = cVal;
-        OP_DIAL_GROUPS.URGENCY.forEach(function (g) {
-            out = out.replace(new RegExp('\\s*\\b' + g + '\\b', 'gi'), '');
-        });
-        out = out.trim();
-        currentOPDialTarget.value = had ? out : (out ? out + ' ' + v : v);
-
-    } else {
-        // Digits and fractions still accumulate — that is how a number is typed.
-        currentOPDialTarget.value = cVal + val;
-    }
-
-    currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
-    paintOPDial();
-}
-
-/**
- * Removes the last thing entered, not the last character.
- *
- * "1-0-1 Days" backspaced a character at a time is five presses to undo one
- * mistake, and the field spends four of them holding "1-0-1 Day", "1-0-1 Da"
- * — values that mean nothing. A whole token goes at once.
- */
-function backspaceOPDial() {
-  if (!currentOPDialTarget) return;
-  var v = String(currentOPDialTarget.value || '').trim();
-  if (!v) return;
-
-  // A trailing word (unit, schedule, urgency) goes whole; otherwise one
-  // character, because a number is built a digit at a time.
-  var m = /\s+\S+$/.exec(v);
-  if (m && /[A-Za-z)]$/.test(v)) v = v.slice(0, m.index);
-  else v = v.slice(0, -1);
-
-  currentOPDialTarget.value = v.trim();
-  currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
-  paintOPDial();
-}
-
-function clearOPDial() {
-  if (!currentOPDialTarget) return;
-  currentOPDialTarget.value = '';
-  currentOPDialTarget.dispatchEvent(new Event('input', { bubbles: true }));
-  paintOPDial();
-}
-
-// ============================================================================
-// TAPER MODE
-// ============================================================================
-function openTaperFromDial() {
-    if (!currentOPDialTarget) return;
-    opTaperTargetRow = currentOPDialTarget.closest('tr');
-    bootstrap.Modal.getInstance(document.getElementById('opDialPadModal'))?.hide();
-    openTaperBuilder(opTaperTargetRow);
+    window.crescDialPad.open(inputEl, mode, {
+      onTaper: function (row) { if (row) openTaperBuilder(row); }
+    });
 }
 
 function openTaperBuilder(row) {
@@ -3604,6 +3398,7 @@ function submitOPEncounter() {
             btn.disabled = false;
             if (response && response.success) {
                 activeOpEncounterId = response.encounterId;
+                if (window.crescDraft) window.crescDraft.clear('op|' + payload.patientId);
                 loadComposerContext();   // pick up newly learnt phrases
                 opToast("Saved.\nEncounter: " + activeOpEncounterId +
                       (response.doctorName ? "\nRecorded under: " + response.doctorName : "") +
@@ -3620,6 +3415,37 @@ function submitOPEncounter() {
         })
         .saveOPEncounterScoped(payload, window.sessionToken);
 }
+
+// ============================================================================
+// DRAFTS — a consultation is interrupted constantly
+// Kept in this browser per user for 24 h (crescDraft, Shell_UX.html) and
+// offered back when the same patient is opened. Cleared by a successful save.
+// ============================================================================
+var OP_DRAFT_SPEC = {
+    status: 'op-draft-status',
+    ignore: '#op-search-pat-id, #op-doctor-select, #ref-to-doctor',
+    rows: {
+        'op-cc-tbody': { add: function () { addOPDynamicRow('op-cc-tbody', 'CC'); }, field: /^op-array-/ },
+        'op-hx-tbody': { add: function () { addOPDynamicRow('op-hx-tbody', 'HX'); }, field: /^op-array-/ },
+        'op-rx-tbody': { add: function () { addOPRxRow(); }, field: /^op-rx-/ },
+        'op-lab-results-tbody': { add: function () { addOPLabResultRow(); }, field: /^op-lab-res-/ }
+    },
+    extra: {
+        get: function () { return { dx: opDxList.slice(), labs: opSelectedLabs.slice() }; },
+        set: function (x) {
+            if (x.dx && x.dx.length) opSetDx(x.dx.join(', '));
+            (x.labs || []).forEach(function (l) { opLabSelect(l.testId, l.testName); });
+            if (typeof compileOPLabs === 'function') compileOPLabs();
+            if (typeof queueSafetyCheck === 'function') queueSafetyCheck();
+        }
+    }
+};
+function opDraftKey() {
+    var p = String(window.currentPatientId || '').trim();
+    var ws = document.getElementById('emr-workspace-op-consult');
+    return (p && p !== '--' && ws && !ws.classList.contains('d-none')) ? 'op|' + p : '';
+}
+if (window.crescDraft) window.crescDraft.watch(opDraftKey, 'emr-workspace-op-consult', OP_DRAFT_SPEC);
 
 function closeOPConsultationWorkspace() {
     // Clearing only the encounter id left the whole chart in the DOM, ready to

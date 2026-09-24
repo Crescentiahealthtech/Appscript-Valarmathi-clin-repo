@@ -374,6 +374,7 @@ function cresc_ms_(v) {
  * Logs one line per failure and returns the number of failures.
  */
 function cresc_testDates() {
+  crescEditorOnly_('cresc_testDates');
   var fails = [];
   var check = function (label, got, want) {
     if (got !== want) fails.push(label + ': got ' + got + ', wanted ' + want);
