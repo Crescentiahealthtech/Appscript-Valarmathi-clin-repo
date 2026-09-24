@@ -112,7 +112,7 @@ var DEP_MAP = {
   "Audit_Viewer.gs":        ["crescGetAuditLog", "audv_when_"],
   "Master_Cache.gs":        ["crescMasterGet_", "crescMasterBust_", "crescMasterReload"],
   "Stock_Alerts.gs":        ["getStockAlerts", "stk_analyse_"],
-  "Patient_Reminders.gs":   ["getReminderQueue", "markReminderSent", "sendRemindersNow", "remindersDaily", "rem_collect_"],
+  "Patient_Reminders.gs":   ["getReminderQueue", "markReminderSent", "sendReminderEmail", "sendRemindersNow", "remindersDaily", "rem_collect_"],
   "Ops_Daily.gs":           ["ownerDailySummary", "opsNightlyBackup", "opsInstallTriggers", "getBackupStatus", "runBackupNow", "getOwnerSummary"],
   // IP Records reads the discharge summary's own sections through the
   // discharge engine's version resolver rather than parsing DS_Snapshots

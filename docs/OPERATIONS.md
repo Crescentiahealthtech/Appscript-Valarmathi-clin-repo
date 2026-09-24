@@ -23,11 +23,11 @@ with its permission.
    | `BACKUP_FOLDER_ID` | Optional. If you leave it out, a private folder called "CresRx Backups (restricted)" is created on the first run. |
    | `BACKUP_KEEP_DAYS` | Daily copies to keep (default 30). The first copy of each month is kept for a year. |
    | `STOCK_MIN_UNITS` | The low-stock floor for a medicine with no recent sales (default 10). |
-   | `REMINDER_PROVIDER` | Leave it blank to send from the desk. Set it to `WHATSAPP_CLOUD` or `SMS_HTTP` to send automatically. |
+   | `REMINDER_AUTO_EMAIL` | Set it to `NO` to stop the 6 pm job from emailing reminders by itself. By default it emails every patient who has consented and has an email address. |
+   | `REMINDER_PROVIDER` | Leave it blank to send WhatsApp from the desk. Set it to `WHATSAPP_CLOUD` to send WhatsApp automatically through the WhatsApp Business API. |
    | `WA_PHONE_NUMBER_ID`, `WA_ACCESS_TOKEN`, `WA_TEMPLATE_NAME`, `WA_TEMPLATE_LANG` | WhatsApp Business Cloud API. The template must be approved and take four body parameters: `{{1}}` name, `{{2}}` what, `{{3}}` when, `{{4}}` clinic. |
-   | `SMS_URL_TEMPLATE` | An HTTP GET URL containing `{to}` and `{text}`. Indian SMS also needs the message text registered as a DLT template. |
 
-3. The first run asks you to re-authorise, because it adds Drive and external-request (UrlFetch) permissions.
+3. Run `RUN_00_authorizeServices()` (in `RUN_Setup.gs`) once and allow the permissions it asks for. The web app runs as you, so Google sign-in (which checks the token with Google), backups and emails only work after you have approved them. Until you do, Google sign-in shows "Google sign-in is not switched on for this clinic yet". Run it again after any update that adds a Google service.
 
 ## Reminders
 
@@ -35,16 +35,19 @@ with its permission.
 - **Follow-ups**: sent when `OP_Encounters.Next_Review_Date` is that day and the patient has no appointment booked for it.
 - **Vaccinations**: sent when a child's next dose on the immunisation card (Maternal & Child) falls due that day.
 - **Consent**: only patients whose DPDP `COMMUNICATION` consent is *Given* are messaged. The list shows everyone else with the reason, so the desk can ask them at their next visit.
-- **Without a provider**: each row has WhatsApp and SMS buttons that open the message ready to send from the clinic phone. Once a row is opened, it is recorded and won't be offered again.
+- **Two channels, WhatsApp and email**:
+  - *WhatsApp*: the WhatsApp button opens the message on the clinic computer's WhatsApp. Opening it records nothing, because the desk may go back without sending. Once it has gone, press the tick (✓) to close the row.
+  - *Email*: sent by the app from the clinic's Google account to the patient's `Email` (Patients, column Q). The Email button sends one immediately, **Send now** sends all of them, and the 6 pm job sends tomorrow's by itself. A personal Gmail account can send about 100 emails a day.
+- **Sending again**: a closed row can always be reopened with **Send again**. The automatic job never sends the same reminder twice.
 - **Record**: every reminder, sent or failed, is logged in `Reminder_Log`.
 
 ## Stock alerts
 
 - **Low stock** is measured in days: current stock divided by the average daily sale over the last 60 days (from `Pharmacy_Invoice_Items`). An item is low when it has fewer than 14 days left.
 - **Items with no recent sales** use the plain floor (`STOCK_MIN_UNITS`).
-- **Per-medicine levels**: add a sheet `Pharmacy_Reorder_Levels` with columns `Brand, Generic, Min_Qty, Order_Up_To`.
+- **Per-medicine levels**: add a sheet `Pharmacy_Reorder_Levels` with columns `Brand, Generic, Min_Qty`.
 - **Expiry**: batches expiring within 90 days are flagged, and within 30 days are shown in red. Expired stock still on the shelf is listed separately, with its value at cost.
-- **Purchase order**: the suggestion brings each low item up to 30 days of stock plus 7 days for delivery. Lines are grouped by the supplier of the most recent batch and costed at the last buying price. It exports to CSV.
+- **Ordering**: no order quantity is suggested; how much to order is the pharmacist's decision. Each low item shows what is left, how fast it sells, and the supplier and buying price of its latest batch. The list exports to CSV.
 
 ## Day summary
 

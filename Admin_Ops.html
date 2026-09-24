@@ -91,48 +91,74 @@
   }
 
   /* ───────────── REMINDERS ───────────── */
+  // WhatsApp and email only. The WhatsApp button opens the message and
+  // leaves the row open — WhatsApp cannot tell us whether it was sent, and
+  // the desk may go back without sending — so the tick (✓) is what closes it.
+  // Email is sent by the server and closes the row itself. A closed row can
+  // always be sent again.
   var REM_STATE = {
-    READY: ['Ready', 'success'], DONE: ['Sent', 'secondary'],
-    NO_CONSENT: ['No consent to message', 'warning'], NO_PHONE: ['No mobile number', 'danger']
+    READY: ['To send', 'success'], DONE: ['Sent', 'secondary'],
+    NO_CONSENT: ['No consent to message', 'warning'], NO_CONTACT: ['No WhatsApp or email', 'danger']
   };
   var REM_KIND = { APPT: 'info', FOLLOWUP: 'primary', VACCINE: 'success' };
+  var CH_LABEL = { WHATSAPP: 'WhatsApp', EMAIL: 'Email' };
+
+  function remActions(x, i, reopen) {
+    if (!can('appointment.write')) return '';
+    if (x.state === 'DONE' && !reopen) {
+      return '<span class="text-success small me-2"><i class="fa-solid fa-circle-check me-1"></i>' +
+        esc(CH_LABEL[x.logged && x.logged.channel] || (x.logged && x.logged.channel) || 'Sent') +
+        (x.logged && x.logged.at ? ' · ' + esc(x.logged.at) : '') + '</span>' +
+        '<button type="button" class="btn btn-link btn-sm p-0 ops-rem-again" data-i="' + i + '">Send again</button>';
+    }
+    if (x.state !== 'READY' && x.state !== 'DONE') return '';
+    return (x.phone
+        ? '<button type="button" class="btn btn-sm btn-outline-success me-1 ops-rem-wa" data-i="' + i + '" title="Open in WhatsApp" aria-label="Open in WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>'
+        : '') +
+      (x.email
+        ? '<button type="button" class="btn btn-sm btn-outline-info me-1 ops-rem-mail" data-i="' + i + '" title="Email ' + esc(x.email) + ' now" aria-label="Send by email"><i class="fa-solid fa-envelope"></i></button>'
+        : '') +
+      (x.phone
+        ? '<button type="button" class="btn btn-sm btn-outline-secondary ops-rem-tick" data-i="' + i + '" title="Mark as sent on WhatsApp" aria-label="Mark as sent on WhatsApp"><i class="fa-solid fa-check"></i></button>'
+        : '');
+  }
 
   function reminders(date) {
     loading('Working out who to remind…');
     call('getReminderQueue', [window.sessionToken || '', { date: date || 'tomorrow' }], function (res) {
       var t = res.tally || {};
       var items = res.items || [];
+      var how = (res.autoEmail ? 'Email goes automatically at 6 pm to patients with an address. ' : '') +
+                (res.auto ? 'WhatsApp goes automatically at 6 pm by ' + esc(res.provider) + '.'
+                          : 'WhatsApp: press the WhatsApp button, send it, then press ✓.');
       var html =
         '<div class="d-flex flex-wrap gap-2 align-items-end mb-3">' +
           '<div><label class="form-label small label-bright mb-1" for="ops-rem-date">For</label>' +
           '<select id="ops-rem-date" class="form-select form-select-sm" style="width:170px;">' +
             '<option value="tomorrow">Tomorrow</option><option value="today">Today</option></select></div>' +
-          '<div class="small label-bright ms-2 mb-1">' + esc(res.dateText) + ' · ' +
-            (res.auto ? 'sent automatically at 6 pm by ' + esc(res.provider)
-                      : 'sent from this desk — each button opens the message on this computer\'s WhatsApp or SMS') + '</div>' +
-          (res.auto && can('appointment.write') && t.READY
-            ? '<button type="button" class="btn btn-sm btn-success ms-auto" id="ops-rem-sendall">Send ' + t.READY + ' now</button>' : '') +
+          '<div class="small label-bright ms-2 mb-1">' + esc(res.dateText) + ' · ' + how + '</div>' +
+          (can('appointment.write') && (res.emailable || (res.auto && t.READY))
+            ? '<button type="button" class="btn btn-sm btn-success ms-auto" id="ops-rem-sendall">' +
+              '<i class="fa-solid fa-paper-plane me-1"></i>Send ' + (res.auto ? t.READY : res.emailable) + ' now' +
+              (res.auto ? '' : ' by email') + '</button>' : '') +
         '</div>' +
-        '<div class="ops-kpis">' + kpi('To send', t.READY || 0) + kpi('Already sent', t.DONE || 0) +
-          kpi('No consent', t.NO_CONSENT || 0, t.NO_CONSENT ? 'warn' : '') + kpi('No mobile', t.NO_PHONE || 0, t.NO_PHONE ? 'bad' : '') + '</div>';
+        '<div class="ops-kpis">' + kpi('To send', t.READY || 0) + kpi('Sent', t.DONE || 0) +
+          kpi('No consent', t.NO_CONSENT || 0, t.NO_CONSENT ? 'warn' : '') +
+          kpi('No WhatsApp or email', t.NO_CONTACT || 0, t.NO_CONTACT ? 'bad' : '') + '</div>';
       if (!items.length) {
         html += '<div class="text-center label-bright py-4">Nothing to remind anybody about for ' + esc(res.dateText) + '.</div>';
       } else {
         html += '<div class="ops-scroll"><table class="table table-sm align-middle mb-0"><thead><tr>' +
-          '<th>For</th><th>Patient</th><th>When</th><th>Mobile</th><th>Status</th><th class="text-end">Send</th></tr></thead><tbody>' +
+          '<th>For</th><th>Patient</th><th>When</th><th>WhatsApp / email</th><th>Status</th><th class="text-end">Send</th></tr></thead><tbody>' +
           items.map(function (x, i) {
             var st = REM_STATE[x.state] || [x.state, 'secondary'];
-            var sendable = x.state === 'READY' && can('appointment.write');
-            var actions = sendable
-              ? '<button type="button" class="btn btn-sm btn-outline-success me-1 ops-rem-send" data-i="' + i + '" data-ch="WHATSAPP" title="Open in WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>' +
-                '<button type="button" class="btn btn-sm btn-outline-secondary ops-rem-send" data-i="' + i + '" data-ch="SMS" title="Open as SMS"><i class="fa-solid fa-comment-sms"></i></button>'
-              : (x.state === 'DONE' && x.logged ? '<span class="label-bright small">' + esc(x.logged.channel) + ' · ' + esc(x.logged.at) + '</span>' : '');
-            return '<tr><td><span class="badge bg-' + REM_KIND[x.kind] + ' bg-opacity-25 text-' + REM_KIND[x.kind] + '">' + esc(x.kindLabel) + '</span></td>' +
-              '<td class="fw-semibold">' + esc(x.name) + '<div class="label-bright" style="font-size:.7rem;">' + esc(x.patientId) + '</div></td>' +
-              '<td>' + esc(x.when) + '<div class="label-bright" style="font-size:.7rem;">' + esc(x.what) + '</div></td>' +
-              '<td class="label-bright">' + esc(x.phone ? '+' + x.phone : '—') + '</td>' +
-              '<td><span class="badge bg-' + st[1] + ' bg-opacity-25 text-' + st[1] + '">' + esc(st[0]) + '</span></td>' +
-              '<td class="text-end text-nowrap">' + actions + '</td></tr>';
+            return '<tr data-i="' + i + '"><td><span class="badge bg-' + REM_KIND[x.kind] + ' bg-opacity-25 text-' + REM_KIND[x.kind] + '">' + esc(x.kindLabel) + '</span></td>' +
+              '<td class="fw-semibold">' + esc(x.name) + '<div class="label-bright" style="font-size:var(--fs-2xs);">' + esc(x.patientId) + '</div></td>' +
+              '<td>' + esc(x.when) + '<div class="label-bright" style="font-size:var(--fs-2xs);">' + esc(x.what) + '</div></td>' +
+              '<td class="label-bright">' + esc(x.phone ? '+' + x.phone : '—') +
+                (x.email ? '<div style="font-size:var(--fs-2xs);">' + esc(x.email) + '</div>' : '') + '</td>' +
+              '<td class="ops-rem-st"><span class="badge bg-' + st[1] + ' bg-opacity-25 text-' + st[1] + '">' + esc(st[0]) + '</span></td>' +
+              '<td class="text-end text-nowrap ops-rem-act">' + remActions(x, i) + '</td></tr>';
           }).join('') + '</tbody></table></div>' +
           '<div class="small label-bright mt-2">Only patients who agreed to messages (DPDP consent: "Reports and reminders by WhatsApp or email") can be sent one. ' +
           'Record consent at the desk to reach the others.</div>';
@@ -149,21 +175,53 @@
           reminders(sel.value);
         });
       };
-      body().querySelectorAll('.ops-rem-send').forEach(function (b) {
-        b.onclick = function () {
-          var x = items[+b.dataset.i];
-          var link = b.dataset.ch === 'SMS' ? x.smsLink : x.waLink;
-          window.open(link, '_blank', 'noopener');
+
+      var rowOf = function (i) { return body().querySelector('tr[data-i="' + i + '"]'); };
+      var markDone = function (i, channel) {
+        var x = items[i];
+        x.state = 'DONE';
+        x.logged = { channel: channel, at: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) };
+        var row = rowOf(i);
+        if (!row) return;
+        row.querySelector('.ops-rem-st').innerHTML = '<span class="badge bg-secondary bg-opacity-25 text-secondary">Sent</span>';
+        row.querySelector('.ops-rem-act').innerHTML = remActions(x, i);
+      };
+      body().onclick = function (e) {
+        var b = e.target.closest && e.target.closest('button[data-i]');
+        if (!b) return;
+        var i = +b.dataset.i, x = items[i];
+        if (b.classList.contains('ops-rem-wa')) {
+          // Opens only. The row stays open until the tick says it went.
+          window.open(x.waLink, '_blank', 'noopener');
+          var tick = rowOf(i) && rowOf(i).querySelector('.ops-rem-tick');
+          if (tick) { tick.classList.remove('btn-outline-secondary'); tick.classList.add('btn-success'); tick.focus(); }
+        } else if (b.classList.contains('ops-rem-tick')) {
+          b.disabled = true;
           google.script.run.withSuccessHandler(function (r) {
-            if (r && r.success) {
-              var cell = b.parentNode;
-              cell.innerHTML = '<span class="text-success small"><i class="fa-solid fa-check me-1"></i>opened</span>';
-            } else if (window.crescToast) window.crescToast((r && r.message) || 'Not recorded.', false);
-          }).withFailureHandler(function () {
-            if (window.crescToast) window.crescToast('Opened, but not recorded as sent (network).', false);
-          }).markReminderSent(window.sessionToken || '', x.key, b.dataset.ch);
-        };
-      });
+            if (r && r.success) markDone(i, 'WHATSAPP');
+            else { b.disabled = false; if (window.crescToast) window.crescToast((r && r.message) || 'Not recorded.', false); }
+          }).withFailureHandler(function (err) {
+            b.disabled = false;
+            if (window.crescToast) window.crescToast('Not recorded: ' + ((err && err.message) || err), false);
+          }).markReminderSent(window.sessionToken || '', x.key);
+        } else if (b.classList.contains('ops-rem-mail')) {
+          b.disabled = true;
+          b.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+          google.script.run.withSuccessHandler(function (r) {
+            if (window.crescToast) window.crescToast((r && r.message) || 'Not sent.', !!(r && r.success));
+            if (r && r.success) markDone(i, 'EMAIL');
+            else { b.disabled = false; b.innerHTML = '<i class="fa-solid fa-envelope"></i>'; }
+          }).withFailureHandler(function (err) {
+            b.disabled = false; b.innerHTML = '<i class="fa-solid fa-envelope"></i>';
+            if (window.crescToast) window.crescToast('Not sent: ' + ((err && err.message) || err), false);
+          }).sendReminderEmail(window.sessionToken || '', x.key);
+        } else if (b.classList.contains('ops-rem-again')) {
+          var cell = rowOf(i).querySelector('.ops-rem-act');
+          cell.innerHTML = remActions(x, i, true);
+          var first = cell.querySelector('button');
+          if (first) first.focus();
+        }
+      };
     });
   }
 
@@ -180,7 +238,7 @@
         kpi('Expire ≤ ' + cfg.nearExpiryDays + ' days', c.expiring || 0, c.expiring ? 'warn' : '') +
         kpi('Expired on shelf', c.expired || 0, c.expired ? 'bad' : '') + '</div>' +
         '<div class="small label-bright mb-2">Low = fewer than ' + (cfg.leadDays + 7) + ' days left at the rate sold over the last ' + cfg.usageDays +
-        ' days. The order brings each up to ' + cfg.coverDays + ' days plus ' + cfg.leadDays + ' days for delivery. As of ' + esc(res.generatedAt) + '.</div>';
+        ' days. How much to order is yours to decide; the supplier and last buying price are shown to help. As of ' + esc(res.generatedAt) + '.</div>';
 
       var section = function (title, head, rows, empty) {
         return '<h6 class="fw-bold mt-3 mb-2">' + title + '</h6>' + (rows.length
@@ -188,12 +246,12 @@
             head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'
           : '<div class="label-bright small">' + empty + '</div>');
       };
-      html += section('Running low', ['Medicine', 'In stock', 'Sells / day', 'Why', 'Order', 'Supplier'],
+      html += section('Running low', ['Medicine', 'In stock', 'Sells / day', 'Why', 'Supplier', 'Last buy price'],
         (res.low || []).map(function (x) {
           return '<tr><td class="fw-semibold">' + esc(x.brand) + '<div class="label-bright" style="font-size:.7rem;">' + esc(x.generic) + '</div></td>' +
             '<td class="' + (x.stock <= 0 ? 'text-danger fw-bold' : '') + '">' + esc(x.stock) + ' ' + esc(x.unit) + '</td>' +
             '<td>' + esc(x.perDay || '—') + '</td><td class="label-bright">' + esc(x.reason) + '</td>' +
-            '<td class="fw-bold">' + esc(x.suggestQty) + '</td><td class="label-bright">' + esc(x.supplier) + '</td></tr>';
+            '<td class="label-bright">' + esc(x.supplier) + '</td><td>' + (x.buyPrice ? money(x.buyPrice) : '—') + '</td></tr>';
         }), 'Nothing is running low.');
       html += section('Expiring soon', ['Medicine', 'Batch', 'Expires', 'Days', 'Qty', 'Rack', 'Value at cost'],
         (res.expiring || []).map(function (x) {
@@ -208,20 +266,20 @@
               '<td>' + esc(x.qty) + '</td><td class="label-bright">' + esc(x.rack) + '</td><td>' + money(x.value) + '</td></tr>';
           }), '');
       }
-      var po = res.purchaseOrder || [];
-      html += '<div class="d-flex align-items-center mt-3 mb-2"><h6 class="fw-bold m-0">Suggested purchase order</h6>' +
-        (po.length ? '<button type="button" class="btn btn-sm btn-outline-success ms-auto" id="ops-po-csv"><i class="fa-solid fa-file-csv me-1"></i>Export CSV</button>' : '') + '</div>' +
-        (po.length ? po.map(function (s) {
-          return '<div class="border rounded p-2 mb-2" style="border-color:var(--border-color)!important;">' +
-            '<div class="d-flex"><strong>' + esc(s.supplier) + '</strong><span class="ms-auto">' + money(s.total) + '</span></div>' +
-            '<div class="small label-bright">' + s.lines.map(function (l) { return esc(l.brand) + ' × ' + esc(l.qty); }).join(' · ') + '</div></div>';
-        }).join('') : '<div class="label-bright small">Nothing to order.</div>');
+      var low = res.low || [];
+      if (low.length) {
+        html = html.replace('<h6 class="fw-bold mt-3 mb-2">Running low</h6>',
+          '<div class="d-flex align-items-center mt-3 mb-2"><h6 class="fw-bold m-0">Running low</h6>' +
+          '<button type="button" class="btn btn-sm btn-outline-success ms-auto" id="ops-low-csv"><i class="fa-solid fa-file-csv me-1"></i>Export list</button></div>');
+      }
       body().innerHTML = html;
-      var b = document.getElementById('ops-po-csv');
+      var b = document.getElementById('ops-low-csv');
       if (b) b.onclick = function () {
-        var rows = [['Supplier', 'Medicine', 'Generic', 'Unit', 'Order qty', 'Last buy price', 'Estimated cost']];
-        po.forEach(function (s) { s.lines.forEach(function (l) { rows.push([s.supplier, l.brand, l.generic, l.unit, l.qty, l.buyPrice, l.cost]); }); });
-        download('purchase-order-' + new Date().toISOString().slice(0, 10) + '.csv', rows);
+        var rows = [['Medicine', 'Generic', 'In stock', 'Unit', 'Sells per day', 'Days left', 'Why', 'Supplier', 'Last buy price']];
+        low.forEach(function (x) {
+          rows.push([x.brand, x.generic, x.stock, x.unit, x.perDay, x.coverDays === null ? '' : x.coverDays, x.reason, x.supplier, x.buyPrice]);
+        });
+        download('low-stock-' + new Date().toISOString().slice(0, 10) + '.csv', rows);
       };
     });
   }
