@@ -1,6 +1,6 @@
 // ============================================================================
 // Patient_Reminders.gs — Crescentia HealthTech / CresRx
-// Appointment, follow-up and vaccination reminders, by WhatsApp or SMS.
+// Appointment, follow-up and vaccination reminders, by WhatsApp or email.
 // ----------------------------------------------------------------------------
 // WHO IS REMINDED OF WHAT (for a given day, normally tomorrow):
 //   APPT     an appointment on that day that is still Booked
@@ -9,42 +9,41 @@
 //   VACCINE  a child under the immunisation card's age whose next dose
 //            (Maternal_Child.gs) falls due that day
 //
-// CONSENT. A reminder is a message to the patient's phone through a third
-// party (Meta for WhatsApp, the SMS gateway otherwise). It goes only to a
-// patient whose COMMUNICATION consent is GIVEN in the DPDP register — the
-// same gate as every other dispatch (DPDP_Dispatch.gs). Everyone else is
+// CONSENT. A reminder goes only to a patient whose COMMUNICATION consent is
+// GIVEN in the DPDP register ("Reports and reminders by WhatsApp or email") —
+// the same gate as every other dispatch (DPDP_Dispatch.gs). Everyone else is
 // listed with the reason, so the desk can ask at the next visit.
 //
-// HOW IT IS SENT. Two ways, chosen in Script Properties:
+// TWO CHANNELS, and only two:
 //
-//   (no provider)   THE DESK SENDS. Admin Dashboard -> Operations ->
-//                   Reminders lists tomorrow's, each with a WhatsApp and an
-//                   SMS button that open the message ready to send from the
-//                   clinic phone. Nothing leaves without a person clicking.
+//   WHATSAPP  The desk's WhatsApp button opens the message on this computer's
+//             WhatsApp, ready to send to the patient's WhatsApp number (or
+//             mobile). WhatsApp does not tell the app whether it was sent, so
+//             the desk presses the tick (✓) once it has gone; until then the
+//             row stays open and can be opened again.
+//             Optional: with REMINDER_PROVIDER = WHATSAPP_CLOUD (and
+//             WA_PHONE_NUMBER_ID, WA_ACCESS_TOKEN, WA_TEMPLATE_NAME — an
+//             APPROVED template with body parameters {{1}} name, {{2}} what,
+//             {{3}} when, {{4}} clinic; WA_TEMPLATE_LANG default "en"), the
+//             WhatsApp Business Cloud API sends them itself.
 //
-//   REMINDER_PROVIDER = WHATSAPP_CLOUD   WhatsApp Business Cloud API
-//       WA_PHONE_NUMBER_ID, WA_ACCESS_TOKEN,
-//       WA_TEMPLATE_NAME   an APPROVED template with four body parameters:
-//                          {{1}} name  {{2}} what  {{3}} when  {{4}} clinic
-//       WA_TEMPLATE_LANG   default "en"
+//   EMAIL     Sent by this server from the clinic's Google account to the
+//             patient's Email (Patients column Q). The desk's Email button
+//             sends one; the 6 pm job sends tomorrow's on its own unless the
+//             script property REMINDER_AUTO_EMAIL is NO. A consumer Gmail
+//             account may send about 100 emails a day.
 //
-//   REMINDER_PROVIDER = SMS_HTTP         any gateway with an HTTP GET API
-//       SMS_URL_TEMPLATE   e.g. https://gateway.example/send?key=…&to={to}&text={text}
-//                          {to} is 91XXXXXXXXXX, {text} is URL-encoded.
-//       Indian SMS needs a DLT-registered template; the text below must be
-//       registered as it is, or the gateway will drop it.
-//
-//   With a provider set, the daily job (remindersDaily, 6 pm) sends
-//   tomorrow's on its own. Every attempt is written to Reminder_Log, and a
-//   reminder already sent is never sent twice.
+// Every send, tick and failure is written to Reminder_Log. A reminder marked
+// done is not sent again automatically; the desk can still send it again.
 // ============================================================================
 
 var REM_CFG = {
   LOG: 'Reminder_Log',
   HEADERS: ['Reminder_ID', 'Key', 'Kind', 'Patient_ID', 'Due_Date', 'Channel',
             'Status', 'Message', 'Logged_At', 'Logged_By', 'Error'],
-  // Statuses that mean "this one is done": never send again.
-  DONE: ['SENT', 'OPENED_BY_DESK']
+  // Statuses that mean "this one is done": the automatic job skips it. The
+  // desk may still send it again on purpose.
+  DONE: ['SENT', 'MARKED_SENT', 'OPENED_BY_DESK']
 };
 
 var REM_KIND_LABEL = { APPT: 'Appointment', FOLLOWUP: 'Follow-up', VACCINE: 'Vaccination' };
@@ -135,10 +134,19 @@ function rem_provider_() {
   if (kind === 'WHATSAPP_CLOUD' && p.WA_PHONE_NUMBER_ID && p.WA_ACCESS_TOKEN && p.WA_TEMPLATE_NAME) {
     return { kind: kind, channel: 'WHATSAPP', label: 'WhatsApp Business (Meta)', p: p };
   }
-  if (kind === 'SMS_HTTP' && p.SMS_URL_TEMPLATE) {
-    return { kind: kind, channel: 'SMS', label: 'SMS gateway', p: p };
-  }
   return null;
+}
+
+/** Whether the daily job emails reminders by itself (default yes). */
+function rem_autoEmail_() {
+  var v = '';
+  try { v = PropertiesService.getScriptProperties().getProperty('REMINDER_AUTO_EMAIL') || ''; } catch (e) {}
+  return !/^(NO|FALSE|0|OFF)$/i.test(rem_str_(v));
+}
+
+function rem_email_(raw) {
+  var e = rem_str_(raw);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) ? e : '';
 }
 
 /**
@@ -156,11 +164,14 @@ function rem_collect_(day) {
   var pv = rem_values_('Patients');
   if (pv) {
     var pc = { id: rem_col_(pv.hdr, ['Patient_ID']), name: rem_col_(pv.hdr, ['Name']),
-               dob: rem_col_(pv.hdr, ['DOB']), mob: rem_col_(pv.hdr, ['Mobile']), wa: rem_col_(pv.hdr, ['WhatsApp']) };
+               dob: rem_col_(pv.hdr, ['DOB']), mob: rem_col_(pv.hdr, ['Mobile']), wa: rem_col_(pv.hdr, ['WhatsApp']),
+               email: rem_col_(pv.hdr, ['Email']) };
+    if (pc.email < 0 && pv.hdr.length > 16) pc.email = 16;   // column Q, as the reset email reads it
     pv.rows.forEach(function (r) {
       var id = rem_str_(r[pc.id]).toUpperCase();
       if (!id) return;
       pts[id] = { name: rem_str_(r[pc.name]), dob: pc.dob >= 0 ? r[pc.dob] : '',
+                  email: rem_email_(pc.email >= 0 ? r[pc.email] : ''),
                   phone: rem_phone_(pc.wa >= 0 ? r[pc.wa] : '') || rem_phone_(pc.mob >= 0 ? r[pc.mob] : '') };
     });
   }
@@ -172,7 +183,7 @@ function rem_collect_(day) {
     items.push({
       key: kind + '|' + ref + '|' + target,
       kind: kind, kindLabel: REM_KIND_LABEL[kind], patientId: pid,
-      name: name || p.name || pid, phone: p.phone || '', dueDate: target,
+      name: name || p.name || pid, phone: p.phone || '', email: p.email || '', dueDate: target,
       what: what, when: when, message: message
     });
   };
@@ -257,10 +268,9 @@ function rem_collect_(day) {
     it.logged = l || null;
     if (l && REM_CFG.DONE.indexOf(l.status) !== -1) it.state = 'DONE';
     else if (c.state !== 'GIVEN') it.state = 'NO_CONSENT';
-    else if (!it.phone) it.state = 'NO_PHONE';
+    else if (!it.phone && !it.email) it.state = 'NO_CONTACT';
     else it.state = 'READY';
     it.waLink = it.phone ? 'https://wa.me/' + it.phone + '?text=' + encodeURIComponent(it.message) : '';
-    it.smsLink = it.phone ? 'sms:+' + it.phone + '?body=' + encodeURIComponent(it.message) : '';
   });
   var order = { APPT: 0, FOLLOWUP: 1, VACCINE: 2 };
   items.sort(function (a, b) { return order[a.kind] - order[b.kind] || a.name.localeCompare(b.name); });
@@ -288,30 +298,37 @@ function rem_send_(provider, item) {
     if (res.getResponseCode() >= 300) throw new Error('WhatsApp ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 200));
     return;
   }
-  if (provider.kind === 'SMS_HTTP') {
-    var url = String(provider.p.SMS_URL_TEMPLATE)
-      .replace('{to}', encodeURIComponent(item.phone))
-      .replace('{text}', encodeURIComponent(item.message));
-    var r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-    if (r.getResponseCode() >= 300) throw new Error('SMS ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200));
-    return;
-  }
   throw new Error('No reminder provider is configured.');
 }
 
+/** One reminder by email, from the clinic's Google account. Throws on failure. */
+function rem_sendEmail_(item) {
+  if (!item.email) throw new Error('No email address on file.');
+  var clinic = (typeof cresc_clinic_ === 'function') ? cresc_clinic_() : {};
+  var name = clinic.name || 'the clinic';
+  GmailApp.sendEmail(item.email,
+    'Reminder: ' + item.what + ' — ' + item.when,
+    item.message + '\n\n' +
+    'You are receiving this because you agreed to reminders from ' + name + '. ' +
+    'To stop them, tell the clinic or switch off "Reports and reminders" under My privacy in the patient portal.',
+    { name: name });
+}
+
 /** Sends every READY reminder for a day. @return {{sent, failed, skipped}} */
-function rem_sendAll_(day, by) {
+function rem_sendAll_(day, by, allowEmail) {
   var provider = rem_provider_();
-  if (!provider) return { sent: 0, failed: 0, skipped: 0, provider: null };
-  var out = { sent: 0, failed: 0, skipped: 0, provider: provider.label };
+  var out = { sent: 0, emailed: 0, whatsapp: 0, failed: 0, skipped: 0, provider: provider ? provider.label : '' };
   rem_collect_(day).forEach(function (it) {
     if (it.state !== 'READY') { out.skipped++; return; }
+    var channel = (provider && it.phone) ? 'WHATSAPP' : ((allowEmail && it.email) ? 'EMAIL' : '');
+    if (!channel) { out.skipped++; return; }     // WhatsApp from the desk
     try {
-      rem_send_(provider, it);
-      rem_log_(it, provider.channel, 'SENT', by);
+      if (channel === 'WHATSAPP') rem_send_(provider, it); else rem_sendEmail_(it);
+      rem_log_(it, channel, 'SENT', by);
       out.sent++;
+      if (channel === 'EMAIL') out.emailed++; else out.whatsapp++;
     } catch (e) {
-      rem_log_(it, provider.channel, 'FAILED', by, e.message);
+      rem_log_(it, channel, 'FAILED', by, e.message);
       out.failed++;
     }
   });
@@ -340,47 +357,79 @@ function getReminderQueue(sessionToken, opts) {
     var day = rem_dayFrom_((opts || {}).date);
     var items = rem_collect_(day);
     var provider = rem_provider_();
-    var tally = { READY: 0, DONE: 0, NO_CONSENT: 0, NO_PHONE: 0 };
+    var tally = { READY: 0, DONE: 0, NO_CONSENT: 0, NO_CONTACT: 0 };
     items.forEach(function (x) { tally[x.state] = (tally[x.state] || 0) + 1; });
     return { success: true, date: rem_iso_(day), dateText: rem_nice_(day), items: items, tally: tally,
-             provider: provider ? provider.label : '', auto: !!provider };
+             provider: provider ? provider.label : '', auto: !!provider, autoEmail: rem_autoEmail_(),
+             emailable: items.filter(function (x) { return x.state === 'READY' && x.email; }).length };
   } catch (err) {
     return { success: false, message: cresc_reason_(err) };
   }
 }
 
+/** The reminder a browser names, looked up again here. */
+function rem_find_(key) {
+  var date = rem_str_(key).split('|')[2] || '';
+  return rem_collect_(rem_dayFrom_(date)).filter(function (x) { return x.key === key; })[0] || null;
+}
+
 /**
- * FRONTEND ENTRY. The desk opened this reminder in WhatsApp or SMS on the
- * clinic phone. Recorded so it is not sent twice; delivery cannot be seen.
- * The reminder is looked up again here — the browser only names it.
+ * FRONTEND ENTRY. The tick: the desk has sent this reminder on WhatsApp.
+ * WhatsApp cannot report back, so opening the message records nothing; a
+ * person says it went. The row then closes, and can be sent again.
  */
-function markReminderSent(sessionToken, key, channel) {
+function markReminderSent(sessionToken, key) {
   try {
     var actor = crescRequire_(sessionToken, 'appointment.write');
-    var date = rem_str_(key).split('|')[2] || '';
-    var it = rem_collect_(rem_dayFrom_(date)).filter(function (x) { return x.key === key; })[0];
+    var it = rem_find_(key);
     if (!it) return { success: false, message: 'That reminder is no longer due.' };
-    if (it.state === 'NO_CONSENT') return { success: false, message: 'This patient has not agreed to messages.' };
-    rem_log_(it, /SMS/i.test(channel) ? 'SMS' : 'WHATSAPP', 'OPENED_BY_DESK', actor.username);
+    if (it.consent !== 'GIVEN') return { success: false, message: 'This patient has not agreed to messages.' };
+    rem_log_(it, 'WHATSAPP', 'MARKED_SENT', actor.username);
     return { success: true };
   } catch (err) {
     return { success: false, message: cresc_reason_(err) };
   }
 }
 
-/** FRONTEND ENTRY. Send a day's reminders now through the provider. */
+/** FRONTEND ENTRY. Email one reminder now (also used to send it again). */
+function sendReminderEmail(sessionToken, key) {
+  try {
+    var actor = crescRequire_(sessionToken, 'appointment.write');
+    var it = rem_find_(key);
+    if (!it) return { success: false, message: 'That reminder is no longer due.' };
+    if (it.consent !== 'GIVEN') return { success: false, message: 'This patient has not agreed to messages.' };
+    if (!it.email) return { success: false, message: 'There is no email address on this patient\'s record.' };
+    try {
+      rem_sendEmail_(it);
+    } catch (e) {
+      rem_log_(it, 'EMAIL', 'FAILED', actor.username, e.message);
+      return { success: false, message: 'The email could not be sent: ' + e.message };
+    }
+    rem_log_(it, 'EMAIL', 'SENT', actor.username);
+    return { success: true, message: 'Emailed to ' + it.email + '.' };
+  } catch (err) {
+    return { success: false, message: cresc_reason_(err) };
+  }
+}
+
+/**
+ * FRONTEND ENTRY. Send a day's open reminders now: by email where there is
+ * an address, and by the WhatsApp Business API where one is set up. The rest
+ * stay for the desk's WhatsApp button.
+ */
 function sendRemindersNow(sessionToken, opts) {
   var lock = LockService.getScriptLock();
   try {
     var actor = crescRequire_(sessionToken, 'appointment.write');
-    if (!rem_provider_()) {
-      return { success: false, message: 'No reminder provider is set up, so reminders are sent from the desk. ' +
-                                        'See Patient_Reminders.gs for the WhatsApp Business and SMS settings.' };
-    }
     lock.waitLock(20000);
-    var r = rem_sendAll_(rem_dayFrom_((opts || {}).date), actor.username);
+    var r = rem_sendAll_(rem_dayFrom_((opts || {}).date), actor.username, true);
+    if (!r.sent && !r.failed) {
+      return { success: true, sent: 0, message: 'Nothing could be sent automatically: none of the open reminders ' +
+               'has an email address' + (r.provider ? '' : ', and WhatsApp is sent from the desk') + '.' };
+    }
     return { success: true, sent: r.sent, failed: r.failed, skipped: r.skipped,
-             message: r.sent + ' sent, ' + r.failed + ' failed, ' + r.skipped + ' not sendable.' };
+             message: r.sent + ' sent (' + r.emailed + ' by email' + (r.whatsapp ? ', ' + r.whatsapp + ' by WhatsApp' : '') +
+                      ')' + (r.failed ? ', ' + r.failed + ' failed' : '') + '.' };
   } catch (err) {
     return { success: false, message: cresc_reason_(err) };
   } finally {
@@ -391,9 +440,9 @@ function sendRemindersNow(sessionToken, opts) {
 /** TIME-DRIVEN, 6 pm. Tomorrow's reminders, when a provider is set up. */
 function remindersDaily(e) {
   crescTriggerOnly_(e, 'remindersDaily');
-  var r = rem_sendAll_(rem_dayFrom_('tomorrow'), 'SYSTEM');
-  var msg = r.provider ? ('Reminders: ' + r.sent + ' sent, ' + r.failed + ' failed, ' + r.skipped + ' skipped.')
-                       : 'Reminders: no provider configured; the desk sends them from Operations -> Reminders.';
+  var r = rem_sendAll_(rem_dayFrom_('tomorrow'), 'SYSTEM', rem_autoEmail_());
+  var msg = 'Reminders: ' + r.sent + ' sent (' + r.emailed + ' email, ' + r.whatsapp + ' WhatsApp), ' +
+            r.failed + ' failed, ' + r.skipped + ' left for the desk.';
   Logger.log(msg);
   return msg;
 }

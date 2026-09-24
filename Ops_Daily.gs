@@ -152,8 +152,7 @@ function ops_buildSummary_() {
   try {
     var st = stk_analyse_();
     s.stock = { counts: st.counts, values: st.values,
-                low: st.low.slice(0, 8), expiring: st.expiring.filter(function (x) { return x.urgent; }).slice(0, 8),
-                poTotal: st.purchaseOrder.reduce(function (t, p) { return t + p.total; }, 0) };
+                low: st.low.slice(0, 8), expiring: st.expiring.filter(function (x) { return x.urgent; }).slice(0, 8) };
   } catch (e) { s.stock = null; }
   try {
     var t = new Date(); t.setHours(0, 0, 0, 0); t.setDate(t.getDate() + 1);
@@ -163,7 +162,8 @@ function ops_buildSummary_() {
                    followUps: items.filter(function (x) { return x.kind === 'FOLLOWUP'; }).length,
                    vaccines: items.filter(function (x) { return x.kind === 'VACCINE'; }).length,
                    noConsent: items.filter(function (x) { return x.state === 'NO_CONSENT'; }).length,
-                   auto: !!rem_provider_() };
+                   whatsappAuto: !!rem_provider_(), emailAuto: rem_autoEmail_(),
+                   withEmail: items.filter(function (x) { return x.state === 'READY' && x.email; }).length };
   } catch (e) { s.tomorrow = null; }
   s.signIn = ops_signInTrouble_(todayKey);
   try { s.backup = ops_lastBackup_(); } catch (e) { s.backup = null; }
@@ -214,8 +214,7 @@ function ops_summaryHtml_(s) {
     var rows = [
       row('Running low', sc.low + (sc.outOfStock ? ' (' + sc.outOfStock + ' out of stock)' : ''), sc.low > 0),
       row('Expiring within 30 days', sc.urgent + ' batch(es)', sc.urgent > 0),
-      row('Already expired, still on the shelf', sc.expired + ' batch(es), ' + ops_money_(s.stock.values.expired) + ' at cost', sc.expired > 0),
-      row('Suggested order', ops_money_(s.stock.poTotal))
+      row('Already expired, still on the shelf', sc.expired + ' batch(es), ' + ops_money_(s.stock.values.expired) + ' at cost', sc.expired > 0)
     ];
     s.stock.low.forEach(function (x) { rows.push(row('  · ' + x.brand, x.reason)); });
     html.push(block('Pharmacy stock', rows));
@@ -225,7 +224,8 @@ function ops_summaryHtml_(s) {
     html.push(block('Tomorrow', [
       row('Reminders due', t.reminders + ' (' + t.appointments + ' appointments, ' + t.followUps + ' follow-ups, ' + t.vaccines + ' vaccinations)'),
       row('Cannot be messaged (no consent)', t.noConsent, t.noConsent > 0),
-      row('Sent by', t.auto ? 'automatically at 6 pm' : 'the desk — Operations → Reminders')
+      row('Sent by', (t.emailAuto ? 'email automatically at 6 pm (' + t.withEmail + ' with an address); ' : '') +
+                     (t.whatsappAuto ? 'WhatsApp automatically at 6 pm' : 'WhatsApp from the desk — Operations → Reminders'))
     ]));
   }
   var si = s.signIn || {};

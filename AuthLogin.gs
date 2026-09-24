@@ -307,6 +307,16 @@ function cresc_verifyGoogleIdToken_(idToken) {
     }
     return { ok: true, email: String(u.email).trim().toLowerCase(), message: '' };
   } catch (e) {
+    // The script's owner has not approved outside web requests yet. That is
+    // a setup step, not the user's fault, and the raw Google message is
+    // unreadable at a sign-in screen — so say what to do instead.
+    if (/permission to call UrlFetchApp|script\.external_request/i.test(String(e.message))) {
+      Logger.log('Google sign-in blocked: run RUN_00_authorizeServices() in the editor. ' + e.message);
+      return { ok: false, email: '', code: 'NOT_AUTHORISED',
+               message: 'Google sign-in is not switched on for this clinic yet. Please sign in ' +
+                        'with your user ID and password. (Administrator: open the Apps Script ' +
+                        'editor, run RUN_00_authorizeServices once and allow the permissions.)' };
+    }
     return { ok: false, email: '', message: 'Google sign-in could not be verified: ' + e.message };
   }
 }

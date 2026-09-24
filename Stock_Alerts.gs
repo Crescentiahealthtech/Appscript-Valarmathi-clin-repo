@@ -1,6 +1,7 @@
 // ============================================================================
 // Stock_Alerts.gs — Crescentia HealthTech / CresRx
-// What is running out, what is about to expire, and what to order.
+// What is running out and what is about to expire. How much to order is
+// the pharmacist's decision; this only shows the facts behind it.
 // ----------------------------------------------------------------------------
 // Pharmacy_Inventory holds one row per batch with its live quantity (the sale
 // path deducts in place, Pharmacy.gs). Nothing read it back to ask whether a
@@ -15,19 +16,18 @@
 // history falls back to a plain minimum (STK_CFG.MIN_UNITS, or a per-item
 // level on the optional Pharmacy_Reorder_Levels sheet).
 //
-// THE ORDER SUGGESTION brings each low item up to STK_CFG.COVER_DAYS of
-// cover, grouped by the supplier its most recent batch came from, costed at
-// the last buying price. A suggestion: the pharmacist edits it.
+// NO ORDER QUANTITY IS SUGGESTED. Each low item shows what is left, how fast
+// it sells, and the supplier and buying price of its latest batch — what the
+// pharmacist needs to decide the order themselves.
 // ============================================================================
 
 var STK_CFG = {
   USAGE_DAYS: 60,        // sales window for the daily average
-  LEAD_DAYS: 7,          // how long an order takes to arrive
-  COVER_DAYS: 30,        // what an order should bring the stock up to
+  LEAD_DAYS: 7,          // how long an order takes to arrive: low = under LEAD_DAYS + 7 days left
   MIN_UNITS: 10,         // floor for a medicine with no sales history
   NEAR_EXPIRY_DAYS: 90,  // flagged
   URGENT_EXPIRY_DAYS: 30,// flagged red: return to supplier or sell first
-  LEVELS_SHEET: 'Pharmacy_Reorder_Levels'   // optional: Brand, Generic, Min_Qty, Order_Up_To
+  LEVELS_SHEET: 'Pharmacy_Reorder_Levels'   // optional: Brand, Generic, Min_Qty
 };
 
 function stk_str_(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
@@ -89,7 +89,7 @@ function stk_analyse_() {
                             unit: stk_str_(r[c.unit]), stock: 0, sellable: 0, batches: 0,
                             supplier: '', buyPrice: 0, lastIn: 0 };
       }
-      // The most recent batch decides supplier and price for the order.
+      // The most recent batch is the supplier and price shown.
       var inAt = (r[c.ts] instanceof Date) ? r[c.ts].getTime() : i;
       if (inAt >= it.lastIn) {
         it.lastIn = inAt;
@@ -142,7 +142,7 @@ function stk_analyse_() {
   if (lv && lv.getLastRow() > 1) {
     lv.getDataRange().getValues().slice(1).forEach(function (r) {
       if (!stk_str_(r[0])) return;
-      levels[stk_key_(r[0], r[1])] = { min: parseFloat(r[2]) || 0, upTo: parseFloat(r[3]) || 0 };
+      levels[stk_key_(r[0], r[1])] = { min: parseFloat(r[2]) || 0 };
     });
   }
   var minUnits = STK_CFG.MIN_UNITS;
@@ -157,27 +157,23 @@ function stk_analyse_() {
     var perDay = (sold[k] || 0) / STK_CFG.USAGE_DAYS;
     var level = levels[k];
     var cover = perDay > 0 ? it.sellable / perDay : null;
-    var reason = '', target = 0;
+    var reason = '';
     if (level && level.min > 0 && it.sellable <= level.min) {
       reason = 'at or below its reorder level (' + level.min + ')';
-      target = level.upTo || Math.max(level.min * 2, Math.ceil(perDay * STK_CFG.COVER_DAYS));
     } else if (perDay > 0 && cover < STK_CFG.LEAD_DAYS + 7) {
       reason = it.sellable <= 0 ? 'out of stock, sells ' + perDay.toFixed(1) + '/day'
              : 'about ' + Math.floor(cover) + ' day(s) left at ' + perDay.toFixed(1) + '/day';
-      target = Math.ceil(perDay * (STK_CFG.COVER_DAYS + STK_CFG.LEAD_DAYS));
     } else if (perDay === 0 && !level && it.sellable > 0 && it.sellable <= minUnits) {
       // No sales in the window: the plain floor. A medicine at zero with no
       // sales is not listed — that is a discontinued line, not a shortage.
       reason = 'only ' + it.sellable + ' left (no sales in ' + STK_CFG.USAGE_DAYS + ' days)';
-      target = minUnits * 2;
     }
     if (!reason) return;
-    var qty = Math.max(0, Math.ceil(target - it.sellable));
     low.push({ brand: it.brand, generic: it.generic, type: it.type, unit: it.unit,
                stock: it.sellable, perDay: Math.round(perDay * 10) / 10,
                coverDays: cover === null ? null : Math.floor(cover),
-               reason: reason, suggestQty: qty, supplier: it.supplier || 'Supplier not recorded',
-               buyPrice: it.buyPrice, estCost: Math.round(qty * it.buyPrice * 100) / 100 });
+               reason: reason, supplier: it.supplier || 'Supplier not recorded',
+               buyPrice: it.buyPrice });
   });
   low.sort(function (a, b) {
     var ca = a.coverDays === null ? 1e9 : a.coverDays, cb = b.coverDays === null ? 1e9 : b.coverDays;
@@ -186,19 +182,9 @@ function stk_analyse_() {
   expiring.sort(function (a, b) { return a.daysLeft - b.daysLeft; });
   expired.sort(function (a, b) { return a.daysLeft - b.daysLeft; });
 
-  var po = {};
-  low.forEach(function (x) {
-    if (!x.suggestQty) return;
-    var s = po[x.supplier] || (po[x.supplier] = { supplier: x.supplier, lines: [], total: 0 });
-    s.lines.push({ brand: x.brand, generic: x.generic, unit: x.unit, qty: x.suggestQty,
-                   buyPrice: x.buyPrice, cost: x.estCost });
-    s.total = Math.round((s.total + x.estCost) * 100) / 100;
-  });
-
   var sum = function (list, k) { return Math.round(list.reduce(function (t, x) { return t + (x[k] || 0); }, 0) * 100) / 100; };
   return {
     low: low, expiring: expiring, expired: expired,
-    purchaseOrder: Object.keys(po).sort().map(function (k) { return po[k]; }),
     counts: {
       low: low.length,
       outOfStock: low.filter(function (x) { return x.stock <= 0; }).length,
@@ -208,14 +194,14 @@ function stk_analyse_() {
       items: Object.keys(items).length
     },
     values: { expiring: sum(expiring, 'value'), expired: sum(expired, 'value') },
-    cfg: { usageDays: STK_CFG.USAGE_DAYS, coverDays: STK_CFG.COVER_DAYS, leadDays: STK_CFG.LEAD_DAYS,
+    cfg: { usageDays: STK_CFG.USAGE_DAYS, leadDays: STK_CFG.LEAD_DAYS,
            nearExpiryDays: STK_CFG.NEAR_EXPIRY_DAYS, urgentDays: STK_CFG.URGENT_EXPIRY_DAYS }
   };
 }
 
 /**
  * FRONTEND ENTRY. Low stock, near-expiry and expired batches, and a
- * purchase-order suggestion. Pharmacy staff and administrators.
+ * supplier and last price of each low item. Pharmacy staff and administrators.
  */
 function getStockAlerts(sessionToken) {
   try {

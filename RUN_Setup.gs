@@ -48,6 +48,49 @@
 // PART 1 — CHECK WHAT ARRIVED  (read-only, run these first, in any order)
 // ---------------------------------------------------------------------------
 
+/**
+ * 0. GRANT THE PERMISSIONS THE APP NEEDS.  Run this first, and again after
+ *    any update that adds a new Google service.
+ *
+ * The web app runs as YOU (executeAs: USER_DEPLOYING), so it can only use a
+ * Google service you have approved for this script. A new service in the code
+ * is not approved until somebody runs a function in the editor and accepts
+ * the permission screen. Until then the web app fails with
+ * "You do not have permission to call UrlFetchApp.fetch" — which is exactly
+ * what Google sign-in reports when this step has been skipped.
+ *
+ * Press Run, choose your account, and on "Google hasn't verified this app"
+ * choose Advanced → Go to (project) → Allow. That screen appears because
+ * this is your own script, not a published app; it is expected.
+ *
+ * Each service is touched once, harmlessly, so the report says which work:
+ *   UrlFetchApp  Google sign-in (checks the token with Google), WhatsApp API
+ *   DriveApp     nightly backups
+ *   GmailApp     password-reset email, reminders by email, the day summary
+ *   ScriptApp    the scheduled jobs
+ */
+function RUN_00_authorizeServices() {
+  crescEditorOnly_('RUN_00_authorizeServices');
+  var out = ['PERMISSIONS', ''];
+  var check = function (label, fn) {
+    try { out.push('PASS  ' + label + ' — ' + fn()); }
+    catch (e) { out.push('FAIL  ' + label + ' — ' + e.message); }
+  };
+  check('UrlFetchApp (Google sign-in)', function () {
+    return 'reached Google (HTTP ' + UrlFetchApp.fetch('https://www.google.com/generate_204',
+      { muteHttpExceptions: true }).getResponseCode() + ')';
+  });
+  check('DriveApp (backups)', function () { DriveApp.getRootFolder().getName(); return 'can read your Drive'; });
+  check('GmailApp (emails)', function () { GmailApp.getAliases(); return 'can send as ' + Session.getEffectiveUser().getEmail(); });
+  check('ScriptApp (scheduled jobs)', function () { return ScriptApp.getProjectTriggers().length + ' trigger(s) installed'; });
+  out.push('');
+  out.push('Every line PASS: Google sign-in and the other services now work in the');
+  out.push('web app. No new deployment is needed for permissions alone.');
+  var report = out.join('\n');
+  Logger.log(report);
+  return report;
+}
+
 /** 1. Did every .gs file get pasted in? Lists anything missing. */
 function RUN_01_checkFilesArrived() {
   crescEditorOnly_('RUN_01_checkFilesArrived');
