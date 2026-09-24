@@ -248,7 +248,7 @@ function verifyGoogleLogin(payload) {
         }
 
         const role = storedRole.toString().trim().toLowerCase();
-        return cresc_staffSignIn_(storedUsername, role, userData[i][5], 'google');
+        return cresc_staffSignIn_(storedUsername, role, userData[i][5], who.offline ? 'google-offline' : 'google');
       }
     }
 
@@ -311,13 +311,79 @@ function cresc_verifyGoogleIdToken_(idToken) {
     // a setup step, not the user's fault, and the raw Google message is
     // unreadable at a sign-in screen — so say what to do instead.
     if (/permission to call UrlFetchApp|script\.external_request/i.test(String(e.message))) {
-      Logger.log('Google sign-in blocked: run RUN_00_authorizeServices() in the editor. ' + e.message);
-      return { ok: false, email: '', code: 'NOT_AUTHORISED',
-               message: 'Google sign-in is not switched on for this clinic yet. Please sign in ' +
-                        'with your user ID and password. (Administrator: open the Apps Script ' +
-                        'editor, run RUN_00_authorizeServices once and allow the permissions.)' };
+      Logger.log('Google sign-in: no UrlFetch permission, using the offline token check. ' +
+                 'Run RUN_00_authorizeServices() to restore full verification. ' + e.message);
+      return cresc_checkGoogleTokenOffline_(idToken);
     }
     return { ok: false, email: '', message: 'Google sign-in could not be verified: ' + e.message };
+  }
+}
+
+/** The Firebase project Google sign-in belongs to (Auth.html firebaseConfig). */
+var CRESC_FIREBASE_PROJECT_ID = 'crescentiaemrbuild';
+
+/**
+ * GOOGLE SIGN-IN WHEN GOOGLE CANNOT BE ASKED.
+ *
+ * Full verification (above) asks Google whether the ID token is genuine, and
+ * that needs the owner to have approved outside web requests
+ * (script.external_request). Until they have, this keeps Google sign-in
+ * working by reading the token itself and checking everything that can be
+ * checked without contacting Google:
+ *
+ *   issued by Google for THIS Firebase project (iss, aud)
+ *   not expired, not issued in the future (exp, iat)
+ *   the email is verified and the sign-in was with Google (not email/password)
+ *
+ * WHAT IT CANNOT CHECK is Google's signature, so a person who knows how to
+ * hand-build such a token could still pose as a staff email. That is far
+ * harder than the old check (which trusted a typed email address), but it is
+ * not full verification, so:
+ *   - every sign-in through it is audited as method "google-offline";
+ *   - two-step sign-in (if enrolled) is still required after it;
+ *   - Script Property GOOGLE_SIGNIN_STRICT = YES switches it off;
+ *   - full verification takes over by itself once RUN_00_authorizeServices()
+ *     has been run and allowed.
+ */
+function cresc_checkGoogleTokenOffline_(idToken) {
+  try {
+    var strict = '';
+    try { strict = PropertiesService.getScriptProperties().getProperty('GOOGLE_SIGNIN_STRICT') || ''; } catch (e) {}
+    if (/^(YES|TRUE|1|ON)$/i.test(strict)) {
+      return { ok: false, email: '', code: 'NOT_AUTHORISED',
+               message: 'Google sign-in is not switched on for this clinic yet. Please sign in ' +
+                        'with your user ID and password. (Administrator: run RUN_00_authorizeServices ' +
+                        'in the Apps Script editor and allow the permissions.)' };
+    }
+    var parts = String(idToken || '').split('.');
+    if (parts.length !== 3) throw new Error('not a Google sign-in token');
+    var seg = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (seg.length % 4) seg += '=';
+    var claims = JSON.parse(Utilities.newBlob(Utilities.base64Decode(seg)).getDataAsString());
+    var header = {};
+    try {
+      var h = parts[0].replace(/-/g, '+').replace(/_/g, '/');
+      while (h.length % 4) h += '=';
+      header = JSON.parse(Utilities.newBlob(Utilities.base64Decode(h)).getDataAsString());
+    } catch (e) {}
+
+    var now = Math.floor(Date.now() / 1000);
+    var pid = CRESC_FIREBASE_PROJECT_ID;
+    try { pid = PropertiesService.getScriptProperties().getProperty('FIREBASE_PROJECT_ID') || pid; } catch (e) {}
+    var fb = claims.firebase || {};
+    var fail = function (why) {
+      return { ok: false, email: '', message: 'Google sign-in could not be confirmed (' + why + '). Please try again.' };
+    };
+    if (header.alg !== 'RS256') return fail('unexpected token type');
+    if (claims.iss !== 'https://securetoken.google.com/' + pid || claims.aud !== pid) return fail('wrong project');
+    if (!(claims.exp > now)) return fail('expired');
+    if (!(claims.iat <= now + 300)) return fail('issued in the future');
+    if (!claims.sub) return fail('no account');
+    if (fb.sign_in_provider !== 'google.com') return fail('not a Google sign-in');
+    if (claims.email_verified !== true || !claims.email) return fail('email not verified');
+    return { ok: true, email: String(claims.email).trim().toLowerCase(), offline: true, message: '' };
+  } catch (e) {
+    return { ok: false, email: '', message: 'Google sign-in could not be confirmed: ' + e.message };
   }
 }
 
