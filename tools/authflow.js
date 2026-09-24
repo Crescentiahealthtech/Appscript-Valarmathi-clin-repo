@@ -59,8 +59,10 @@ const env = {
     computeDigest: (_a, v) => Array.from(crypto.createHash('sha256').update(String(v)).digest()),
     DigestAlgorithm: { SHA_256: 'SHA_256' },
     base64Encode: b => Buffer.from(b.map(n => n & 0xff)).toString('base64'),
+    base64Decode: t => Array.from(Buffer.from(String(t), 'base64')).map(n => (n << 24) >> 24),
     getUuid: () => crypto.randomUUID(),
-    newBlob: s => ({ getBytes: () => Array.from(Buffer.from(String(s), 'utf8')) }),
+    newBlob: s => ({ getBytes: () => Array.from(Buffer.from(String(s), 'utf8')),
+                     getDataAsString: () => Array.isArray(s) ? Buffer.from(s.map(n => n & 0xff)).toString('utf8') : String(s) }),
     formatDate: () => '2026-09-23 10:00'
   },
   PropertiesService: { getScriptProperties: () => ({ getProperty: () => null, setProperty() {} }) },
@@ -233,6 +235,35 @@ check('an admin can remove it for a nurse', x.success === true && !users()[1][5]
 r = env.verifyLogin({ username: 'nurse1', password: 'Old-password-123' });
 check('...after which the password signs straight in', r.success === true && !!r.sessionToken, r);
 check('set-up and removal are audited', audit.some(a => a === 'MFA_ENROLLED nurse1') && audit.some(a => a === 'MFA_REMOVED nurse1'), audit.slice(-4));
+
+// --- 7. Google sign-in before the owner has approved outside requests -------
+const props = {};
+env.PropertiesService.getScriptProperties = () => ({ getProperty: k => props[k] || null, setProperty() {} });
+env.UrlFetchApp.fetch = () => { throw new Error('You do not have permission to call UrlFetchApp.fetch. Required permissions: https://www.googleapis.com/auth/script.external_request'); };
+const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+const tok = (claims, alg) => b64({ alg: alg || 'RS256', kid: 'k' }) + '.' + b64(claims) + '.sig';
+const nowS = Math.floor(Date.now() / 1000);
+const good = { iss: 'https://securetoken.google.com/crescentiaemrbuild', aud: 'crescentiaemrbuild', sub: 'u1',
+               iat: nowS - 10, exp: nowS + 3000, email: 'nurse1@example.com', email_verified: true,
+               firebase: { sign_in_provider: 'google.com' } };
+fresh();
+r = env.verifyGoogleLogin({ idToken: tok(good) });
+check('Google sign-in works without UrlFetch permission (offline check)', r.success === true && !!r.sessionToken, r);
+r = env.verifyGoogleLogin({ idToken: tok(Object.assign({}, good, { aud: 'someone-else' })) });
+check('a token for another Firebase project is refused', r.success === false && !r.sessionToken, r);
+r = env.verifyGoogleLogin({ idToken: tok(Object.assign({}, good, { exp: nowS - 5 })) });
+check('an expired token is refused', r.success === false, r);
+r = env.verifyGoogleLogin({ idToken: tok(Object.assign({}, good, { firebase: { sign_in_provider: 'password' } })) });
+check('a non-Google sign-in token is refused', r.success === false, r);
+r = env.verifyGoogleLogin({ idToken: tok(good, 'none') });
+check('an unsigned (alg none) token is refused', r.success === false, r);
+fresh(SECRET);
+r = env.verifyGoogleLogin({ idToken: tok(good) });
+check('two-step sign-in is still asked after the offline check', r.mfaRequired === true && !r.sessionToken, r);
+props.GOOGLE_SIGNIN_STRICT = 'YES';
+fresh();
+r = env.verifyGoogleLogin({ idToken: tok(good) });
+check('GOOGLE_SIGNIN_STRICT=YES switches the offline check off', r.success === false && /not switched on/.test(r.message), r);
 
 if (failed) { console.log(`${failed} of ${ran} sign-in checks FAILED.`); process.exit(1); }
 console.log(`${ran} sign-in checks passed (reset keeps the old password, temp works once, MFA gates the session, Google needs a token, in-app MFA set-up saves only a confirmed secret).`);

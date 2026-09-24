@@ -96,6 +96,16 @@ function RUN_00_authorizeServices() {
     out.push('     https://www.googleapis.com/auth/script.external_request');
     out.push('  3. Save, run RUN_00_authorizeServices again, and Allow on the new screen.');
     out.push('  4. Deploy -> Manage deployments -> Edit -> Version: New version -> Deploy.');
+    out.push('');
+    out.push('If the manifest already lists it and NO Allow screen appears when you run');
+    out.push('this, Google is re-using the old approval. Clear it and approve again:');
+    out.push('  a. Open https://myaccount.google.com/permissions (as ' + Session.getEffectiveUser().getEmail() + ').');
+    out.push('  b. Find this Apps Script project, open it, and choose "Delete all connections".');
+    out.push('  c. Run RUN_00_authorizeServices again: the full Allow screen appears,');
+    out.push('     including "Connect to an external service". Allow.');
+    out.push('');
+    out.push('Until then Google sign-in still works using an offline token check');
+    out.push('(AuthLogin.gs, cresc_checkGoogleTokenOffline_), audited as "google-offline".');
   }
   var report = out.join('\n');
   Logger.log(report);
