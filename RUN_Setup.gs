@@ -84,8 +84,19 @@ function RUN_00_authorizeServices() {
   check('GmailApp (emails)', function () { GmailApp.getAliases(); return 'can send as ' + Session.getEffectiveUser().getEmail(); });
   check('ScriptApp (scheduled jobs)', function () { return ScriptApp.getProjectTriggers().length + ' trigger(s) installed'; });
   out.push('');
-  out.push('Every line PASS: Google sign-in and the other services now work in the');
-  out.push('web app. No new deployment is needed for permissions alone.');
+  if (out.join('\n').indexOf('FAIL') === -1) {
+    out.push('Every line PASS: Google sign-in and the other services now work in the');
+    out.push('web app. No new deployment is needed for permissions alone.');
+  } else {
+    out.push('A FAIL above means that permission is not in this project\'s manifest, so');
+    out.push('Google never offers it. Fix it once:');
+    out.push('  1. Project Settings (gear) -> tick "Show appsscript.json manifest file".');
+    out.push('  2. Open appsscript.json and replace it with the repository\'s copy, whose');
+    out.push('     "oauthScopes" list includes');
+    out.push('     https://www.googleapis.com/auth/script.external_request');
+    out.push('  3. Save, run RUN_00_authorizeServices again, and Allow on the new screen.');
+    out.push('  4. Deploy -> Manage deployments -> Edit -> Version: New version -> Deploy.');
+  }
   var report = out.join('\n');
   Logger.log(report);
   return report;
