@@ -42,6 +42,8 @@ function dc_invalidate_(sheetName) {
   delete DC_CACHE.sheets[k];
   // The cross-user copy of a reference list built from this sheet, too.
   if (typeof MCACHE_SOURCES !== 'undefined' && MCACHE_SOURCES[k]) crescMasterBust_(k);
+  // And the access map every session check reads (RBAC.gs, SECTION B2).
+  if (k === 'Users' && typeof cresc_aclBust_ === 'function') cresc_aclBust_();
 }
 
 /** Clears everything. Call at the top of a long entry point that writes. */

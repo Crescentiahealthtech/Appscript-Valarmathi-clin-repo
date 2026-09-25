@@ -3,8 +3,8 @@
 // ==========================================
 
 function getLabBillingWorkspace(sessionToken) {
-  try { crescRequire_(sessionToken, 'billing.read'); }
-  catch (err) { return { success: false, message: err.message }; }
+  try { crescRequire_(sessionToken, ['lab.bill', 'accounts.read']); }
+  catch (err) { return { success: false, message: cresc_reason_(err) }; }
   return lab_billingWorkspace_();
 }
 
@@ -320,7 +320,7 @@ function settleLabBillBalance(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var actor = crescRequire_(sessionToken, ['billing.write', 'accounts.settle']);
+    var actor = crescRequire_(sessionToken, ['lab.bill', 'accounts.settle']);
     payload = payload || {};
     var mode = String(payload.payMode || 'CASH').toUpperCase();
     if (['CASH', 'UPI', 'CARD', 'BANK'].indexOf(mode) === -1) {
@@ -349,8 +349,8 @@ function parseTestsForUI_(jsonStr) {
 }
 
 function getLabDailyCollection(sessionToken) {
-  try { crescRequire_(sessionToken, ['billing.read', 'accounts.read']); }
-  catch (err) { return { success: false, message: err.message }; }
+  try { crescRequire_(sessionToken, ['lab.bill', 'accounts.read']); }
+  catch (err) { return { success: false, message: cresc_reason_(err) }; }
   return lab_dailyCollection_();
 }
 
@@ -385,7 +385,7 @@ function lab_dailyCollection_() {
  */
 function getLabReceiptHtml(billId, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['lab.bill', 'accounts.read']);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName("LAB_BILLING");
     if (!sheet) throw new Error("LAB_BILLING sheet not found.");
@@ -412,13 +412,33 @@ function getLabReceiptHtml(billId, sessionToken) {
           balance: Number(data[i][headers.indexOf("BalanceAmount")]) || 0,
           payStatus: data[i][headers.indexOf("PaymentStatus")] || '',
           receipt: data[i][headers.indexOf("ReceiptNumber")] || billId,
-          billedAt: data[i][headers.indexOf("BilledAt")] ? new Date(data[i][headers.indexOf("BilledAt")]).toLocaleString('en-IN') : ""
+          billedAtRaw: data[i][headers.indexOf("BilledAt")],
+          billedAt: cresc_formatDate_(data[i][headers.indexOf("BilledAt")], 'dd-MMM-yyyy hh:mm a')
         };
         break;
       }
     }
     
     if (!b) throw new Error("Bill not found in database.");
+
+    // THE PAYMENTS SO FAR. A part-paid or unpaid bill used to reprint as the
+    // original invoice and nothing else — "Paid ₹200" with no word of the
+    // ₹300 collected last week — so the reprint could not serve as the
+    // receipt the patient was asking for. Every collection is a
+    // LAB_SETTLEMENTS row; what was paid at billing is the rest of PaidAmount.
+    const settlements = labb_settlements_().filter(function (r) {
+      return String(r.BillID || '').trim() === String(billId).trim();
+    }).map(function (r) {
+      return { at: cresc_formatDate_(r.SettledAt, 'dd-MMM-yyyy hh:mm a'),
+               amount: Number(r.Amount) || 0, mode: String(r.PaymentMode || ''),
+               by: String(r.SettledBy || ''), note: String(r.Note || '') };
+    });
+    const later = settlements.reduce(function (t, r) { return t + r.amount; }, 0);
+    const atBilling = Math.max(0, Math.round((b.paid - later) * 100) / 100);
+    const cancelled = String(b.payStatus).toUpperCase() === 'CANCELLED';
+    const paymentRows = []
+      .concat(atBilling > 0 ? [{ at: b.billedAt, amount: atBilling, mode: b.payMode, by: '', note: 'At billing' }] : [])
+      .concat(settlements);
 
     // Parse itemized tests
     let items = [];
@@ -519,6 +539,25 @@ function getLabReceiptHtml(billId, sessionToken) {
             </table>
           </div>
 
+          ${(!isIp && paymentRows.length) ? `
+          <div style="padding:0 24px 14px;">
+            <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Payments received</div>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead><tr style="background:#f3f4f6;">
+                <th style="padding:5px 8px;text-align:left;">Date</th><th style="padding:5px 8px;text-align:left;">Mode</th>
+                <th style="padding:5px 8px;text-align:left;">Note</th><th style="padding:5px 8px;text-align:right;">Amount</th>
+              </tr></thead>
+              <tbody>${paymentRows.map(function (r) {
+                return '<tr><td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">' + _esc_(r.at) + '</td>' +
+                       '<td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">' + _esc_(r.mode) + '</td>' +
+                       '<td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;">' + _esc_(r.note || (r.by ? 'Collected by ' + r.by : '')) + '</td>' +
+                       '<td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">₹' + Number(r.amount).toFixed(2) + '</td></tr>';
+              }).join('')}</tbody>
+            </table>
+          </div>` : ''}
+
+          ${cancelled ? `<div style="padding:0 24px 14px;"><span style="border:2px solid #b91c1c;color:#b91c1c;display:inline-block;padding:4px 12px;font-weight:800;letter-spacing:.05em;border-radius:4px;font-size:12px;">CANCELLED — NOT A RECEIPT</span></div>` : ''}
+
           <div style="padding:12px 24px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#374151;display:flex;justify-content:space-between;align-items:center;">
             ${payLine}
             <div style="color:#9ca3af;">This is a computer-generated invoice.</div>
@@ -535,9 +574,9 @@ function getLabReceiptHtml(billId, sessionToken) {
       </html>
     `;
 
-    return { success: true, html: html };
+    return { success: true, html: html, balance: b.balance, status: b.payStatus };
   } catch (error) {
-    return { success: false, message: error.toString() };
+    return { success: false, message: cresc_reason_(error) };
   }
 }
 
@@ -557,7 +596,7 @@ function _esc_(s) {
 function generateAndStoreLabInvoicePDF(billId, sessionToken) {
   try {
     // 1. Generate HTML using existing engine
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, 'lab.bill');
 
     // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
     // The register has carried this purpose since it was built and nothing
@@ -631,7 +670,7 @@ function generateAndStoreLabInvoicePDF(billId, sessionToken) {
  */
 function emailLabInvoicePDF(billId, patientEmail, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, 'lab.bill');
 
     // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
     // The register has carried this purpose since it was built and nothing

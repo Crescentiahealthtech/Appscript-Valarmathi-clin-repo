@@ -101,17 +101,26 @@ var CRESC_PERMS = {
   'lab.ack_critical':        'Acknowledge a critical value',
   'lab.catalog':             'Edit the test catalogue and prices',
 
+  // THE DESK'S OWN TILL. Lab bills used to sit behind billing.write, the same
+  // key as the pharmacy's and reception's — so a lab technician could raise
+  // and settle pharmacy bills and a pharmacist could collect on lab bills.
+  // Each desk now has its own key, and billing.* means the hospital desk.
+  'lab.bill':                'Raise, collect on and reprint lab bills',
+
   // --- pharmacy ---------------------------------------------------------
   'pharmacy.read':           'See stock and the dispensing queue',
   'pharmacy.dispense':       'Dispense against a prescription',
+  'pharmacy.bill':           'Settle, search and reprint pharmacy bills',
+  'pharmacy.register':       'Print the Schedule H / H1 / X drug register',
   'pharmacy.stock_add':      'Receive stock',
   'pharmacy.stock_edit':     'Adjust a batch',
   'pharmacy.stock_discard':  'Write stock off as expired, damaged or lost',
   'pharmacy.return':         'Accept a return / issue a refund',
 
   // --- money ------------------------------------------------------------
-  'billing.read':            'See a bill',
-  'billing.write':           'Raise or take payment on a bill',
+  'billing.read':            'See a hospital bill',
+  'billing.write':           'Raise or take payment on a hospital bill',
+  'billing.cancel':          'Cancel or void a bill',
   'accounts.read':           'See the Finance Hub and the ledger',
   'accounts.write':          'Record an expense or a transfer',
   'accounts.settle':         'Settle a discharge bill',
@@ -124,7 +133,11 @@ var CRESC_PERMS = {
   // sign in for is still an endpoint. They are separated from patient.read so
   // that "may look up a drug dose" never has to mean "may open a patient".
   'reference.read':          'Look up drug, dose and test reference data',
-  'dashboard.read':          'See the clinic overview dashboard',
+  // THE COMMAND CENTER. The clinic-wide overview — every desk's takings,
+  // footfall, occupancy — is for the people who run the clinic. It is held
+  // by administrators and doctors; anyone else is given it individually from
+  // Staff Accounts → Access, and lands on their own desk instead.
+  'dashboard.read':          'Open the Command Center (clinic overview)',
 
   // --- administration ---------------------------------------------------
   'admin.users':             'Create and disable staff logins',
@@ -228,6 +241,9 @@ var CRESC_ROLE_MATRIX = {
     'reference.read', 'dashboard.read'
   ],
 
+  // dashboard.read — the Command Center — is held by admin and doctor only.
+  // Every other role lands on its own desk; see CRESC_UI_PERMS and
+  // crescLandingTab() in ScriptsMV.html.
   nurse: [
     'patient.read',
     'appointment.read',
@@ -237,40 +253,37 @@ var CRESC_ROLE_MATRIX = {
     // clinician, so acknowledging is theirs. Verifying a result is not.
     'lab.read', 'lab.order', 'lab.collect', 'lab.ack_critical',
     'pharmacy.read',
-    'reference.read', 'dashboard.read'
+    'reference.read'
   ],
 
   receptionist: [
     'patient.read', 'patient.write', 'patient.register',
     'appointment.read', 'appointment.write', 'appointment.cancel',
     'billing.read', 'billing.write',
-    'ward.read',
-    'dashboard.read'
+    'ward.read'
   ],
 
   pharmacist: [
     'patient.read',
-    'pharmacy.read', 'pharmacy.dispense', 'pharmacy.stock_add',
-    'pharmacy.stock_edit', 'pharmacy.stock_discard', 'pharmacy.return',
-    'billing.read', 'billing.write',
-    'reference.read', 'dashboard.read'
+    'pharmacy.read', 'pharmacy.dispense', 'pharmacy.bill', 'pharmacy.register',
+    'pharmacy.stock_add', 'pharmacy.stock_edit', 'pharmacy.stock_discard',
+    'pharmacy.return',
+    'reference.read'
   ],
 
   lab: [
     'patient.read',
     'lab.read', 'lab.order', 'lab.collect', 'lab.result', 'lab.verify',
-    'lab.ack_critical', 'lab.catalog',
-    'billing.read', 'billing.write',
-    'reference.read', 'dashboard.read'
+    'lab.ack_critical', 'lab.catalog', 'lab.bill',
+    'reference.read'
   ],
 
   accountant: [
     'patient.read',
-    'billing.read', 'billing.write',
+    'billing.read', 'billing.write', 'billing.cancel',
     'accounts.read', 'accounts.write', 'accounts.settle',
     'accounts.lock_period', 'accounts.payables', 'accounts.tax',
-    'ward.read',
-    'dashboard.read'
+    'ward.read'
   ],
 
   // A patient reaches exactly one thing: their own record. Every portal
@@ -341,6 +354,240 @@ function crescCan_(role, permission) {
   return crescPermsFor_(role).indexOf(crescStr_(permission)) !== -1;
 }
 
+
+// ---------------------------------------------------------------------------
+// SECTION B2 — PER-PERSON ACCESS, AND THE ACCOUNT'S STATE RIGHT NOW
+// ---------------------------------------------------------------------------
+//
+// A role is a starting point, not a person. Two receptionists are not always
+// trusted with the same things, and a nurse covering the lab for a month
+// needs the lab for a month. Before this section the only way to give one
+// person one more thing was to change their whole role, and the only way to
+// take one thing away was to take the role away.
+//
+// So each staff account carries two lists on its Users row:
+//
+//   Access_Grant   permissions this person has ON TOP of their role
+//   Access_Revoke  permissions of their role this person does NOT have
+//
+// effective = (role's permissions + Access_Grant) − Access_Revoke
+//
+// Both are edited from Staff Accounts → Access, every change is audited, and
+// both are plain comma-separated keys an owner can read on the sheet.
+//
+// THE SAME READ ALSO ANSWERS "IS THIS ACCOUNT STILL ALLOWED IN?" A session is
+// a cached copy of who someone was when they signed in. Switching an account
+// off, or changing its role, used to take effect only when that session
+// expired — up to eight hours later, and never, for a session in steady use.
+// dc_validateSession_ now asks crescAccountState_() on every call, so a
+// switched-off account is refused on its very next click and a role change
+// applies on the next one.
+//
+// COST. The Users sheet is read once and kept in the script cache for
+// CRESC_ACL_TTL_S, shared by every user; each call pays one cache read, and
+// one execution reads it at most once. Every writer in the application that
+// changes an account calls cresc_aclBust_(), and a hand edit to the Users
+// sheet busts it through onEdit (Master_Cache.gs).
+//
+// IF THE SHEET CANNOT BE READ AT ALL (a transient Sheets fault), accounts are
+// judged on their role alone — exactly the behaviour before this section —
+// rather than every member of staff being signed out at once. An account
+// that is READ and found missing or switched off is always refused.
+// ---------------------------------------------------------------------------
+
+var CRESC_GRANT_HEADER  = 'Access_Grant';
+var CRESC_REVOKE_HEADER = 'Access_Revoke';
+var CRESC_ACL_CACHE_KEY = 'CRESC_ACL_V1';
+var CRESC_ACL_TTL_S     = 600;
+
+/**
+ * Session usernames minted by the script itself for editor-run jobs
+ * (RUN_Setup.gs, DPDP_Consent_Backfill.gs, Doctor_Schedule_Engine.gs). They
+ * have no Users row by design; every one of them is issued only from a
+ * function guarded by crescEditorOnly_.
+ */
+var CRESC_SYSTEM_USERS = ['SCRIPT_OWNER', 'SYSTEM_SEED'];
+
+/**
+ * Keys only the system owner may hand to someone whose role lacks them.
+ * Each of these reaches past one person's own work: creating logins,
+ * changing clinic-wide configuration, reading everyone's audit trail,
+ * answering for the clinic under the DPDP Act, or freezing the books.
+ */
+var CRESC_OWNER_GRANT_ONLY = ['admin.users', 'admin.config', 'admin.audit',
+                              'dpdp.manage', 'accounts.lock_period'];
+
+/**
+ * Keys that are never granted individually. The owner's key is a property of
+ * the account (the Super_Admin flag), not a permission to hand around; the
+ * portal key belongs to patients and means nothing on a staff login.
+ */
+var CRESC_NEVER_GRANT = ['admin.users.elevated', 'portal.self'];
+
+/** This execution's copy of the access map. Globals do not outlive a call. */
+var CRESC_ACL_MEMO = null;
+
+/** A comma/space/semicolon separated list of permission keys, cleaned. */
+function cresc_permList_(v) {
+  var out = [], seen = {};
+  crescStr_(v).split(/[\s,;]+/).forEach(function (p) {
+    p = p.trim().toLowerCase();
+    if (!p || seen[p] || !CRESC_PERMS.hasOwnProperty(p)) return;
+    seen[p] = true;
+    out.push(p);
+  });
+  return out;
+}
+
+/**
+ * The access map: { users: { USERNAME: {n, r, rr, a, o, g, x} }, at }.
+ *   n  the username as typed on the sheet
+ *   r  canonical role      rr the role as spelled on the sheet, lower-cased
+ *   a  active              o  system owner (Super_Admin)
+ *   g  granted keys        x  revoked keys
+ * null only when the Users sheet could not be read.
+ */
+function cresc_aclMap_() {
+  if (CRESC_ACL_MEMO) return CRESC_ACL_MEMO;
+  var cache = null;
+  try {
+    cache = CacheService.getScriptCache();
+    var raw = cache.get(CRESC_ACL_CACHE_KEY);
+    if (raw) { CRESC_ACL_MEMO = JSON.parse(raw); return CRESC_ACL_MEMO; }
+  } catch (e) { /* a cache fault is a slower read, not a failure */ }
+
+  var built = cresc_aclBuild_();
+  if (built) {
+    try { if (cache) cache.put(CRESC_ACL_CACHE_KEY, JSON.stringify(built), CRESC_ACL_TTL_S); }
+    catch (e) {}
+    CRESC_ACL_MEMO = built;
+  }
+  return built;
+}
+
+/** One read of the Users sheet into the access map. */
+function cresc_aclBuild_() {
+  try {
+    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
+    if (!sh) return null;
+    var users = {};
+    if (sh.getLastRow() < 2) return { users: users, at: Date.now() };
+
+    var ownerCol = cresc_superAdminColumn_(sh);
+    var data = sh.getDataRange().getValues();
+    if (ownerCol !== -1) cresc_seedFirstOwner_(sh, data, ownerCol);
+
+    var head = data[0].map(function (h) { return crescStr_(h); });
+    var gCol = head.indexOf(CRESC_GRANT_HEADER);
+    var xCol = head.indexOf(CRESC_REVOKE_HEADER);
+
+    for (var i = 1; i < data.length; i++) {
+      var name = crescStr_(data[i][0]).toUpperCase();
+      if (!name || users[name]) continue;
+      var owner = ownerCol !== -1 &&
+        (/^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][ownerCol])) || cresc_seededRow_ === i + 1);
+      users[name] = {
+        n:  crescStr_(data[i][0]),
+        r:  crescRole_(data[i][2]),
+        rr: crescStr_(data[i][2]).toLowerCase(),
+        // The same test AuthLogin applies at the door: blank is active,
+        // anything other than "active" is not.
+        a:  !crescStr_(data[i][3]) || crescStr_(data[i][3]).toLowerCase() === 'active',
+        o:  !!owner,
+        g:  gCol === -1 ? [] : cresc_permList_(data[i][gCol]),
+        x:  xCol === -1 ? [] : cresc_permList_(data[i][xCol])
+      };
+    }
+    return { users: users, at: Date.now() };
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Forget the cached access map. Call after ANY change to an account. */
+function cresc_aclBust_() {
+  CRESC_ACL_MEMO = null;
+  try { CacheService.getScriptCache().remove(CRESC_ACL_CACHE_KEY); } catch (e) {}
+}
+
+/** The map entry for a username, or null. */
+function cresc_aclEntry_(username) {
+  var map = cresc_aclMap_();
+  if (!map || !map.users) return null;
+  return map.users[crescStr_(username).toUpperCase()] || null;
+}
+
+/**
+ * IS THIS SESSION'S ACCOUNT STILL ALLOWED IN, AND AS WHAT?
+ *
+ * @param {{username:string, role:string}} sess
+ * @return {{ok:boolean, role?:string, reason?:string}}
+ *   role is the account's CURRENT role as spelled on the Users sheet, for
+ *   the caller to put on the session in place of the one it signed in with.
+ */
+function crescAccountState_(sess) {
+  if (!sess) return { ok: false, reason: 'No session.' };
+  var role = crescRole_(sess.role);
+  // A patient's login lives on the Patients sheet, not Users.
+  if (role === 'patient') return { ok: true, role: crescStr_(sess.role) };
+
+  var user = crescStr_(sess.username).toUpperCase();
+  var map = cresc_aclMap_();
+  if (!map || !map.users) return { ok: true, role: crescStr_(sess.role) };   // unreadable: role only
+
+  var entry = map.users[user];
+  if (!entry && CRESC_SYSTEM_USERS.indexOf(user) !== -1) {
+    return { ok: true, role: crescStr_(sess.role) };
+  }
+  if (!entry) {
+    // Before refusing, read the sheet once more: a row typed in by hand (the
+    // onEdit bust does not fire for every kind of edit) must not lock its new
+    // owner out for the life of the cached copy.
+    cresc_aclBust_();
+    map = cresc_aclMap_();
+    entry = (map && map.users) ? map.users[user] : null;
+    if (!map || !map.users) return { ok: true, role: crescStr_(sess.role) };
+  }
+  if (!entry) return { ok: false, reason: 'This account no longer exists.' };
+  if (!entry.a) return { ok: false, reason: 'This account has been switched off.' };
+  return { ok: true, role: entry.rr || entry.r };
+}
+
+/**
+ * Everything one person may do: their role, plus what they were granted,
+ * minus what was taken away, plus the owner's key when the account is the
+ * system owner.
+ *
+ * @return {{perms:Array<string>, elevated:boolean, granted:Array<string>,
+ *           revoked:Array<string>}}
+ */
+function crescEffectivePerms_(username, role) {
+  var canonical = crescRole_(role);
+  var perms = crescPermsFor_(canonical);
+  var out = { perms: perms, elevated: false, granted: [], revoked: [] };
+  if (!perms.length || canonical === 'patient') return out;
+
+  var entry = cresc_aclEntry_(username);
+  if (!entry) return out;
+
+  (entry.g || []).forEach(function (p) {
+    if (CRESC_NEVER_GRANT.indexOf(p) !== -1) return;
+    if (perms.indexOf(p) === -1) { perms.push(p); out.granted.push(p); }
+  });
+  (entry.x || []).forEach(function (p) {
+    var at = perms.indexOf(p);
+    if (at !== -1) { perms.splice(at, 1); out.revoked.push(p); }
+  });
+
+  if (canonical === 'admin' && entry.o) {
+    out.elevated = true;
+    CRESC_ELEVATED_PERMS.forEach(function (p) {
+      if (perms.indexOf(p) === -1) perms.push(p);
+    });
+  }
+  return out;
+}
+
 /** The Users column that marks an administrator as the system owner. */
 var CRESC_SUPERADMIN_HEADER = 'Super_Admin';
 
@@ -367,27 +614,12 @@ function crescIsElevated_(username, role) {
   if (crescRole_(role) !== 'admin') return false;
   var want = crescStr_(username).toUpperCase();
   if (!want) return false;
-  try {
-    var sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
-    if (!sh || sh.getLastRow() < 2) return false;
-
-    // ONE read of the sheet, not two. crescActor_ calls this on every
-    // execution an administrator makes, and the ensure-column pass needs the
-    // same rows this test does, so they share them.
-    var col = cresc_superAdminColumn_(sh);
-    if (col === -1) return false;
-    var data = sh.getDataRange().getValues();
-    cresc_seedFirstOwner_(sh, data, col);
-
-    for (var i = 1; i < data.length; i++) {
-      if (crescStr_(data[i][0]).toUpperCase() !== want) continue;
-      if (/^(YES|TRUE|1|Y)$/i.test(crescStr_(data[i][col]))) return true;
-      // The row may have just been seeded by the pass above, in which case
-      // `data` is the copy taken before the write.
-      return cresc_seededRow_ === (i + 1);
-    }
-  } catch (e) { /* no sheet, no elevation — fail closed */ }
-  return false;
+  // Answered from the shared access map (SECTION B2) rather than a read of
+  // the Users sheet on every call an administrator makes. The map is built
+  // by the same Super_Admin column read — including the first-owner seed —
+  // and is busted whenever an account changes.
+  var entry = cresc_aclEntry_(want);
+  return !!(entry && entry.o && entry.r === 'admin');
 }
 
 /** The Super_Admin column index, adding the column if it is missing. */
@@ -484,14 +716,18 @@ var CRESC_CURRENT_ACTOR = null;
 function crescNoteSession_(sess) {
   if (CRESC_CURRENT_ACTOR || !sess) return;
   var role = crescRole_(sess.role);
+  // The person's own access, not just their role's: an inner guard reached
+  // through a ward note or a billing desk must refuse what was revoked from
+  // this person exactly as the outer one would.
+  var eff = crescEffectivePerms_(sess.username, role);
   CRESC_CURRENT_ACTOR = {
     username:    crescStr_(sess.username),
     role:        role,
     rawRole:     crescStr_(sess.role),
-    elevated:    false,
+    elevated:    eff.elevated,
     doctorId:    crescStr_(sess.doctorId),
     displayName: crescStr_(sess.displayName) || crescStr_(sess.name) || crescStr_(sess.username),
-    permissions: crescPermsFor_(role)
+    permissions: eff.perms
   };
 }
 
@@ -520,21 +756,13 @@ function crescActor_(token) {
   } catch (e) { sess = null; }
   if (!sess) return CRESC_CURRENT_ACTOR || null;
 
+  // The role as the Users sheet says it is NOW (dc_validateSession_ has
+  // already put it on the session), then this person's own grants and
+  // revocations, then — for the system owner — the one extra key.
   var role = crescRole_(sess.role);
-  var perms = crescPermsFor_(role);
-
-  // The owner's one extra key. Resolved here, once per execution, so every
-  // crescRequire_('admin.users.elevated') downstream is answered from the
-  // same lookup rather than re-reading the Users sheet per endpoint.
-  var elevated = false;
-  if (role === 'admin') {
-    elevated = crescIsElevated_(sess.username, role);
-    if (elevated) {
-      CRESC_ELEVATED_PERMS.forEach(function (p) {
-        if (perms.indexOf(p) === -1) perms.push(p);
-      });
-    }
-  }
+  var eff = crescEffectivePerms_(sess.username, role);
+  var perms = eff.perms;
+  var elevated = eff.elevated;
 
   var actor = {
     username:    crescStr_(sess.username),
@@ -667,6 +895,32 @@ function crescTriggerOnly_(e, what) {
 }
 
 /**
+ * WHO IS DOING THIS — for a "…By" column.
+ *
+ * Session.getActiveUser() was used for this in the lab and pharmacy modules,
+ * and for this web app — deployed to run as its owner — it names the OWNER,
+ * or nobody, whoever is actually signed in. Every lab order, sample, result,
+ * bill and every pharmacy return in the clinic's history was therefore
+ * recorded as the work of one account. The session knows who it is; this
+ * reads it from the actor the endpoint's own guard already resolved.
+ *
+ * @param {string} [fallback]  for a scheduled job with no signed-in person
+ * @return {string} the signed-in username
+ */
+function cresc_actorName_(fallback) {
+  var a = CRESC_CURRENT_ACTOR;
+  if (a && a.username) return a.username;
+  return fallback || 'SYSTEM';
+}
+
+/** The signed-in person's display name, for a document someone reads. */
+function cresc_actorDisplay_(fallback) {
+  var a = CRESC_CURRENT_ACTOR;
+  if (a) return a.displayName || a.username || fallback || 'SYSTEM';
+  return fallback || 'SYSTEM';
+}
+
+/**
  * A CAUGHT ERROR, SAID IN A SENTENCE THE USER CAN ACT ON.
  *
  * It lives here, beside crescRequire_, because crescRequire_ is what
@@ -783,21 +1037,53 @@ function crescRbacSelfTest() {
     }
   });
 
-  // Every role actually present on the Users sheet must resolve to something.
+  // The Access screen's groups (RBAC_Access.gs) must list every key a person
+  // can be given, once — a key missing from them is one no screen can grant.
+  if (typeof CRESC_ACCESS_GROUPS !== 'undefined') {
+    var listed = {};
+    CRESC_ACCESS_GROUPS.forEach(function (g) {
+      g.perms.forEach(function (p) {
+        if (!CRESC_PERMS.hasOwnProperty(p)) problems.push('Access group "' + g.key + '" lists unknown "' + p + '".');
+        if (listed[p]) problems.push('"' + p + '" is listed in two access groups.');
+        listed[p] = true;
+      });
+    });
+    Object.keys(CRESC_PERMS).forEach(function (p) {
+      if (!listed[p] && CRESC_NEVER_GRANT.indexOf(p) === -1) {
+        problems.push('"' + p + '" is in no access group, so Staff Accounts → Access cannot show it.');
+      }
+    });
+  }
+
+  // Every role actually present on the Users sheet must resolve to something,
+  // and every key typed into Access_Grant / Access_Revoke must be a real one.
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
     if (sheet && sheet.getLastRow() > 1) {
-      var rows = sheet.getRange(2, 3, sheet.getLastRow() - 1, 1).getValues();
+      var all = sheet.getDataRange().getValues();
+      var head = all[0].map(function (h) { return crescStr_(h); });
       var seen = {};
-      rows.forEach(function (r) {
-        var raw = crescStr_(r[0]);
-        if (!raw || seen[raw]) return;
-        seen[raw] = true;
-        if (!CRESC_ROLE_MATRIX[crescRole_(raw)]) {
-          problems.push('The Users sheet contains role "' + raw + '", which resolves ' +
-                        'to nothing — those accounts can do nothing at all.');
+      for (var r = 1; r < all.length; r++) {
+        var raw = crescStr_(all[r][2]);
+        if (raw && !seen[raw]) {
+          seen[raw] = true;
+          if (!CRESC_ROLE_MATRIX[crescRole_(raw)]) {
+            problems.push('The Users sheet contains role "' + raw + '", which resolves ' +
+                          'to nothing — those accounts can do nothing at all.');
+          }
         }
-      });
+        [CRESC_GRANT_HEADER, CRESC_REVOKE_HEADER].forEach(function (h) {
+          var c = head.indexOf(h);
+          if (c === -1) return;
+          crescStr_(all[r][c]).split(/[\s,;]+/).forEach(function (k) {
+            k = k.trim().toLowerCase();
+            if (k && !CRESC_PERMS.hasOwnProperty(k)) {
+              problems.push('Users row ' + (r + 1) + ' (' + crescStr_(all[r][0]) + ') has "' + k +
+                            '" in ' + h + ', which is not a permission — it is ignored.');
+            }
+          });
+        });
+      }
     }
   } catch (e) { problems.push('Could not read the Users sheet: ' + e.message); }
 

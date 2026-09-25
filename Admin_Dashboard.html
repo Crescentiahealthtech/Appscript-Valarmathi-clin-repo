@@ -245,6 +245,10 @@
       </div>
       <div class="modal-footer" style="border-color:var(--border-color);">
         <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-sm btn-outline-info"
+                onclick="openAccessMatrix()" title="Every account against every part of the application">
+          <i class="fa-solid fa-table-cells me-1"></i> Who can open what
+        </button>
         <button type="button" class="btn btn-sm btn-outline-success fw-bold"
                 onclick="openAddStaff()">
           <i class="fa-solid fa-user-plus me-1"></i> Add someone
@@ -253,6 +257,61 @@
     </div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     ACCESS — ONE PERSON'S MODULES AND FUNCTIONS
+
+     A role is where a person starts, not all they are. This grants one
+     member of staff something their role lacks, or withdraws something it
+     carries, one module or one function at a time. The server decides and
+     enforces (RBAC.gs SECTION B2, RBAC_Access.gs); every save is audited
+     as STAFF_ACCESS_CHANGED, and takes effect on that person's next click.
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="accessModal" tabindex="-1" aria-hidden="true" aria-labelledby="ax-title">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;">
+      <div class="modal-header" style="border-color:var(--border-color);">
+        <h5 class="modal-title fw-bold text-white-force" id="ax-title">
+          <i class="fa-solid fa-user-lock me-2" style="color:var(--accent-fg);"></i><span id="ax-heading">Access</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="ax-msg" class="d-none mb-3"></div>
+        <div id="ax-body">
+          <div class="text-center py-4 label-bright"><i class="fa-solid fa-spinner fa-spin me-2"></i>Loading…</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-color:var(--border-color);" id="ax-footer">
+        <input id="ax-note" class="form-control form-control-sm me-auto" style="max-width:360px;"
+               placeholder="Reason for the change (kept in the audit log)" maxlength="300">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="ax-reset" onclick="axResetToRole()">
+          Reset to role defaults
+        </button>
+        <button type="button" class="btn btn-sm btn-primary fw-bold" id="ax-save" onclick="axSave()">
+          <i class="fa-solid fa-floppy-disk me-1"></i> Save access
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  #accessModal .ax-group { border:1px solid var(--border-color); border-radius:10px; padding:.6rem .75rem; height:100%; }
+  #accessModal .ax-group-head { display:flex; align-items:center; gap:.5rem; font-weight:700; margin-bottom:.4rem; }
+  #accessModal .ax-perm { display:flex; align-items:flex-start; gap:.45rem; padding:.18rem 0; font-size:var(--fs-sm); }
+  #accessModal .ax-perm input { margin-top:.2rem; }
+  #accessModal .ax-tag { font-size:var(--fs-2xs); font-weight:700; border-radius:5px; padding:0 .35rem; margin-left:.25rem; white-space:nowrap; }
+  #accessModal .ax-added   { background:var(--success-bg); color:var(--success-fg); }
+  #accessModal .ax-removed { background:var(--danger-bg);  color:var(--danger-fg); }
+  #accessModal .ax-owner   { background:var(--bg-input);   color:var(--text-muted); }
+  #accessModal table.ax-matrix th, #accessModal table.ax-matrix td { font-size:var(--fs-xs); padding:.3rem .4rem; text-align:center; white-space:nowrap; }
+  #accessModal table.ax-matrix td:first-child, #accessModal table.ax-matrix th:first-child { text-align:left; }
+  #accessModal .ax-all  { color:var(--success-fg); font-weight:800; }
+  #accessModal .ax-some { color:var(--warning-fg); font-weight:800; }
+  #accessModal .ax-none { color:var(--text-faint); }
+  #accessModal .ax-custom { outline:2px solid var(--accent-purple); outline-offset:-2px; border-radius:4px; }
+</style>
 
 <!-- ══════════════════════════════════════════════════════════════════
      AUDIT LOG — every trail, one list
@@ -1672,7 +1731,7 @@
     host.innerHTML =
       '<div class="table-responsive"><table class="table table-sm align-middle mb-0">' +
       '<thead><tr>' +
-        '<th>User ID</th><th>Role</th><th>Password</th><th>Two-step</th><th>Status</th><th></th>' +
+        '<th>User ID</th><th>Role</th><th>Access</th><th>Password</th><th>Two-step</th><th>Status</th><th></th>' +
       '</tr></thead><tbody>' +
       res.accounts.map(function (a) {
         const e = window.crescEsc;
@@ -1703,6 +1762,18 @@
           ? '<span class="badge bg-success-subtle text-success-emphasis">Active</span>'
           : '<span class="badge bg-danger-subtle text-danger-emphasis">Switched off</span>';
 
+        // Their own additions to, and removals from, what the role carries.
+        const g = (a.granted || []).length, x = (a.revoked || []).length;
+        const accessCell = (g || x)
+          ? '<span class="badge bg-info-subtle text-info-emphasis" title="' +
+              e([].concat((a.granted || []).map(function (p) { return '+ ' + p; }),
+                          (a.revoked || []).map(function (p) { return '− ' + p; })).join('\n')) + '">' +
+              (g ? '+' + g : '') + (g && x ? ' / ' : '') + (x ? '−' + x : '') + ' custom</span>'
+          : '<span class="label-bright small">role default</span>';
+        const accessBtn = a.isSelf ? '' :
+          ' <button class="btn btn-link btn-sm p-0 ms-1 align-baseline" onclick="openAccessEditor(\'' +
+            saJs(a.username) + '\')">' + (a.manageable ? 'change' : 'view') + '</button>';
+
         let actions;
         if (a.isSelf) {
           // Switching off your own account locks the clinic out of its own
@@ -1726,6 +1797,7 @@
             (a.email ? '<div class="label-bright" style="font-size:.68rem;">' + e(a.email) + '</div>' : '') +
           '</td>' +
           '<td>' + e(role) + '</td>' +
+          '<td class="small text-nowrap">' + accessCell + accessBtn + '</td>' +
           '<td class="small">' + pwd + '</td>' +
           '<td class="small text-nowrap">' + mfa + '</td>' +
           '<td>' + status + '</td>' +
@@ -1791,6 +1863,255 @@
     });
   }
   window.saMfaRemove = saMfaRemove;
+
+  /* ══════════════════════════════════════════════════════════════════
+     ACCESS — one person's modules and functions (RBAC_Access.gs)
+     ══════════════════════════════════════════════════════════════════ */
+
+  var AX = { data: null, user: '', role: '', eff: {}, mode: 'editor' };
+
+  function axMsg(text, kind) {
+    const box = asEl('ax-msg');
+    if (!box) return;
+    if (!text) { box.classList.add('d-none'); return; }
+    box.className = 'alert alert-' + (kind || 'info') + ' py-2 small mb-3';
+    box.textContent = text;
+    box.classList.remove('d-none');
+  }
+
+  function axShow(mode) {
+    AX.mode = mode;
+    const modalEl = asEl('accessModal');
+    axMsg('');
+    asEl('ax-footer').classList.toggle('d-none', mode !== 'editor');
+    asEl('ax-body').innerHTML =
+      '<div class="text-center py-4 label-bright"><i class="fa-solid fa-spinner fa-spin me-2"></i>Loading…</div>';
+    (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl)).show();
+  }
+
+  function axLoad(then) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          asEl('ax-body').innerHTML = '<div class="text-danger small py-3">' +
+            window.crescEsc((res && res.message) || 'Access could not be read.') + '</div>';
+          return;
+        }
+        AX.data = res;
+        then();
+      })
+      .withFailureHandler(function (err) {
+        asEl('ax-body').innerHTML = '<div class="text-danger small py-3">Could not read access: ' +
+          window.crescEsc((err && err.message) || err) + '</div>';
+      })
+      .crescGetAccessOverview(window.sessionToken || '');
+  }
+
+  function openAccessEditor(username) {
+    axShow('editor');
+    asEl('ax-heading').textContent = 'Access — ' + username;
+    asEl('ax-note').value = '';
+    axLoad(function () {
+      const a = axAccount(username);
+      if (!a) { asEl('ax-body').innerHTML = '<div class="small py-3">No such account.</div>'; return; }
+      AX.user = a.username;
+      AX.role = a.role;
+      AX.eff = {};
+      (a.effective || []).forEach(function (p) { AX.eff[p] = true; });
+      axRenderEditor();
+    });
+  }
+  window.openAccessEditor = openAccessEditor;
+
+  function openAccessMatrix() {
+    axShow('matrix');
+    asEl('ax-heading').textContent = 'Who can open what';
+    axLoad(axRenderMatrix);
+  }
+  window.openAccessMatrix = openAccessMatrix;
+
+  function axAccount(username) {
+    const want = String(username || '').toUpperCase();
+    return ((AX.data && AX.data.accounts) || []).filter(function (a) {
+      return String(a.username).toUpperCase() === want;
+    })[0] || null;
+  }
+
+  function axDefaults(role) { return (AX.data.roleDefaults && AX.data.roleDefaults[role]) || []; }
+
+  function axRenderEditor() {
+    const e = window.crescEsc, d = AX.data, a = axAccount(AX.user);
+    const defaults = axDefaults(AX.role);
+    const can = !!a.manageable;
+    const owner = !!d.elevated;
+    const roleLabel = function (r) { return (d.roleLabels && d.roleLabels[r]) || r; };
+
+    const roles = (d.assignableRoles || []).slice();
+    if (roles.indexOf(a.role) === -1) roles.unshift(a.role);
+    const roleCtl = (can && a.role !== 'doctor')
+      ? '<select class="form-select form-select-sm d-inline-block" style="width:auto;" onchange="axRole(this.value)">' +
+          roles.map(function (r) {
+            return '<option value="' + e(r) + '"' + (r === AX.role ? ' selected' : '') + '>' + e(roleLabel(r)) + '</option>';
+          }).join('') + '</select>'
+      : '<strong>' + e(roleLabel(AX.role)) + '</strong>';
+
+    const head =
+      '<div class="d-flex flex-wrap gap-3 align-items-center mb-3">' +
+        '<div>Role: ' + roleCtl + '</div>' +
+        '<div class="small label-bright">' +
+          (can ? 'Tick to give, untick to take away. <span class="ax-tag ax-added">added</span> and ' +
+                 '<span class="ax-tag ax-removed">removed</span> mark where this person differs from the role.'
+               : (a.isSelf ? 'You cannot change your own access.' : 'Doctors and administrators are changed by the system owner.')) +
+          (a.role !== AX.role ? ' <strong class="text-warning">Changing the role signs them out so their screens redraw.</strong>' : '') +
+        '</div>' +
+        (a.active ? '' : '<span class="badge bg-danger-subtle text-danger-emphasis">switched off</span>') +
+      '</div>';
+
+    const groups = (d.groups || []).map(function (g) {
+      const held = g.perms.filter(function (p) { return AX.eff[p.key]; }).length;
+      const perms = g.perms.map(function (p) {
+        const isDef = defaults.indexOf(p.key) !== -1;
+        const on = !!AX.eff[p.key];
+        const locked = !can || (p.ownerOnly && !owner && !isDef && !on);
+        const tag = (on && !isDef) ? '<span class="ax-tag ax-added">added</span>'
+                  : (!on && isDef) ? '<span class="ax-tag ax-removed">removed</span>' : '';
+        return '<label class="ax-perm">' +
+          '<input type="checkbox" class="form-check-input" ' + (on ? 'checked ' : '') + (locked ? 'disabled ' : '') +
+            'onchange="axToggle(\'' + e(p.key) + '\', this.checked)">' +
+          '<span>' + e(p.label) + tag +
+            (p.ownerOnly && !owner ? '<span class="ax-tag ax-owner" title="Only the system owner may give this">owner</span>' : '') +
+            '<div class="label-bright" style="font-size:var(--fs-2xs);">' + e(p.key) + '</div></span>' +
+        '</label>';
+      }).join('');
+      const all = held === g.perms.length, none = held === 0;
+      return '<div class="col-md-6 col-xl-4"><div class="ax-group">' +
+        '<div class="ax-group-head">' +
+          '<input type="checkbox" class="form-check-input" title="The whole module" ' +
+            (all ? 'checked ' : '') + (can ? '' : 'disabled ') +
+            'data-ax-some="' + (!all && !none ? '1' : '') + '" onchange="axModule(\'' + e(g.key) + '\', this.checked)">' +
+          '<i class="fa-solid ' + e(g.icon || 'fa-cube') + '" style="color:var(--accent-fg);"></i>' +
+          '<span>' + e(g.label) + '</span>' +
+          '<span class="ms-auto label-bright small">' + held + '/' + g.perms.length + '</span>' +
+        '</div>' + perms + '</div></div>';
+    }).join('');
+
+    asEl('ax-body').innerHTML = head + '<div class="row g-3">' + groups + '</div>';
+    // A module with some but not all of its functions reads as neither.
+    Array.prototype.forEach.call(asEl('ax-body').querySelectorAll('[data-ax-some="1"]'),
+      function (el) { el.indeterminate = true; });
+    asEl('ax-save').disabled = !can;
+    asEl('ax-reset').disabled = !can;
+    asEl('ax-note').disabled = !can;
+  }
+
+  function axToggle(key, on) {
+    if (on) AX.eff[key] = true; else delete AX.eff[key];
+    axRenderEditor();
+  }
+  window.axToggle = axToggle;
+
+  function axModule(groupKey, on) {
+    const g = (AX.data.groups || []).filter(function (x) { return x.key === groupKey; })[0];
+    if (!g) return;
+    const defaults = axDefaults(AX.role);
+    g.perms.forEach(function (p) {
+      if (on && p.ownerOnly && !AX.data.elevated && defaults.indexOf(p.key) === -1 && !AX.eff[p.key]) return;
+      if (on) AX.eff[p.key] = true; else delete AX.eff[p.key];
+    });
+    axRenderEditor();
+  }
+  window.axModule = axModule;
+
+  function axRole(role) {
+    const a = axAccount(AX.user);
+    AX.role = role;
+    // The new role's defaults, with this person's own additions and removals
+    // carried across where they still mean something.
+    const eff = {};
+    axDefaults(role).forEach(function (p) { eff[p] = true; });
+    (a.granted || []).forEach(function (p) { eff[p] = true; });
+    (a.revoked || []).forEach(function (p) { delete eff[p]; });
+    AX.eff = eff;
+    axRenderEditor();
+  }
+  window.axRole = axRole;
+
+  function axResetToRole() {
+    AX.eff = {};
+    axDefaults(AX.role).forEach(function (p) { AX.eff[p] = true; });
+    axRenderEditor();
+  }
+  window.axResetToRole = axResetToRole;
+
+  function axSave() {
+    const a = axAccount(AX.user);
+    const defaults = axDefaults(AX.role);
+    const grant = Object.keys(AX.eff).filter(function (p) { return defaults.indexOf(p) === -1; });
+    const revoke = defaults.filter(function (p) { return !AX.eff[p]; });
+    const change = { grant: grant, revoke: revoke, note: asEl('ax-note').value.trim() };
+    if (AX.role !== a.role) change.role = AX.role;
+
+    const go = function () {
+      crescRun({
+        fn: 'crescSaveUserAccess',
+        args: [window.sessionToken || '', AX.user, change],
+        key: 'crescSaveUserAccess',
+        button: 'ax-save',
+        busy: false,
+        error: 'Could not save the access',
+        onSuccess: function (res) {
+          if (!res || !res.success) { axMsg((res && res.message) || 'Not saved.', 'danger'); return; }
+          axMsg(res.message, 'success');
+          if (res.account) {
+            a.role = res.account.role; a.granted = res.account.granted;
+            a.revoked = res.account.revoked; a.effective = res.account.effective;
+          }
+          if (typeof saLoad === 'function' && asEl('staffAccountsModal') &&
+              asEl('staffAccountsModal').classList.contains('show')) saLoad();
+          axRenderEditor();
+        }
+      });
+    };
+    if (change.role) {
+      crescConfirm(AX.user + ' will become ' + ((AX.data.roleLabels || {})[AX.role] || AX.role) +
+                   '. Their open sessions end, and they sign in again to the new role\'s screens.',
+                   { title: 'Change role', okLabel: 'Change role and save' })
+        .then(function (ok) { if (ok) go(); });
+      return;
+    }
+    go();
+  }
+  window.axSave = axSave;
+
+  function axRenderMatrix() {
+    const e = window.crescEsc, d = AX.data;
+    const groups = d.groups || [];
+    const rows = (d.accounts || []).map(function (a) {
+      const eff = {}; (a.effective || []).forEach(function (p) { eff[p] = true; });
+      const custom = {}; [].concat(a.granted || [], a.revoked || []).forEach(function (p) { custom[p] = true; });
+      const cells = groups.map(function (g) {
+        const n = g.perms.filter(function (p) { return eff[p.key]; }).length;
+        const mark = n === 0 ? '<span class="ax-none">–</span>'
+                   : n === g.perms.length ? '<span class="ax-all">✓</span>'
+                   : '<span class="ax-some">' + n + '/' + g.perms.length + '</span>';
+        const isCustom = g.perms.some(function (p) { return custom[p.key]; });
+        return '<td' + (isCustom ? ' class="ax-custom" title="Differs from the role"' : '') + '>' + mark + '</td>';
+      }).join('');
+      return '<tr' + (a.active ? '' : ' style="opacity:.5;"') + '>' +
+        '<td><button class="btn btn-link btn-sm p-0" onclick="openAccessEditor(\'' + saJs(a.username) + '\')">' +
+          e(a.username) + '</button>' +
+          (a.owner ? ' <span class="badge bg-info-subtle text-info-emphasis">owner</span>' : '') +
+          '<div class="label-bright" style="font-size:var(--fs-2xs);">' + e(a.roleLabel) +
+            (a.active ? '' : ' · switched off') + '</div></td>' + cells + '</tr>';
+    }).join('');
+    asEl('ax-body').innerHTML =
+      '<div class="small label-bright mb-2">✓ the whole module · <span class="ax-some">n/m</span> part of it · ' +
+        '– none. A ringed cell differs from the role — somebody was given, or had taken away, part of it. ' +
+        'Click a name to change their access.</div>' +
+      '<div class="table-responsive"><table class="table table-sm ax-matrix mb-0"><thead><tr><th>Account</th>' +
+        groups.map(function (g) { return '<th title="' + e(g.label) + '"><i class="fa-solid ' + e(g.icon) + '"></i><div>' + e(g.label) + '</div></th>'; }).join('') +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
 
   function asCreate() {
     const btn = asEl('as-save');

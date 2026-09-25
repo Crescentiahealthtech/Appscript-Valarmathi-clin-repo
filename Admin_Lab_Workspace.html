@@ -31,17 +31,30 @@
       </div>
     </div>
     <div class="col-6 col-md-4 col-xl-3">
-      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('workspace-lab-records'); LabRecordsApp.init();">
+      <!-- switchTab alone: CRESC_TAB_INIT already runs LabRecordsApp.init on
+           arrival, and the second, inline call made every visit to Lab
+           Records fetch its whole history twice. -->
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('workspace-lab-records');">
         <i class="fa-solid fa-folder-open fa-2x mb-3" style="color:var(--success-fg);"></i>
         <h6 class="text-white-force fw-bold m-0">Lab Records</h6>
         <small class="label-bright mt-1 d-block">Patient Results History</small>
       </div>
     </div>
-    <div class="col-6 col-md-4 col-xl-3">
+    <div class="col-6 col-md-4 col-xl-3" id="lab-tile-billing">
       <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" onclick="switchTab('lab-billing-workspace');">
         <i class="fa-solid fa-file-invoice fa-2x mb-3 text-info"></i>
         <h6 class="text-white-force fw-bold m-0">Lab Billing</h6>
         <small class="label-bright mt-1 d-block">OP Spot · IP Account</small>
+      </div>
+    </div>
+    <!-- Every lab bill in a date range — settled, unsettled, IP, cancelled —
+         with reprint and collection: the ledger the hospital desk has. -->
+    <div class="col-6 col-md-4 col-xl-3" id="lab-tile-ledger">
+      <div class="card p-4 text-center soft-glow h-100 style-workspace-btn" role="button" tabindex="0"
+           onclick="switchTab('lab-ledger-workspace');" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();switchTab('lab-ledger-workspace');}">
+        <i class="fa-solid fa-book fa-2x mb-3" style="color:var(--accent-fg);"></i>
+        <h6 class="text-white-force fw-bold m-0">Billing Ledger</h6>
+        <small class="label-bright mt-1 d-block">Settled · Unsettled · Reprint</small>
       </div>
     </div>
   </div>

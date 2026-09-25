@@ -57,9 +57,15 @@
    several — lands in the right place without an entry here.
    ==================================================================== */
 
-/** Element id -> the permission that reveals it. */
+/**
+ * Element id -> the permission that reveals it. An array means ANY of them.
+ *
+ * The Command Center (nav-tab-dash) is dashboard.read: administrators and
+ * doctors, and anyone given it individually from Staff Accounts → Access.
+ * Everyone else lands on their own desk — see crescLandingTab() below.
+ */
 var CRESC_UI_PERMS = {
-  'nav-tab-dash':       null,              // everyone who is signed in
+  'nav-tab-dash':       'dashboard.read',
   'nav-tab-appt':       'appointment.read',
   'nav-tab-patients':   'patient.read',
   'nav-tab-emr':        'emr.read',
@@ -67,7 +73,22 @@ var CRESC_UI_PERMS = {
   'nav-tab-lab':        'lab.read',
   'nav-tab-accounts':   'accounts.read',
   'nav-tab-privacy':    'dpdp.manage',
-  'card-hosp-billing':  'billing.write',
+  'card-hosp-billing':  'billing.read',
+  // The pharmacy hub's tiles (Pharmacy_Module.html), each on the key the
+  // screen behind it needs. A tile for work the server will refuse is a
+  // button that exists only to produce an error.
+  'ph-tile-inventory':  'pharmacy.read',
+  'ph-tile-billing':    ['pharmacy.dispense', 'pharmacy.bill'],
+  'ph-tile-alerts':     'pharmacy.read',
+  'ph-tile-stock-add':  'pharmacy.stock_add',
+  'ph-tile-desk':       'pharmacy.return',
+  'ph-tile-dash':       ['pharmacy.bill', 'pharmacy.read'],
+  'ph-tile-ledger':     ['pharmacy.bill', 'accounts.read'],
+  'ph-tile-register':   'pharmacy.register',
+  // The lab hub's billing tiles (Admin_Lab_Workspace.html, a lazy bundle —
+  // Module_Loader_UI repaints when it arrives).
+  'lab-tile-billing':   ['lab.bill', 'accounts.read'],
+  'lab-tile-ledger':    ['lab.bill', 'accounts.read'],
   // THE THREE STAGES OF ONE INPATIENT STAY, each hidden from a role that
   // cannot work it. The server has always enforced these — billing.read to
   // see a running tab, billing.write to post to it, accounts.settle to close
@@ -96,16 +117,117 @@ window.crescCan = function (perm) {
   return !!(window.crescPerms && window.crescPerms[perm]);
 };
 
+/** True when `need` (a key, a list of keys, or null) is satisfied. */
+function crescHolds(need, perms) {
+  perms = perms || window.crescPerms || {};
+  if (need === null || need === undefined) return true;
+  if (Array.isArray(need)) return need.some(function (p) { return !!perms[p]; });
+  return !!perms[need];
+}
+
 function crescPaintRBAC() {
   var perms = window.crescPerms || {};
   Object.keys(CRESC_UI_PERMS).forEach(function (id) {
     var el = document.getElementById(id);
     if (!el) return;
-    var need = CRESC_UI_PERMS[id];
-    var show = (need === null) ? true : !!perms[need];
-    el.classList.toggle('d-none', !show);
+    el.classList.toggle('d-none', !crescHolds(CRESC_UI_PERMS[id], perms));
   });
+  // Buttons inside screens can carry their own gate: data-perm="a,b" shows
+  // the element to anyone holding any one of the keys.
+  Array.prototype.forEach.call(document.querySelectorAll('[data-perm]'), function (el) {
+    var keys = String(el.getAttribute('data-perm') || '').split(',')
+      .map(function (k) { return k.trim(); }).filter(Boolean);
+    el.classList.toggle('d-none', keys.length > 0 && !crescHolds(keys, perms));
+  });
+  if (window.crescPerms) crescEnsureLanding();
 }
+window.crescPaintRBAC = crescPaintRBAC;
+
+/**
+ * WHERE A SIGNED-IN PERSON STARTS.
+ *
+ * Their role's usual desk, if they hold the key for it; otherwise the first
+ * rail item they can open. Before this, sign-in routed on the role NAME alone
+ * — so a receptionist landed on the Command Center whether or not they could
+ * read it, and a Users row spelled "Pharmacist" (rather than "pharmacy")
+ * fell through to the dashboard too.
+ */
+var CRESC_LANDING = {
+  admin:        ['nav-tab-dash'],
+  doctor:       ['nav-tab-emr', 'nav-tab-dash'],
+  nurse:        ['nav-tab-emr', 'nav-tab-appt'],
+  receptionist: ['nav-tab-appt', 'nav-tab-patients'],
+  reception:    ['nav-tab-appt', 'nav-tab-patients'],
+  pharmacist:   ['nav-tab-pharmacy'],
+  pharmacy:     ['nav-tab-pharmacy'],
+  lab:          ['nav-tab-lab'],
+  accountant:   ['nav-tab-accounts'],
+  accounts:     ['nav-tab-accounts']
+};
+var CRESC_NAV_TARGET = {
+  'nav-tab-dash': 'tab-admin-dash', 'nav-tab-appt': 'workspace-appointments',
+  'nav-tab-patients': 'workspace-patients', 'nav-tab-emr': 'tab-admin-emr',
+  'nav-tab-pharmacy': 'workspace-pharmacy', 'nav-tab-lab': 'workspace-lab',
+  'nav-tab-accounts': 'workspace-accounts', 'nav-tab-privacy': 'tab-admin-dpdp'
+};
+var CRESC_NAV_ORDER = ['nav-tab-dash', 'nav-tab-appt', 'nav-tab-patients', 'nav-tab-emr',
+                       'nav-tab-pharmacy', 'nav-tab-lab', 'nav-tab-accounts', 'nav-tab-privacy'];
+
+/** The rail item a role should start on, given what it may open. */
+function crescLandingTab(role, perms) {
+  var want = (CRESC_LANDING[String(role || '').toLowerCase()] || []).concat(CRESC_NAV_ORDER);
+  for (var i = 0; i < want.length; i++) {
+    if (crescHolds(CRESC_UI_PERMS[want[i]], perms)) return want[i];
+  }
+  return null;
+}
+window.crescLandingTab = crescLandingTab;
+
+/**
+ * If the screen showing is one this person may not open — the Command Center
+ * after their access to it was withdrawn, say — move them to one they can.
+ * Only the rail's own landing screens are judged; a deep screen inside a
+ * module is guarded by its server calls.
+ */
+function crescEnsureLanding() {
+  if (!window.crescPerms || String(window.loggedInRole || '') === 'patient') return;
+  if (window.crescNavPending > 0) return;   // a screen is still on its way
+  var active = document.querySelector('.page-section.active-section');
+  var onId = active ? active.id : '';
+  var navId = null;
+  Object.keys(CRESC_NAV_TARGET).forEach(function (k) { if (CRESC_NAV_TARGET[k] === onId) navId = k; });
+  if (onId && (!navId || crescHolds(CRESC_UI_PERMS[navId]))) return;
+  var go = crescLandingTab(window.loggedInRole, window.crescPerms);
+  if (!go) {
+    crescRbacProblem('Your account has no screens switched on. Ask an administrator ' +
+                     'to check your access in Staff Accounts.', false);
+    return;
+  }
+  switchTab(CRESC_NAV_TARGET[go], document.getElementById(go));
+}
+
+/**
+ * Access changed by an administrator reaches an open screen within minutes,
+ * not at the next sign-in: the rail is re-drawn from the server's answer
+ * every five minutes and whenever the window regains focus.
+ */
+(function () {
+  var last = 0;
+  function recheck() {
+    if (!window.sessionToken || !window.crescPerms || typeof google === 'undefined' || !google.script) return;
+    if (String(window.loggedInRole || '') === 'patient') return;
+    if (Date.now() - last < 60000) return;
+    last = Date.now();
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success) { window.crescPerms = res.permissions || {}; crescPaintRBAC(); }
+      })
+      .withFailureHandler(function () { /* the next check tries again */ })
+      .crescGetMyPermissions(window.sessionToken);
+  }
+  setInterval(recheck, 5 * 60000);
+  window.addEventListener('focus', recheck);
+})();
 
 /**
  * @param {string} role  kept for the existing call site in Auth.html; the
@@ -286,6 +408,8 @@ var CRESC_TAB_INIT = {
   'pharmacy-desk-workspace':      'openPharmacyDesk',
   'pharmacy-billing-workspace':   'openPharmacyBilling',
   'pharmacy-dashboard-workspace': 'openPharmacyDashboard',
+  'pharmacy-ledger-workspace':    'PhLedger.open',
+  'pharmacy-schedule-register':   'PhRegister.open',
   // THE PRIVACY CONSOLE HAD NO ENTRY HERE AT ALL.
   //
   // switchTab('tab-admin-dpdp') showed the markup and nothing fetched
@@ -298,6 +422,7 @@ var CRESC_TAB_INIT = {
   'tab-admin-dpdp':               'dpConsoleLoad',
   'lab-workspace-view':           'LabX.load',
   'lab-billing-workspace':        'LabBill.load',
+  'lab-ledger-workspace':         'LabLedger.open',
   'workspace-lab-catalog':        'LabCatalog.init',
   'workspace-lab-records':        'LabRecordsApp.init',
   'workspace-accounts':           'showAccounts'

@@ -280,7 +280,12 @@ function labCancelBill(payload, sessionToken) {
     lock.waitLock(10000);
     payload = payload || {};
 
-    var actor = crescRequire_(sessionToken, "billing.write");
+    // lab.bill voids a bill nobody has paid — a keying mistake at the desk.
+    // A bill with money on it needs billing.cancel (administrator, accounts):
+    // "take the cash, void the bill" is the oldest way a till goes short, and
+    // the person who took the cash must not be the person who can erase it.
+    var actor = crescRequire_(sessionToken, ["lab.bill", "billing.cancel"]);
+    var mayVoidPaid = (actor.permissions || []).indexOf("billing.cancel") !== -1;
 
     var billId = labx_str_(payload.billId);
     if (!billId) return { success: false, message: "No bill was named." };
@@ -309,6 +314,14 @@ function labCancelBill(payload, sessionToken) {
       var net = Number(data[i][map["NetAmount"]]) || 0;
       var mode = labx_str_(data[i][map["PaymentMode"]]);
       var admissionId = labx_str_(data[i][map["AdmissionID"]]);
+      var paidSoFar = (map["PaidAmount"] === undefined) ? 0 : (Number(data[i][map["PaidAmount"]]) || 0);
+      if (paidSoFar > 0 && !mayVoidPaid) {
+        return { success: false, code: "NEEDS_BILLING_CANCEL",
+                 message: "Bill " + billId + " has \u20b9" + paidSoFar.toFixed(2) + " paid on it. " +
+                          "A bill with money taken can only be voided by an administrator or " +
+                          "accounts, so the refund and the void are seen by someone other than " +
+                          "the person who took the payment." };
+      }
 
       // A released report is a strong signal that this bill is not a
       // mis-keying but a real episode of care. It is still allowed — refunds

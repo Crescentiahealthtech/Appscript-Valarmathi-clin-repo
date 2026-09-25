@@ -148,7 +148,7 @@ function saveCatalogEntry(p, sessionToken) {
     const map = labHeaderMap_(sheet);
     const ncols = LAB_SCHEMA.LAB_TEST_CATALOG.length;
     const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    const by = Session.getActiveUser().getEmail() || 'SYSTEM';
+    const by = cresc_actorName_('SYSTEM');
 
     let existingRow = -1, existingCreatedAt = now, existingCreatedBy = by;
     let testId = p.testId ? String(p.testId) : '';
@@ -265,7 +265,7 @@ function savePanelWithParameters(p, sessionToken) {
     const map = labHeaderMap_(sheet);
     const ncols = LAB_SCHEMA.LAB_TEST_CATALOG.length;
     const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    const by = Session.getActiveUser().getEmail() || 'SYSTEM';
+    const by = cresc_actorName_('SYSTEM');
 
     let panelRow = -1, panelId = p.testId ? String(p.testId) : '';
     let pCreatedAt = now, pCreatedBy = by;
@@ -401,7 +401,7 @@ function createLabRequest(d, sessionToken) {
     const map = labHeaderMap_(sheet);
     const ncols = LAB_SCHEMA.LAB_ORDERS.length;
     const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    const by = Session.getActiveUser().getEmail() || 'SYSTEM';
+    const by = cresc_actorName_('SYSTEM');
     const orderId = bc_nextDailyId_('LAB_ORDER', 'LAB-ORD-', '-', 4, sheet, map['OrderID'] + 1);   // Barcode_Engine.gs
 
     const row = new Array(ncols).fill('');
@@ -548,7 +548,7 @@ function lab_setOrderStatus_(orderId, newStatus) {
         
         sheet.getRange(rowNum, map['OrderStatus'] + 1).setValue(targetStatus);
         sheet.getRange(rowNum, map['LastUpdatedAt'] + 1).setValue(nowStr);
-        sheet.getRange(rowNum, map['LastUpdatedBy'] + 1).setValue(Session.getActiveUser().getEmail() || 'SYSTEM');
+        sheet.getRange(rowNum, map['LastUpdatedBy'] + 1).setValue(cresc_actorName_('SYSTEM'));
         
         labAudit_('STATUS_CHANGED', 'ORDER', orderId, { from: cur }, { to: targetStatus });
         SpreadsheetApp.flush();
@@ -696,7 +696,7 @@ function generateLabBill(d, sessionToken) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    crescRequire_(sessionToken, 'billing.write');
+    crescRequire_(sessionToken, 'lab.bill');
     if (!d||!d.orderId) return { success: false, message: 'Order ID required.' };
     const od = getLabOrderDetail(d.orderId);
     if (!od.success) return { success: false, message: od.message };
@@ -722,7 +722,7 @@ function generateLabBill(d, sessionToken) {
     const ip = (order.source==='IP_CASESHEET'||order.source==='IP_NOTES');
 
     const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    const by = Session.getActiveUser().getEmail()||'SYSTEM';
+    const by = cresc_actorName_('SYSTEM');
     let category, payMode, paid, balance, payStatus, receipt='', ledgerPostId='';
 
     if (ip) {
@@ -844,7 +844,7 @@ function collectLabSample(d, sessionToken) {
     const map=labHeaderMap_(sheet);
     const ncols=LAB_SCHEMA.LAB_SAMPLES.length;
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
-    const by=Session.getActiveUser().getEmail()||'SYSTEM';
+    const by=cresc_actorName_('SYSTEM');
     const datePart=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyyMMdd');
     const sampleIds=[];
 
@@ -879,7 +879,7 @@ function receiveLabSample(orderId, sessionToken) {
     const map=labHeaderMap_(sheet);
     const data=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getValues();
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
-    const by=Session.getActiveUser().getEmail()||'SYSTEM';
+    const by=cresc_actorName_('SYSTEM');
     let n=0;
     data.forEach(function(r,i){
       if(String(r[map['OrderID']])===String(orderId)&&String(r[map['CollectionStatus']])!=='REJECTED'&&!r[map['ReceivedAtLabAt']]){
@@ -1008,7 +1008,7 @@ function saveLabResultsDraft(d, sessionToken) {
     const map=labHeaderMap_(sheet);
     const ncols=LAB_SCHEMA.LAB_RESULTS.length;
     const nowStr=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
-    const by=Session.getActiveUser().getEmail()||'SYSTEM';
+    const by=cresc_actorName_('SYSTEM');
     // Read the block ONCE, edit it in memory, write each touched row once.
     //
     // This used to issue seven setValue() calls per parameter for an existing
@@ -1943,7 +1943,7 @@ function _raiseNcr_(d){
     row[map['NCRId']]=ncrId; row[map['OrderID']]=String(d.orderId||''); row[map['SampleID']]=String(d.sampleId||'');
     row[map['PatientID']]=String(d.patientId||''); row[map['NCRType']]=String(d.type||'GENERAL');
     row[map['Description']]=String(d.description||''); row[map['ImmediateAction']]=String(d.immediateAction||'');
-    row[map['RaisedBy']]=Session.getActiveUser().getEmail()||'SYSTEM';
+    row[map['RaisedBy']]=cresc_actorName_('SYSTEM');
     row[map['RaisedAt']]=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     row[map['Status']]='OPEN';
     sheet.appendRow(row); return ncrId;
@@ -2095,7 +2095,7 @@ function _logCritical_(orderId,c){
     row[map['CommID']]='CRIT-'+Utilities.getUuid().substring(0,8).toUpperCase();
     row[map['OrderID']]=orderId; row[map['ResultID']]=String(c.resultId||''); row[map['PatientID']]=String(c.patientId||'');
     row[map['TestName']]=String(c.parameterName||''); row[map['CriticalValue']]=String(c.value||''); row[map['Flag']]='C';
-    row[map['CommunicatedBy']]=Session.getActiveUser().getEmail()||'SYSTEM';
+    row[map['CommunicatedBy']]=cresc_actorName_('SYSTEM');
     row[map['CommunicatedAt']]=Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyy-MM-dd HH:mm:ss');
     row[map['IsAcknowledged']]=false;
     sheet.appendRow(row);
@@ -2224,7 +2224,7 @@ function getSuggestedTubes(orderId, sessionToken) {
    ─────────────────────────────────────────────────────────────────── */
 function getLabBillHtml(orderId, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['lab.bill', 'accounts.read']);
     if (!orderId) return { success: false, message: 'Order ID required.' };
     var od = getLabOrderDetail(orderId);
     if (!od.success) return { success: false, message: od.message };

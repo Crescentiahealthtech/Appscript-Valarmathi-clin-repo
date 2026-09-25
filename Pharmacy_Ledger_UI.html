@@ -1,0 +1,290 @@
+<!-- =====================================================================
+     PHARMACY — BILLING LEDGER and SCHEDULE H REGISTER
+     Backends: getPharmacyLedger (Billing_Ledger.gs),
+               getScheduleDrugRegister (Pharmacy.gs, SECTION G).
+
+     Nothing is declared at the top level except window.PhLedger and
+     window.PhRegister, which CRESC_TAB_INIT (ScriptsMV.html) calls on arrival.
+     ===================================================================== -->
+
+<div id="pharmacy-ledger-workspace" class="page-section d-none">
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-sm btn-outline-secondary" onclick="switchTab('workspace-pharmacy')">
+        <i class="fa-solid fa-arrow-left me-1"></i>Back to Pharmacy
+      </button>
+      <div>
+        <h4 class="fw-bold m-0" style="color:var(--text-main);"><i class="fa-solid fa-book me-2 text-info"></i>Pharmacy billing ledger</h4>
+        <small class="label-bright">Every bill in a period — settled and unsettled — with reprint and collection</small>
+      </div>
+    </div>
+  </div>
+  <div class="hd-panel"><div id="ph-ledger-host"></div></div>
+</div>
+
+<div id="pharmacy-schedule-register" class="page-section d-none">
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-sm btn-outline-secondary" onclick="switchTab('workspace-pharmacy')">
+        <i class="fa-solid fa-arrow-left me-1"></i>Back to Pharmacy
+      </button>
+      <div>
+        <h4 class="fw-bold m-0" style="color:var(--text-main);"><i class="fa-solid fa-file-signature me-2" style="color:var(--danger-fg);"></i>Schedule H drug register</h4>
+        <small class="label-bright">Scheduled medicines issued in a period, for signature and inspection</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="hd-panel mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="ph-label" for="phr-from">From</label>
+        <input type="date" id="phr-from" class="form-control form-control-sm">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="ph-label" for="phr-to">To</label>
+        <input type="date" id="phr-to" class="form-control form-control-sm">
+      </div>
+      <div class="col-12 col-md-4">
+        <span class="ph-label d-block">Schedules</span>
+        <label class="me-3 small"><input type="checkbox" class="phr-sch" value="H" checked> Schedule H</label>
+        <label class="me-3 small"><input type="checkbox" class="phr-sch" value="H1" checked> Schedule H1</label>
+        <label class="small"><input type="checkbox" class="phr-sch" value="X" checked> Schedule X</label>
+      </div>
+      <div class="col-12 col-md-4 d-flex gap-2 justify-content-md-end">
+        <button type="button" class="btn btn-sm btn-primary" onclick="PhRegister.load()"><i class="fa-solid fa-magnifying-glass me-1"></i>Show</button>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="PhRegister.print()"><i class="fa-solid fa-print me-1"></i>Print register</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="PhRegister.csv()" title="Download as CSV"><i class="fa-solid fa-file-csv"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="phr-note" class="small mb-2"></div>
+  <div class="hd-panel">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" style="--bs-table-bg:transparent;color:var(--text-main);">
+        <thead>
+          <tr class="label-bright" style="font-size:var(--fs-2xs);text-transform:uppercase;">
+            <th style="width:50px;">S.No</th><th>Date of issue</th><th>Patient</th><th>Doctor</th>
+            <th>Drug issued</th><th class="text-end">Qty</th><th>Schedule</th><th style="width:140px;">Signature</th>
+          </tr>
+        </thead>
+        <tbody id="phr-body">
+          <tr><td colspan="8" class="text-center label-bright py-4">Choose a period and press Show.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  function E(v) { return window.crescEsc ? window.crescEsc(v) : String(v == null ? '' : v); }
+  function $(id) { return document.getElementById(id); }
+  function tok() { return window.sessionToken || ''; }
+  function say(m) { if (window.crescAlert) crescAlert(m); }
+
+  // =================================================================
+  // THE LEDGER
+  // =================================================================
+  function reprint(invoiceNo) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { say((res && res.message) || 'That invoice could not be read.'); return; }
+        window.crescPharmacyInvoiceHtml(res.print, function (html) {
+          window.crescInvoicePrintHtml(html, 'Pharmacy invoice ' + invoiceNo);
+        });
+      })
+      .withFailureHandler(function (err) { say('Could not reprint: ' + ((err && err.message) || err)); })
+      .getInvoiceForPrint(invoiceNo, tok());
+  }
+
+  function collect(row, reload) {
+    var owed = window.CrescLedger.money(row.balance);
+    crescPrompt('Collect ' + owed + ' on ' + row.id + ' (' + row.patientName + ').\n\n' +
+                'Paid by — CASH, UPI, CARD or BANK:', 'CASH',
+                { title: 'Settle credit bill', okLabel: 'Next' })
+      .then(function (mode) {
+        if (mode === null) return;
+        mode = String(mode || '').trim().toUpperCase();
+        if (['CASH', 'UPI', 'CARD', 'BANK'].indexOf(mode) === -1) { say('Enter CASH, UPI, CARD or BANK.'); return; }
+        var ask = (mode === 'CASH') ? Promise.resolve('')
+          : crescPrompt(mode + ' reference number:', '', { title: 'Payment reference', okLabel: 'Settle' });
+        ask.then(function (txn) {
+          if (txn === null) return;
+          google.script.run
+            .withSuccessHandler(function (res) {
+              if (!res || !res.success) { say((res && res.message) || 'The bill was not settled.'); return; }
+              reload();
+              crescConfirm(res.message + '\n\nPrint the settled invoice as the receipt?',
+                           { title: 'Settled', okLabel: 'Print receipt' })
+                .then(function (ok) { if (ok) reprint(row.id); });
+            })
+            .withFailureHandler(function (err) { say('Could not settle: ' + ((err && err.message) || err)); })
+            .settleCreditBill({ invoiceNo: row.id, payMode: mode, txnId: String(txn || '').trim() }, tok());
+        });
+      });
+  }
+
+  var mounted = false;
+  function openLedger() {
+    if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
+    if (!window.CrescLedger) { $('ph-ledger-host').textContent = 'The ledger component did not load. Reload the page.'; return; }
+    if (!mounted) {
+      mounted = true;
+      window.CrescLedger.mount({
+        host: 'ph-ledger-host',
+        fn: 'getPharmacyLedger',
+        title: 'Pharmacy billing ledger',
+        idLabel: 'Invoice',
+        fileStem: 'pharmacy-ledger',
+        searchHint: 'Invoice, patient ID, name or mobile',
+        actions: function (r, res) {
+          var a = [{ act: 'print', icon: 'fa-print', label: 'Reprint the invoice' }];
+          if (res.canCollect && r.balance > 0 && r.status !== 'CANCELLED') {
+            a.push({ act: 'collect', icon: 'fa-indian-rupee-sign', label: 'Collect the balance', tone: 'success' });
+          }
+          return a;
+        },
+        onAction: function (act, row, reload) {
+          if (act === 'print') reprint(row.id);
+          else if (act === 'collect') collect(row, reload);
+        }
+      });
+    }
+    window.CrescLedger.load('ph-ledger-host');
+  }
+
+  // =================================================================
+  // THE SCHEDULE H REGISTER
+  // =================================================================
+  var REG = null;
+
+  function openRegister() {
+    if (typeof crescInvoiceWarm === 'function') crescInvoiceWarm();
+    if (!$('phr-from').value) {
+      var now = new Date();
+      $('phr-from').value = window.CrescLedger.localDay(new Date(now.getFullYear(), now.getMonth(), 1));
+      $('phr-to').value = window.CrescLedger.localDay(now);
+    }
+    load();
+  }
+
+  function schedules() {
+    return Array.prototype.filter.call(document.querySelectorAll('.phr-sch'), function (c) { return c.checked; })
+      .map(function (c) { return c.value; });
+  }
+
+  function load() {
+    var body = $('phr-body');
+    body.innerHTML = '<tr><td colspan="8" class="text-center label-bright py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i>Reading the register…</td></tr>';
+    $('phr-note').textContent = '';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) {
+          REG = null;
+          body.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">' +
+            E((res && res.message) || 'The register could not be read.') + '</td></tr>';
+          return;
+        }
+        REG = res;
+        var notes = [];
+        if (res.withoutDoctor) notes.push(res.withoutDoctor + ' entr' + (res.withoutDoctor === 1 ? 'y has' : 'ies have') +
+          ' no prescribing doctor — sold before the doctor was made compulsory. Write the name in by hand.');
+        if (res.inferred) notes.push(res.inferred + ' entr' + (res.inferred === 1 ? 'y was' : 'ies were') +
+          ' sold before the drug was marked as scheduled, and are listed by its schedule today (marked *).');
+        $('phr-note').innerHTML = notes.map(function (n) {
+          return '<div class="text-warning"><i class="fa-solid fa-triangle-exclamation me-1"></i>' + E(n) + '</div>';
+        }).join('');
+        if (!res.rows.length) {
+          body.innerHTML = '<tr><td colspan="8" class="text-center label-bright py-4">' +
+            E(res.message || 'No scheduled medicine was issued in this period.') + '</td></tr>';
+          return;
+        }
+        body.innerHTML = res.rows.map(function (r) {
+          return '<tr>' +
+            '<td>' + r.sNo + '</td>' +
+            '<td class="text-nowrap">' + E(r.date) + '<div class="label-bright small">' + E(r.time) + ' · ' + E(r.invoiceNo) + '</div></td>' +
+            '<td>' + E(r.patientName || '—') + '<div class="label-bright small">' + E(r.patientId) +
+              (r.ageSex ? ' · ' + E(r.ageSex) : '') + '</div></td>' +
+            '<td' + (r.doctorMissing ? ' class="text-danger"' : '') + '>' + E(r.doctorMissing ? '(not recorded)' : r.doctor) + '</td>' +
+            '<td>' + E(r.drug) + (r.generic ? '<div class="label-bright small">' + E(r.generic) + '</div>' : '') +
+              '<div class="label-bright small">Batch ' + E(r.batch) + '</div></td>' +
+            '<td class="text-end">' + E(r.qty) + ' ' + E(r.unit) +
+              (r.returned ? '<div class="label-bright small">' + E(r.returned) + ' returned</div>' : '') + '</td>' +
+            '<td><span class="badge bg-danger">' + E(r.schedule) + (r.inferred ? '*' : '') + '</span></td>' +
+            '<td style="border-bottom:1px dashed var(--border-color);"></td>' +
+          '</tr>';
+        }).join('');
+      })
+      .withFailureHandler(function (err) {
+        body.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">' +
+          E('The register could not be read: ' + ((err && err.message) || err)) + '</td></tr>';
+      })
+      .getScheduleDrugRegister({ from: $('phr-from').value, to: $('phr-to').value, schedules: schedules() }, tok());
+  }
+
+  function fmtDay(d) {
+    var p = String(d || '').split('-');
+    if (p.length !== 3) return d;
+    return p[2] + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + '-' + p[0];
+  }
+
+  function print() {
+    if (!REG) { say('Show the register first, then print it.'); return; }
+    window.crescReportPrint({
+      title: 'SCHEDULE H DRUG REGISTER',
+      subtitle: 'Issued from ' + fmtDay(REG.from) + ' to ' + fmtDay(REG.to),
+      meta: [['Schedules', REG.schedules.join(', ')], ['Printed by', window.loggedInUser || '']],
+      landscape: true,
+      columns: [
+        { label: 'S.No', width: '42px', align: 'center' },
+        { label: 'Date of issuance', width: '96px' },
+        { label: 'Patient name' },
+        { label: "Doctor's name" },
+        { label: 'Drug issued' },
+        { label: 'Qty issued', width: '70px', align: 'right' },
+        { label: 'Signature', width: '150px', blank: true }
+      ],
+      rows: REG.rows.map(function (r) {
+        return [String(r.sNo), r.date + '\n' + r.invoiceNo,
+                (r.patientName || '') + (r.patientId ? ' (' + r.patientId + ')' : ''),
+                r.doctorMissing ? '' : r.doctor,
+                r.drug + (r.generic ? ' — ' + r.generic : '') + ' [' + r.schedule + (r.inferred ? '*' : '') + '] B.' + r.batch,
+                String(r.qty) + (r.unit ? ' ' + r.unit : ''), ''];
+      }),
+      totals: [['Entries', String(REG.rows.length)]],
+      footNote: (REG.inferred ? '* Classified by the medicine\'s current schedule; sold before it was marked. ' : '') +
+                'Certified that the above medicines were issued against a valid prescription.',
+      signatures: ['Pharmacist', 'Registered Pharmacist (name & reg. no.)', 'Date']
+    });
+  }
+
+  function csv() {
+    if (!REG || !REG.rows.length) { say('There is nothing to export — show the register first.'); return; }
+    var cell = function (v) {
+      var s = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    var lines = [['S.No', 'Date of issuance', 'Time', 'Invoice', 'Patient ID', 'Patient name', 'Age / sex',
+                  "Doctor's name", 'Drug issued', 'Generic', 'Batch', 'Quantity', 'Unit', 'Returned',
+                  'Schedule', 'Classified later', 'Signature'].map(cell).join(',')];
+    REG.rows.forEach(function (r) {
+      lines.push([r.sNo, r.date, r.time, r.invoiceNo, r.patientId, r.patientName, r.ageSex,
+                  r.doctorMissing ? '' : r.doctor, r.drug, r.generic, r.batch, r.qty, r.unit, r.returned || 0,
+                  r.schedule, r.inferred ? 'yes' : '', ''].map(cell).join(','));
+    });
+    var url = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = 'schedule-h-register-' + REG.from + '-to-' + REG.to + '.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  window.PhLedger = { open: openLedger, reprint: reprint };
+  window.PhRegister = { open: openRegister, load: load, print: print, csv: csv };
+})();
+</script>

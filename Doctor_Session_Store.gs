@@ -51,6 +51,30 @@ function dc_sessionName_(sess) {
   return dc_str_(sess.displayName) || dc_str_(sess.name) || dc_str_(sess.username);
 }
 
+/**
+ * THE ACCOUNT, AS IT IS NOW. A session remembers who someone was when they
+ * signed in; this asks RBAC.gs whether that account is still switched on and
+ * what its role is today, so switching someone off — or changing their role —
+ * takes effect on their very next call instead of when the session expires.
+ *
+ * Returns the session with its role brought up to date, or null when the
+ * account may no longer act (its sessions are ended as well).
+ */
+function ds_applyAccountState_(token, sess) {
+  if (!sess || typeof crescAccountState_ !== 'function') return sess;
+  var st = crescAccountState_(sess);
+  if (!st.ok) {
+    try { if (typeof ds_revokeUserSessions_ === 'function') ds_revokeUserSessions_(sess.username, ''); }
+    catch (e) {}
+    try { CacheService.getScriptCache().remove("SESS_" + token); } catch (e) {}
+    return null;
+  }
+  if (st.role && dc_str_(st.role).toLowerCase() !== dc_str_(sess.role).toLowerCase()) {
+    sess.role = dc_str_(st.role).toLowerCase();
+  }
+  return sess;
+}
+
 function dc_validateSession_(sessionToken) {
   var token = dc_str_(sessionToken);
   if (!token) return null;
@@ -60,6 +84,8 @@ function dc_validateSession_(sessionToken) {
   try { sess = validateSession_(token); } catch (e) { sess = null; }
 
   if (sess) {
+    sess = ds_applyAccountState_(token, sess);
+    if (!sess) return null;
     ds_touchSession_(token, sess);     // writes the row if it is missing
     if (typeof crescNoteSession_ === 'function') crescNoteSession_(sess);
     return sess;
@@ -96,6 +122,9 @@ function dc_validateSession_(sessionToken) {
         displayName: dc_str_(data[i][4])
       };
 
+      revived = ds_applyAccountState_(token, revived);
+      if (!revived) return null;
+
       // Rehydrate the cache so the next call takes the fast path.
       try {
         CacheService.getScriptCache()
@@ -103,6 +132,7 @@ function dc_validateSession_(sessionToken) {
       } catch (e) { /* cache is best-effort; the sheet is the truth */ }
 
       ds_slideExpiry_(sh, i + 1);
+      ds_markTouched_(token);
       if (typeof crescNoteSession_ === 'function') crescNoteSession_(revived);
       return revived;
     }
@@ -113,15 +143,41 @@ function dc_validateSession_(sessionToken) {
   }
 }
 
+/**
+ * How long a session's Sessions row is trusted as fresh before the next call
+ * slides its expiry again.
+ *
+ * THIS WAS THE SLOWEST LINE IN THE APPLICATION. Every validated call — every
+ * lab queue refresh, every billing screen, every keystroke that searched a
+ * patient — read the ENTIRE Sessions sheet and then wrote two cells to it,
+ * before doing the work the user asked for. Two cell writes and a full-sheet
+ * read are several hundred milliseconds on a good day, paid on every call by
+ * every desk, on a sheet that only grows. The expiry is eight hours; sliding
+ * it every two minutes instead of every call loses nothing.
+ */
+var DS_TOUCH_SECONDS = 120;
+
+function ds_markTouched_(token) {
+  try { CacheService.getScriptCache().put("SESSTOUCH_" + token, "1", DS_TOUCH_SECONDS); }
+  catch (e) {}
+}
+
 /** Writes the row on first sight; otherwise slides the expiry forward. */
 function ds_touchSession_(token, sess) {
   try {
+    // Touched within the last DS_TOUCH_SECONDS: the row exists and its
+    // expiry is hours away. Nothing to do.
+    try {
+      if (CacheService.getScriptCache().get("SESSTOUCH_" + token)) return;
+    } catch (e) { /* no cache: fall through to the sheet, as before */ }
+
     var sh = ds_sessionSheet_();
     var data = sh.getDataRange().getDisplayValues();
 
     for (var i = 1; i < data.length; i++) {
       if (dc_str_(data[i][0]) === token) {
         ds_slideExpiry_(sh, i + 1);
+        ds_markTouched_(token);
         return;
       }
     }
@@ -136,6 +192,7 @@ function ds_touchSession_(token, sess) {
       String(dc_sessionName_(sess)),
       now, now, exp, "ACTIVE"
     ]);
+    ds_markTouched_(token);
   } catch (e) { /* never block the request over session bookkeeping */ }
 }
 
@@ -144,9 +201,15 @@ function ds_slideExpiry_(sh, rowNumber) {
   try {
     var m = dc_headerMap_(sh);
     var now = new Date();
-    sh.getRange(rowNumber, m["Last_Seen"] + 1).setValue(now);
-    sh.getRange(rowNumber, m["Expires_At"] + 1)
-      .setValue(new Date(now.getTime() + DS_SESSION_HOURS * 3600 * 1000));
+    var exp = new Date(now.getTime() + DS_SESSION_HOURS * 3600 * 1000);
+    // One write when the two columns sit side by side, as they do on every
+    // sheet this file creates; two when somebody has moved them.
+    if (m["Expires_At"] === m["Last_Seen"] + 1) {
+      sh.getRange(rowNumber, m["Last_Seen"] + 1, 1, 2).setValues([[now, exp]]);
+    } else {
+      sh.getRange(rowNumber, m["Last_Seen"] + 1).setValue(now);
+      sh.getRange(rowNumber, m["Expires_At"] + 1).setValue(exp);
+    }
   } catch (e) { /* best effort */ }
 }
 

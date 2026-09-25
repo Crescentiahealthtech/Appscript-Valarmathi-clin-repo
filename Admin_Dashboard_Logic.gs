@@ -17,12 +17,13 @@
  */
 function getDashboardData(role, bust, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'dashboard.read');
-    role = (role || "").toString().trim().toLowerCase();
-
-    // Only these roles may ever receive revenue figures (server-side gate).
-    var isFinancial = (role === 'admin' || role === 'accounts' ||
-                       role === 'receptionist' || role === 'reception');
+    var actor = crescRequire_(sessionToken, 'dashboard.read');
+    // The role the BROWSER sends is ignored. It used to decide whether the
+    // reply carried the clinic's takings, so a doctor calling this with
+    // 'admin' received every revenue figure. The session's own permissions
+    // decide now — the same accounts.read that draws the money cards.
+    role = actor.role;
+    var isFinancial = (actor.permissions || []).indexOf('accounts.read') !== -1;
 
     var cache = CacheService.getScriptCache();
     // The version suffix moves whenever the payload shape changes, so a cached

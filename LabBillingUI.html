@@ -25,6 +25,9 @@
               title="Open or close the lab counter's cash shift">
         <i class="fa-solid fa-cash-register"></i> Cash Drawer
       </button>
+      <button class="btn btn-sm btn-outline-info" onclick="switchTab('lab-ledger-workspace');" title="Every lab bill in a period, settled and unsettled">
+        <i class="fa-solid fa-book me-1"></i>Billing Ledger
+      </button>
       <button class="btn btn-sm" style="background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabBill.generateAndPrintDayReport();"><i class="fa-solid fa-print me-1"></i>Print Day Report</button>
     </div>
   </div>
@@ -303,7 +306,14 @@ var LabBill=(function(){
     run('settleLabBillBalance',[{billId:_settleBill.billId,amount:amt,payMode:g('lbSettleMode').value,note:g('lbSettleNote').value.trim()}],function(res){
       btn.disabled=false;
       if(!res||!res.success){flash((res&&res.message)||'Could not record the payment.',false);return;}
+      var paidBill=_settleBill?_settleBill.billId:'';
       closeSettle();flash(res.message,true);load();
+      // The patient is at the counter having just paid: hand them the bill
+      // with this payment on it.
+      if(paidBill&&typeof crescConfirm==='function'){
+        crescConfirm(res.message+'\n\nPrint a receipt showing this payment?',{title:'Payment recorded',okLabel:'Print receipt'})
+          .then(function(ok){if(ok)printReceiptDirectly(paidBill);});
+      }
     },'Recording payment…');
   }
   document.addEventListener('keydown',function(ev){
@@ -334,9 +344,15 @@ var LabBill=(function(){
       // Nothing to do to a cancellation. The reason is the record.
       actions='';
     } else if(b.tabType==='UNSETTLED'){
+      // THE REPRINT. An unsettled bill had Collect and Cancel and no way to
+      // print it again — so the patient who came back to pay the rest could
+      // not be handed the bill showing what was already paid. The invoice now
+      // lists every payment so far and what is still owed.
+      var reprintBtn='<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--border-color);color:var(--text-muted);background:transparent;" title="Reprint this bill with the payments so far" onclick="event.stopPropagation(); LabBill.printReceiptDirectly(\''+e(b.billId)+'\')"><i class="fa-solid fa-print me-1"></i>Reprint</button>';
       actions=(b.isIP&&!b.ipSettledWithout)
-        ?'<div class="label-bright" style="font-size:.7rem;">On '+e(b.admissionId||'the IP account')+'</div>'
+        ?'<div class="label-bright" style="font-size:.7rem;">On '+e(b.admissionId||'the IP account')+'</div>'+reprintBtn
         :'<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="event.stopPropagation(); LabBill.openSettle(\''+e(b.billId)+'\')"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Collect</button>'
+         +reprintBtn
          +'<button class="btn btn-sm ms-1" style="font-size:.75rem;border:1px solid var(--danger);color:var(--danger-fg);background:transparent;" title="Cancel / void this bill" onclick="event.stopPropagation(); LabBill.cancelBill(\''+e(b.billId)+'\',\''+e(b.patientName).replace(/\'/g,"\\\'")+'\','+(Number(b.net)||0)+')"><i class="fa-solid fa-ban"></i></button>';
     } else if(b.tabType==='PENDING'){
       actions='<button class="btn btn-sm fw-semibold ms-2" style="font-size:.75rem;background:var(--success-bg);border:1px solid var(--success);color:var(--success-fg);" onclick="LabBill.openOrder(\''+e(b.orderId)+'\')"><i class="fa-solid fa-arrow-right me-1"></i>Process</button>'
@@ -605,5 +621,95 @@ var LabBill=(function(){
     openSettle:openSettle, closeSettle:closeSettle, doSettle:doSettle,
     findOlder:findOlder, hideOlder:hideOlder
   };
+})();
+</script>
+<!-- =====================================================================
+     LAB BILLING LEDGER — every lab bill in a period (Billing_Ledger.gs)
+     The desk above is today's work; this is the record: settled, part-paid,
+     unpaid, on an IP account, cancelled — with reprint and collection.
+     ===================================================================== -->
+<div id="lab-ledger-workspace" class="page-section d-none">
+  <div class="d-flex justify-content-between align-items-center mt-4 mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-sm btn-outline-secondary py-1 px-3" onclick="switchTab('lab-billing-workspace');">
+        <i class="fa-solid fa-arrow-left me-1"></i>Back to Lab Billing
+      </button>
+      <div>
+        <h3 class="fw-bold m-0 text-white-force"><i class="fa-solid fa-book me-2" style="color:var(--accent-fg);"></i>Lab billing ledger</h3>
+        <div class="label-bright small">Settled and unsettled lab bills, reprint and collection</div>
+      </div>
+    </div>
+  </div>
+  <div class="lbKpi" style="text-align:left;"><div id="lab-ledger-host"></div></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var mounted = false;
+
+  function open() {
+    if (!window.CrescLedger) {
+      var h = document.getElementById('lab-ledger-host');
+      if (h) h.textContent = 'The ledger component did not load. Reload the page.';
+      return;
+    }
+    if (!mounted) {
+      mounted = true;
+      window.CrescLedger.mount({
+        host: 'lab-ledger-host',
+        fn: 'getLabLedger',
+        title: 'Lab billing ledger',
+        idLabel: 'Receipt',
+        fileStem: 'lab-ledger',
+        searchHint: 'Receipt, patient ID, name, IP number or test',
+        actions: function (r, res) {
+          var a = [{ act: 'print', icon: 'fa-print', label: 'Reprint with payments so far' }];
+          if (res.canCollect && r.balance > 0 && (r.status === 'UNPAID' || r.status === 'PART_PAID')) {
+            a.push({ act: 'collect', icon: 'fa-indian-rupee-sign', label: 'Collect the balance', tone: 'success' });
+          }
+          return a;
+        },
+        onAction: function (act, row, reload) {
+          if (act === 'print') {
+            if (window.LabBill && typeof window.LabBill.printReceiptDirectly === 'function') {
+              window.LabBill.printReceiptDirectly(row.id);
+            }
+            return;
+          }
+          if (act === 'collect') collect(row, reload);
+        }
+      });
+    }
+    window.CrescLedger.load('lab-ledger-host');
+  }
+
+  function collect(row, reload) {
+    var owed = window.CrescLedger.money(row.balance);
+    crescPrompt('Collect on ' + (row.receipt || row.id) + ' (' + row.patientName + ') — ' + owed + ' owed.\n\nAmount received:',
+                String(row.balance), { title: 'Collect payment', okLabel: 'Next' })
+      .then(function (raw) {
+        if (raw === null) return;
+        var amt = Number(raw);
+        if (!(amt > 0)) { crescAlert('Enter the amount received.'); return; }
+        crescPrompt('Paid by — CASH, UPI, CARD or BANK:', 'CASH', { title: 'Payment mode', okLabel: 'Record payment' })
+          .then(function (mode) {
+            if (mode === null) return;
+            google.script.run
+              .withSuccessHandler(function (res) {
+                if (!res || !res.success) { crescAlert((res && res.message) || 'The payment was not recorded.'); return; }
+                reload();
+                crescConfirm(res.message + '\n\nPrint a receipt showing this payment?',
+                             { title: 'Payment recorded', okLabel: 'Print receipt' })
+                  .then(function (ok) { if (ok && window.LabBill) window.LabBill.printReceiptDirectly(row.id); });
+              })
+              .withFailureHandler(function (err) { crescAlert('Could not record the payment: ' + ((err && err.message) || err)); })
+              .settleLabBillBalance({ billId: row.id, amount: amt, payMode: String(mode || '').trim().toUpperCase() },
+                                    window.sessionToken || '');
+          });
+      });
+  }
+
+  window.LabLedger = { open: open };
 })();
 </script>

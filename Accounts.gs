@@ -200,7 +200,11 @@ function acc_readObjects_(sheetName) {
     var out = [];
     for (var i = 1; i < data.length; i++) {
       if (!data[i][0]) continue;
+      // _cells keeps the row by position for sheets whose headers are
+      // missing or reworded (see acc_opRows_). It is not enumerable, so
+      // nothing that walks an object's keys sees it.
       var obj = { _row: i + 1 };
+      Object.defineProperty(obj, '_cells', { value: data[i], enumerable: false });
       for (var j = 0; j < headers.length; j++) {
         obj[headers[j]] = data[i][j]; // mapped by exact header name
       }
@@ -312,10 +316,19 @@ function acc_opRows_() {
   try { if (typeof hb_billedApptIds_ === 'function') billed = hb_billedApptIds_() || {}; }
   catch (e) { billed = {}; }
 
+  // The Appointments sheet was never given headers for its fee and timestamp
+  // columns (H and I), and its status header is a sentence — "Status (Booked,
+  // Arrived, …)". Read by header name, all three came back empty, so no OP
+  // consultation ever counted here while the Command Center, which reads them
+  // by position, counted every one: two screens, two different totals.
+  // Headers win when they exist; the fixed positions every booking path
+  // writes to (Doctor_Schedule_Engine, Appointment.gs) are the fallback.
   return acc_readObjects_('Appointments').map(function (r) {
-    var status = acc_str_(r['Status']).toUpperCase();
-    var fee = acc_money_(r['Fee']);
-    var d = acc_toDate_(r['Timestamp'] || r['Date']);
+    var cells = r._cells || [];
+    var statusKey = Object.keys(r).filter(function (k) { return /^status\b/i.test(acc_str_(k).trim()); })[0];
+    var status = acc_str_(statusKey ? r[statusKey] : cells[6]).toUpperCase();
+    var fee = acc_money_(r['Fee'] !== undefined ? r['Fee'] : cells[7]);
+    var d = acc_toDate_(r['Timestamp'] || cells[8] || r['Date'] || cells[3]);
     var billId = acc_str_(r['Appt_ID'] || r['Appt ID'] || r['ApptId']);
     var invoiced = !!billed[billId.toUpperCase()];
     return {

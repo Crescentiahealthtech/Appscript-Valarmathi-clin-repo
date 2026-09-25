@@ -116,16 +116,29 @@ function labAudit_(action, entityType, entityId, oldVal, newVal) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var s = ss.getSheetByName(LAB.AUDIT_LOG); if (!s) return;
-    var m = labHeaderMap_(s); var nc = LAB_SCHEMA.LAB_AUDIT_LOG.length;
+    var m = labHeaderMap_(s);
+    // As wide as the sheet actually is. The live LAB_AUDIT_LOG was created
+    // with UserID, UserName and SessionID columns this schema never had, and
+    // a row built eight wide under a ten-wide header put every field after
+    // Timestamp in the wrong column.
+    var nc = Math.max(LAB_SCHEMA.LAB_AUDIT_LOG.length, s.getLastColumn());
     var row = new Array(nc).fill('');
-    row[m['AuditID']]     = 'AUD-' + Utilities.getUuid().substring(0,8).toUpperCase();
-    row[m['Timestamp']]   = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    row[m['Action']]      = String(action||'');
-    row[m['EntityType']]  = String(entityType||'');
-    row[m['EntityID']]    = String(entityId==null?'':entityId);
-    row[m['OldValue']]    = oldVal==null?'':(typeof oldVal==='object'?JSON.stringify(oldVal):String(oldVal));
-    row[m['NewValue']]    = newVal==null?'':(typeof newVal==='object'?JSON.stringify(newVal):String(newVal));
-    row[m['PerformedBy']] = Session.getActiveUser().getEmail()||'SYSTEM';
+    var put = function (h, v) { if (m[h] !== undefined) row[m[h]] = v; };
+    var who = cresc_actorName_('SYSTEM');
+    put('AuditID',    'AUD-' + Utilities.getUuid().substring(0,8).toUpperCase());
+    put('Timestamp',  Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss'));
+    put('Action',     String(action||''));
+    put('EntityType', String(entityType||''));
+    put('EntityID',   String(entityId==null?'':entityId));
+    put('OldValue',   oldVal==null?'':(typeof oldVal==='object'?JSON.stringify(oldVal):String(oldVal)));
+    put('NewValue',   newVal==null?'':(typeof newVal==='object'?JSON.stringify(newVal):String(newVal)));
+    // WHO. Written to whichever of the three names this sheet uses. It was
+    // written to "PerformedBy" only — a column the live sheet does not have —
+    // and before that it was Session.getActiveUser(), the deploying account.
+    // Not one lab audit row had ever said who acted.
+    put('PerformedBy', who);
+    put('UserID',      who);
+    put('UserName',    cresc_actorDisplay_(who));
     s.appendRow(row);
   } catch(e) { Logger.log('labAudit_: '+e.message); }
 }

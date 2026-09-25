@@ -133,6 +133,26 @@
               </div>
             </div>
 
+            <!-- Drugs and Cosmetics Rules. H, H1 and X can only be sold on a
+                 prescription, and every sale goes into the Schedule H
+                 register. A new batch of a medicine already on the shelf
+                 inherits its schedule when this is left blank. -->
+            <div class="col-md-6 col-12">
+              <div>
+                <label class="custom-label-dark" for="drugSchedule">Drug Schedule</label>
+                <select class="form-select custom-input-dark" id="drugSchedule">
+                  <option value="">Not scheduled (OTC / general)</option>
+                  <option value="H">Schedule H — prescription only</option>
+                  <option value="H1">Schedule H1 — prescription + register</option>
+                  <option value="X">Schedule X — narcotic / psychotropic</option>
+                </select>
+              </div>
+            </div>
+            <div class="col-md-6 col-12 d-flex align-items-end">
+              <small class="label-bright">Schedule H, H1 and X medicines need the prescribing doctor's name at billing
+                and are listed in the Schedule H register.</small>
+            </div>
+
             <div class="col-md-6 col-12">
               <div>
                 <label class="custom-label-dark" for="manufacturer">Manufacturer</label>
@@ -184,7 +204,8 @@
       mrp: document.getElementById('mrp').value,
       gst: document.getElementById('gstPercent').value,
       manufacturer: document.getElementById('manufacturer').value.trim(),
-      supplier: document.getElementById('supplierName').value.trim() || 'N/A'
+      supplier: document.getElementById('supplierName').value.trim() || 'N/A',
+      schedule: document.getElementById('drugSchedule').value
     };
 
     // Dispatch to Backend

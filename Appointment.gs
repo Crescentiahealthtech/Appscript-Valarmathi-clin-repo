@@ -256,7 +256,10 @@ function submitNewAppointment(apptObj, sessionToken) {
     const newId = apt_newId_();
     sheet.appendRow([
       newId, apptObj.patientId, apptObj.patientName, apptObj.date, apptObj.time,
-      apptObj.purpose, apptObj.status || 'Booked', apptObj.fee || 0, new Date().toISOString()
+      apptObj.purpose, apptObj.status || 'Booked', apptObj.fee || 0,
+      // A real Date, not toISOString(): the text form is the UTC time, which
+      // reads five and a half hours early in the sheet and sorts as a string.
+      new Date()
     ]);
     SpreadsheetApp.flush();
     return { success: true, apptId: newId };
@@ -434,7 +437,7 @@ function saveEnterpriseAvailability(payload, sessionToken) {
 
     // Log the Audit Trail (Wrapped in try/catch to prevent it crashing the main save)
     try {
-      let activeUser = Session.getActiveUser().getEmail() || 'System Admin';
+      let activeUser = cresc_actorName_('System Admin');   // the signed-in person, not the deploying account
       let logAction = blockedSlots.length === 0 ? "Cleared Schedule" : `Blocked ${blockedSlots.length} slots per day`;
       auditSheet.appendRow([new Date(), activeUser, 'Availability', logAction, `${startDate} to ${endDate || startDate}`]);
     } catch(err) { /* Ignore audit log failure if permissions block it */ }

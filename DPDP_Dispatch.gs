@@ -370,7 +370,7 @@ function dpdpDispatchChannels_() {
 function getDispatchConsent(patientId, channel, sessionToken) {
   try {
     var actor = crescRequire_(sessionToken,
-                              ['billing.read', 'patient.read', 'lab.read',
+                              ['billing.read', 'pharmacy.bill', 'lab.bill', 'patient.read', 'lab.read',
                                'emr.read', 'portal.self']);
     var pid = String(patientId || '').trim().toUpperCase();
     if (actor.role === 'patient' &&

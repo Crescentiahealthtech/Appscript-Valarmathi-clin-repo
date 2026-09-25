@@ -503,6 +503,11 @@ function crescAdminResetPassword(username, sessionToken) {
     var actor = crescRequire_(sessionToken, 'admin.users');
     var want = String(username || '').trim();
     if (!want) return { success: false, message: 'Name the account to reset.' };
+    if (want.toUpperCase() === String(actor.username || '').trim().toUpperCase()) {
+      return { success: false,
+               message: 'Use "Change password" in your account menu to change your own ' +
+                        'password. A reset is for somebody else\'s account.' };
+    }
 
     // Resetting a password is handing somebody the account. It is gated the
     // same way creating the account is, or the boundary would be one
@@ -525,8 +530,15 @@ function crescAdminResetPassword(username, sessionToken) {
         cresc_writeCredential_(cresc_usersSheet_(), i + 1, temp, true,
                                'Must_Change', 'Password_Updated_At');
         SpreadsheetApp.flush();
+        // A reset is what an administrator does when an account may be in
+        // the wrong hands. Every session it already has ends here — without
+        // this, whoever was using it stayed signed in on the old password
+        // for as long as they kept clicking.
+        var ended = 0;
+        try { if (typeof ds_revokeUserSessions_ === 'function') ended = ds_revokeUserSessions_(want, ''); }
+        catch (e) {}
         crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_RESET, want, String(udata[i][2] || ''),
-                        { by: actor.username });
+                        { by: actor.username, sessionsEnded: ended });
         return { success: true, temporaryPassword: temp,
                  message: 'Temporary password for ' + want + ': ' + temp +
                           '\nIt is shown once. They must change it at first sign-in.' };
@@ -542,6 +554,8 @@ function crescAdminResetPassword(username, sessionToken) {
         cresc_writeCredential_(cresc_patientsSheet_(), j + 1, temp, true,
                                'Portal_Must_Change', 'Portal_Password_Updated_At');
         SpreadsheetApp.flush();
+        try { if (typeof ds_revokeUserSessions_ === 'function') ds_revokeUserSessions_(want, ''); }
+        catch (e) {}
         crescAuthAudit_(CRESC_AUTH_EVENTS.PASSWORD_RESET, want, 'patient', { by: actor.username });
         return { success: true, temporaryPassword: temp,
                  message: 'Temporary portal password for ' + want + ': ' + temp +
@@ -720,6 +734,9 @@ function crescCreateStaffAccount(payload, sessionToken) {
     put('Must_Change', 'YES');
     users.appendRow(row);
     var rowNo = users.getLastRow();
+    // The access map (RBAC.gs) must see the new row before the new person
+    // signs in, or their first call is refused as an unknown account.
+    if (typeof cresc_aclBust_ === 'function') cresc_aclBust_();
 
     // Written through the same helper the reset path uses, so a created
     // account and a reset account are stored identically — including the
@@ -834,6 +851,14 @@ function crescSetAccountActive(username, active, sessionToken) {
       users.getRange(i + 1, 4).setValue(now);
       SpreadsheetApp.flush();
       if (typeof dc_invalidate_ === 'function') dc_invalidate_('Users');
+      if (typeof cresc_aclBust_ === 'function') cresc_aclBust_();
+      // Switched OFF means off now, not when their session happens to expire:
+      // every open session this account has is ended with the switch.
+      var ended = 0;
+      if (!on) {
+        try { if (typeof ds_revokeUserSessions_ === 'function') ended = ds_revokeUserSessions_(want, ''); }
+        catch (e) {}
+      }
 
       try {
         crescAuthAudit_(on ? CRESC_AUTH_EVENTS.ACCOUNT_ENABLED
@@ -843,7 +868,7 @@ function crescSetAccountActive(username, active, sessionToken) {
       try {
         logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
                   on ? 'STAFF_ACCOUNT_ENABLED' : 'STAFF_ACCOUNT_DISABLED',
-                  'User', want.toUpperCase(), { role: targetRole });
+                  'User', want.toUpperCase(), { role: targetRole, sessionsEnded: ended });
       } catch (e) {}
 
       return { success: true,
@@ -883,6 +908,9 @@ function crescListStaffAccounts(sessionToken) {
 
     var sh = cresc_usersSheet_();
     crescEnsureSuperAdminColumn_(sh);
+    // The list is where an administrator checks who can do what, so it reads
+    // the access map fresh rather than from the ten-minute cached copy.
+    if (typeof cresc_aclBust_ === 'function') cresc_aclBust_();
     var m = dc_headerMap_(sh);
     var data = sh.getDataRange().getValues();
     var superCol = m[CRESC_SUPERADMIN_HEADER];
@@ -918,6 +946,11 @@ function crescListStaffAccounts(sessionToken) {
         isSelf: username.toUpperCase() === String(actor.username || '').toUpperCase(),
         // Whether two-step sign-in is on, and whether what is stored is a
         // usable secret. Never the secret itself.
+        // This person's own additions to, and removals from, their role
+        // (RBAC.gs SECTION B2), so the list shows at a glance who has been
+        // given something their role does not carry.
+        granted: (typeof crescEffectivePerms_ === 'function') ? crescEffectivePerms_(username, role).granted : [],
+        revoked: (typeof crescEffectivePerms_ === 'function') ? crescEffectivePerms_(username, role).revoked : [],
         hasMfa: !!String(data[i][5] || '').replace(/\s/g, ''),
         mfaBroken: !!String(data[i][5] || '').replace(/\s/g, '') &&
                    !mfa_normaliseSecret_(data[i][5]).ok

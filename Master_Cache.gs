@@ -131,5 +131,9 @@ function onEdit(e) {
     if (!e || !e.range || typeof e.range.getSheet !== 'function') return;
     var name = e.range.getSheet().getName();
     if (MCACHE_SOURCES[name]) crescMasterBust_(name);
+    // A hand edit to Users — a role retyped, a Status set to INACTIVE, an
+    // Access_Grant pasted in — takes effect on the next call, not in ten
+    // minutes (RBAC.gs, SECTION B2).
+    if (name === 'Users' && typeof cresc_aclBust_ === 'function') cresc_aclBust_();
   } catch (err) {}
 }

@@ -1,0 +1,301 @@
+<!-- =====================================================================
+     📒 ONE BILLING LEDGER — pharmacy and lab (Billing_Ledger.gs)
+
+     The hospital desk had a ledger: a period, a status, a search, the totals,
+     and reprint / collect on every row. The pharmacy and the lab did not, so
+     last month's bills, or everything still owed, had no screen. This draws
+     that same ledger for any desk whose server returns the row shape
+     documented at the top of Billing_Ledger.gs.
+
+       CrescLedger.mount({
+         host:    'ph-ledger-host',          // an empty <div>
+         fn:      'getPharmacyLedger',       // server fn(filter, token)
+         title:   'Pharmacy billing ledger', // printed heading
+         idLabel: 'Invoice',
+         actions: function (row, reply) { return [{act, icon, label, tone}] },
+         onAction: function (act, row, reload) { … }
+       });
+
+     It lives in the SHELL because the pharmacy and lab are separate lazy
+     bundles and both mount it. Nothing is declared at the top level except
+     window.CrescLedger.
+     ===================================================================== -->
+<style>
+  .cl-wrap .cl-bar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-end; margin-bottom:.75rem; }
+  .cl-wrap .cl-bar label { display:block; font-size:var(--fs-2xs); font-weight:700; letter-spacing:.4px;
+                           text-transform:uppercase; color:var(--text-muted); margin-bottom:2px; }
+  .cl-wrap .cl-in { background:var(--bg-input); color:var(--text-main); border:1px solid var(--border-color);
+                    border-radius:7px; padding:.35rem .5rem; font-size:var(--fs-sm); }
+  .cl-wrap .cl-quick { display:flex; gap:.35rem; flex-wrap:wrap; margin-bottom:.6rem; }
+  .cl-wrap .cl-quick button { font-size:var(--fs-xs); }
+  .cl-wrap .cl-totals { font-size:var(--fs-sm); color:var(--text-muted); margin-bottom:.5rem; }
+  .cl-wrap .cl-totals strong { color:var(--text-main); }
+  .cl-wrap .cl-chip { display:inline-block; border-radius:6px; padding:.1rem .45rem; font-size:var(--fs-2xs);
+                      font-weight:700; letter-spacing:.3px; white-space:nowrap; }
+  .cl-wrap .cl-PAID       { background:var(--success-bg); color:var(--success-fg); }
+  .cl-wrap .cl-IP_SETTLED { background:var(--info-bg);    color:var(--info-fg); }
+  .cl-wrap .cl-PART_PAID  { background:var(--warning-bg); color:var(--warning-fg); }
+  .cl-wrap .cl-UNPAID     { background:var(--danger-bg);  color:var(--danger-fg); }
+  .cl-wrap .cl-ON_ACCOUNT { background:var(--accent-glow); color:var(--accent-fg); }
+  .cl-wrap .cl-CANCELLED  { background:var(--bg-input);   color:var(--text-muted); text-decoration:line-through; }
+  .cl-wrap .cl-mode       { background:var(--bg-input); color:var(--text-main); border:1px solid var(--border-color); }
+  .cl-wrap table.cl-table { width:100%; border-collapse:collapse; }
+  .cl-wrap table.cl-table th { font-size:var(--fs-2xs); text-transform:uppercase; letter-spacing:.4px;
+                               color:var(--text-muted); border-bottom:1px solid var(--border-color);
+                               padding:.4rem .35rem; text-align:left; font-weight:700; white-space:nowrap; }
+  .cl-wrap table.cl-table td { padding:.35rem .35rem; border-bottom:1px solid var(--border-color);
+                               vertical-align:middle; font-size:var(--fs-sm); color:var(--text-main); }
+  .cl-wrap .cl-money { font-variant-numeric:tabular-nums; text-align:right; white-space:nowrap; }
+  .cl-wrap .cl-sub { font-size:var(--fs-2xs); color:var(--text-muted); }
+  .cl-wrap tr.cl-cancelled td { opacity:.55; }
+</style>
+
+<script>
+(function () {
+  'use strict';
+
+  var LEDGERS = {};
+
+  var STATUS_LABEL = {
+    PAID: 'Paid', IP_SETTLED: 'Settled at discharge', PART_PAID: 'Part paid',
+    UNPAID: 'Unpaid', ON_ACCOUNT: 'On IP account', CANCELLED: 'Cancelled'
+  };
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function money(n) { return '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  /** yyyy-MM-dd in the clinic's (the browser's) own zone — never toISOString(), which is UTC. */
+  function localDay(d) {
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function q(L, sel) { return L.root.querySelector(sel); }
+
+  function mount(cfg) {
+    var host = document.getElementById(cfg.host);
+    if (!host) return null;
+    if (LEDGERS[cfg.host]) return LEDGERS[cfg.host];
+    var L = { cfg: cfg, root: host, rows: [], reply: null, seq: 0 };
+    LEDGERS[cfg.host] = L;
+
+    var monthStart = new Date(); monthStart.setDate(1);
+    host.classList.add('cl-wrap');
+    host.innerHTML =
+      '<div class="cl-bar">' +
+        '<div><label>From</label><input type="date" class="cl-in" data-cl="from" value="' + localDay(monthStart) + '"></div>' +
+        '<div><label>To</label><input type="date" class="cl-in" data-cl="to" value="' + localDay(new Date()) + '"></div>' +
+        '<div><label>Status</label><select class="cl-in" data-cl="status">' +
+          '<option value="ALL">All bills</option>' +
+          '<option value="SETTLED">Settled</option>' +
+          '<option value="UNSETTLED">Unsettled (still owed)</option>' +
+          '<option value="UNPAID">Unpaid</option>' +
+          '<option value="PART_PAID">Part paid</option>' +
+          '<option value="ON_ACCOUNT">On IP account</option>' +
+          '<option value="CANCELLED">Cancelled</option>' +
+        '</select></div>' +
+        '<div style="flex:1 1 200px;"><label>Search</label><input type="text" class="cl-in w-100" data-cl="search" ' +
+          'placeholder="' + esc(cfg.searchHint || 'Bill no., patient, mobile') + '"></div>' +
+        '<div class="d-flex gap-1">' +
+          '<button type="button" class="btn btn-sm btn-primary" data-cl-do="load"><i class="fa-solid fa-magnifying-glass me-1"></i>Show</button>' +
+          '<button type="button" class="btn btn-sm btn-outline-secondary" data-cl-do="print" title="Print this list"><i class="fa-solid fa-print"></i></button>' +
+          '<button type="button" class="btn btn-sm btn-outline-secondary" data-cl-do="csv" title="Download as CSV"><i class="fa-solid fa-file-csv"></i></button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="cl-quick">' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary" data-cl-do="today">Today</button>' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary" data-cl-do="month">This month</button>' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary" data-cl-do="lastmonth">Last month</button>' +
+        '<button type="button" class="btn btn-sm btn-outline-warning" data-cl-do="owed"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Everything still owed</button>' +
+      '</div>' +
+      '<div class="cl-totals" data-cl="totals"></div>' +
+      '<div class="table-responsive"><table class="cl-table"><thead><tr>' +
+        '<th>' + esc(cfg.idLabel || 'Bill') + '</th><th>Date</th><th>Patient</th><th>Details</th><th>Mode</th>' +
+        '<th class="cl-money">Net</th><th class="cl-money">Paid</th><th class="cl-money">Balance</th>' +
+        '<th>Status</th><th class="text-end">Actions</th>' +
+      '</tr></thead><tbody data-cl="body"><tr><td colspan="10" class="text-center label-bright py-4">Choose a period and press Show.</td></tr></tbody></table></div>';
+
+    host.addEventListener('click', function (ev) {
+      var b = ev.target.closest ? ev.target.closest('[data-cl-do],[data-cl-act]') : null;
+      if (!b || !host.contains(b)) return;
+      var act = b.getAttribute('data-cl-act');
+      if (act) {
+        var row = L.rows[parseInt(b.getAttribute('data-cl-i'), 10)];
+        if (row && typeof cfg.onAction === 'function') cfg.onAction(act, row, function () { load(L); });
+        return;
+      }
+      var what = b.getAttribute('data-cl-do');
+      var from = q(L, '[data-cl=from]'), to = q(L, '[data-cl=to]'), st = q(L, '[data-cl=status]');
+      var now = new Date();
+      if (what === 'today') { from.value = to.value = localDay(now); }
+      else if (what === 'month') { var m = new Date(now.getFullYear(), now.getMonth(), 1); from.value = localDay(m); to.value = localDay(now); }
+      else if (what === 'lastmonth') {
+        from.value = localDay(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+        to.value = localDay(new Date(now.getFullYear(), now.getMonth(), 0));
+      }
+      else if (what === 'owed') { from.value = ''; to.value = ''; st.value = 'UNSETTLED'; }
+      else if (what === 'print') { printList(L); return; }
+      else if (what === 'csv') { csv(L); return; }
+      load(L);
+    });
+    host.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && ev.target && ev.target.getAttribute('data-cl') === 'search') { ev.preventDefault(); load(L); }
+    });
+    host.addEventListener('change', function (ev) {
+      var k = ev.target && ev.target.getAttribute('data-cl');
+      if (k === 'status' || k === 'from' || k === 'to') load(L);
+    });
+    return L;
+  }
+
+  function filterOf(L) {
+    return {
+      from: q(L, '[data-cl=from]').value, to: q(L, '[data-cl=to]').value,
+      status: q(L, '[data-cl=status]').value, search: q(L, '[data-cl=search]').value, limit: 1000
+    };
+  }
+
+  function load(L) {
+    var body = q(L, '[data-cl=body]');
+    var seq = ++L.seq;
+    body.innerHTML = '<tr><td colspan="10" class="text-center label-bright py-4"><i class="fa-solid fa-spinner fa-spin me-2"></i>Loading…</td></tr>';
+    var runner = google.script.run
+      .withSuccessHandler(function (res) {
+        if (seq !== L.seq) return;           // a newer request is on its way
+        if (!res || !res.success) {
+          body.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-4">' +
+            esc((res && res.message) || 'The ledger could not be loaded.') + '</td></tr>';
+          q(L, '[data-cl=totals]').innerHTML = '';
+          return;
+        }
+        L.reply = res; L.rows = res.rows || [];
+        render(L);
+      })
+      .withFailureHandler(function (err) {
+        if (seq !== L.seq) return;
+        body.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-4">' +
+          esc('The ledger could not be loaded: ' + ((err && err.message) || err)) + '</td></tr>';
+      });
+    runner[L.cfg.fn](filterOf(L), window.sessionToken || '');
+  }
+
+  function render(L) {
+    var res = L.reply || {}, t = res.totals || {}, cfg = L.cfg;
+    var modes = Object.keys(t.byMode || {}).map(function (m) {
+      return '<span class="cl-chip cl-mode me-1">' + esc(m) + ' ' + money(t.byMode[m]) + '</span>';
+    }).join('');
+    var ag = t.aging || {};
+    var aging = (t.unsettled ? '<div class="mt-1">Owed by age: ' +
+        [['0–7 days', ag.d0_7], ['8–30 days', ag.d8_30], ['31–90 days', ag.d31_90], ['over 90 days', ag.d90p]]
+          .filter(function (a) { return a[1] > 0; })
+          .map(function (a) { return '<span class="cl-chip cl-PART_PAID me-1">' + esc(a[0]) + ' ' + money(a[1]) + '</span>'; }).join('') +
+      '</div>' : '');
+    q(L, '[data-cl=totals]').innerHTML =
+      '<strong>' + (t.count || 0) + '</strong> bill(s) · billed <strong>' + money(t.net) + '</strong>' +
+      ' · collected <strong>' + money(t.paid) + '</strong>' +
+      ' · still owed <strong style="color:var(--danger-fg);">' + money(t.balance) + '</strong>' +
+      (t.refund ? ' · refunded <strong>' + money(t.refund) + '</strong>' : '') +
+      (t.cancelled ? ' · <span title="Cancelled bills are listed but counted nowhere">' + t.cancelled + ' cancelled</span>' : '') +
+      (modes ? '<div class="mt-1">Collected by mode: ' + modes + '</div>' : '') + aging +
+      (res.truncated ? '<div class="mt-1 text-warning">Showing the first ' + L.rows.length + ' of ' + res.count + ' — narrow the period to see the rest.</div>' : '');
+
+    var body = q(L, '[data-cl=body]');
+    if (!L.rows.length) {
+      body.innerHTML = '<tr><td colspan="10" class="text-center label-bright py-4">No bills match these filters.</td></tr>';
+      return;
+    }
+    body.innerHTML = L.rows.map(function (r, i) {
+      var acts = (typeof cfg.actions === 'function' ? cfg.actions(r, res) : []) || [];
+      var owedAge = (r.balance > 0 && r.ageDays > 0) ? '<div class="cl-sub">' + r.ageDays + ' day(s) old</div>' : '';
+      return '<tr class="' + (r.status === 'CANCELLED' ? 'cl-cancelled' : '') + '">' +
+        '<td class="fw-bold text-nowrap">' + esc(r.receipt || r.id) + '</td>' +
+        '<td class="text-nowrap">' + esc(r.date) + '<div class="cl-sub">' + esc(r.time) + '</div></td>' +
+        '<td>' + esc(r.patientName) + '<div class="cl-sub">' + esc(r.patientId) +
+          (r.admissionId ? ' · ' + esc(r.admissionId) : '') + '</div></td>' +
+        '<td style="max-width:260px;">' + esc(r.detail) + (r.doctor ? '<div class="cl-sub">' + esc(r.doctor) + '</div>' : '') + '</td>' +
+        '<td><span class="cl-chip cl-mode">' + esc(r.mode) + '</span></td>' +
+        '<td class="cl-money">' + money(r.net) + '</td>' +
+        '<td class="cl-money">' + money(r.paid) + '</td>' +
+        '<td class="cl-money"' + (r.balance > 0 ? ' style="color:var(--danger-fg);font-weight:700;"' : '') + '>' +
+          money(r.balance) + owedAge + '</td>' +
+        '<td><span class="cl-chip cl-' + esc(r.status) + '">' + esc(STATUS_LABEL[r.status] || r.status) + '</span></td>' +
+        '<td class="text-end text-nowrap">' + acts.map(function (a) {
+          return '<button type="button" class="btn btn-sm btn-outline-' + esc(a.tone || 'secondary') + ' ms-1" ' +
+                 'data-cl-act="' + esc(a.act) + '" data-cl-i="' + i + '" title="' + esc(a.label) + '">' +
+                 '<i class="fa-solid ' + esc(a.icon || 'fa-circle') + '"></i>' +
+                 (a.text ? ' ' + esc(a.text) : '') + '</button>';
+        }).join('') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function periodText(L) {
+    var f = filterOf(L);
+    var sel = q(L, '[data-cl=status]');
+    var st = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : f.status;
+    var fmt = function (d) {
+      if (!d) return '';
+      var p = d.split('-');
+      return p[2] + '-' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1] - 1] + '-' + p[0];
+    };
+    var when = (f.from || f.to) ? (fmt(f.from) || 'the start') + ' to ' + (fmt(f.to) || 'today') : 'All dates';
+    return { when: when, status: st, search: f.search };
+  }
+
+  function printList(L) {
+    if (!L.reply) { if (window.crescAlert) crescAlert('Show the list first, then print it.'); return; }
+    if (typeof window.crescReportPrint !== 'function') return;
+    var p = periodText(L), t = L.reply.totals || {};
+    window.crescReportPrint({
+      title: String(L.cfg.title || 'Billing ledger').toUpperCase(),
+      subtitle: p.when,
+      meta: [['Status', p.status], ['Search', p.search], ['Printed by', window.loggedInUser || '']],
+      landscape: true,
+      columns: [
+        { label: '#', width: '30px' }, { label: L.cfg.idLabel || 'Bill', width: '110px' },
+        { label: 'Date', width: '90px' }, { label: 'Patient' }, { label: 'Details' },
+        { label: 'Mode', width: '60px' }, { label: 'Net', align: 'right', width: '80px' },
+        { label: 'Paid', align: 'right', width: '80px' }, { label: 'Balance', align: 'right', width: '80px' },
+        { label: 'Status', width: '90px' }
+      ],
+      rows: L.rows.map(function (r, i) {
+        return [String(i + 1), r.receipt || r.id, r.date + ' ' + r.time, r.patientName + ' (' + r.patientId + ')',
+                r.detail, r.mode, money(r.net), money(r.paid), money(r.balance), STATUS_LABEL[r.status] || r.status];
+      }),
+      totals: [['Bills', String(t.count || 0)], ['Billed', money(t.net)], ['Collected', money(t.paid)],
+               ['Owed', money(t.balance)]]
+    });
+  }
+
+  function csv(L) {
+    if (!L.rows.length) { if (window.crescAlert) crescAlert('There is nothing to export — show a list first.'); return; }
+    var cell = function (v) {
+      var s = String(v == null ? '' : v);
+      if (/^[=+\-@]/.test(s)) s = "'" + s;            // never a formula in a spreadsheet
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    var lines = [['Bill', 'Date', 'Time', 'Patient ID', 'Patient', 'Details', 'Doctor', 'Mode',
+                  'Net', 'Paid', 'Balance', 'Refunded', 'Status', 'Admission', 'Billed by'].map(cell).join(',')];
+    L.rows.forEach(function (r) {
+      lines.push([r.receipt || r.id, r.date, r.time, r.patientId, r.patientName, r.detail, r.doctor, r.mode,
+                  r.net, r.paid, r.balance, r.refund || 0, STATUS_LABEL[r.status] || r.status,
+                  r.admissionId, r.by].map(cell).join(','));
+    });
+    var name = String(L.cfg.fileStem || 'ledger') + '-' + localDay(new Date()) + '.csv';
+    var url = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  window.CrescLedger = {
+    mount: mount,
+    /** Loads (or reloads) a mounted ledger. */
+    load: function (hostId) { var L = LEDGERS[hostId]; if (L) load(L); },
+    localDay: localDay,
+    money: money
+  };
+})();
+</script>

@@ -411,7 +411,74 @@
     }, done);
   };
 
-  function openPrintWindow(html, title) {
+  // ------------------------------------------------------------------
+  // A REPORT ON THE CLINIC'S LETTERHEAD — a register, a ledger, a list.
+  //
+  //   crescReportPrint({
+  //     title:     'Schedule H Drug Register',
+  //     subtitle:  '01-Sep-2026 to 30-Sep-2026',
+  //     meta:      [['Schedules', 'H, H1, X'], ['Printed by', 'meena']],
+  //     columns:   [{label:'S.No', width:'40px'}, {label:'Signature', width:'120px', blank:true}],
+  //     rows:      [['1', '…', …]],          // cells are ESCAPED here
+  //     totals:    [['Entries', '12']],
+  //     landscape: true,
+  //     footNote:  'Certified that the above entries are true.'
+  //   })
+  //
+  // A column with blank:true prints as an empty ruled box on every row — the
+  // space a register leaves for a signature made in ink.
+  // ------------------------------------------------------------------
+  window.crescReportPrint = function (r) {
+    r = r || {};
+    withClinic(function (clinic) {
+      var cols = r.columns || [];
+      var head = cols.map(function (c) {
+        return '<th style="border:1px solid #9ca3af;padding:6px 6px;text-align:' + (c.align || 'left') +
+               ';font-size:10.5px;text-transform:uppercase;letter-spacing:.02em;background:#f3f4f6;' +
+               (c.width ? 'width:' + c.width + ';' : '') + '">' + esc(c.label) + '</th>';
+      }).join('');
+      var body = (r.rows || []).length ? (r.rows || []).map(function (row) {
+        return '<tr style="page-break-inside:avoid;">' + cols.map(function (c, i) {
+          var v = c.blank ? '' : row[i];
+          return '<td style="border:1px solid #9ca3af;padding:' + (c.blank ? '14px' : '5px') + ' 6px;' +
+                 'vertical-align:top;font-size:11.5px;text-align:' + (c.align || 'left') + ';">' +
+                 (c.html ? (v == null ? '' : v) : esc(v)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') : '<tr><td colspan="' + Math.max(1, cols.length) + '" style="border:1px solid #9ca3af;padding:18px;' +
+        'text-align:center;color:' + C.faint + ';">Nothing in this period.</td></tr>';
+
+      var meta = (r.meta || []).filter(function (m) { return m && m[1] !== '' && m[1] != null; })
+        .map(function (m) { return '<span style="color:' + C.muted + ';">' + esc(m[0]) + ':</span> ' + esc(m[1]); })
+        .join('<span style="color:' + C.line + ';"> &nbsp;|&nbsp; </span>');
+      var totals = (r.totals || []).map(function (t) {
+        return '<span style="margin-left:18px;"><span style="color:' + C.muted + ';">' + esc(t[0]) + ':</span> <strong>' +
+               esc(t[1]) + '</strong></span>';
+      }).join('');
+
+      var html =
+        '<div style="max-width:' + (r.landscape ? '1100px' : '780px') + ';margin:12px auto;font-family:' + FONT +
+          ';color:' + C.ink + ';background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;">' +
+          letterhead(clinic, r.title || 'REPORT', '', r.printedAt || '') +
+          '<div style="padding:10px 24px;font-size:12.5px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+            '<div><strong>' + esc(r.subtitle || '') + '</strong>' + (meta ? '<div style="margin-top:4px;">' + meta + '</div>' : '') + '</div>' +
+            '<div>' + totals + '</div>' +
+          '</div>' +
+          '<div style="padding:0 24px 12px;"><table style="width:100%;border-collapse:collapse;">' +
+            '<thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+          (r.footNote ? '<div style="padding:4px 24px 8px;font-size:11.5px;color:' + C.ink + ';">' + r.footNote + '</div>' : '') +
+          (r.signatures
+            ? '<div style="padding:28px 24px 8px;display:flex;justify-content:space-between;gap:24px;font-size:12px;">' +
+                r.signatures.map(function (sig) {
+                  return '<div style="flex:1;border-top:1px solid ' + C.ink + ';padding-top:4px;text-align:center;">' + esc(sig) + '</div>';
+                }).join('') + '</div>'
+            : '') +
+          '<div style="padding:8px 24px 16px;font-size:10.5px;color:' + C.faint + ';">' + esc(clinic.footer || '') + '</div>' +
+        '</div>';
+      openPrintWindow(html, r.title || 'Report', !!r.landscape);
+    });
+  };
+
+  function openPrintWindow(html, title, landscape) {
     (function () {
       var w = window.open('', '_blank', 'width=900,height=820,top=40,left=40');
       if (!w) {
@@ -430,7 +497,8 @@
         '<title>' + esc(title) + '</title>' +
         '<style>*{box-sizing:border-box;margin:0;padding:0;}' +
         'body{background:#fff;font-family:' + FONT + ';}' +
-        '@media print{@page{margin:1cm;} .no-print{display:none!important;}}' +
+        '@media print{@page{margin:1cm;' + (landscape ? 'size:A4 landscape;' : '') + '} .no-print{display:none!important;}' +
+        ' thead{display:table-header-group;}}' +
         '</style></head><body>' + html +
         '<div class="no-print" style="text-align:center;padding:16px 0 28px;">' +
           '<button onclick="window.print();" style="background:' + C.accent + ';color:#fff;border:0;' +

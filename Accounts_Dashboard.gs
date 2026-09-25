@@ -98,7 +98,7 @@ function getFinanceDashboard(scope, periodKey, sessionToken) {
 
     // saved discharge drafts: ward charges entered but not yet posted (active admissions only)
     var activeIP = {}, admSh = ss.getSheetByName('IP_Admissions');
-    if (admSh) { var add = admSh.getDataRange().getValues(), ahh = add[0].map(function (x) { return acc_str_(x).trim(); }); var aiIP = ahh.indexOf('IP Number'), aiSt = ahh.indexOf('Status'); for (var k = 1; k < add.length; k++) if (acc_str_(add[k][aiSt]).toUpperCase() === 'ACTIVE') activeIP[acc_str_(add[k][aiIP]).trim()] = true; }
+    if (admSh) { var add = admSh.getDataRange().getValues(), ahh = add[0].map(function (x) { return acc_str_(x).trim(); }); var aiIP = ahh.indexOf('IP_Number') !== -1 ? ahh.indexOf('IP_Number') : ahh.indexOf('IP Number'), aiSt = ahh.indexOf('Status'); for (var k = 1; k < add.length; k++) if (acc_str_(add[k][aiSt]).toUpperCase() === 'ACTIVE') activeIP[acc_str_(add[k][aiIP]).trim()] = true; }
     var drSh = ss.getSheetByName('IP_Discharge_Drafts');
     if (drSh) {
       var dd2 = drSh.getDataRange().getValues(), dh2 = dd2[0].map(function (x) { return acc_str_(x).trim(); }), diIP = dh2.indexOf('IP_Number'), diW = dh2.indexOf('Ward_JSON');
