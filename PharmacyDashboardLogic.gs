@@ -84,7 +84,7 @@ function getPharmacyDashboard(fromKey, toKey, sessionToken) {
 // Search past bills by Patient ID / Name / Mobile / Invoice No.
 function searchPharmacyInvoices(query, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['pharmacy.bill', 'pharmacy.read', 'accounts.read']);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var q = String(query || "").trim().toLowerCase();
     if (!q) return { success: false, message: "Enter an ID, name, mobile, or invoice number." };
@@ -119,7 +119,7 @@ function searchPharmacyInvoices(query, sessionToken) {
 // Rebuild the print payload for ANY past invoice (same shape buildPrintInvoiceRaw expects).
 function getInvoiceForPrint(invoiceNo, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['pharmacy.bill', 'pharmacy.read', 'accounts.read']);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var target = String(invoiceNo || "").trim().toUpperCase();
     if (!target) return { success: false, message: "No invoice number." };

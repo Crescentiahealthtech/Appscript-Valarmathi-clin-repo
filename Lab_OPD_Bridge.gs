@@ -125,8 +125,8 @@ function collectAndBillLabSample(payload, sessionToken) {
     // It used to take no token and call generateLabBill / collectLabSample
     // without one, so both refused and this entry point could never succeed.
     // The token is checked here and handed to each step, which checks its own
-    // permission (billing.write, lab.collect) against the same person.
-    crescRequire_(sessionToken, ['lab.collect', 'billing.write']);
+    // permission (lab.bill, lab.collect) against the same person.
+    crescRequire_(sessionToken, ['lab.collect', 'lab.bill']);
     if (!payload || !payload.orderId) return { success: false, message: 'Order ID required.' };
 
     var od = getLabOrderDetail(payload.orderId);

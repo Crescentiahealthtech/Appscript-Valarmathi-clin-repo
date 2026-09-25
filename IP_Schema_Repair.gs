@@ -314,3 +314,188 @@ function repairOPEncounterHeaders(dryRun) {
   return (dryRun ? 'DRY RUN — nothing written. Run repairOPEncounterHeaders(false) to apply.\n' : 'Written:\n') +
          changes.join('\n');
 }
+
+
+// ---------------------------------------------------------------------------
+// THE DATES, TIMES AND HEADERS FOUND WRONG IN THE LIVE WORKBOOK (Sep 2026)
+//
+// The code that wrote each of these is fixed; this repairs what it already
+// wrote. It previews by default and changes nothing until asked to apply.
+//
+//   1. Appointments: columns H and I carry the fee and the booking time and
+//      have no headers, so Accounts (which reads by header) saw neither.
+//   2. Appointments.Timestamp and Pharmacy_Inventory.Timestamp: rows written
+//      as ISO TEXT ("2026-05-17T04:53:02.393Z" — UTC, five and a half hours
+//      early) instead of as dates.
+//   3. Any cell holding a stringified date — "Sat Dec 30 1899 11:45:00
+//      GMT+0521 (India Standard Time)", "Sat Apr 01 2028 00:00:00 GMT+0530"
+//      — is rewritten as the date or time it always meant. Signed discharge
+//      snapshots and the audit trails are never touched: those are evidence,
+//      and are cleaned where they are displayed instead.
+//   4. LAB_AUDIT_LOG: rows written under a header they did not match (the
+//      action sitting in UserID, and so on) are moved into their columns.
+//      Nothing in them is changed or removed.
+//   5. IP_Discharge_Drafts: the old eight-column header is brought up to the
+//      ten columns saveDischargeDraft writes (AccountsIPChargesLogic.gs).
+//
+// Run from the editor:            repairSheetData()      preview
+//                                 repairSheetData(true)  apply
+// or Admin Dashboard → Operations → Backups → "Check sheet data".
+// ---------------------------------------------------------------------------
+
+/** EDITOR. Preview (or apply) the sheet data repair. */
+function repairSheetData(apply) {
+  crescEditorOnly_('repairSheetData');
+  var r = cresc_repairSheetData_(!!apply);
+  Logger.log(r.report);
+  return r.report;
+}
+
+/**
+ * FRONTEND ENTRY (Operations → Backups). The same repair, for an
+ * administrator who is not in the script editor. Take a backup first; the
+ * screen offers one.
+ */
+function crescRepairSheetData(sessionToken, apply) {
+  var lock = LockService.getScriptLock();
+  try {
+    var actor = crescRequire_(sessionToken, 'admin.config');
+    lock.waitLock(30000);
+    var r = cresc_repairSheetData_(!!apply);
+    if (apply) {
+      try {
+        logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                  'SHEET_DATA_REPAIRED', 'Workbook', '', { changed: r.changed });
+      } catch (e) {}
+    }
+    return { success: true, changed: r.changed, report: r.report, applied: !!apply };
+  } catch (err) {
+    return { success: false, message: cresc_reason_(err) };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+/** Sheets whose text is evidence or payload, never rewritten by step 3. */
+var CRESC_REPAIR_SKIP = ['DS_Snapshots', 'DS_Working', 'DS_Workflow_Log', 'Audit_Log',
+                         'Audit_Event_Ledger', 'LAB_AUDIT_LOG', 'Sessions', 'Consent_Register',
+                         'Breach_Register', 'Document_Grants', 'Backup_Log'];
+
+var CRESC_STAMP_RX = /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2} \d{4} \d{2}:\d{2}:\d{2} GMT[+-]\d{4}/;
+
+function cresc_repairSheetData_(apply) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var lines = [apply ? 'APPLYING the sheet data repair:' : 'PREVIEW — nothing has been changed. Apply to make these changes:'];
+  var changed = 0;
+  var note = function (n, what) { if (n) { changed += n; lines.push('  • ' + what); } };
+
+  // ---- 1. Appointments headers --------------------------------------------
+  var ap = ss.getSheetByName('Appointments');
+  if (ap && ap.getLastColumn() >= 9) {
+    var head = ap.getRange(1, 1, 1, 9).getValues()[0];
+    var fixes = [];
+    if (!String(head[7] || '').trim()) fixes.push([8, 'Fee']);
+    if (!String(head[8] || '').trim()) fixes.push([9, 'Timestamp']);
+    if (fixes.length && apply) fixes.forEach(function (f) { ap.getRange(1, f[0]).setValue(f[1]).setFontWeight('bold'); });
+    note(fixes.length, 'Appointments: header' + (fixes.length > 1 ? 's' : '') + ' ' +
+         fixes.map(function (f) { return '"' + f[1] + '" (column ' + String.fromCharCode(64 + f[0]) + ')'; }).join(' and ') +
+         (apply ? ' written' : ' to be written') + '.');
+  }
+
+  // ---- 2. ISO text in timestamp columns ------------------------------------
+  [['Appointments', 9, 'Timestamp'], ['Pharmacy_Inventory', 1, 'Timestamp']].forEach(function (t) {
+    var sh = ss.getSheetByName(t[0]);
+    if (!sh || sh.getLastRow() < 2 || sh.getLastColumn() < t[1]) return;
+    var rng = sh.getRange(2, t[1], sh.getLastRow() - 1, 1);
+    var vals = rng.getValues(), n = 0;
+    var out = vals.map(function (r) {
+      var v = r[0];
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v.trim())) {
+        var d = new Date(v.trim());
+        if (!isNaN(d.getTime())) { n++; return [d]; }
+      }
+      return [v];
+    });
+    if (n && apply) { rng.setValues(out); rng.setNumberFormat('dd-mmm-yyyy hh:mm'); }
+    note(n, t[0] + '.' + t[2] + ': ' + n + ' ISO text value(s) ' + (apply ? 'converted' : 'to convert') + ' to real dates.');
+  });
+
+  // ---- 3. Stringified dates anywhere ---------------------------------------
+  ss.getSheets().forEach(function (sh) {
+    var name = sh.getName();
+    if (CRESC_REPAIR_SKIP.indexOf(name) !== -1) return;
+    var lr = sh.getLastRow(), lc = sh.getLastColumn();
+    if (lr < 2 || lc < 1) return;
+    var hdr = sh.getRange(1, 1, 1, lc).getValues()[0].map(function (h) { return String(h || '').trim(); });
+    var data = sh.getRange(2, 1, lr - 1, lc).getValues();
+    var hits = 0, cols = {};
+    for (var i = 0; i < data.length; i++) {
+      for (var j = 0; j < lc; j++) {
+        var v = data[i][j];
+        if (typeof v !== 'string' || v.indexOf('GMT') === -1 || !CRESC_STAMP_RX.test(v)) continue;
+        if (/^\s*[\{\[]/.test(v)) continue;                      // JSON: somebody's payload
+        var isExpiry = /expir/i.test(hdr[j]);
+        var cleaned = cresc_cleanStampedTime_(v);
+        var d = cresc_parseDate_(cleaned);
+        if (apply) {
+          var cell = sh.getRange(i + 2, j + 1);
+          if (isExpiry && d && !cresc_isSheetEpoch_(d)) {
+            cell.setValue(new Date(d.getFullYear(), d.getMonth(), 1)).setNumberFormat('mmm yyyy');
+          } else {
+            cell.setNumberFormat('@').setValue(cleaned);
+          }
+        }
+        hits++;
+        cols[hdr[j] || ('column ' + (j + 1))] = true;
+      }
+    }
+    note(hits, name + ': ' + hits + ' stringified date(s) in ' + Object.keys(cols).join(', ') +
+               (apply ? ' rewritten' : ' to rewrite') + ' as readable dates and times.');
+  });
+
+  // ---- 4. LAB_AUDIT_LOG column alignment ------------------------------------
+  var la = ss.getSheetByName('LAB_AUDIT_LOG');
+  if (la && la.getLastRow() > 1) {
+    var lh = la.getRange(1, 1, 1, la.getLastColumn()).getValues()[0].map(function (h) { return String(h || '').trim(); });
+    var cU = lh.indexOf('UserID'), cN = lh.indexOf('UserName'), cA = lh.indexOf('Action'),
+        cT = lh.indexOf('EntityType'), cI = lh.indexOf('EntityID'), cO = lh.indexOf('OldValue'), cV = lh.indexOf('NewValue');
+    if (cU === 2 && cA === 4 && cT === 5 && cI === 6 && cO === 7 && cV === 8) {
+      var w = la.getLastColumn();
+      var rows = la.getRange(2, 1, la.getLastRow() - 1, w).getValues();
+      var moved = 0;
+      var out2 = rows.map(function (r) {
+        // Written as [AuditID, Timestamp, Action, EntityType, EntityID, Old, New, PerformedBy]
+        // under the ten-column header: the action is where UserID belongs.
+        var looksOld = /^[A-Z][A-Z_]*[A-Z]$/.test(String(r[2] || '')) && /^[A-Z_]+$/.test(String(r[3] || '')) &&
+                       !/^[A-Z][A-Z_]*[A-Z]$/.test(String(r[4] || ''));
+        if (!looksOld) return r;
+        moved++;
+        var n = r.slice();
+        n[2] = r[7] || '';            // PerformedBy -> UserID
+        n[3] = '';                    // UserName was never recorded
+        n[4] = r[2]; n[5] = r[3]; n[6] = r[4]; n[7] = r[5]; n[8] = r[6];
+        return n;
+      });
+      if (moved && apply) la.getRange(2, 1, rows.length, w).setValues(out2);
+      note(moved, 'LAB_AUDIT_LOG: ' + moved + ' row(s) ' + (apply ? 'moved' : 'to move') +
+                  ' into the columns their header names (nothing in them changed).');
+    }
+  }
+
+  // ---- 5. IP_Discharge_Drafts header ---------------------------------------
+  var dr = ss.getSheetByName('IP_Discharge_Drafts');
+  if (dr && typeof IPC_DRAFT_HEADERS !== 'undefined') {
+    var dh = dr.getRange(1, 1, 1, Math.max(dr.getLastColumn(), 1)).getValues()[0].map(function (h) { return String(h || '').trim(); });
+    if (dh.slice(0, IPC_DRAFT_HEADERS.length).join('|') !== IPC_DRAFT_HEADERS.join('|')) {
+      if (apply && typeof ipc_healDraftHeaders_ === 'function') ipc_healDraftHeaders_(dr);
+      note(1, 'IP_Discharge_Drafts: header ' + (apply ? 'brought' : 'to bring') +
+              ' up to the ten columns the discharge desk writes, so saved ward charges load back.');
+    }
+  }
+
+  if (apply) SpreadsheetApp.flush();
+  if (!changed) lines.push('  Nothing to repair — every check is clean.');
+  lines.push('');
+  lines.push(apply ? 'Done: ' + changed + ' change(s).' : changed + ' change(s) would be made.');
+  return { changed: changed, report: lines.join('\n') };
+}

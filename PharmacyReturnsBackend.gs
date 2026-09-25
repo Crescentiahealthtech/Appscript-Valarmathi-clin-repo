@@ -196,7 +196,7 @@ function processPharmacyReturn(payload, sessionToken) {
     if (creditUnsettled) refundMode = "CREDIT-ADJUST";
     else if (!refundMode) refundMode = origPayMode || "CASH";
 
-    var by = ""; try { by = Session.getActiveUser().getEmail() || ""; } catch (e) {}
+    var by = cresc_actorName_('');   // the signed-in member of staff, not the deploying account
     var now = new Date();
     var returnNo = _nextReturnNo_(rHeader, now);
 
@@ -303,7 +303,7 @@ function getPharmacyFinanceSummary(fromKey, toKey, sessionToken) {
 // ---------------------------------------------------------------------
 function getPendingCreditBills(sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['pharmacy.bill', 'accounts.read']);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVOICES);
     if (!sheet || sheet.getLastRow() <= 1) return { success: true, data: [] };

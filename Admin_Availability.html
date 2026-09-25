@@ -125,7 +125,7 @@ var avRowSeq = 0;
 
 // ---------------------------------------------------------------- INIT ----
 function initAvailability() {
-  document.getElementById('avail-start-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('avail-start-date').value = window.crescDateInputValue(new Date());   // local, not UTC
 
   const modalEl = document.getElementById('conflictModal');
   if (modalEl && typeof bootstrap !== 'undefined') {

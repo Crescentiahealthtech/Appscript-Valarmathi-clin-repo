@@ -31,6 +31,9 @@ node tools/rpc.js
 hr "5. Server calls with no failure handler (they fail silently)"
 node tools/nofail.js && echo "(nothing listed above = every call has a failure path)"
 
+hr "5a. Names used but defined nowhere (a ReferenceError waiting to run)"
+node tools/undef.js || FAILED=1
+
 hr "5b. The same top-level name defined in two .gs files (last one wins)"
 node tools/dupes.js || FAILED=1
 
@@ -52,6 +55,12 @@ node tools/credtest.js || FAILED=1
 hr "10b. Sign-in flows: reset, MFA, Google, against a pretend spreadsheet"
 node tools/authflow.js || FAILED=1
 
+hr "10c. Per-person access: grants, revocations, switched-off and re-roled accounts"
+node tools/access.js || FAILED=1
+
+hr "10d. The pharmacy counter: stock in, Schedule H rule, shelf prices, register, ledger, credit"
+node tools/pharmacy.js || FAILED=1
+
 hr "11. CSS classes used but never defined"
 echo "   (review by hand — template literals produce false positives)"
 node tools/css.js | tail -n 20
@@ -61,6 +70,8 @@ cat <<'NOTE'
   cresc_testDates()        Shared_Dates.gs      the date parser's own checks
   verifyDeployment()       Deployment_Check.gs  which .gs files are missing
   normaliseSheetDates()    IP_Schema_Repair.gs  dry run: text dates in sheets
+  repairSheetData()        IP_Schema_Repair.gs  preview; repairSheetData(true) applies
+                                                (also Operations -> Backups)
   dpdpReadinessCheck()     DPDP_Compliance.gs   DPDP posture of this deployment
   crescRbacCoverage()      RBAC.gs              the same count as check 7
   crescRbacSelfTest()      RBAC.gs              the role matrix against itself

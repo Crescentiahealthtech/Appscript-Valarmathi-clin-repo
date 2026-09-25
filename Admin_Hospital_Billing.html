@@ -155,8 +155,15 @@
 
       <div id="hb-context" class="row g-3 mt-1 d-none">
         <div class="col-md-6">
-          <div class="hb-label mt-2">Recent visits &mdash; click one to bill its consultation</div>
-          <div id="hb-visits"></div>
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <div class="hb-label m-0">Visits to bill &mdash; click one to bill its consultation</div>
+            <!-- Billed, future and no-show visits are kept one click away
+                 rather than crowding out the visit being paid for today. -->
+            <label class="small label-bright d-flex align-items-center gap-1 m-0" style="cursor:pointer;">
+              <input type="checkbox" id="hb-visits-all" onchange="hbRenderVisits()"> show all visits
+            </label>
+          </div>
+          <div id="hb-visits" class="mt-1"></div>
         </div>
         <div class="col-md-6">
           <div class="hb-label mt-2">Outstanding elsewhere</div>
@@ -389,6 +396,7 @@
         HB.packages = res.data.packages || [];
         HB.doctors = res.data.doctors || [];
         HB.canWrite = !!res.data.canWrite;
+        HB.canCancel = !!res.data.canCancel;
         HB.booted = true;
 
         $('hb-doctor').innerHTML = '<option value="">—</option>' + HB.doctors.map(function (d) {
@@ -457,27 +465,50 @@
 
         // An unbilled visit today is almost always why the patient is at the
         // counter, so its consultation is put on the bill straight away.
-        var today = new Date().toISOString().slice(0, 10);
-        var todays = HB.appointments.filter(function (a) { return a.date === today && !a.billed; })[0];
+        // LOCAL date: toISOString() is the UTC date, which in India is still
+        // yesterday until 05:30 — the morning's first visits were never
+        // picked up.
+        var today = localDay(new Date());
+        var todays = HB.appointments.filter(function (a) { return a.date === today && a.billable; })[0];
         if (todays && !HB.items.length) useAppointment(todays.apptId);
       })
       .withFailureHandler(function (err) { msg('Lookup failed: ' + (err && err.message), 'danger'); })
       .hb_getPatientContext(token(), q);
   }
 
+  /** yyyy-MM-dd in the browser's own zone (the clinic's). */
+  function localDay(d) {
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+
   function renderVisits() {
     var box = $('hb-visits');
-    if (!HB.appointments.length) {
-      box.innerHTML = '<div class="label-bright small">No appointments on record.</div>';
+    var all = !!($('hb-visits-all') && $('hb-visits-all').checked);
+    var billable = HB.appointments.filter(function (a) { return a.billable; });
+    var list = all ? HB.appointments : billable;
+    if (!list.length) {
+      var hidden = HB.appointments.length - billable.length;
+      box.innerHTML = '<div class="label-bright small">' +
+        (HB.appointments.length
+          ? 'Nothing to bill: every visit on record is billed, in the future or a no-show.' +
+            (hidden && !all ? ' Tick <em>show all visits</em> to see them.' : '')
+          : 'No appointments on record.') + '</div>';
       return;
     }
-    box.innerHTML = HB.appointments.slice(0, 5).map(function (a) {
-      return '<div class="hb-visit' + (a.billed ? ' hb-used' : '') + '"' +
-             (a.billed ? '' : ' onclick="hbUseAppointment(\'' + esc(a.apptId) + '\')"') + '>' +
+    box.innerHTML = list.slice(0, all ? 25 : 6).map(function (a) {
+      // A future booking is not shown by default, but it can still be billed
+      // in advance from "show all visits" — as it could before.
+      var pick = a.billable || (a.future && !a.billed);
+      var chip = a.billed ? '<span class="hb-chip hb-chip-PAID">billed</span>'
+               : a.future ? '<span class="hb-chip hb-chip-CANCELLED">upcoming</span>'
+               : !a.billable ? '<span class="hb-chip hb-chip-CANCELLED">' + esc(a.status) + '</span>'
+               : '<span class="label-bright small">₹' + (a.tariff || 0) + '</span>';
+      return '<div class="hb-visit' + (pick ? '' : ' hb-used') + '"' +
+             (pick ? ' role="button" tabindex="0" onclick="hbUseAppointment(\'' + esc(a.apptId) + '\')"' +
+                           ' onkeydown="if(event.key===\'Enter\'){hbUseAppointment(\'' + esc(a.apptId) + '\');}"' : '') + '>' +
         '<div class="d-flex justify-content-between align-items-center">' +
-          '<span class="fw-semibold" style="color: var(--text-main);">' + esc(a.dateText) + ' · ' + esc(a.time || '') + '</span>' +
-          (a.billed ? '<span class="hb-chip hb-chip-PAID">billed</span>'
-                    : '<span class="label-bright small">₹' + (a.tariff || 0) + '</span>') +
+          '<span class="fw-semibold" style="color: var(--text-main);">' + esc(a.dateText) +
+            (a.time ? ' · ' + esc(a.time) : '') + '</span>' + chip +
         '</div>' +
         '<div class="label-bright small">' + esc(a.doctorName || a.doctorId || '—') +
           (a.purpose ? ' · ' + esc(a.purpose) : '') + ' · ' + esc(a.status) + '</div>' +
@@ -507,7 +538,7 @@
   /** Puts an appointment's consultation on the bill and links the two. */
   function useAppointment(apptId) {
     var appt = HB.appointments.filter(function (a) { return a.apptId === apptId; })[0];
-    if (!appt || appt.billed) return;
+    if (!appt || appt.billed || (!appt.billable && !appt.future)) return;
 
     HB.apptId = appt.apptId;
     $('hb-appt').value = appt.apptId + ' · ' + appt.dateText;
@@ -1002,9 +1033,13 @@
             '<td class="text-end text-nowrap">' +
               '<button class="btn btn-sm btn-outline-secondary me-1" title="Print" onclick="hbReprint(\'' +
                 esc(r.invoiceNo) + '\')"><i class="fa-solid fa-print"></i></button>' +
-              (r.balance > 0 && r.status !== 'CANCELLED'
-                ? '<button class="btn btn-sm btn-outline-success" title="Record payment" onclick="hbCollect(\'' +
+              (r.balance > 0 && r.status !== 'CANCELLED' && HB.canWrite
+                ? '<button class="btn btn-sm btn-outline-success me-1" title="Record payment" onclick="hbCollect(\'' +
                   esc(r.invoiceNo) + '\',' + r.balance + ')"><i class="fa-solid fa-indian-rupee-sign"></i></button>'
+                : '') +
+              (r.status !== 'CANCELLED' && HB.canCancel
+                ? '<button class="btn btn-sm btn-outline-danger" title="Cancel this invoice" onclick="hbCancel(\'' +
+                  esc(r.invoiceNo) + '\')"><i class="fa-solid fa-ban"></i></button>'
                 : '') +
             '</td></tr>';
         }).join('');
@@ -1016,6 +1051,24 @@
       .hb_getInvoices(token(), {
         from: $('hb-f-from').value, to: $('hb-f-to').value,
         payStatus: $('hb-f-status').value, search: $('hb-f-search').value, limit: 300
+      });
+  }
+
+  /** Cancels an invoice with a reason. The row stays; it stops counting. */
+  function cancelInvoice(invoiceNo) {
+    crescPrompt('Cancel invoice ' + invoiceNo + '?\n\nThe invoice stays on record but stops counting ' +
+                'as income or as a due. Any money already taken must be refunded from the drawer ' +
+                'separately.\n\nReason:', '', { title: 'Cancel invoice', okLabel: 'Cancel invoice' })
+      .then(function (why) {
+        if (why === null) return;
+        if (String(why).trim().length < 5) { crescAlert('Give a reason of at least a few words.'); return; }
+        google.script.run
+          .withSuccessHandler(function (res) {
+            crescAlert((res && res.message) || 'Done.');
+            if (res && res.success) loadLedger();
+          })
+          .withFailureHandler(function (err) { crescAlert('Could not cancel: ' + (err && err.message)); })
+          .hb_cancelInvoice(token(), invoiceNo, String(why).trim());
       });
   }
 
@@ -1038,17 +1091,28 @@
         var amount = Number(raw);
         if (!amount || amount <= 0) { crescAlert('Enter an amount greater than zero.'); return; }
 
-        crescPrompt('Payment mode (Cash / UPI / Card / Bank Transfer):', 'Cash',
-                    { title: 'Payment mode', okLabel: 'Record payment' })
+        crescPrompt('Payment mode — Cash, UPI, Card or Bank Transfer:', 'Cash',
+                    { title: 'Payment mode', okLabel: 'Next' })
           .then(function (mode) {
             if (mode === null) return;
-            google.script.run
-              .withSuccessHandler(function (res) {
-                crescAlert((res && res.message) || 'Done.');
-                if (res && res.success) loadLedger();
-              })
-              .withFailureHandler(function (err) { crescAlert('Could not record the payment: ' + (err && err.message)); })
-              .hb_recordPayment(token(), invoiceNo, amount, mode, '');
+            crescPrompt('Reference (UPI / card / transfer number) — leave blank for cash:', '',
+                        { title: 'Payment reference', okLabel: 'Record payment' })
+              .then(function (ref) {
+                if (ref === null) return;
+                google.script.run
+                  .withSuccessHandler(function (res) {
+                    if (!res || !res.success) { crescAlert((res && res.message) || 'The payment was not recorded.'); return; }
+                    loadLedger();
+                    // The patient paid and is still at the counter: the
+                    // updated bill, showing what is now paid and still owed,
+                    // is the receipt they are waiting for.
+                    crescConfirm(res.message + '\n\nPrint the updated bill as a receipt?',
+                                 { title: 'Payment recorded', okLabel: 'Print receipt' })
+                      .then(function (ok) { if (ok) reprint(invoiceNo); });
+                  })
+                  .withFailureHandler(function (err) { crescAlert('Could not record the payment: ' + (err && err.message)); })
+                  .hb_recordPayment(token(), invoiceNo, amount, mode, ref || '');
+              });
           });
       });
   }
@@ -1074,8 +1138,8 @@
       if (type === 'records') {
         if (!$('hb-f-from').value) {
           var d = new Date(); d.setDate(d.getDate() - 30);
-          $('hb-f-from').value = d.toISOString().slice(0, 10);
-          $('hb-f-to').value = new Date().toISOString().slice(0, 10);
+          $('hb-f-from').value = localDay(d);
+          $('hb-f-to').value = localDay(new Date());
         }
         loadLedger();
       } else {
@@ -1098,6 +1162,7 @@
   window.openBillingWorkspace = openWorkspace;
   window.hbFetchPatient       = fetchPatient;
   window.hbUseAppointment     = useAppointment;
+  window.hbRenderVisits       = renderVisits;
   window.hbDoctorChanged      = doctorChanged;
   window.hbAddRow             = addRowAndRender;
   window.hbRemove             = removeRow;
@@ -1112,5 +1177,6 @@
   window.hbLoadLedger         = loadLedger;
   window.hbReprint            = reprint;
   window.hbCollect            = collect;
+  window.hbCancel             = cancelInvoice;
 })();
 </script>

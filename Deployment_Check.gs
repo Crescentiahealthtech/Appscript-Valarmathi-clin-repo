@@ -26,7 +26,7 @@ var DEP_MAP = {
   "Shared_Dates.gs": [
     "cresc_parseDate_", "cresc_formatDate_", "cresc_dateOnly_", "cresc_dayKey_",
     "cresc_timeText_", "cresc_dateTimeText_", "cresc_daysBetween_", "cresc_los_",
-    "cresc_ms_", "cresc_isSheetEpoch_"
+    "cresc_ms_", "cresc_isSheetEpoch_", "cresc_cleanStampedTime_"
   ],
   "Doctor_Core.gs": [
     "dc_headerMap_", "dc_col_", "dc_ensureColumn_", "dc_ensureSheet_",
@@ -57,7 +57,17 @@ var DEP_MAP = {
               // The system-owner flag. Auth_Credentials.gs reads it to decide
               // who may create, disable or reset a doctor or an administrator;
               // with this file stale, nobody can and nothing says why.
-              "crescIsElevated_", "crescEnsureSuperAdminColumn_"],
+              "crescIsElevated_", "crescEnsureSuperAdminColumn_",
+              // Per-person access and the account's state now. Every session
+              // check goes through these (Doctor_Session_Store.gs calls
+              // crescAccountState_), and every "…By" column through
+              // cresc_actorName_.
+              "crescAccountState_", "crescEffectivePerms_", "cresc_aclBust_",
+              "cresc_actorName_", "cresc_actorDisplay_"],
+  // Staff Accounts → Access. Without it the screen cannot load or save.
+  "RBAC_Access.gs": ["crescGetAccessOverview", "crescSaveUserAccess"],
+  // The pharmacy and lab billing ledgers.
+  "Billing_Ledger.gs": ["getPharmacyLedger", "getLabLedger", "cresc_ledgerTotals_"],
   // Sign-in audit and lockout. AuthLogin.gs calls into these on every
   // attempt, so without this file nobody can sign in at all.
   "Auth_Audit.gs": ["crescAuthAudit_", "crescAuthGuard_", "crescAuthFailed_",
@@ -83,7 +93,8 @@ var DEP_MAP = {
     "getIPNotesPrintHtml", "getIPNotesLabCatalog"
   ],
   "IP_Schema_Repair.gs": [
-    "repairCasesheetHeaderDrift", "runIPHealthCheck", "repairDuplicatePharmacyQueueRows"
+    "repairCasesheetHeaderDrift", "runIPHealthCheck", "repairDuplicatePharmacyQueueRows",
+    "repairSheetData", "crescRepairSheetData"
   ],
   "Drug_Interaction.gs": [
     "di_sheet_", "setupDrugInteractions", "checkDrugInteractions_", "di_rules_"

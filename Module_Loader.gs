@@ -53,7 +53,7 @@ var CRESC_BUNDLES = {
 
   'pharmacy':      ['PharmacyStockAddUI', 'PharmacyInventoryLedger',
                     'Pharmacy_Billing_UI', 'PharmacyDeskReturnsUI',
-                    'PharmacyDashboardUI'],
+                    'PharmacyDashboardUI', 'Pharmacy_Ledger_UI'],
   'lab':           ['Admin_Lab_Workspace', 'LabModuleUI', 'LabBillingUI',
                     'LabRecordsUI'],
   'accounts':      ['Admin_Accounts_Workspace', 'Accounts_Scripts',

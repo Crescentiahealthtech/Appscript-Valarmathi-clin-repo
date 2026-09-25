@@ -330,7 +330,7 @@ function forceDriveAuthorization() {
 function getArchiveInvoiceLink(orderId, sessionToken) {
   try {
     // 1. Get the HTML Invoice (Uses the existing function that handles IP logic)
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['lab.bill', 'accounts.read']);
 
     // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
     // The register has carried this purpose since it was built and nothing
@@ -384,7 +384,7 @@ function getArchiveInvoiceLink(orderId, sessionToken) {
 
 function emailArchiveInvoice(orderId, patientEmail, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['lab.bill', 'accounts.read']);
 
     // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
     // The register has carried this purpose since it was built and nothing

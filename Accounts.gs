@@ -174,6 +174,28 @@ function acc_lockedSet_() {
 }
 function acc_isLocked_(period) { return acc_lockedSet_().indexOf(period) !== -1; }
 
+/**
+ * '' when money may be moved on this date, or the sentence saying why not.
+ *
+ * Locking a month in the Finance Hub froze its manual entries and its
+ * settlements — and nothing else. A hospital invoice from a closed month
+ * could still be cancelled, and a lab bill voided, each one silently
+ * rewriting the income of a month the accountant had already signed off.
+ * Every desk that raises, takes payment on, or voids a bill asks this.
+ *
+ * @param {*} when  a date (default: now)
+ */
+function acc_periodLockReason_(when) {
+  try {
+    var p = acc_period_(when || new Date());
+    if (p && acc_isLocked_(p)) {
+      return 'The books for ' + p + ' are locked in the Finance Hub, so nothing dated in that ' +
+             'month can be raised, paid or voided. Ask accounts to unlock it if this must change.';
+    }
+  } catch (e) { /* no Finance Hub, no lock */ }
+  return '';
+}
+
 // Append an immutable audit line. Never throws upward (best-effort logging).
 function acc_audit_(user, action, module, refId, oldVal, newVal, reason) {
   try {
@@ -200,7 +222,11 @@ function acc_readObjects_(sheetName) {
     var out = [];
     for (var i = 1; i < data.length; i++) {
       if (!data[i][0]) continue;
+      // _cells keeps the row by position for sheets whose headers are
+      // missing or reworded (see acc_opRows_). It is not enumerable, so
+      // nothing that walks an object's keys sees it.
       var obj = { _row: i + 1 };
+      Object.defineProperty(obj, '_cells', { value: data[i], enumerable: false });
       for (var j = 0; j < headers.length; j++) {
         obj[headers[j]] = data[i][j]; // mapped by exact header name
       }
@@ -312,10 +338,19 @@ function acc_opRows_() {
   try { if (typeof hb_billedApptIds_ === 'function') billed = hb_billedApptIds_() || {}; }
   catch (e) { billed = {}; }
 
+  // The Appointments sheet was never given headers for its fee and timestamp
+  // columns (H and I), and its status header is a sentence — "Status (Booked,
+  // Arrived, …)". Read by header name, all three came back empty, so no OP
+  // consultation ever counted here while the Command Center, which reads them
+  // by position, counted every one: two screens, two different totals.
+  // Headers win when they exist; the fixed positions every booking path
+  // writes to (Doctor_Schedule_Engine, Appointment.gs) are the fallback.
   return acc_readObjects_('Appointments').map(function (r) {
-    var status = acc_str_(r['Status']).toUpperCase();
-    var fee = acc_money_(r['Fee']);
-    var d = acc_toDate_(r['Timestamp'] || r['Date']);
+    var cells = r._cells || [];
+    var statusKey = Object.keys(r).filter(function (k) { return /^status\b/i.test(acc_str_(k).trim()); })[0];
+    var status = acc_str_(statusKey ? r[statusKey] : cells[6]).toUpperCase();
+    var fee = acc_money_(r['Fee'] !== undefined ? r['Fee'] : cells[7]);
+    var d = acc_toDate_(r['Timestamp'] || cells[8] || r['Date'] || cells[3]);
     var billId = acc_str_(r['Appt_ID'] || r['Appt ID'] || r['ApptId']);
     var invoiced = !!billed[billId.toUpperCase()];
     return {

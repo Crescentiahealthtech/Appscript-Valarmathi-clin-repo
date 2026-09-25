@@ -85,10 +85,11 @@ window.CrescModules = (function () {
     'tab-admin-pharmacy': 'pharmacy', 'pharmacy-inventory-view': 'pharmacy',
     'pharmacy-billing-workspace': 'pharmacy', 'pharmacy-desk-workspace': 'pharmacy',
     'pharmacy-dashboard-workspace': 'pharmacy',
+    'pharmacy-ledger-workspace': 'pharmacy', 'pharmacy-schedule-register': 'pharmacy',
     // lab
     'workspace-lab': 'lab', 'workspace-lab-catalog': 'lab',
     'workspace-lab-records': 'lab', 'lab-workspace-view': 'lab',
-    'lab-billing-workspace': 'lab',
+    'lab-billing-workspace': 'lab', 'lab-ledger-workspace': 'lab',
     // accounts — the hub ships with its own scripts, so it is lazy too
     'workspace-accounts': 'accounts', 'workspace-accounts-dashboard': 'accounts',
     'workspace-accounts-ledger': 'accounts', 'workspace-accounts-drawer': 'accounts',
@@ -325,6 +326,12 @@ window.CrescModules = (function () {
 
   function settle(name, ok) {
     state[name] = ok ? 'ready' : 'failed';
+    // The bundle's own tiles and buttons carry permission gates
+    // (CRESC_UI_PERMS, data-perm) that could not be painted before its markup
+    // existed. Paint them now, before anybody can see them ungated.
+    if (ok && window.crescPerms && typeof window.crescPaintRBAC === 'function') {
+      try { window.crescPaintRBAC(); } catch (e) { /* drawing only */ }
+    }
     var list = (waiters[name] || []).concat(ok ? (readyCbs[name] || []) : []);
     waiters[name] = [];
     if (ok) readyCbs[name] = [];   // onReady fires once
@@ -483,8 +490,12 @@ window.CrescModules = (function () {
     clearMissing();
     if (!bundle || state[bundle] === 'ready') { cb(); return; }
     veil(true, bundle);
+    // A navigation is in flight: crescEnsureLanding (ScriptsMV.html) must not
+    // judge the empty screen it leaves behind in the meantime.
+    window.crescNavPending = (window.crescNavPending || 0) + 1;
     load(bundle, function (ok) {
       veil(false);
+      window.crescNavPending = Math.max(0, (window.crescNavPending || 1) - 1);
       if (ok && tabId && !document.getElementById(tabId)) missingScreen(tabId, bundle);
       cb();
     });

@@ -426,6 +426,20 @@ function dsx_upgradePayload_(payload) {
   // amendment re-assembles from source anyway, and gets the new shape then.
   if (payload.signature && dsx_str_(payload.signature.signedBy)) return payload;
 
+  // A DRAFT carrying a stringified time cell ("… Sat Dec 30 1899 23:31:00
+  // GMT+0521 …") is cleaned as it is opened, so the editor shows — and the
+  // next save stores — "10-Sep-2026 11:31 PM". Signed ones are cleaned only
+  // where they are printed (DS_Print.gs).
+  if (typeof cresc_cleanStampedTime_ === 'function') {
+    Object.keys(payload.sections).forEach(function (k) {
+      var sec = payload.sections[k];
+      if (!sec || sec.format !== 'FIELDS' || !sec.content || typeof sec.content !== 'object') return;
+      Object.keys(sec.content).forEach(function (f) {
+        if (typeof sec.content[f] === 'string') sec.content[f] = cresc_cleanStampedTime_(sec.content[f]);
+      });
+    });
+  }
+
   dsx_upgradeMedTable_(payload.sections.TREATMENT_GIVEN, 'TREATMENT_GIVEN');
   dsx_upgradeMedTable_(payload.sections.DISCHARGE_MEDICATIONS, 'DISCHARGE_MEDICATIONS');
   return payload;

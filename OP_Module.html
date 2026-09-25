@@ -1818,7 +1818,7 @@ function useConsultTemplate(id) {
                 if (t.reviewDays) {
                     const d = new Date();
                     d.setDate(d.getDate() + t.reviewDays);
-                    opSetVal('clin-review-date', d.toISOString().split('T')[0]);
+                    opSetVal('clin-review-date', window.crescDateInputValue(d));   // local date, not UTC
                 }
 
                 // A template's investigations are ORDERS. Tick the real catalog
@@ -2345,7 +2345,7 @@ function applyAssistAdvice() {
     el.value = el.value ? el.value + '. ' + res.advice : res.advice;
     if (res.reviewDays) {
         const d = new Date(); d.setDate(d.getDate() + res.reviewDays);
-        document.getElementById('clin-review-date').value = d.toISOString().split('T')[0];
+        document.getElementById('clin-review-date').value = window.crescDateInputValue(d);   // local date, not UTC
     }
 }
 
@@ -2608,7 +2608,7 @@ function sendReferral() {
             reason: val('ref-reason'),
             clinicalSummary: val('ref-summary'),
             sourceEncounterId: activeOpEncounterId,
-            date: new Date().toISOString().split('T')[0]
+            date: window.crescDateInputValue(new Date())
         }, window.sessionToken);
 }
 

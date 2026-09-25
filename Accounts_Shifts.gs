@@ -121,7 +121,7 @@ function acc_cashSince_(fromDate, counterName) {
 
 function getShiftState(counterName, sessionToken) {
   try {
-    crescRequire_(sessionToken, ['billing.read', 'accounts.read']);
+    crescRequire_(sessionToken, ['billing.read', 'pharmacy.bill', 'lab.bill', 'accounts.read']);
     var rows = acc_readObjects_(ACC_CFG.SHIFTS);
     var open = null, history = [];
     
@@ -170,7 +170,7 @@ function openShift(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var actor = crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
+    var actor = crescRequire_(sessionToken, ['billing.write', 'pharmacy.bill', 'lab.bill', 'accounts.write']);
     // Who did this is the session's answer, never the browser's: the client
     // sends `user`, and anything it sends it can make up.
     payload = payload || {};
@@ -205,7 +205,7 @@ function closeShift(payload, sessionToken) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var actor = crescRequire_(sessionToken, ['billing.write', 'accounts.write']);
+    var actor = crescRequire_(sessionToken, ['billing.write', 'pharmacy.bill', 'lab.bill', 'accounts.write']);
     // Who did this is the session's answer, never the browser's: the client
     // sends `user`, and anything it sends it can make up.
     payload = payload || {};

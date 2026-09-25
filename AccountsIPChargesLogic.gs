@@ -38,7 +38,55 @@ function ipc_ensure_(name, headers) {
 function ipc_charges_() { return ipc_ensure_(IPC_CFG.CHARGES, ['Charge_ID', 'IP_Number', 'Timestamp', 'Category', 'Description', 'Source', 'Source_Ref', 'Amount', 'GST', 'Is_NonPayable', 'Status', 'Settlement_ID', 'Created_By', 'Notes']); }
 function ipc_advances_() { return ipc_ensure_(IPC_CFG.ADVANCES, ['Advance_ID', 'IP_Number', 'Timestamp', 'Amount', 'Pay_Mode', 'Txn_ID', 'Status', 'Settlement_ID', 'Collected_By']); }
 function ipc_settlements_() { return ipc_ensure_(IPC_CFG.SETTLEMENTS, ['Settlement_ID', 'IP_Number', 'Timestamp', 'Gross_Tab', 'Package_Code', 'Package_Cap', 'Package_Adjustment', 'Capped_Gross', 'Discount_Percent', 'Discount_Amount', 'NonPayable_Total', 'Advance_Applied', 'Insurance_Approved', 'Insurer_JSON', 'Insurance_Status', 'Patient_Liability', 'Patient_Paid', 'Patient_Pay_Mode', 'Refund_Due', 'Recognized_Realized', 'Settled_By', 'Notes']); }
-function ipc_drafts_() { return ipc_ensure_('IP_Discharge_Drafts', ['IP_Number', 'Updated_At', 'Discount_Percent', 'Package_Code', 'Package_Cap', 'Insurance_Approved', 'Insurers_JSON', 'Ward_JSON', 'Remarks', 'Updated_By']); }
+var IPC_DRAFT_HEADERS = ['IP_Number', 'Updated_At', 'Discount_Percent', 'Package_Code', 'Package_Cap',
+                         'Insurance_Approved', 'Insurers_JSON', 'Ward_JSON', 'Remarks', 'Updated_By'];
+/** The eight columns the sheet was first created with, before packages and insurers. */
+var IPC_DRAFT_HEADERS_V1 = ['IP_Number', 'Updated_At', 'Discount_Percent', 'Package_Cap',
+                            'Insurance_Approved', 'Ward_JSON', 'Remarks', 'Updated_By'];
+
+function ipc_drafts_() {
+  var sh = ipc_ensure_('IP_Discharge_Drafts', IPC_DRAFT_HEADERS);
+  ipc_healDraftHeaders_(sh);
+  return sh;
+}
+
+/**
+ * THE DISCHARGE DRAFT THAT NEVER CAME BACK.
+ *
+ * A sheet created before Package_Code and Insurers_JSON existed kept its old
+ * eight headers, because ipc_ensure_ only writes headers on a NEW sheet.
+ * saveDischargeDraft has been writing the ten-column layout under them ever
+ * since, and the loader reads by header — so it looked for Ward_JSON where
+ * Insurance_Approved now sits, got a number, and every saved ward-charge
+ * draft reopened empty. The Accounts dashboard read the same wrong column
+ * for its pending-IP estimate.
+ *
+ * This rewrites the header once, and moves any row still in the old layout
+ * into the new one. Each row is judged on its own: a row saved by the current
+ * code carries its Ward_JSON (an array) in the eighth column. A sheet in any
+ * other shape is left exactly as it is.
+ */
+function ipc_healDraftHeaders_(sh) {
+  try {
+    var width = Math.max(sh.getLastColumn(), IPC_DRAFT_HEADERS.length);
+    var head = sh.getRange(1, 1, 1, width).getValues()[0].map(function (x) { return acc_str_(x).trim(); });
+    if (head.slice(0, IPC_DRAFT_HEADERS.length).join('|') === IPC_DRAFT_HEADERS.join('|')) return;
+    if (head.slice(0, IPC_DRAFT_HEADERS_V1.length).join('|') !== IPC_DRAFT_HEADERS_V1.join('|')) return;
+
+    var n = sh.getLastRow() - 1;
+    if (n > 0) {
+      var rows = sh.getRange(2, 1, n, width).getValues();
+      var out = rows.map(function (r) {
+        if (/^\s*\[/.test(acc_str_(r[7]))) return r.slice(0, IPC_DRAFT_HEADERS.length);
+        // Old layout: IP, Updated_At, Discount, Cap, Insurance, Ward_JSON, Remarks, Updated_By.
+        return [r[0], r[1], r[2], '', r[3], r[4], '[]', r[5], r[6], r[7]];
+      });
+      sh.getRange(2, 1, n, IPC_DRAFT_HEADERS.length).setValues(out);
+    }
+    sh.getRange(1, 1, 1, IPC_DRAFT_HEADERS.length).setValues([IPC_DRAFT_HEADERS]).setFontWeight('bold');
+    SpreadsheetApp.flush();
+  } catch (e) { /* a draft that cannot be healed still saves; it just reads as before */ }
+}
 function ipc_los_(doa) {
   // Shared_Dates.gs counts whole days at midnight, so an admission at 23:00
   // and a bill raised at 01:00 the next morning is two days on the bill, not
@@ -136,7 +184,12 @@ function addIpCharge(payload, sessionToken) {
 function billChargeToIp(payload, sessionToken) {
   // Only ever called from inside a guarded endpoint: the ambient actor it
   // set answers here. A direct google.script.run call has none and is refused.
-  var actor = crescRequire_(sessionToken);
+  //
+  // It used to ask for a session and NOTHING ELSE, so any signed-in login —
+  // a nurse, a receptionist, a patient on the portal — could call it from
+  // the console with their own token and put a charge of any amount on any
+  // admission's running bill. Only a desk that bills may post to the tab.
+  var actor = crescRequire_(sessionToken, ['pharmacy.dispense', 'pharmacy.bill', 'lab.bill', 'billing.write']);
   payload = payload || {};
   payload.user = actor.displayName || actor.username;
   var lock = LockService.getScriptLock();
@@ -164,23 +217,45 @@ function billChargeToIp(payload, sessionToken) {
   finally { lock.releaseLock(); }
 }
 
+/**
+ * Takes a pharmacy or lab bill OFF an admission's running tab because it was
+ * paid at the counter instead. The caller holds the script lock.
+ *
+ * Without this, a credit bill routed to the tab and then settled at the
+ * pharmacy counter was charged twice: once at the counter, and again on the
+ * discharge bill, which still carried it ON_TAB.
+ *
+ * @return {boolean} true when an open tab charge was found and closed
+ */
+function ipc_markChargePaidAtCounter_(source, sourceRef, payMode, who) {
+  var sh = ipc_ss_().getSheetByName(IPC_CFG.CHARGES);
+  if (!sh || sh.getLastRow() < 2) return false;
+  var d = sh.getDataRange().getValues(), h = d[0].map(function (x) { return acc_str_(x).trim(); });
+  var cSrc = h.indexOf('Source'), cRef = h.indexOf('Source_Ref'), cStat = h.indexOf('Status');
+  if (cSrc < 0 || cRef < 0 || cStat < 0) return false;
+  for (var i = 1; i < d.length; i++) {
+    if (acc_str_(d[i][cSrc]).toUpperCase() !== acc_str_(source).toUpperCase()) continue;
+    if (acc_str_(d[i][cRef]).trim() !== acc_str_(sourceRef).trim()) continue;
+    if (acc_str_(d[i][cStat]).toUpperCase() !== 'ON_TAB') continue;
+    sh.getRange(i + 1, cStat + 1).setValue('PAID_COUNTER');
+    acc_audit_(who, 'IP_PAID_AT_COUNTER', source, sourceRef, 'ON_TAB', 'PAID_COUNTER', acc_str_(payMode));
+    return true;
+  }
+  return false;
+}
+
 // When an IP patient pays a pharmacy/lab bill at the counter instead of on tab.
+// `user` is accepted for the old call shape and ignored: who did it is the
+// session's answer, never the browser's.
 function markIpChargePaidAtCounter(source, sourceRef, payMode, user, sessionToken) {
-  crescRequire_(sessionToken, 'billing.write');
+  var actor = crescRequire_(sessionToken, ['billing.write', 'pharmacy.bill', 'lab.bill']);
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var sh = ipc_charges_(), d = sh.getDataRange().getValues(), h = d[0].map(function (x) { return acc_str_(x).trim(); });
-    var cSrc = h.indexOf('Source'), cRef = h.indexOf('Source_Ref'), cStat = h.indexOf('Status');
-    for (var i = 1; i < d.length; i++) {
-      if (acc_str_(d[i][cSrc]).toUpperCase() === acc_str_(source).toUpperCase() && acc_str_(d[i][cRef]).trim() === acc_str_(sourceRef).trim() && acc_str_(d[i][cStat]).toUpperCase() === 'ON_TAB') {
-        sh.getRange(i + 1, cStat + 1).setValue('PAID_COUNTER');
-        acc_audit_(user, 'IP_PAID_AT_COUNTER', source, sourceRef, 'ON_TAB', 'PAID_COUNTER', acc_str_(payMode));
-        SpreadsheetApp.flush();
-        return { success: true, message: "Charge marked paid at counter — removed from tab." };
-      }
-    }
-    return { success: false, message: "No open tab charge found for that bill." };
+    var done = ipc_markChargePaidAtCounter_(source, sourceRef, payMode, actor.displayName || actor.username);
+    SpreadsheetApp.flush();
+    return done ? { success: true, message: "Charge marked paid at counter — removed from tab." }
+                : { success: false, message: "No open tab charge found for that bill." };
   } catch (e) { return { success: false, message: "Error: " + e.message }; }
   finally { lock.releaseLock(); }
 }

@@ -48,10 +48,7 @@ var HB_CFG = {
   SERVICES: 'Service_Master',
   PACKAGES: 'Package_Master',
   TZ:       'Asia/Kolkata',
-  LOCK_MS:  15000,
-  // Who may raise a bill, and who may only look at one.
-  WRITERS:  ['admin', 'accounts', 'accountant', 'receptionist', 'reception'],
-  READERS:  ['admin', 'accounts', 'accountant', 'receptionist', 'reception', 'doctor']
+  LOCK_MS:  15000
 };
 
 var HB_H_INVOICES = [
@@ -70,6 +67,25 @@ var HB_H_ITEMS = [
 ];
 
 var HB_H_SERVICES = ['Service_Code', 'Name', 'Category', 'Rate', 'Tax_Pct', 'Active'];
+
+/**
+ * The payment modes a hospital bill may record. The ledger's "record
+ * payment" used to take whatever was typed into a prompt, so "cash", "Cash ",
+ * "csh" and "gpay" all reached the sheet and the till could not total them.
+ */
+var HB_PAY_MODES = ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Credit'];
+
+/** The canonical spelling of a mode, or '' when it is not one of HB_PAY_MODES. */
+function hb_mode_(v) {
+  var want = hb_str_(v).toUpperCase().replace(/[^A-Z]/g, '');
+  if (!want) return '';
+  if (want === 'GPAY' || want === 'PHONEPE' || want === 'PAYTM') want = 'UPI';
+  if (want === 'BANK' || want === 'NEFT' || want === 'IMPS' || want === 'RTGS') want = 'BANKTRANSFER';
+  for (var i = 0; i < HB_PAY_MODES.length; i++) {
+    if (HB_PAY_MODES[i].toUpperCase().replace(/[^A-Z]/g, '') === want) return HB_PAY_MODES[i];
+  }
+  return '';
+}
 
 /** The starting tariff. Seeded once; the clinic owns the sheet afterwards. */
 var HB_SEED_SERVICES = [
@@ -146,26 +162,39 @@ function hb_err_(message) { return { success: false, message: hb_str_(message) }
 // ---------------------------------------------------------------------------
 
 /**
- * Validates the session and the role.
+ * Validates the session and the PERMISSION.
+ *
+ * This used to compare the session's role against HB_CFG.WRITERS/READERS —
+ * a second permission matrix, private to this file, that the per-user access
+ * screen (Staff Accounts → Access) could not reach. A receptionist whose
+ * billing access had been withdrawn kept billing, because this desk never
+ * asked RBAC.gs. It asks now, so a grant or a revocation lands here the
+ * moment it is saved.
  *
  * @param {string} token
  * @param {boolean} needWrite
- * @return {{username:string, role:string}}
- * @throws when the session is dead or the role may not do this
+ * @return {{username:string, role:string, permissions:Array<string>}}
+ * @throws when the session is dead or the permission is not held
  */
 function hb_actor_(token, needWrite) {
-  var sess = null;
-  try { sess = dc_validateSession_(token); } catch (e) { sess = null; }
-  if (!sess) throw new Error('Your session has expired. Please sign in again.');
-
-  var role = hb_str_(sess.role).toLowerCase();
-  var allowed = needWrite ? HB_CFG.WRITERS : HB_CFG.READERS;
-  if (allowed.indexOf(role) === -1) {
-    throw new Error(needWrite
-      ? 'Your role (' + role + ') cannot raise or settle a hospital bill.'
-      : 'Your role (' + role + ') cannot view hospital billing.');
+  var actor;
+  try {
+    actor = crescRequire_(token, needWrite ? 'billing.write' : 'billing.read');
+  } catch (e) {
+    var why = cresc_reason_(e);
+    if (/cannot/.test(why)) {
+      why = needWrite ? 'You do not have access to raise or settle a hospital bill.'
+                      : 'You do not have access to hospital billing.';
+    }
+    throw new Error(why);
   }
-  return { username: hb_str_(sess.username), role: role };
+  return { username: hb_str_(actor.username), role: actor.role,
+           permissions: actor.permissions || [] };
+}
+
+/** Whether the actor holds a permission, without throwing. */
+function hb_can_(actor, perm) {
+  return !!(actor && actor.permissions && actor.permissions.indexOf(perm) !== -1);
 }
 
 // ---------------------------------------------------------------------------
@@ -338,8 +367,9 @@ function hb_getBootstrap(token) {
       services: services,
       packages: packages,
       doctors: doctors,
-      paymentModes: ['Cash', 'UPI', 'Card', 'Bank Transfer', 'Credit'],
-      canWrite: HB_CFG.WRITERS.indexOf(actor.role) !== -1,
+      paymentModes: HB_PAY_MODES.slice(),
+      canWrite: hb_can_(actor, 'billing.write'),
+      canCancel: hb_can_(actor, 'billing.cancel'),
       servicesConfigured: services.length > 0
     });
   } catch (e) {
@@ -414,6 +444,14 @@ function hb_findPatient_(q) {
 /**
  * This patient's recent appointments, newest first, with the consultation
  * tariff the booking snapshotted and whether a bill already settled it.
+ *
+ * WHAT THE DESK IS SHOWN. Every visit on record used to come back — billed
+ * ones, cancelled-then-rebooked ones, next month's booking — and the five
+ * newest were drawn, which was usually the future booking and three billed
+ * visits, with the one the patient was standing there to pay for pushed off
+ * the list. Each visit now says whether it is BILLABLE (not billed, not in
+ * the future, not a no-show), and the screen shows those first, with the
+ * rest one click away.
  */
 function hb_recentAppointments_(patientId) {
   var sh = hb_ss_().getSheetByName('Appointments');
@@ -428,6 +466,7 @@ function hb_recentAppointments_(patientId) {
 
   var billed = hb_billedApptIds_();
   var want = hb_upper_(patientId);
+  var today = hb_dayKey_(new Date());
   var out = [];
 
   for (var i = 1; i < values.length; i++) {
@@ -436,22 +475,37 @@ function hb_recentAppointments_(patientId) {
     var status = hb_str_(r[6]);
     if (status === 'Blocked' || status === 'DELETE' || status === 'Cancelled') continue;
     var when = hb_toDate_(r[3]);
+    var day = hb_dayKey_(r[3]);
+    var isBilled = !!billed[hb_upper_(r[0])];
+    var future = !!(day && day > today);
+    var noShow = /no[\s-]?show/i.test(status);
+    // The time column is a Sheets TIME cell, which getValues() hands back as
+    // a Date pinned to 30-Dec-1899. hb_str_() on it printed
+    // "Sat Dec 30 1899 11:45:00 GMT+0521 (India Standard Time)" beside the
+    // visit date; cresc_timeText_ formats it as the clock time it is.
+    var time = (typeof cresc_timeText_ === 'function') ? cresc_timeText_(r[4]) : hb_str_(r[4]);
     out.push({
       apptId: hb_str_(r[0]),
-      date: hb_dayKey_(r[3]),
+      date: day,
       dateText: hb_fmt_(r[3], 'dd-MMM-yyyy'),
-      sortMs: when ? when.getTime() : 0,
-      time: hb_str_(r[4]),
+      sortMs: (when ? when.getTime() : 0),
+      time: time,
       purpose: hb_str_(r[5]),
       status: status,
       tariff: hb_money_(r[7]),
       doctorId: (docIdx === -1) ? '' : hb_str_(r[docIdx]),
       doctorName: (snapIdx === -1) ? '' : hb_str_(r[snapIdx]),
-      billed: !!billed[hb_upper_(r[0])]
+      billed: isBilled,
+      future: future,
+      billable: !isBilled && !future && !noShow
     });
   }
-  out.sort(function (a, b) { return b.sortMs - a.sortMs; });
-  return out.slice(0, 10);
+  // Billable first (today's on top), then everything else newest first.
+  out.sort(function (a, b) {
+    if (a.billable !== b.billable) return a.billable ? -1 : 1;
+    return b.sortMs - a.sortMs;
+  });
+  return out.slice(0, 25);
 }
 
 /** {APPT_ID: true} for every appointment a live invoice already covers. */
@@ -725,13 +779,34 @@ function hb_saveInvoice(token, payload) {
 
     var items = payload.items || [];
     if (!items.length) return hb_err_('Add at least one particular before saving.');
+    // A negative quantity or rate is a line that SUBTRACTS from the bill —
+    // hb_total_ adds whatever it is given, so a "-1 × 500" line took 500 off
+    // the gross without appearing anywhere as a discount.
+    for (var li = 0; li < items.length; li++) {
+      var q = parseFloat(items[li].qty), rt = parseFloat(items[li].rate), dc = parseFloat(items[li].discount);
+      if ((!isNaN(q) && q <= 0) || (!isNaN(rt) && rt < 0) || (!isNaN(dc) && dc < 0)) {
+        return hb_err_('Line ' + (li + 1) + ' has a negative or zero quantity, rate or discount. ' +
+                       'Take money off with the discount fields instead.');
+      }
+    }
+    if (hb_money_(payload.billDiscount) < 0) return hb_err_('The bill discount cannot be negative.');
 
     var totals = hb_total_(items, payload.billDiscount);
     if (totals.net <= 0) return hb_err_('The net amount is zero. Price at least one line.');
+    var lockedNow = (typeof acc_periodLockReason_ === 'function') ? acc_periodLockReason_(new Date()) : '';
+    if (lockedNow) return hb_err_(lockedNow);
 
-    var mode = hb_str_(payload.paymentMode) || 'Cash';
+    var mode = hb_mode_(payload.paymentMode || 'Cash');
+    if (!mode) return hb_err_('Choose how it was paid: ' + HB_PAY_MODES.join(', ') + '.');
     var paid = hb_money_(payload.paid);
     if (paid < 0) return hb_err_('Amount paid cannot be negative.');
+    // "Credit" means nothing was taken. A credit bill with money on it is a
+    // cash bill recorded under the wrong mode, and the till would be short
+    // by exactly that amount at close.
+    if (mode === 'Credit' && paid > 0) {
+      return hb_err_('A credit bill is one with nothing paid yet. Choose the mode the ' +
+                     hb_money_(paid).toFixed(2) + ' was paid by, or set the amount to 0.');
+    }
     if (paid > totals.net) paid = totals.net;
     var balance = hb_money_(totals.net - paid);
 
@@ -832,6 +907,12 @@ function hb_recordPayment(token, invoiceNo, amount, mode, ref) {
     if (!want) return hb_err_('No invoice was named.');
     var pay = hb_money_(amount);
     if (pay <= 0) return hb_err_('Enter an amount greater than zero.');
+    var payMode = hb_mode_(mode || 'Cash');
+    if (!payMode || payMode === 'Credit') {
+      return hb_err_('Choose how it was paid: Cash, UPI, Card or Bank Transfer.');
+    }
+    var lockedPay = (typeof acc_periodLockReason_ === 'function') ? acc_periodLockReason_(new Date()) : '';
+    if (lockedPay) return hb_err_(lockedPay);
 
     lock.waitLock(HB_CFG.LOCK_MS);
 
@@ -859,11 +940,11 @@ function hb_recordPayment(token, invoiceNo, amount, mode, ref) {
     set('Paid', newPaid);
     set('Balance', newBalance);
     set('Payment_Status', payStatus);
-    set('Payment_Mode', hb_str_(mode) || hb_str_(hit['Payment_Mode']) || 'Cash');
+    set('Payment_Mode', payMode);
     if (hb_str_(ref)) set('Payment_Ref', hb_str_(ref));
 
     hb_audit_(actor, 'RECORD_PAYMENT', want, balance, newBalance,
-              'Received ' + pay + ' by ' + (hb_str_(mode) || 'Cash'));
+              'Received ' + pay + ' by ' + payMode);
     hb_invalidateDashboard_();
     SpreadsheetApp.flush();
 
@@ -884,8 +965,9 @@ function hb_cancelInvoice(token, invoiceNo, reason) {
   var lock = LockService.getScriptLock();
   try {
     var actor = hb_actor_(token, true);
-    if (actor.role !== 'admin' && actor.role !== 'accounts' && actor.role !== 'accountant') {
-      return hb_err_('Only an administrator or accounts may cancel an invoice.');
+    if (!hb_can_(actor, 'billing.cancel')) {
+      return hb_err_('Cancelling an invoice needs the "cancel or void a bill" permission ' +
+                     '(administrators and accounts hold it).');
     }
     var why = hb_str_(reason);
     if (!why) return hb_err_('A reason is required to cancel an invoice.');
@@ -899,6 +981,11 @@ function hb_cancelInvoice(token, invoiceNo, reason) {
     })[0];
     if (!hit) return hb_err_('Invoice ' + want + ' was not found.');
     if (hb_upper_(hit['Status']) === 'CANCELLED') return hb_err_('Invoice ' + want + ' is already cancelled.');
+    // Cancelling rewrites the income of the month the invoice belongs to.
+    if (typeof acc_periodLockReason_ === 'function') {
+      var lockedInv = acc_periodLockReason_(hb_toDate_(hit['Timestamp']) || hb_toDate_(hit['Invoice_Date']));
+      if (lockedInv) return hb_err_(lockedInv);
+    }
 
     if (map['Status'] !== undefined) sh.getRange(hit._row, map['Status'] + 1).setValue('CANCELLED');
     if (map['Cancel_Reason'] !== undefined) sh.getRange(hit._row, map['Cancel_Reason'] + 1).setValue(why);

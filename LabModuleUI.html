@@ -519,7 +519,7 @@ var LabX = (function () {
           '<div class="lx-dots">'+dots+'</div>'+
           '<span class="lx-stage-pill">'+esc(o.status.replace(/_/g,' '))+'</span>'+
           billInfo+
-          '<span class="label-bright" style="font-size:.68rem;">'+esc(o.source)+' · '+esc(o.createdAt)+'</span>'+
+          '<span class="label-bright" style="font-size:.68rem;">'+esc(o.source)+' · '+esc(o.createdText||o.createdAt)+'</span>'+
         '</div>'+
       '</div>'+
       tat+

@@ -103,7 +103,8 @@ function apptToken(purpose, counters) {
 
 // ---------------------------------------------------------------- INIT ----
 function initAdminLedger() {
-  document.getElementById('admin-ledger-date').value = new Date().toISOString().split('T')[0];
+  // The clinic's date, not UTC's: toISOString() is still yesterday until 05:30.
+  document.getElementById('admin-ledger-date').value = window.crescDateInputValue(new Date());
 
   window.loadDoctorContext(function (ctx) {
     const filter = document.getElementById('ledger-doctor-filter');
@@ -122,9 +123,9 @@ function initAdminLedger() {
 
 function changeLedgerDate(days) {
   const input = document.getElementById('admin-ledger-date');
-  const cur = new Date(input.value);
+  const cur = window.crescParseDate(input.value) || new Date();   // local midnight, not UTC
   cur.setDate(cur.getDate() + days);
-  input.value = cur.toISOString().split('T')[0];
+  input.value = window.crescDateInputValue(cur);
   loadAdminLedger();
 }
 

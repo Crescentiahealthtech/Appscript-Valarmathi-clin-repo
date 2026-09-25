@@ -134,6 +134,15 @@
               <label class="custom-label-dark">Rack Location</label>
               <input type="text" class="form-control custom-input-dark text-uppercase" id="editRack">
             </div>
+            <div class="col-12">
+              <label class="custom-label-dark" for="editSchedule">Drug Schedule <small class="label-bright">(applies to every batch of this medicine)</small></label>
+              <select class="form-select custom-input-dark" id="editSchedule">
+                <option value="">Not scheduled (OTC / general)</option>
+                  <option value="H">Schedule H — prescription only</option>
+                  <option value="H1">Schedule H1 — prescription + register</option>
+                  <option value="X">Schedule X — narcotic / psychotropic</option>
+              </select>
+            </div>
           </div>
         </form>
       </div>
@@ -346,20 +355,24 @@
         }
       }
       
+      // Every sheet value escaped: a brand, batch or supplier typed with
+      // markup in it was drawn as markup, in every pharmacist's session.
+      const sch = item.schedule
+        ? ` <span class="badge bg-danger" title="Schedule ${phEsc(item.schedule)}: prescription only">Sch ${phEsc(item.schedule)}</span>` : '';
       const row = `
         <tr>
           <td class="ps-3 text-secondary">${index + 1}</td>
-          <td><span class="badge bg-secondary bg-opacity-25 text-light fw-normal">${item.genericName}</span></td>
-          <td class="text-info fw-semibold">${item.brandName}</td>
-          <td class="text-secondary">${item.batch}</td>
+          <td><span class="badge bg-secondary bg-opacity-25 text-light fw-normal">${phEsc(item.genericName)}</span></td>
+          <td class="text-info fw-semibold">${phEsc(item.brandName)}${sch}</td>
+          <td class="text-secondary">${phEsc(item.batch)}</td>
           <td>${stockDisplay}</td>
-          <td>${item.expiry}</td>
+          <td>${phEsc(item.expiry)}</td>
           <td class="text-center">${statusBadge}</td>
           <td>${item.mrp.toFixed(2)}</td>
-          <td class="text-secondary">${item.gst}%</td>
-          <td>${item.rack || '-'}</td>
-          <td class="text-secondary truncate-text" style="max-width: 100px;">${item.supplier}</td>
-          <td class="text-secondary truncate-text" style="max-width: 100px;">${item.manufacturer}</td>
+          <td class="text-secondary">${phEsc(item.gst)}%</td>
+          <td>${phEsc(item.rack || '-')}</td>
+          <td class="text-secondary truncate-text" style="max-width: 100px;">${phEsc(item.supplier)}</td>
+          <td class="text-secondary truncate-text" style="max-width: 100px;">${phEsc(item.manufacturer)}</td>
           <td class="pe-3 text-center">
             <div class="btn-group btn-group-sm">
               <button class="btn btn-primary py-1 px-2" title="Adjust this batch" onclick="openInventoryEditModal(${safeItem})">
@@ -430,11 +443,13 @@
 
   function filterInventoryTable() {
     const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
-    const filteredData = currentInventoryData.filter(item => 
-      item.brandName.toLowerCase().includes(searchTerm) || 
-      item.genericName.toLowerCase().includes(searchTerm) ||
-      item.batch.toLowerCase().includes(searchTerm)
-    );
+    // "sch h1" / "schedule x" finds the scheduled medicines.
+    const schQ = (searchTerm.match(/^sch(?:edule)?\s*(h1|h|x)$/) || [])[1];
+    const filteredData = currentInventoryData.filter(item => schQ
+      ? String(item.schedule || '').toLowerCase() === schQ
+      : (item.brandName.toLowerCase().includes(searchTerm) ||
+         item.genericName.toLowerCase().includes(searchTerm) ||
+         item.batch.toLowerCase().includes(searchTerm)));
     renderInventoryTable(filteredData);
   }
 
@@ -453,6 +468,7 @@
     document.getElementById('editMrp').value = item.mrp;
     document.getElementById('editGst').value = item.gst;
     document.getElementById('editRack').value = item.rack;
+    document.getElementById('editSchedule').value = item.schedule || '';
 
     const modal = new bootstrap.Modal(document.getElementById('inventoryEditModal'));
     modal.show();
@@ -735,7 +751,8 @@
       gst: document.getElementById('editGst').value,
       rack: document.getElementById('editRack').value.trim().toUpperCase(),
       supplier: document.getElementById('editSupplier').value,
-      manufacturer: document.getElementById('editManufacturer').value
+      manufacturer: document.getElementById('editManufacturer').value,
+      schedule: document.getElementById('editSchedule').value
     };
 
     google.script.run

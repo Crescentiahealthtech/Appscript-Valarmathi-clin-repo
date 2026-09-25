@@ -75,6 +75,81 @@ var PH_INVOICE_HEADERS = ["Invoice_No","Timestamp","Bill_Type","Patient_ID","Pat
   "Pay_Mode","Txn_ID","Pay_Status","Status","Item_Count","Created_By","Bill_UUID",
   "Settled_At","Settled_By"];
 
+var PH_ITEM_HEADERS = ["Invoice_No","Timestamp","Patient_ID","Brand","Generic","Batch","Expiry",
+  "Qty","Unit","MRP","GST_Pct","Taxable","GST_Amt","Line_Total","Inventory_RowId","Schedule"];
+
+/** Modes a pharmacy bill may be paid by. CREDIT is settled later. */
+var PH_PAY_MODES = ["CASH", "UPI", "CARD", "CREDIT"];
+
+// ---------------------------------------------------------------------
+// DRUG SCHEDULES (Drugs and Cosmetics Rules, 1945)
+//
+// Schedule H, H1 and X medicines may only be sold against a prescription,
+// and the pharmacy has to be able to show — for any period an inspector
+// names — who was given what, on whose prescription. That is the register
+// getScheduleDrugRegister() prints.
+//
+// The schedule is a property of the MEDICINE, recorded on its inventory
+// rows (column "Schedule", added on first use), and snapshotted onto every
+// invoice line at the moment of sale, so a later reclassification never
+// rewrites what the register says was sold.
+// ---------------------------------------------------------------------
+var PH_SCHEDULE_HEADER = "Schedule";
+var PH_SCHEDULES = { H: "Schedule H", H1: "Schedule H1", X: "Schedule X" };
+
+/** "Schedule H1", "sch h1", "h1" -> "H1"; anything unrecognised -> "". */
+function _phSchedule_(v) {
+  var k = String(v == null ? "" : v).toUpperCase().replace(/SCHEDULE|SCH\.?/g, "").replace(/[^A-Z0-9]/g, "");
+  return PH_SCHEDULES[k] ? k : "";
+}
+
+/**
+ * Makes sure the sheet's grid is at least `n` columns wide. getRange() past
+ * the last column of the GRID throws, and a sheet whose unused columns were
+ * deleted by hand is exactly as wide as its data.
+ */
+function _phEnsureWidth_(sheet, n) {
+  try {
+    var max = sheet.getMaxColumns();
+    if (max < n) sheet.insertColumnsAfter(max, n - max);
+  } catch (e) { /* a fake sheet in a test, or no permission: the write reports itself */ }
+}
+
+/** The zero-based Schedule column on Pharmacy_Inventory; -1 if absent and not ensured. */
+function _phScheduleCol_(sheet, ensure) {
+  var width = Math.max(1, sheet.getLastColumn());
+  var head = sheet.getRange(1, 1, 1, width).getValues()[0]
+    .map(function (h) { return String(h || "").trim().toLowerCase(); });
+  var i = head.indexOf(PH_SCHEDULE_HEADER.toLowerCase());
+  if (i !== -1 || !ensure) return i;
+  // Column O at the earliest: the fourteen before it are read by position.
+  var col = Math.max(width, 14) + 1;
+  _phEnsureWidth_(sheet, col);
+  sheet.getRange(1, col).setValue(PH_SCHEDULE_HEADER).setFontWeight("bold").setBackground("#f4cccc");
+  return col - 1;
+}
+
+/** { "BRAND (lower-case)": "H" | "H1" | "X" } from every inventory row that carries one. */
+function _phScheduleByBrand_(data, col) {
+  var out = {};
+  if (col < 0) return out;
+  for (var i = 1; i < data.length; i++) {
+    var sc = _phSchedule_(data[i][col]);
+    var b = String(data[i][1] || "").trim().toLowerCase();
+    if (sc && b && !out[b]) out[b] = sc;
+  }
+  return out;
+}
+
+/**
+ * Whether the doctor on a bill names somebody. "Self / OTC" is the desk's
+ * default and means nobody prescribed it.
+ */
+function _phNamesDoctor_(doctor) {
+  var d = String(doctor || "").trim().toUpperCase().replace(/\s+/g, " ");
+  return !!d && ["SELF / OTC", "SELF/OTC", "SELF", "OTC", "NONE", "NIL", "-", "N/A", "NA"].indexOf(d) === -1;
+}
+
 
 // =====================================================================
 // SECTION A — INVENTORY (used by Ledger + Add screens)
@@ -88,6 +163,8 @@ function fetchPharmacyInventory(sessionToken) {
     if (!sheet) return { success: false, message: "Pharmacy_Inventory sheet not found." };
     var data = sheet.getDataRange().getValues();
     if (data.length <= 1) return { success: true, data: [] };
+    var schCol = _phScheduleCol_(sheet, false);
+    var schByBrand = _phScheduleByBrand_(data, schCol);
 
     var out = [];
     for (var i = 1; i < data.length; i++) {
@@ -95,6 +172,8 @@ function fetchPharmacyInventory(sessionToken) {
       if (!row[1]) continue;
       out.push({
         rowId: i + 1,
+        schedule: (schCol >= 0 && _phSchedule_(row[schCol])) ||
+                  schByBrand[String(row[1]).trim().toLowerCase()] || "",
         brandName: String(row[1]),
         genericName: String(row[2] || ""),
         drugType: String(row[3] || ""),
@@ -119,63 +198,171 @@ function fetchPharmacyInventory(sessionToken) {
 
 function savePharmacyInventory(payload) {
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
   try {
-    crescRequire_((payload || {}).token, 'pharmacy.stock_add');
+    var actor = crescRequire_((payload || {}).token, 'pharmacy.stock_add');
+    payload = payload || {};
+
+    // WHAT A STOCK ENTRY MUST CARRY. This used to append whatever arrived:
+    // a quantity of -5, an MRP of 0, a batch with no number.
+    var brand = String(payload.medicineName || "").trim();
+    var batch = String(payload.batchNo || "").trim().toUpperCase();
+    var qty = parseInt(payload.qty, 10);
+    var mrp = parseFloat(payload.mrp);
+    var buy = parseFloat(payload.buyPrice);
+    var gst = parseFloat(payload.gst);
+    if (!brand) return { success: false, message: "Enter the medicine (brand) name." };
+    if (!batch) return { success: false, message: "Enter the batch number printed on the pack." };
+    if (!(qty > 0)) return { success: false, message: "Enter how many units were received." };
+    if (!(mrp > 0)) return { success: false, message: "Enter the MRP printed on the pack." };
+    if (isNaN(buy) || buy < 0) return { success: false, message: "Enter the buying price." };
+    if (buy > mrp) return { success: false, message: "The buying price (" + buy + ") is above the MRP (" + mrp + "). Check both." };
+    if (isNaN(gst) || gst < 0 || gst > 28) return { success: false, message: "GST must be between 0 and 28%." };
+
+    lock.waitLock(10000);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
     if (!sheet) {
       sheet = ss.insertSheet(PH_SHEETS.INVENTORY);
       sheet.appendRow(["Timestamp","Brand Name","Generic Name","Type","Qty","Unit",
-        "Batch No","Expiry Date","Rack Location","Buy Price","MRP","GST %","Manufacturer","Supplier"]);
-      sheet.getRange("A1:N1").setFontWeight("bold").setBackground("#d9d9d9");
+        "Batch No","Expiry Date","Rack Location","Buy Price","MRP","GST %","Manufacturer","Supplier",
+        PH_SCHEDULE_HEADER]);
+      sheet.getRange("A1:O1").setFontWeight("bold").setBackground("#d9d9d9");
     }
-    sheet.appendRow([
-      payload.timestamp ? new Date(payload.timestamp) : new Date(),
-      String(payload.medicineName || ""), String(payload.genericName || ""),
-      String(payload.drugType || ""), parseInt(payload.qty, 10) || 0, String(payload.unit || ""),
-      String(payload.batchNo || ""), String(payload.expiryDate || ""), String(payload.rackLocation || ""),
-      parseFloat(payload.buyPrice) || 0, parseFloat(payload.mrp) || 0, parseFloat(payload.gst) || 0,
-      String(payload.manufacturer || ""), String(payload.supplier || "")
-    ]);
-    return { success: true, message: "Stock successfully added!" };
+    var schCol = _phScheduleCol_(sheet, true);
+    var data = sheet.getDataRange().getValues();
+
+    // The schedule is the medicine's, so a new batch of a brand already on
+    // the shelf inherits it unless the form says otherwise.
+    var schedule = _phSchedule_(payload.schedule) ||
+                   _phScheduleByBrand_(data, schCol)[brand.toLowerCase()] || "";
+
+    // THE SAME BATCH, RECEIVED AGAIN. Appending a second row with the same
+    // brand and batch split the stock in two, and billing — which looks a
+    // batch up by brand and batch number — found only one of them: the other
+    // row's units could never be sold, and a sale could decrement the wrong
+    // one. A re-delivery of the same batch at the same MRP now tops up the
+    // row that is already there.
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][1] || "").trim().toUpperCase() !== brand.toUpperCase()) continue;
+      if (String(data[i][6] || "").trim().toUpperCase() !== batch) continue;
+      var oldMrp = parseFloat(data[i][10]) || 0;
+      if (Math.abs(oldMrp - mrp) > 0.009) {
+        return { success: false,
+                 message: brand + " batch " + batch + " is already in stock at MRP " + oldMrp.toFixed(2) +
+                          ". The same batch cannot carry two prices — check the pack, or adjust the " +
+                          "existing batch from Live Inventory." };
+      }
+      var before = parseInt(data[i][4], 10) || 0;
+      sheet.getRange(i + 1, 5).setValue(before + qty);
+      if (schedule && schCol >= 0) sheet.getRange(i + 1, schCol + 1).setValue(schedule);
+      logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                'PHARMACY_STOCK_RECEIVED', 'Pharmacy_Inventory', brand + ' / ' + batch,
+                { qty: qty, before: before, after: before + qty, toppedUp: true });
+      return { success: true,
+               message: qty + " unit(s) added to the existing " + brand + " batch " + batch +
+                        " — " + (before + qty) + " now in stock." };
+    }
+
+    var row = [
+      payload.timestamp ? (cresc_parseDate_(payload.timestamp) || new Date()) : new Date(),
+      brand, String(payload.genericName || "").trim(),
+      String(payload.drugType || ""), qty, String(payload.unit || ""),
+      batch, String(payload.expiryDate || ""), String(payload.rackLocation || "").trim().toUpperCase(),
+      buy, mrp, gst,
+      String(payload.manufacturer || "").trim(), String(payload.supplier || "").trim()
+    ];
+    while (row.length < schCol) row.push("");
+    row[schCol] = schedule;
+    sheet.appendRow(row);
+    logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+              'PHARMACY_STOCK_RECEIVED', 'Pharmacy_Inventory', brand + ' / ' + batch,
+              { qty: qty, mrp: mrp, schedule: schedule });
+    return { success: true,
+             message: "Stock added: " + qty + " × " + brand + " (batch " + batch + ")" +
+                      (schedule ? " — " + PH_SCHEDULES[schedule] + "." : ".") };
   } catch (error) {
-    return { success: false, message: "Database Error: " + error.toString() };
-  } finally { lock.releaseLock(); }
+    return { success: false, message: _phReason_(error) };
+  } finally { try { lock.releaseLock(); } catch (e) {} }
 }
 
 function updatePharmacyStock(payload) {
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
   try {
     var actor = crescRequire_((payload || {}).token, 'pharmacy.stock_edit');
+    payload = payload || {};
+    var newStock = parseInt(payload.stock, 10);
+    var mrp = parseFloat(payload.mrp), gst = parseFloat(payload.gst);
+    if (isNaN(newStock) || newStock < 0) return { success: false, message: "The stock count cannot be negative." };
+    if (!(mrp > 0)) return { success: false, message: "Enter the MRP." };
+    if (isNaN(gst) || gst < 0 || gst > 28) return { success: false, message: "GST must be between 0 and 28%." };
+
+    lock.waitLock(10000);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var stockSheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
     var masterSheet = ss.getSheetByName(PH_SHEETS.MASTER_LEDGER);
     var rowNum = parseInt(payload.rowId, 10);
-    stockSheet.getRange(rowNum, 5).setValue(parseInt(payload.stock, 10) || 0);
+    if (!stockSheet || !(rowNum > 1) || rowNum > stockSheet.getLastRow()) {
+      return { success: false, message: "That batch is no longer in the inventory. Refresh and try again." };
+    }
+
+    // rowId is a position, not an identity — the same check the write-off
+    // makes. An edit that lands on whatever row now sits at that position
+    // silently rewrites a different medicine's count and price.
+    var current = stockSheet.getRange(rowNum, 1, 1, 14).getValues()[0];
+    var brand = String(current[1] || "").trim();
+    var batch = String(current[6] || "").trim();
+    if ((payload.brandName && String(payload.brandName).trim().toUpperCase() !== brand.toUpperCase()) ||
+        (payload.batch && String(payload.batch).trim().toUpperCase() !== batch.toUpperCase())) {
+      return { success: false,
+               message: "The inventory has changed since this screen was loaded — row " + rowNum +
+                        " now holds " + (brand || "(blank)") + " batch " + (batch || "(blank)") +
+                        ". Refresh and try again. Nothing was changed." };
+    }
+
+    var before = parseInt(current[4], 10) || 0;
+    stockSheet.getRange(rowNum, 5).setValue(newStock);
     stockSheet.getRange(rowNum, 8).setValue(String(payload.expiry || ""));
-    stockSheet.getRange(rowNum, 9).setValue(String(payload.rack || ""));
-    stockSheet.getRange(rowNum, 11).setValue(parseFloat(payload.mrp) || 0);
-    stockSheet.getRange(rowNum, 12).setValue(parseFloat(payload.gst) || 0);
+    stockSheet.getRange(rowNum, 9).setValue(String(payload.rack || "").trim().toUpperCase());
+    stockSheet.getRange(rowNum, 11).setValue(mrp);
+    stockSheet.getRange(rowNum, 12).setValue(gst);
+
+    // A schedule belongs to the medicine, so it is set on every batch of it:
+    // an H1 drug whose older batch still said "none" would be sold from that
+    // batch without the prescription check.
+    var scheduleNote = "";
+    if (payload.schedule !== undefined) {
+      var sc = _phSchedule_(payload.schedule);
+      var schCol = _phScheduleCol_(stockSheet, true);
+      var all = stockSheet.getRange(1, 1, stockSheet.getLastRow(), schCol + 1).getValues();
+      var changed = 0;
+      for (var r = 1; r < all.length; r++) {
+        if (String(all[r][1] || "").trim().toUpperCase() !== brand.toUpperCase()) continue;
+        if (_phSchedule_(all[r][schCol]) === sc) continue;
+        stockSheet.getRange(r + 1, schCol + 1).setValue(sc);
+        changed++;
+      }
+      if (changed) scheduleNote = " " + brand + " is now " + (sc ? PH_SCHEDULES[sc] : "not scheduled") +
+                                  " on " + changed + " batch row(s).";
+    }
+
     if (masterSheet) {
-      masterSheet.appendRow([new Date(), "ADJ-" + Math.floor(1000 + Math.random() * 9000),
-        "Manual Adjustment", String(payload.brandName || ""), String(payload.genericName || ""),
-        "N/A", "N/A", parseInt(payload.stock, 10) || 0, String(payload.batch || ""),
-        String(payload.expiry || ""), String(payload.rack || ""), 0, parseFloat(payload.mrp) || 0,
-        parseFloat(payload.gst) || 0, String(payload.manufacturer || ""), String(payload.supplier || ""),
+      masterSheet.appendRow([new Date(), "ADJ-" + Utilities.getUuid().substring(0, 6).toUpperCase(),
+        "Manual Adjustment", brand, String(current[2] || ""),
+        "N/A", "N/A", newStock, batch,
+        String(payload.expiry || ""), String(payload.rack || ""), 0, mrp,
+        gst, String(current[12] || ""), String(current[13] || ""),
         // The actor column used to be the literal string "Admin", whoever was
         // signed in — so the master ledger recorded every manual adjustment
         // in this clinic's history as having been made by the same person.
         actor.displayName || actor.username]);
     }
     logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
-              'PHARMACY_STOCK_ADJUST', 'Pharmacy_Inventory', String(payload.batch || ''),
-              { brand: String(payload.brandName || ''), stock: parseInt(payload.stock, 10) || 0 });
-    return { success: true, message: "Inventory updated securely." };
+              'PHARMACY_STOCK_ADJUST', 'Pharmacy_Inventory', batch,
+              { brand: brand, stockBefore: before, stock: newStock, mrp: mrp, gst: gst });
+    return { success: true, message: "Inventory updated." + scheduleNote };
   } catch (error) {
-    return { success: false, message: "Failed to update: " + error.toString() };
-  } finally { lock.releaseLock(); }
+    return { success: false, message: "Failed to update: " + _phReason_(error) };
+  } finally { try { lock.releaseLock(); } catch (e) {} }
 }
 
 // =====================================================================
@@ -563,9 +750,12 @@ function fetchBillableStock(sessionToken) {
     crescRequire_(sessionToken, 'pharmacy.read');
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVENTORY);
-    if (!sheet) return { success: true, data: [] };
+    var doctors = _phClinicDoctors_();
+    if (!sheet) return { success: true, data: [], doctors: doctors };
     var data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return { success: true, data: [] };
+    if (data.length <= 1) return { success: true, data: [], doctors: doctors };
+    var schCol = _phScheduleCol_(sheet, false);
+    var schByBrand = _phScheduleByBrand_(data, schCol);
 
     var batches = [];
     for (var i = 1; i < data.length; i++) {
@@ -579,7 +769,8 @@ function fetchBillableStock(sessionToken) {
         rowId: i + 1, brand: brand, generic: String(row[2] || ""), type: String(row[3] || ""),
         qty: qty, unit: String(row[5] || ""), batch: String(row[6] || ""),
         expiry: exp, expSort: _expiryToSortKey_(exp),
-        mrp: parseFloat(row[10]) || 0, gst: parseFloat(row[11]) || 0, rack: String(row[8] || "")
+        mrp: parseFloat(row[10]) || 0, gst: parseFloat(row[11]) || 0, rack: String(row[8] || ""),
+        schedule: (schCol >= 0 && _phSchedule_(row[schCol])) || schByBrand[brand.toLowerCase()] || ""
       });
     }
     batches.sort(function (a, b) {
@@ -587,15 +778,28 @@ function fetchBillableStock(sessionToken) {
       if (a.brand.toLowerCase() > b.brand.toLowerCase()) return 1;
       return a.expSort - b.expSort;
     });
-    return { success: true, data: batches };
+    return { success: true, data: batches, doctors: doctors };
   } catch (error) {
-    return { success: false, message: "Stock load failed: " + error.toString() };
+    return { success: false, message: "Stock load failed: " + _phReason_(error) };
   }
+}
+
+/**
+ * The clinic's own doctors, for the "Prescribing doctor" box. It was three
+ * names typed into the page, two of whom are not on the Doctors sheet; an
+ * outside prescriber is typed in free.
+ */
+function _phClinicDoctors_() {
+  try {
+    if (typeof getActiveDoctors_ !== 'function') return [];
+    return (getActiveDoctors_() || []).map(function (d) { return String(d.name || '').trim(); })
+      .filter(function (n) { return n && !/visiting/i.test(n); });
+  } catch (e) { return []; }
 }
 
 function getPatientBillingContext(query, sessionToken) {
   try {
-    crescRequire_(sessionToken, ['billing.read', 'pharmacy.read']);
+    crescRequire_(sessionToken, ['pharmacy.read', 'pharmacy.bill']);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var patient = _findPatient_(ss, query);
     var pid = patient ? String(patient.id) : String(query || "").trim();
@@ -862,7 +1066,16 @@ function processPharmacyBill(payload, sessionToken) {
   // where the real sentence is already displayed.
   var lock = null;
   try {
-    crescRequire_(sessionToken, 'pharmacy.dispense');
+    var actor = crescRequire_(sessionToken, 'pharmacy.dispense');
+    payload = payload || {};
+
+    var payMode = String(payload.payMode || "CASH").trim().toUpperCase();
+    if (PH_PAY_MODES.indexOf(payMode) === -1) {
+      return { success: false, message: "Choose how the bill is paid: cash, UPI, card or credit." };
+    }
+    var discount = parseFloat(payload.discount) || 0;
+    if (discount < 0) return { success: false, message: "The discount cannot be negative." };
+
     lock = LockService.getScriptLock();
     if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -881,82 +1094,139 @@ function processPharmacyBill(payload, sessionToken) {
     var items = payload.billedItems || [];
     if (items.length === 0) throw new Error("No billable items supplied.");
 
-    // 1. Index inventory by Brand|Batch
+    // 1. Index inventory. BY ROW first: the desk sends the row each batch was
+    //    picked from, and two rows can share a brand and batch number (a
+    //    re-delivery keyed twice). Indexing by brand|batch alone kept only the
+    //    LAST such row, so the other's stock could never be sold and a sale
+    //    could come off the wrong row.
     var data = invSheet.getDataRange().getValues();
-    var idx = {};
+    var schCol = _phScheduleCol_(invSheet, false);
+    var schByBrand = _phScheduleByBrand_(data, schCol);
+    var byKey = {}, byRow = {};
     for (var r = 1; r < data.length; r++) {
       var key = (String(data[r][1]).trim() + "|" + String(data[r][6]).trim()).toUpperCase();
-      idx[key] = { rowNum: r + 1, qty: parseInt(data[r][4], 10) || 0 };
+      var ref = {
+        rowNum: r + 1, key: key, qty: parseInt(data[r][4], 10) || 0,
+        brand: String(data[r][1] || "").trim(), generic: String(data[r][2] || ""),
+        unit: String(data[r][5] || ""), batch: String(data[r][6] || "").trim(),
+        expiry: data[r][7], mrp: parseFloat(data[r][10]) || 0, gst: parseFloat(data[r][11]) || 0,
+        schedule: (schCol >= 0 && _phSchedule_(data[r][schCol])) ||
+                  schByBrand[String(data[r][1] || "").trim().toLowerCase()] || ""
+      };
+      byRow[r + 1] = ref;
+      (byKey[key] = byKey[key] || []).push(ref);
     }
 
     // 2. Validate every line BEFORE writing
-    var pending = {};
+    var pending = {}, lines = [];
     for (var i = 0; i < items.length; i++) {
-      var it = items[i];
+      var it = items[i] || {};
       var k = (String(it.drug).trim() + "|" + String(it.batch).trim()).toUpperCase();
-      var ref = idx[k];
-      if (!ref) throw new Error("Not in stock: " + it.drug + " (Batch " + it.batch + ").");
+      var row = byRow[parseInt(it.rowId, 10)];
+      if (!row || row.key !== k) {
+        var cands = (byKey[k] || []).filter(function (c) { return c.qty - (pending[c.rowNum] || 0) > 0; });
+        row = cands[0] || (byKey[k] || [])[0];
+      }
+      if (!row) throw new Error("Not in stock: " + it.drug + " (Batch " + it.batch + ").");
       var want = parseFloat(it.qty) || 0;
       if (want <= 0) throw new Error("Invalid quantity for " + it.drug + ".");
-      pending[k] = (pending[k] || 0) + want;
-      if (pending[k] > ref.qty)
-        throw new Error("Insufficient stock for " + it.drug + " (Batch " + it.batch + "). Available " + ref.qty + ", requested " + pending[k] + ".");
+      pending[row.rowNum] = (pending[row.rowNum] || 0) + want;
+      if (pending[row.rowNum] > row.qty)
+        throw new Error("Insufficient stock for " + it.drug + " (Batch " + it.batch + "). Available " + row.qty + ", requested " + pending[row.rowNum] + ".");
+      if (!(row.mrp > 0)) throw new Error(row.brand + " batch " + row.batch + " has no MRP on the inventory. Set it before selling.");
+      lines.push({ ref: row, qty: want });
     }
-    var deductions = [];
-    for (var key in pending) deductions.push({ rowNum: idx[key].rowNum, newQty: idx[key].qty - pending[key] });
+
+    // 2b. THE PRESCRIPTION RULE. A Schedule H, H1 or X medicine is sold
+    //     against a prescription, so the bill must name who prescribed it and
+    //     who it is for — the two columns the register exists to show. The
+    //     desk asks too; this is the check that holds when it does not.
+    var scheduled = lines.filter(function (l) { return !!l.ref.schedule; });
+    if (scheduled.length) {
+      var names = scheduled.map(function (l) { return l.ref.brand + " (" + l.ref.schedule + ")"; })
+        .filter(function (v, idx, a) { return a.indexOf(v) === idx; });
+      if (!_phNamesDoctor_(payload.doctor)) {
+        return { success: false, code: "SCHEDULE_DOCTOR_REQUIRED",
+                 message: names.join(", ") + (names.length > 1 ? " are" : " is") +
+                          " a scheduled drug and can only be sold on a prescription. Enter the " +
+                          "prescribing doctor's name — \"Self / OTC\" is not accepted." };
+      }
+      if (!String(payload.patientName || "").trim()) {
+        return { success: false, code: "SCHEDULE_PATIENT_REQUIRED",
+                 message: "Enter the patient's name: " + names.join(", ") +
+                          " must be entered in the Schedule H register against a named patient." };
+      }
+    }
 
     // 3. Invoice number + commit deductions
     var now = new Date();
     var invoiceNo = _nextInvoiceNo_(headerSheet, now);
-    for (var d = 0; d < deductions.length; d++) invSheet.getRange(deductions[d].rowNum, 5).setValue(deductions[d].newQty);
+    Object.keys(pending).forEach(function (rn) {
+      invSheet.getRange(parseInt(rn, 10), 5).setValue(byRow[rn].qty - pending[rn]);
+    });
 
-    // 4. Recompute money server-side
+    // 4. Money, from the INVENTORY. The browser's rate and GST used to be
+    //    stored as sent, so a bill could be raised at any price the page was
+    //    persuaded to post. The shelf's MRP is the price; a lower one is a
+    //    discount, and there is a field for that.
     var gross = 0, totalGst = 0, itemRows = [];
-    for (var m = 0; m < items.length; m++) {
-      var li = items[m];
-      var qty = parseFloat(li.qty) || 0, mrp = parseFloat(li.rate) || 0, gstPct = parseFloat(li.gst) || 0;
+    var tz = Session.getScriptTimeZone();
+    for (var m = 0; m < lines.length; m++) {
+      var ln = lines[m], rf = ln.ref;
+      var qty = ln.qty, mrp = rf.mrp, gstPct = rf.gst;
       var lineTotal = qty * mrp;
       var gstAmt = lineTotal - (lineTotal / (1 + gstPct / 100));
       gross += lineTotal; totalGst += gstAmt;
+      var expText = (rf.expiry instanceof Date) ? Utilities.formatDate(rf.expiry, tz, "yyyy-MM") : String(rf.expiry || "");
       itemRows.push([invoiceNo, now, String(payload.patientId || "WALK-IN"),
-        String(li.drug || ""), String(li.generic || ""), String(li.batch || ""), String(li.expiry || ""),
-        qty, String(li.unit || ""), round2_(mrp), gstPct, round2_(lineTotal - gstAmt),
-        round2_(gstAmt), round2_(lineTotal), String(li.rowId || "")]);
+        rf.brand, rf.generic, rf.batch, expText,
+        qty, rf.unit, round2_(mrp), gstPct, round2_(lineTotal - gstAmt),
+        round2_(gstAmt), round2_(lineTotal), String(rf.rowNum), rf.schedule]);
     }
-    var discount = parseFloat(payload.discount) || 0;
     if (discount > gross) discount = gross;
     var net = round2_(gross - discount);
 
-    // 5. Write header + items
-    var payStatus = (String(payload.payMode).toUpperCase() === "CREDIT") ? "PENDING" : "PAID";
-    var billedBy = ""; try { billedBy = Session.getActiveUser().getEmail() || ""; } catch (e) {}
+    // 5. Write header + items. Created_By is the signed-in member of staff.
+    //    It was Session.getActiveUser(), which for this web app is the
+    //    account that DEPLOYED it — so every bill in the clinic's history was
+    //    recorded as raised by the owner, whoever stood at the counter.
+    var payStatus = (payMode === "CREDIT") ? "PENDING" : "PAID";
+    var billedBy = actor.username;
     headerSheet.appendRow([invoiceNo, now, String(payload.billType || "WALK-IN"),
       String(payload.patientId || "WALK-IN"), String(payload.patientName || ""), String(payload.mobile || ""),
       String(payload.age || ""), String(payload.sex || ""), String(payload.address || ""),
-      String(payload.doctor || "Self / OTC"), round2_(gross), round2_(totalGst), round2_(discount), net,
-      String(payload.payMode || "CASH"), String(payload.txnId || ""), payStatus, "ACTIVE",
-      items.length, billedBy, String(payload.billUuid || ""), "", ""]);
+      String(payload.doctor || "Self / OTC").trim(), round2_(gross), round2_(totalGst), round2_(discount), net,
+      payMode, String(payload.txnId || ""), payStatus, "ACTIVE",
+      itemRows.length, billedBy, String(payload.billUuid || ""), "", ""]);
     itemsSheet.getRange(itemsSheet.getLastRow() + 1, 1, itemRows.length, itemRows[0].length).setValues(itemRows);
     // Route IP credit bills to the running tab. Discharge owns recognition.
-    if (String(payload.payMode).toUpperCase() === "CREDIT") {
+    if (payMode === "CREDIT") {
       try {
         var ipNo = ipc_activeAdmissionByPatient_(String(payload.patientId || ""));
         if (ipNo) billChargeToIp({
           ipNumber: ipNo, source: 'PHARMACY', sourceRef: invoiceNo,
           amount: net, gst: round2_(totalGst),
-          description: items.length + ' pharmacy item(s)', user: billedBy
+          description: itemRows.length + ' pharmacy item(s)'
         });
      } catch (e) {}
+    }
+    if (scheduled.length) {
+      try {
+        logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                  'PHARMACY_SCHEDULED_SALE', 'Pharmacy_Invoice', invoiceNo,
+                  { doctor: String(payload.doctor || ''), patientId: String(payload.patientId || ''),
+                    items: scheduled.map(function (l) { return l.ref.brand + ' ×' + l.qty + ' (' + l.ref.schedule + ')'; }) });
+      } catch (e) {}
     }
 
     // 6. Return confirmed print payload
     return { success: true, invoiceNo: invoiceNo, print: {
       invoiceNo: invoiceNo,
-      date: Utilities.formatDate(now, Session.getScriptTimeZone(), "dd-MMM-yyyy HH:mm"),
+      date: Utilities.formatDate(now, tz, "dd-MMM-yyyy HH:mm"),
       billType: String(payload.billType || "WALK-IN"), patientId: String(payload.patientId || "WALK-IN"),
       patientName: String(payload.patientName || "Walk-in Patient"), mobile: String(payload.mobile || ""),
       age: String(payload.age || ""), sex: String(payload.sex || ""), address: String(payload.address || ""),
-      doctor: String(payload.doctor || "Self / OTC"), payMode: String(payload.payMode || "CASH"),
+      doctor: String(payload.doctor || "Self / OTC"), payMode: payMode,
       txnId: String(payload.txnId || ""), payStatus: payStatus,
       // Expiry is rendered here, once, so the invoice printed from this reply
       // and the one reprinted later from the sheet read identically. A batch
@@ -966,7 +1236,7 @@ function processPharmacyBill(payload, sessionToken) {
       // cell produces.
       items: itemRows.map(function (row) { return { drug: row[3], generic: row[4], batch: row[5],
         expiry: cresc_expiryText_(row[6]), qty: row[7], unit: row[8], mrp: row[9], gst: row[10],
-        taxable: row[11], gstAmt: row[12], lineTotal: row[13] }; }),
+        taxable: row[11], gstAmt: row[12], lineTotal: row[13], schedule: row[15] }; }),
       gross: round2_(gross), totalGst: round2_(totalGst), discount: round2_(discount), net: net } };
   } catch (error) {
     return { success: false, message: _phReason_(error) };
@@ -981,25 +1251,61 @@ function settleCreditBill(payload, sessionToken) {
   // Guard inside the try — see processPharmacyBill above for why.
   var lock = null;
   try {
-    crescRequire_(sessionToken, 'billing.write');
+    var actor = crescRequire_(sessionToken, ['pharmacy.bill', 'accounts.settle']);
+    payload = payload || {};
+    var mode = String(payload.payMode || "CASH").trim().toUpperCase();
+    if (["CASH", "UPI", "CARD", "BANK"].indexOf(mode) === -1) {
+      return { success: false, message: "Choose how it was paid: cash, UPI, card or bank transfer." };
+    }
+    if (typeof acc_isLocked_ === 'function' && typeof acc_period_ === 'function' &&
+        acc_isLocked_(acc_period_(new Date()))) {
+      return { success: false, message: "This month is locked in the Finance Hub; settlements are frozen." };
+    }
     lock = LockService.getScriptLock();
     if (!lock.tryLock(10000)) return { success: false, message: "System busy, please retry." };
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName(PH_SHEETS.INVOICES);
     if (!sheet) throw new Error("Invoice ledger not found.");
     var data = sheet.getDataRange().getValues();
+    var h = data[0].map(function (x) { return String(x || "").trim(); });
+    var col = function (name, fallback) { var i = h.indexOf(name); return i === -1 ? fallback : i; };
+    var cPay = col("Pay_Status", 16), cStat = col("Status", 17), cMode = col("Pay_Mode", 14),
+        cTxn = col("Txn_ID", 15), cAt = col("Settled_At", 21), cBy = col("Settled_By", 22);
     var target = String(payload.invoiceNo || "").trim();
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]).trim() !== target) continue;
-      if (String(data[i][16]).trim().toUpperCase() === "PAID") return { success: false, message: "Invoice " + target + " is already settled." };
+      var pay = String(data[i][cPay]).trim().toUpperCase();
+      var st = String(data[i][cStat]).trim().toUpperCase();
+      if (st === "CANCELLED") return { success: false, message: "Invoice " + target + " was cancelled." };
+      if (pay === "PAID") return { success: false, message: "Invoice " + target + " is already settled." };
+      if (pay === "IP_SETTLED") return { success: false, message: "Invoice " + target + " was settled on the patient's discharge bill." };
       var rowNum = i + 1;
-      var by = ""; try { by = Session.getActiveUser().getEmail() || ""; } catch (e) {}
-      sheet.getRange(rowNum, 15).setValue(String(payload.payMode || "CASH")); 
-      sheet.getRange(rowNum, 16).setValue(String(payload.txnId || ""));       
-      sheet.getRange(rowNum, 17).setValue("PAID");                            
-      sheet.getRange(rowNum, 22).setValue(new Date());                        
-      sheet.getRange(rowNum, 23).setValue(by);                               
-      return { success: true, message: "Invoice " + target + " settled." };
+      var who = actor.displayName || actor.username;
+      sheet.getRange(rowNum, cMode + 1).setValue(mode);
+      sheet.getRange(rowNum, cTxn + 1).setValue(String(payload.txnId || ""));
+      sheet.getRange(rowNum, cPay + 1).setValue("PAID");
+      sheet.getRange(rowNum, cAt + 1).setValue(new Date());
+      // Who took the money: the session, not Session.getActiveUser(), which
+      // for this web app is always the account that deployed it.
+      sheet.getRange(rowNum, cBy + 1).setValue(who);
+
+      // A credit bill routed to an admission's running tab and then paid here
+      // is taken off the tab, or the discharge bill charges it again.
+      var offTab = false;
+      try {
+        if (typeof ipc_markChargePaidAtCounter_ === 'function') {
+          offTab = ipc_markChargePaidAtCounter_('PHARMACY', target, mode, who);
+        }
+      } catch (e) {}
+      try {
+        logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                  'PHARMACY_CREDIT_SETTLED', 'Pharmacy_Invoice', target,
+                  { mode: mode, txnId: String(payload.txnId || ''), removedFromIpTab: offTab });
+      } catch (e) {}
+      SpreadsheetApp.flush();
+      return { success: true, invoiceNo: target,
+               message: "Invoice " + target + " settled by " + mode + "." +
+                        (offTab ? " It has been taken off the patient's IP running bill." : "") };
     }
     return { success: false, message: "Invoice " + target + " not found." };
   } catch (error) {
@@ -1034,10 +1340,20 @@ function _ensureInvoiceItemsSheet_(ss) {
   var sheet = ss.getSheetByName(PH_SHEETS.INVOICE_ITEMS);
   if (!sheet) {
     sheet = ss.insertSheet(PH_SHEETS.INVOICE_ITEMS);
-    sheet.appendRow(["Invoice_No","Timestamp","Patient_ID","Brand","Generic","Batch","Expiry",
-      "Qty","Unit","MRP","GST_Pct","Taxable","GST_Amt","Line_Total","Inventory_RowId"]);
-    sheet.getRange("A1:O1").setFontWeight("bold").setBackground("#d9ead3");
+    sheet.appendRow(PH_ITEM_HEADERS);
+    sheet.getRange(1, 1, 1, PH_ITEM_HEADERS.length).setFontWeight("bold").setBackground("#d9ead3");
     sheet.setFrozenRows(1);
+    return sheet;
+  }
+  // The Schedule column (P) is new: lines are written sixteen wide, and a
+  // column with no header would be invisible to every reader.
+  _phEnsureWidth_(sheet, PH_ITEM_HEADERS.length);
+  var width = Math.max(sheet.getLastColumn(), PH_ITEM_HEADERS.length);
+  var head = sheet.getRange(1, 1, 1, width).getValues()[0];
+  for (var c = 0; c < PH_ITEM_HEADERS.length; c++) {
+    if (!String(head[c] || "").trim()) {
+      sheet.getRange(1, c + 1).setValue(PH_ITEM_HEADERS[c]).setFontWeight("bold");
+    }
   }
   return sheet;
 }
@@ -1110,7 +1426,7 @@ function _expiryToSortKey_(exp) {
 
 function generateAndStorePharmacyInvoicePDF(invoiceNo, htmlContent, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['pharmacy.bill', 'pharmacy.dispense']);
 
     // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
     // The register has carried this purpose since it was built and nothing
@@ -1162,7 +1478,7 @@ function generateAndStorePharmacyInvoicePDF(invoiceNo, htmlContent, sessionToken
 
 function emailPharmacyInvoice(invoiceNo, htmlContent, patientEmail, sessionToken) {
   try {
-    crescRequire_(sessionToken, 'billing.read');
+    crescRequire_(sessionToken, ['pharmacy.bill', 'pharmacy.dispense']);
     if (!patientEmail) throw new Error("No valid email address provided.");
 
     // ── DPDP s.6 / s.5: the patient's COMMUNICATION consent, checked here ──
@@ -1192,5 +1508,150 @@ function emailPharmacyInvoice(invoiceNo, htmlContent, patientEmail, sessionToken
     return { success: true, message: "Invoice emailed successfully." };
   } catch (error) {
     return { success: false, message: error.toString() };
+  }
+}
+// =====================================================================
+// SECTION G — THE SCHEDULE H / H1 / X REGISTER
+// ---------------------------------------------------------------------
+// One row per scheduled medicine sold, for the period asked: S.No, date of
+// issue, patient, prescribing doctor, the drug, the quantity — and a blank
+// column the pharmacist signs on paper. Printed from Pharmacy → Schedule H
+// Register; the same rows export to CSV.
+//
+// WHERE THE SCHEDULE COMES FROM. Every line sold since the Schedule column
+// existed carries its own schedule, snapshotted at the sale. Lines sold
+// before that carry none, and are classified by the medicine's CURRENT
+// schedule on the inventory — marked `inferred`, so the printed register
+// can say which is which. Cancelled bills are left out; a line with units
+// returned says how many.
+// =====================================================================
+
+/**
+ * FRONTEND ENTRY. The register rows for a date range.
+ *
+ * @param {{from:string, to:string, schedules?:Array<string>}} filter
+ *        from/to as yyyy-MM-dd (inclusive); schedules default H, H1, X
+ * @param {string} sessionToken
+ */
+function getScheduleDrugRegister(filter, sessionToken) {
+  try {
+    crescRequire_(sessionToken, 'pharmacy.register');
+    filter = filter || {};
+    var from = String(filter.from || '').trim(), to = String(filter.to || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      return { success: false, message: 'Choose the first and last day of the period.' };
+    }
+    if (from > to) return { success: false, message: 'The period starts after it ends.' };
+    var want = {};
+    (filter.schedules && filter.schedules.length ? filter.schedules : Object.keys(PH_SCHEDULES))
+      .forEach(function (k) { var sc = _phSchedule_(k); if (sc) want[sc] = true; });
+    if (!Object.keys(want).length) return { success: false, message: 'Tick at least one schedule.' };
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var tz = Session.getScriptTimeZone();
+    var itemsSheet = ss.getSheetByName(PH_SHEETS.INVOICE_ITEMS);
+    var headSheet = ss.getSheetByName(PH_SHEETS.INVOICES);
+    if (!itemsSheet || itemsSheet.getLastRow() < 2 || !headSheet) {
+      return { success: true, rows: [], summary: {}, message: '' };
+    }
+
+    // The current classification, for lines sold before the snapshot existed.
+    var current = {};
+    var inv = ss.getSheetByName(PH_SHEETS.INVENTORY);
+    if (inv && inv.getLastRow() > 1) {
+      current = _phScheduleByBrand_(inv.getDataRange().getValues(), _phScheduleCol_(inv, false));
+    }
+
+    // Invoice headers: who, prescribed by whom, and whether it still stands.
+    var hd = headSheet.getDataRange().getValues();
+    var hh = hd[0].map(function (x) { return String(x || '').trim(); });
+    var hc = function (n, f) { var i = hh.indexOf(n); return i === -1 ? f : i; };
+    var H = { no: hc('Invoice_No', 0), pid: hc('Patient_ID', 3), name: hc('Patient_Name', 4),
+              mob: hc('Mobile', 5), age: hc('Age', 6), sex: hc('Sex', 7), addr: hc('Address', 8),
+              doc: hc('Doctor', 9), status: hc('Status', 17), by: hc('Created_By', 19) };
+    var head = {};
+    for (var i = 1; i < hd.length; i++) {
+      var no = String(hd[i][H.no] || '').trim().toUpperCase();
+      if (no) head[no] = hd[i];
+    }
+
+    // Units returned against each invoice line (brand|batch).
+    var returned = {};
+    try {
+      var ri = ss.getSheetByName((typeof PH_RET !== 'undefined') ? PH_RET.ITEMS : 'Pharmacy_Return_Items');
+      if (ri && ri.getLastRow() > 1) {
+        ri.getDataRange().getValues().slice(1).forEach(function (r) {
+          var k = [String(r[2] || '').trim(), String(r[3] || '').trim(), String(r[5] || '').trim()].join('|').toUpperCase();
+          returned[k] = (returned[k] || 0) + (parseFloat(r[7]) || 0);
+        });
+      }
+    } catch (e) {}
+
+    var idata = itemsSheet.getDataRange().getValues();
+    var ih = idata[0].map(function (x) { return String(x || '').trim(); });
+    var cSch = ih.indexOf(PH_SCHEDULE_HEADER);
+    var rows = [], summary = {};
+    for (var j = 1; j < idata.length; j++) {
+      var it = idata[j];
+      var invNo = String(it[0] || '').trim();
+      if (!invNo) continue;
+      var when = cresc_parseDate_(it[1]);
+      if (!when) continue;
+      var day = Utilities.formatDate(when, tz, 'yyyy-MM-dd');
+      if (day < from || day > to) continue;
+
+      var brand = String(it[3] || '').trim();
+      var own = (cSch >= 0) ? _phSchedule_(it[cSch]) : '';
+      var sc = own || current[brand.toLowerCase()] || '';
+      if (!sc || !want[sc]) continue;
+
+      var h = head[invNo.toUpperCase()];
+      if (h && String(h[H.status] || '').trim().toUpperCase() === 'CANCELLED') continue;
+
+      var qty = parseFloat(it[7]) || 0;
+      var back = returned[[invNo, brand, String(it[5] || '').trim()].join('|').toUpperCase()] || 0;
+      var ageSex = h ? [String(h[H.age] || '').trim(), String(h[H.sex] || '').trim()].filter(String).join(' / ') : '';
+      rows.push({
+        sortMs: when.getTime(),
+        date: Utilities.formatDate(when, tz, 'dd-MMM-yyyy'),
+        time: Utilities.formatDate(when, tz, 'hh:mm a'),
+        invoiceNo: invNo,
+        patientName: h ? String(h[H.name] || '').trim() : '',
+        patientId: h ? String(h[H.pid] || '').trim() : String(it[2] || '').trim(),
+        ageSex: ageSex,
+        address: h ? String(h[H.addr] || '').trim() : '',
+        doctor: h ? String(h[H.doc] || '').trim() : '',
+        drug: brand,
+        generic: String(it[4] || '').trim(),
+        batch: String(it[5] || '').trim(),
+        qty: qty,
+        unit: String(it[8] || '').trim(),
+        returned: back,
+        schedule: sc,
+        inferred: !own,
+        doctorMissing: !h || !_phNamesDoctor_(h[H.doc]),
+        issuedBy: h ? String(h[H.by] || '').trim() : ''
+      });
+      summary[sc] = (summary[sc] || 0) + 1;
+    }
+    rows.sort(function (a, b) { return a.sortMs - b.sortMs; });
+    rows.forEach(function (r, n) { r.sNo = n + 1; delete r.sortMs; });
+
+    try {
+      var actor = crescActor_(sessionToken);
+      logAudit_({ username: actor.username, role: actor.role, doctorId: actor.doctorId },
+                'SCHEDULE_REGISTER_READ', 'Pharmacy', from + '..' + to,
+                { rows: rows.length, schedules: Object.keys(want) });
+    } catch (e) {}
+
+    return {
+      success: true, rows: rows, summary: summary, from: from, to: to,
+      schedules: Object.keys(want),
+      withoutDoctor: rows.filter(function (r) { return r.doctorMissing; }).length,
+      inferred: rows.filter(function (r) { return r.inferred; }).length,
+      message: rows.length ? '' : 'No scheduled medicine was sold in this period.'
+    };
+  } catch (err) {
+    return { success: false, rows: [], message: _phReason_(err) };
   }
 }

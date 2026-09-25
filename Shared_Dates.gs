@@ -62,6 +62,7 @@
 //   cresc_dateOnly_(v)             -> midnight local, for day comparisons
 //   cresc_isSheetEpoch_(d)         -> true for a Sheets time-only cell
 //   cresc_timeText_(v, pattern)    -> clock time from a time-only cell
+//   cresc_cleanStampedTime_(s)     -> text with "Sat Dec 30 1899 ... GMT" made readable
 //   cresc_daysBetween_(a, b)       -> whole days, or null
 //
 // Every module helper (dsx_toDate_, hb_toDate_, acc_toDate_, ipa_*, ipr_*,
@@ -332,6 +333,41 @@ function cresc_expiryText_(v) {
   return s;
 }
 
+/**
+ * TEXT THAT ALREADY HAS A STRINGIFIED DATE BAKED INTO IT, MADE READABLE.
+ *
+ * Before cresc_timeText_ existed, String() on a Sheets cell was written
+ * straight into saved documents. Two shapes are out there:
+ *
+ *   "10-Sep-2026 Sat Dec 30 1899 23:31:00 GMT+0521 (India Standard Time)"
+ *       a time-only cell (the 1899 epoch) beside a date — discharge
+ *       summaries saved before the fix carry this as the admission date;
+ *   "Sat Apr 01 2028 00:00:00 GMT+0530 (India Standard Time)"
+ *       a whole Date — a pharmacy return's batch expiry.
+ *
+ * A SIGNED discharge summary cannot be rewritten (its content hash is the
+ * evidence), so this runs where such text is SHOWN or PRINTED, and on drafts
+ * as they are opened. The 1899 form becomes the clock time it always was;
+ * any other form becomes dd-MMM-yyyy, with the time kept when it is not
+ * midnight. Text without either pattern is returned exactly as given.
+ *
+ * @param {*} v
+ * @return {string}
+ */
+function cresc_cleanStampedTime_(v) {
+  if (v === null || v === undefined) return '';
+  var s = String(v);
+  if (s.indexOf('GMT') === -1) return s;
+  var RX = /\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{1,2}) (\d{4}) (\d{2}):(\d{2}):\d{2} GMT[+-]\d{4}(?: \([^)]*\))?/g;
+  return s.replace(RX, function (whole, mon, day, year, hh, mm) {
+    var h = parseInt(hh, 10), min = parseInt(mm, 10);
+    var clock = ('0' + (((h + 11) % 12) + 1)).slice(-2) + ':' + mm + ' ' + (h < 12 ? 'AM' : 'PM');
+    if (parseInt(year, 10) < 1900) return clock;
+    var date = ('0' + parseInt(day, 10)).slice(-2) + '-' + mon + '-' + year;
+    return (h === 0 && min === 0) ? date : (date + ' ' + clock);
+  });
+}
+
 /** "13-Sep-2026 05:34 PM" from a date cell and a separate time cell. */
 function cresc_dateTimeText_(dateVal, timeVal) {
   var d = cresc_formatDate_(dateVal, 'dd-MMM-yyyy');
@@ -410,10 +446,18 @@ function cresc_testDates() {
   check('a time-only cell prints as a time',
     cresc_timeText_(new Date(1899, 11, 30, 17, 34)), '05:34 PM');
 
+  check('stamped 1899 time is cleaned to a clock time',
+    cresc_cleanStampedTime_('10-Sep-2026 Sat Dec 30 1899 23:31:00 GMT+0521 (India Standard Time)'),
+    '10-Sep-2026 11:31 PM');
+  check('stamped whole date is cleaned to a date',
+    cresc_cleanStampedTime_('Sat Apr 01 2028 00:00:00 GMT+0530 (India Standard Time)'),
+    '01-Apr-2028');
+  check('ordinary text passes through', cresc_cleanStampedTime_('Fever, 3 days'), 'Fever, 3 days');
+
   if (fails.length) {
     fails.forEach(function (f) { Logger.log('FAIL  ' + f); });
   } else {
-    Logger.log('cresc_testDates: all ' + 20 + ' checks passed.');
+    Logger.log('cresc_testDates: all ' + 23 + ' checks passed.');
   }
   return fails.length;
 }

@@ -495,7 +495,13 @@
     ipc_currentCasesheet_: 'IP_Casesheet_Engine.gs', ipc_writeCasesheetRow_: 'IP_Casesheet_Engine.gs',
     checkDrugInteractions_: 'Drug_Interaction.gs', di_rules_: 'Drug_Interaction.gs',
     _normDrug_: 'IP_Notes_Logic.gs',
-    createLabRequest: 'LabIntegrationEngine.gs'
+    createLabRequest: 'LabIntegrationEngine.gs',
+    cresc_cleanStampedTime_: 'Shared_Dates.gs',
+    crescAccountState_: 'RBAC.gs', crescEffectivePerms_: 'RBAC.gs', cresc_aclBust_: 'RBAC.gs',
+    cresc_actorName_: 'RBAC.gs', cresc_actorDisplay_: 'RBAC.gs',
+    crescGetAccessOverview: 'RBAC_Access.gs', crescSaveUserAccess: 'RBAC_Access.gs',
+    getPharmacyLedger: 'Billing_Ledger.gs', getLabLedger: 'Billing_Ledger.gs',
+    getScheduleDrugRegister: 'Pharmacy.gs', ipc_markChargePaidAtCounter_: 'AccountsIPChargesLogic.gs'
   };
 
   /**
@@ -758,7 +764,9 @@
    */
   window.setDateRestrictions = function () {
     var today = new Date();
-    var strToday = today.toISOString().split('T')[0];
+    // The clinic's date. toISOString() is UTC — yesterday until 05:30 IST,
+    // which let a booking be made for a day that had already passed.
+    var strToday = window.crescDateInputValue(today);
 
     // The portal's booking date. 'pat-book-date' was a hidden input behind
     // three day cards, so the two-day cap was the whole of what a patient
@@ -768,7 +776,7 @@
     // day the doctor is not in clinic anyway (portalDoctorSlots).
     var portalMax = new Date();
     portalMax.setDate(today.getDate() + 90);
-    var strPortalMax = portalMax.toISOString().split('T')[0];
+    var strPortalMax = window.crescDateInputValue(portalMax);
     ['pat-book-date', 'pp-date-any'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
@@ -1278,28 +1286,17 @@
       window.loadDoctorContext(function () {});
     }
 
+    // THE FIRST SCREEN. Staff start on their role's usual desk
+    // (CRESC_LANDING in ScriptsMV.html): the Command Center for an
+    // administrator, the EMR for a doctor or nurse, appointments for the front
+    // desk, the pharmacy, the lab and the Finance Hub for theirs. When the
+    // permission reply lands, crescEnsureLanding() moves anyone whose access
+    // does not include that desk to the first screen it does include.
+    //
+    // This used to switch on the role name with its own list, which sent a
+    // receptionist and a nurse to the Command Center and a Users row spelled
+    // "Pharmacist" or "Accountant" to the dashboard by default.
     switch (window.loggedInRole) {
-      case 'admin':
-      case 'receptionist':
-      case 'reception':
-        switchTab('tab-admin-dash', document.getElementById('nav-tab-dash')); break;
-      case 'doctor':
-        switchTab('tab-admin-emr', document.getElementById('nav-tab-emr')); break;
-      case 'nurse':
-        switchTab('tab-admin-dash', document.getElementById('nav-tab-dash')); break;
-      case 'pharmacy':
-        switchTab('tab-admin-pharmacy', document.getElementById('nav-tab-pharmacy')); break;
-      case 'lab':
-        // 'tab-admin-lab' is not an element in this app — the lab's landing
-        // screen is workspace-lab. The old id matched nothing, so switchTab
-        // hid every section and activated none: a lab user signed in to a
-        // blank page.
-        switchTab('workspace-lab', document.getElementById('nav-tab-lab')); break;
-      case 'accounts':
-        // The Finance Hub, not the billing tab. tab-admin-billing exists but
-        // both of its workspaces start hidden, so landing there also showed
-        // nothing; and accounts' own rail entry is the hub.
-        switchTab('workspace-accounts', document.getElementById('nav-tab-accounts')); break;
       case 'patient': {
         const patHome = document.querySelector('#nav-patient .nav-link');
         switchTab('tab-pat-home', patHome);
@@ -1315,8 +1312,12 @@
         }
         break;
       }
-      default:
-        switchTab('tab-admin-dash', document.getElementById('nav-tab-dash'));
+      default: {
+        var lead = (typeof CRESC_LANDING !== 'undefined' && CRESC_LANDING[window.loggedInRole])
+          ? CRESC_LANDING[window.loggedInRole][0] : 'nav-tab-dash';
+        var target = (typeof CRESC_NAV_TARGET !== 'undefined' && CRESC_NAV_TARGET[lead]) || 'tab-admin-dash';
+        switchTab(target, document.getElementById(lead));
+      }
     }
   }
 

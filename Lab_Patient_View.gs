@@ -157,7 +157,7 @@ function lpv_resultsFor_(pid, limit) {
           refRangeText: String(r[rMap['RefRangeText']] || '')
         });
         if (!rec.verifiedBy) rec.verifiedBy = String(r[rMap['VerifiedBy']] || '');
-        if (!rec.verifiedAt) rec.verifiedAt = String(r[rMap['VerifiedAt']] || '');
+        if (!rec.verifiedAt) rec.verifiedAt = lab_ts_(r[rMap['VerifiedAt']]);
       });
     }
 

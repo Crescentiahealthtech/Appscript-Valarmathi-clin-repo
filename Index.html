@@ -161,6 +161,9 @@
     <!-- One invoice layout for pharmacy, lab and hospital billing. Both
          billing desks are lazy bundles, so it belongs in the shell. -->
     <?!= include('Invoice_Template'); ?>
+    <!-- The pharmacy and lab billing ledgers (Billing_Ledger.gs). Both desks
+         are lazy bundles, so the one component they mount lives here. -->
+    <?!= include('Billing_Ledger_Kit'); ?>
     <!-- The cash drawer, mountable at any counter that takes money —
          reception, pharmacy and the lab are three separate lazy bundles, so
          the one panel all three mount belongs here rather than in any of
