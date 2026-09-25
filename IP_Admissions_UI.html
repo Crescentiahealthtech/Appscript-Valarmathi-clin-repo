@@ -528,7 +528,9 @@
     bedHint('');
 
     var now = new Date();
-    if ($('adm-doa')) $('adm-doa').value = now.toISOString().slice(0, 10);
+    // The admission's own date. toISOString() is UTC, so a patient admitted
+    // between midnight and 05:30 was recorded as admitted the day before.
+    if ($('adm-doa')) $('adm-doa').value = window.crescDateInputValue(now);
     if ($('adm-toa')) $('adm-toa').value =
       ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
 

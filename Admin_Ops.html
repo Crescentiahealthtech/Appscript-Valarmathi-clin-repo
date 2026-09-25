@@ -279,7 +279,7 @@
         low.forEach(function (x) {
           rows.push([x.brand, x.generic, x.stock, x.unit, x.perDay, x.coverDays === null ? '' : x.coverDays, x.reason, x.supplier, x.buyPrice]);
         });
-        download('low-stock-' + new Date().toISOString().slice(0, 10) + '.csv', rows);
+        download('low-stock-' + (window.crescDateInputValue ? window.crescDateInputValue(new Date()) : '') + '.csv', rows);
       };
     });
   }
@@ -322,7 +322,9 @@
           '<button type="button" class="btn btn-sm btn-primary" id="ops-bk-now"><i class="fa-solid fa-cloud-arrow-up me-1"></i>Back up now</button>' +
           (res.folderUrl ? '<a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="' + esc(res.folderUrl) + '"><i class="fa-brands fa-google-drive me-1"></i>Backup folder</a>' : '') +
           '<button type="button" class="btn btn-sm btn-outline-secondary" id="ops-master-reload" title="After editing drug, lab-test, package or doctor lists directly in the spreadsheet"><i class="fa-solid fa-rotate me-1"></i>Reload reference lists</button>' +
+          '<button type="button" class="btn btn-sm btn-outline-warning" id="ops-repair" title="Dates stored as text, missing headers, misaligned audit rows"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Check sheet data</button>' +
         '</div>' +
+        '<div id="ops-repair-out" class="mb-2"></div>' +
         (res.rows.length ? '<div class="ops-scroll" style="max-height:26vh;"><table class="table table-sm align-middle mb-3"><thead><tr><th>When</th><th>Result</th><th>Check</th><th>By</th><th></th></tr></thead><tbody>' +
           res.rows.map(function (r) {
             return '<tr><td>' + esc(r.at) + '</td><td class="' + (r.status === 'OK' ? 'text-success' : 'text-danger') + '">' + esc(r.status) + '</td>' +
@@ -338,6 +340,33 @@
         call('runBackupNow', [window.sessionToken || ''], function (r) {
           if (window.crescToast) window.crescToast(r.message, r.status === 'OK');
           backups();
+        });
+      };
+      // THE SHEET DATA REPAIR (IP_Schema_Repair.gs). Always a preview first;
+      // nothing is written until the second, confirmed press.
+      document.getElementById('ops-repair').onclick = function () {
+        var out = document.getElementById('ops-repair-out');
+        out.innerHTML = '<div class="small label-bright"><i class="fa-solid fa-spinner fa-spin me-1"></i>Checking every sheet…</div>';
+        call('crescRepairSheetData', [window.sessionToken || '', false], function (r) {
+          out.innerHTML = '<pre class="small p-2 mb-2" style="white-space:pre-wrap;background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;">' +
+            esc(r.report) + '</pre>' +
+            (r.changed ? '<button type="button" class="btn btn-sm btn-warning" id="ops-repair-go">' +
+              '<i class="fa-solid fa-check me-1"></i>Apply these ' + r.changed + ' change(s)</button>' +
+              ' <span class="small label-bright">Take a backup first — it is the button above.</span>' : '');
+          var go = document.getElementById('ops-repair-go');
+          if (go) go.onclick = function () {
+            crescConfirm('Apply the ' + r.changed + ' change(s) listed? Take a backup first if you have not today.',
+                         { title: 'Repair sheet data', okLabel: 'Apply' })
+              .then(function (ok) {
+                if (!ok) return;
+                go.disabled = true;
+                go.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>Repairing…';
+                call('crescRepairSheetData', [window.sessionToken || '', true], function (r2) {
+                  out.innerHTML = '<pre class="small p-2 mb-2" style="white-space:pre-wrap;background:var(--bg-input);border:1px solid var(--success);border-radius:8px;">' +
+                    esc(r2.report) + '</pre>';
+                });
+              });
+          };
         });
       };
       document.getElementById('ops-master-reload').onclick = function () {

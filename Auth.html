@@ -495,7 +495,13 @@
     ipc_currentCasesheet_: 'IP_Casesheet_Engine.gs', ipc_writeCasesheetRow_: 'IP_Casesheet_Engine.gs',
     checkDrugInteractions_: 'Drug_Interaction.gs', di_rules_: 'Drug_Interaction.gs',
     _normDrug_: 'IP_Notes_Logic.gs',
-    createLabRequest: 'LabIntegrationEngine.gs'
+    createLabRequest: 'LabIntegrationEngine.gs',
+    cresc_cleanStampedTime_: 'Shared_Dates.gs',
+    crescAccountState_: 'RBAC.gs', crescEffectivePerms_: 'RBAC.gs', cresc_aclBust_: 'RBAC.gs',
+    cresc_actorName_: 'RBAC.gs', cresc_actorDisplay_: 'RBAC.gs',
+    crescGetAccessOverview: 'RBAC_Access.gs', crescSaveUserAccess: 'RBAC_Access.gs',
+    getPharmacyLedger: 'Billing_Ledger.gs', getLabLedger: 'Billing_Ledger.gs',
+    getScheduleDrugRegister: 'Pharmacy.gs', ipc_markChargePaidAtCounter_: 'AccountsIPChargesLogic.gs'
   };
 
   /**
@@ -758,7 +764,9 @@
    */
   window.setDateRestrictions = function () {
     var today = new Date();
-    var strToday = today.toISOString().split('T')[0];
+    // The clinic's date. toISOString() is UTC — yesterday until 05:30 IST,
+    // which let a booking be made for a day that had already passed.
+    var strToday = window.crescDateInputValue(today);
 
     // The portal's booking date. 'pat-book-date' was a hidden input behind
     // three day cards, so the two-day cap was the whole of what a patient
@@ -768,7 +776,7 @@
     // day the doctor is not in clinic anyway (portalDoctorSlots).
     var portalMax = new Date();
     portalMax.setDate(today.getDate() + 90);
-    var strPortalMax = portalMax.toISOString().split('T')[0];
+    var strPortalMax = window.crescDateInputValue(portalMax);
     ['pat-book-date', 'pp-date-any'].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;

@@ -1,5 +1,4 @@
 var APPT_ALLOWED_STATUSES = ['Booked', 'Arrived', 'In-Progress', 'Completed', 'Cancelled'];
-var APPT_STATUS_WRITERS   = ['admin', 'doctor', 'receptionist', 'reception', 'nurse'];
 
 // ==========================================
 // 🚀 APPOINTMENT MODULE ENGINE
@@ -288,13 +287,15 @@ function updateAppointmentStatus(apptId, newStatus, sessionToken) {
   try {
     lock.waitLock(10000);
 
-    const sess = dc_validateSession_(sessionToken);
-    if (!sess) return "Your session has expired. Please sign in again.";
-
-    const role = dc_str_(sess.role).toLowerCase();
-    if (APPT_STATUS_WRITERS.indexOf(role) === -1) {
-      return "Your role cannot change appointment status.";
-    }
+    // Permissions, not role names, so a person's own access (Staff Accounts
+    // → Access) reaches this desk: moving a visit along needs
+    // appointment.write, or emr.write for the nurse who marks arrivals;
+    // deleting one needs appointment.cancel — and is still not a doctor's to
+    // do, as before.
+    let actor;
+    try { actor = crescRequire_(sessionToken, ['appointment.write', 'emr.write']); }
+    catch (e) { return cresc_reason_(e); }
+    const role = actor.role;
 
     const id = dc_str_(apptId);
     const target = dc_str_(newStatus);
@@ -302,8 +303,9 @@ function updateAppointmentStatus(apptId, newStatus, sessionToken) {
     if (target !== "DELETE" && APPT_ALLOWED_STATUSES.indexOf(target) === -1) {
       return "Unknown status: " + target;
     }
-    if (target === "DELETE" && role !== "admin" && role !== "receptionist" && role !== "reception") {
-      return "Your role cannot delete appointments.";
+    if (target === "DELETE" &&
+        (actor.permissions.indexOf('appointment.cancel') === -1 || role === 'doctor')) {
+      return "You do not have access to delete appointments.";
     }
 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Appointments');
@@ -328,7 +330,7 @@ function updateAppointmentStatus(apptId, newStatus, sessionToken) {
 
     if (target === "DELETE") {
       // Snapshot first: once the row is gone the audit entry is the only record.
-      logAudit_(sess, 'APPOINTMENT_DELETED', 'Appointment', id, {
+      logAudit_(actor, 'APPOINTMENT_DELETED', 'Appointment', id, {
         patientId: dc_upper_(row[1]),
         status: previous,
         row: row.map(function (v) { return (v instanceof Date) ? v.toISOString() : String(v); })
@@ -336,7 +338,7 @@ function updateAppointmentStatus(apptId, newStatus, sessionToken) {
       sheet.deleteRow(rowNum);
     } else {
       sheet.getRange(rowNum, 7).setValue(target);
-      logAudit_(sess, 'APPOINTMENT_STATUS', 'Appointment', id,
+      logAudit_(actor, 'APPOINTMENT_STATUS', 'Appointment', id,
                 { from: previous, to: target, patientId: dc_upper_(row[1]) });
     }
 

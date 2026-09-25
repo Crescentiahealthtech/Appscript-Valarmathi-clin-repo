@@ -434,7 +434,7 @@ function phdShowTab(name) {
   // FINANCE
   // ===================================================================
   function phdFinanceToday() {
-    const t = new Date().toISOString().slice(0, 10);
+    const t = window.crescDateInputValue(new Date());   // local, not UTC
     document.getElementById('phdFrom').value = t;
     document.getElementById('phdTo').value = t;
     phdRunFinance();

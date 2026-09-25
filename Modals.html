@@ -149,7 +149,7 @@ function openAdminBookingModal(preFillDate, preFillDoctorId, preFillPatientId) {
 
   const ledgerDate = document.getElementById('admin-ledger-date');
   document.getElementById('ab-date').value =
-    preFillDate || (ledgerDate ? ledgerDate.value : new Date().toISOString().split('T')[0]);
+    preFillDate || (ledgerDate ? ledgerDate.value : window.crescDateInputValue(new Date()));
 
   window.loadDoctorContext(function (ctx) {
     const sel = document.getElementById('ab-doctor');

@@ -255,7 +255,13 @@ var DSX_PRINT_DATE_FIELDS = ['date', 'followUpDate', 'nextReviewDate',
  * exactly as written rather than being guessed at.
  */
 function dsx_printFieldValue_(field, value) {
-  var raw = dsx_str_(value);
+  // A summary saved before cresc_timeText_ existed can carry a stringified
+  // time cell — "10-Sep-2026 Sat Dec 30 1899 23:31:00 GMT+0521 (India
+  // Standard Time)" as its date of admission. A SIGNED summary cannot be
+  // rewritten (its hash is the evidence), so the words are made readable
+  // here, on the way to the page, and the stored text is left as signed.
+  var raw = (typeof cresc_cleanStampedTime_ === 'function')
+    ? cresc_cleanStampedTime_(dsx_str_(value)) : dsx_str_(value);
   if (DSX_PRINT_DATE_FIELDS.indexOf(field) > -1 && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     // Built from the three numbers rather than new Date(raw): the string form
     // is parsed as UTC midnight, which in Asia/Kolkata prints as the DAY

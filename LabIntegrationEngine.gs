@@ -40,6 +40,17 @@ function getOrderableTests(sessionToken) {
  * unreachable from google.script.run.
  */
 function lab_orderableTests_() {
+  // Read by every order screen on every desk — the OP consult, the ward, the
+  // lab's own walk-in form — and changed a few times a month. Shared through
+  // the reference-list cache (Master_Cache.gs); the catalogue writers below
+  // and a hand edit to LAB_TEST_CATALOG both end the cached copy.
+  if (typeof crescMasterGet_ === 'function') {
+    return crescMasterGet_('labcatalog', lab_orderableTestsRead_);
+  }
+  return lab_orderableTestsRead_();
+}
+
+function lab_orderableTestsRead_() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(LAB.CATALOG);
@@ -201,6 +212,7 @@ function saveCatalogEntry(p, sessionToken) {
     else sheet.appendRow(row);
 
     labAudit_(existingRow !== -1 ? 'CATALOG_UPDATED' : 'CATALOG_CREATED', 'CATALOG', testId, null, { name: p.testName, type: type });
+    if (typeof crescMasterBust_ === 'function') crescMasterBust_(LAB.CATALOG);
     SpreadsheetApp.flush();
     return { success: true, message: (existingRow !== -1 ? 'Updated' : 'Created') + ' "' + p.testName + '".', testId: testId };
   } catch (err) {
@@ -224,6 +236,7 @@ function setCatalogActive(testId, isActive, sessionToken) {
       if (String(ids[i][0]) === String(testId)) {
         sheet.getRange(i+2, map['IsActive']+1).setValue(!!isActive);
         SpreadsheetApp.flush();
+        if (typeof crescMasterBust_ === 'function') crescMasterBust_(LAB.CATALOG);
         return { success: true, message: (isActive ? 'Activated' : 'Deactivated') + '.' };
       }
     }
@@ -344,6 +357,7 @@ function savePanelWithParameters(p, sessionToken) {
     });
     existingParams.forEach(function(ep){ if(!touched[ep.id]) sheet.getRange(ep.rowNum, map['IsActive']+1).setValue(false); });
     labAudit_('PANEL_SAVED','CATALOG',panelId,null,{name:p.testName,params:params.length});
+    if (typeof crescMasterBust_ === 'function') crescMasterBust_(LAB.CATALOG);
     SpreadsheetApp.flush();
     return { success: true, message: 'Panel "'+p.testName+'" saved with '+params.length+' parameter(s).', panelId: panelId, paramCount: params.length };
   } catch (err) {
@@ -483,7 +497,7 @@ function getLabOrderDetail(orderId, sessionToken) {
           repeatOf:     String(r[map['RepeatOfOrderID']]||''),
           repeatReason: String(r[map['RepeatReason']]||''),
           status:       String(r[map['OrderStatus']]||'PENDING'),
-          createdAt:    String(r[map['CreatedAt']]||'')
+          createdAt:    lab_ts_(r[map['CreatedAt']])
         }
       };
     }
@@ -610,7 +624,16 @@ function getLabWorkspaceData(sessionToken) {
 
       const bill = billIdx[oid] || null;
       const samp = sampIdx[oid] || null;
-      const createdAt = String(r[oMap['CreatedAt']]||'');
+      // CreatedAt is written as 'yyyy-MM-dd HH:mm:ss' TEXT, which Sheets turns
+      // into a real date on the way in. String() of that date is "Sat Jun 13
+      // 2026 23:25:10 GMT+0530 (India Standard Time)" — which is what every
+      // queue card printed, what "orders today" compared against 'yyyy-MM-dd'
+      // (so it was always 0), and what the queue sorted on (alphabetically,
+      // by weekday). One parse, three formats.
+      const createdRaw = r[oMap['CreatedAt']];
+      const createdD = cresc_parseDate_(createdRaw);
+      const createdAt = createdD ? Utilities.formatDate(createdD, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss')
+                                 : String(createdRaw || '');
       if (createdAt.indexOf(todayStr) === 0) stats.todayTotal++;
 
       const stageIdx = {PENDING:0,BILLED:1,RECOLLECT:1,SAMPLE_COLLECTED:2,IN_PROCESS:3,RESULT_ENTERED:4,VERIFIED:5,REPORT_DISPATCHED:6,AMENDED:6,CANCELLED:0}[status]||0;
@@ -653,7 +676,9 @@ function getLabWorkspaceData(sessionToken) {
           overdue:      overdue,
           tatText:      tatText,
           tatPct:       tatPct,
-          createdAt:    createdAt
+          createdAt:    createdAt,
+          createdText:  createdD ? Utilities.formatDate(createdD, Session.getScriptTimeZone(), 'dd-MMM hh:mm a') : '',
+          createdMs:    createdD ? createdD.getTime() : 0
         });
       }
     });
@@ -662,7 +687,7 @@ function getLabWorkspaceData(sessionToken) {
     orders.sort(function(a,b){
       if(a.overdue!==b.overdue) return a.overdue?-1:1;
       if((pw[a.priority]||9)!==(pw[b.priority]||9)) return (pw[a.priority]||9)-(pw[b.priority]||9);
-      return a.createdAt<b.createdAt?1:-1;
+      return (b.createdMs||0)-(a.createdMs||0);
     });
     return { success: true, stats: stats, orders: orders };
   } catch (err) {
@@ -734,6 +759,11 @@ function generateLabBill(d, sessionToken) {
       payMode=String(d.paymentMode||'').toUpperCase();
       if(['CASH','CARD','UPI'].indexOf(payMode)===-1) return {success:false,message:'Select payment mode (Cash / Card / UPI).'};
       paid = (d.paidAmount===''||d.paidAmount==null) ? net : +Number(d.paidAmount).toFixed(2);
+      // Neither below nothing nor above the bill: a paid figure over the net
+      // wrote a negative balance, and a negative one a balance larger than
+      // the bill — both reached the till and the receivables as they were.
+      if (!isFinite(paid) || paid < 0) return {success:false,message:'The amount paid cannot be negative.'};
+      if (paid > net) paid = net;
       balance = +(net-paid).toFixed(2);
       payStatus = balance<=0?'PAID':(paid>0?'PARTIAL':'PENDING');
       receipt = 'RCP-'+Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'yyyyMMdd')+'-'+Utilities.getUuid().substring(0,4).toUpperCase();
@@ -815,7 +845,7 @@ function getLabBill(orderId, sessionToken) {
           category:String(r[map['BillingCategory']]||''),items:_safeParse_(r[map['TestsJSON']]),gross:Number(r[map['GrossAmount']])||0,
           discountAmount:Number(r[map['DiscountAmount']])||0,net:Number(r[map['NetAmount']])||0,paymentMode:String(r[map['PaymentMode']]||''),
           paid:Number(r[map['PaidAmount']])||0,balance:Number(r[map['BalanceAmount']])||0,paymentStatus:String(r[map['PaymentStatus']]||''),
-          receiptNumber:String(r[map['ReceiptNumber']]||''),billedAt:String(r[map['BilledAt']]||'')};
+          receiptNumber:String(r[map['ReceiptNumber']]||''),billedAt:lab_ts_(r[map['BilledAt']])};
       }
     });
     return found?{success:true,bill:found}:{success:false,message:'No bill for this order.'};
@@ -938,7 +968,7 @@ function getOrderSamples(orderId, sessionToken) {
       if(String(r[map['OrderID']])!==String(orderId)) return;
       out.push({sampleId:String(r[map['SampleID']]),sampleType:String(r[map['SampleType']]||''),barcode:String(r[map['BarcodeID']]||''),
         status:String(r[map['CollectionStatus']]||''),rejectionReason:String(r[map['RejectionReason']]||''),
-        collectedAt:String(r[map['CollectedAt']]||''),receivedAt:String(r[map['ReceivedAtLabAt']]||'')});
+        collectedAt:lab_ts_(r[map['CollectedAt']]),receivedAt:lab_ts_(r[map['ReceivedAtLabAt']])});
     });
     return {success:true,samples:out};
   } catch(err){return{success:false,message:'getOrderSamples failed: '+err.message};}
@@ -1623,7 +1653,7 @@ function labListCriticalUnacked(token) {
       var ack = r[map['IsAcknowledged']];
       if (ack === true || String(ack).toUpperCase() === 'TRUE') return;
 
-      var at = String(r[map['CommunicatedAt']] || '');
+      var at = lab_ts_(r[map['CommunicatedAt']]);
       var ms = (typeof cresc_ms_ === 'function') ? cresc_ms_(at) : null;
       rows.push({
         commId:     String(r[map['CommID']] || ''),
@@ -1853,7 +1883,7 @@ function _priorValuesForPatient_(patientId,excludeOrderId){
     if(String(r[map['PatientID']])!==String(patientId)) return;
     if(String(r[map['OrderID']])===String(excludeOrderId)) return;
     if(r[map['IsDraft']]===true||String(r[map['IsDraft']]).toUpperCase()==='TRUE') return;
-    const pid=String(r[map['ParameterID']]); const at=String(r[map['VerifiedAt']]||r[map['EnteredAt']]||'');
+    const pid=String(r[map['ParameterID']]); const at=lab_ts_(r[map['VerifiedAt']]||r[map['EnteredAt']]);
     if(!out[pid]||at>out[pid].at) out[pid]={value:String(r[map['ResultValue']]||''),at:at};
   });
   return out;
@@ -1924,7 +1954,7 @@ function _closeTat_(orderId,verifiedStr){
     data.forEach(function(r,i){
       if(String(r[map['OrderID']])!==String(orderId)||r[map['ResultVerifiedAt']]) return;
       const rowNum=i+2;
-      const dlStr=String(r[map['TAT_Deadline']]||''); const stStr=String(r[map['SampleCollectedAt']]||'');
+      const dlStr=lab_ts_(r[map['TAT_Deadline']]); const stStr=lab_ts_(r[map['SampleCollectedAt']]);
       const actual=stStr?Math.round((new Date(verifiedStr)-new Date(stStr))/60000):'';
       const overdue=dlStr?(new Date(verifiedStr)>new Date(dlStr)):false;
       sheet.getRange(rowNum,map['ResultVerifiedAt']+1).setValue(verifiedStr);

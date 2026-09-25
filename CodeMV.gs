@@ -303,7 +303,9 @@ function saveAdminAvailability(dateStr, blockedSlots, sessionToken) {
     rowsToDelete.forEach(r => sheet.deleteRow(r));
     if (blockedSlots.length > 0) {
       const newRows = [];
-      let timestamp = new Date().toISOString();
+      // A date, not ISO text: toISOString() is UTC and lands in the sheet as a
+      // string five and a half hours behind the clinic's clock.
+      let timestamp = new Date();
       blockedSlots.forEach((slot, index) => {
         // Row-count-derived ids, generated immediately after deleting rows
         // from the same sheet: getLastRow() has just dropped, so the next

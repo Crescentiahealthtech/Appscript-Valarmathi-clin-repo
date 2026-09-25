@@ -946,7 +946,7 @@ function buildIPCard(ev) {
                   // review-date box came up empty on a real follow-up.
                   var iso = (typeof window.crescDateInputValue === 'function')
                     ? window.crescDateInputValue(ev.followUp) : '';
-                  if (!iso) { var d = new Date(ev.followUp); if (!isNaN(d)) iso = d.toISOString().split('T')[0]; }
+                  if (!iso) { var d = new Date(ev.followUp); if (!isNaN(d)) iso = window.crescDateInputValue(d); }
                   if (iso) document.getElementById('clin-review-date').value = iso;
               } catch(e) {}
           }

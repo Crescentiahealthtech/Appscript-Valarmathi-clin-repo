@@ -779,6 +779,17 @@ function hb_saveInvoice(token, payload) {
 
     var items = payload.items || [];
     if (!items.length) return hb_err_('Add at least one particular before saving.');
+    // A negative quantity or rate is a line that SUBTRACTS from the bill —
+    // hb_total_ adds whatever it is given, so a "-1 × 500" line took 500 off
+    // the gross without appearing anywhere as a discount.
+    for (var li = 0; li < items.length; li++) {
+      var q = parseFloat(items[li].qty), rt = parseFloat(items[li].rate), dc = parseFloat(items[li].discount);
+      if ((!isNaN(q) && q <= 0) || (!isNaN(rt) && rt < 0) || (!isNaN(dc) && dc < 0)) {
+        return hb_err_('Line ' + (li + 1) + ' has a negative or zero quantity, rate or discount. ' +
+                       'Take money off with the discount fields instead.');
+      }
+    }
+    if (hb_money_(payload.billDiscount) < 0) return hb_err_('The bill discount cannot be negative.');
 
     var totals = hb_total_(items, payload.billDiscount);
     if (totals.net <= 0) return hb_err_('The net amount is zero. Price at least one line.');

@@ -160,8 +160,11 @@
      t.value = today;
     }
   
-    // 3. Auto-fetch the dashboard data so the user isn't staring at a blank screen
-    pdashFetchDash();
+    // 3. Auto-fetch the dashboard data so the user isn't staring at a blank
+    //    screen. This called pdashFetchDash(), a function that does not
+    //    exist: the ReferenceError was swallowed by the router, so the
+    //    dashboard had never once loaded by itself.
+    pdashRun();
   }
 
   function closePharmacyDashboard() {
@@ -183,17 +186,23 @@
   }
   var pdashR2 = n => '₹' + (Math.round((n || 0) * 100) / 100).toFixed(2);
 
+  /** yyyy-MM-dd in the clinic's own zone. toISOString() is UTC: before
+   *  05:30 it is yesterday, and the 1st of the month at midnight is the
+   *  last day of the month before. */
+  function pdashDay(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
   function pdashToday() {
-    const t = new Date().toISOString().slice(0, 10);
+    const t = pdashDay(new Date());
     document.getElementById('pdashFrom').value = t;
     document.getElementById('pdashTo').value = t;
     pdashRun();
   }
   function pdashThisMonth() {
     const now = new Date();
-    const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const first = pdashDay(new Date(now.getFullYear(), now.getMonth(), 1));
     document.getElementById('pdashFrom').value = first;
-    document.getElementById('pdashTo').value = now.toISOString().slice(0, 10);
+    document.getElementById('pdashTo').value = pdashDay(now);
     pdashRun();
   }
 

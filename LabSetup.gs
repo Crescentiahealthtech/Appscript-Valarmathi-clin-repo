@@ -112,6 +112,23 @@ function labHeaderMap_(sheet) {
 }
 
 /** Appends one row to LAB_AUDIT_LOG. All strings. Never throws. */
+/**
+ * A lab timestamp cell as the 'yyyy-MM-dd HH:mm:ss' text this module writes.
+ *
+ * The lab writes its timestamps as TEXT, and Sheets turns that text into a
+ * real date on the way in. Every reader here then did String(cell), which of
+ * a date is "Sat Jun 13 2026 23:25:10 GMT+0530 (India Standard Time)" — shown
+ * on queue cards and panels, compared against 'yyyy-MM-dd' (never equal) and
+ * sorted as text. This gives every reader back the text it was written for.
+ */
+function lab_ts_(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (v instanceof Date) {
+    return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
+  }
+  return String(v);
+}
+
 function labAudit_(action, entityType, entityId, oldVal, newVal) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();

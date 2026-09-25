@@ -33,7 +33,9 @@ var MCACHE_SOURCES = {
   'Lab_Test_Master':       ['labtests'],
   'Clinical_Templates':    ['phrases'],
   'Package_Master':        ['packages'],
-  'Doctors':               ['doctors']
+  'Doctors':               ['doctors'],
+  // The lab's orderable tests, read by every order screen (LabIntegrationEngine.gs).
+  'LAB_TEST_CATALOG':      ['labcatalog']
 };
 
 function mcache_ver_(cache, name) {
