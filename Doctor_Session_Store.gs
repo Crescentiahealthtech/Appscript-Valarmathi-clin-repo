@@ -24,6 +24,7 @@
 // ============================================================================
 
 var DS_SESSION_HOURS = 8;              // real session lifetime, sheet-backed
+var DS_SESSION_MAX_HOURS = 16;         // however active: a double shift, then sign in again
 var DS_CACHE_SECONDS = 21600;          // 6h — the Apps Script hard ceiling
 
 function ds_sessionSheet_() {
@@ -103,8 +104,21 @@ function dc_validateSession_(sessionToken) {
       if (dc_str_(data[i][0]) !== token) continue;
       if (dc_upper_(data[i][8]) !== "ACTIVE") return null;
 
-      var expires = new Date(data[i][7]);
-      if (isNaN(expires.getTime()) || expires < now) {
+      // DISPLAY values, so in an Indian-locale spreadsheet these read
+      // "25/09/2026 10:00:00". new Date() reads that month-first — or not at
+      // all when the day is over 12 — so a live session was judged expired
+      // the moment the cache let it go, which is the very logout this file
+      // exists to prevent. cresc_parseDate_ reads it day-first.
+      var parseAt = function (v) {
+        var d = (typeof cresc_parseDate_ === 'function') ? cresc_parseDate_(v) : new Date(v);
+        return (d && !isNaN(d.getTime())) ? d : null;
+      };
+      var expires = parseAt(data[i][7]);
+      var issued = parseAt(data[i][5]);
+      // An absolute ceiling as well as the sliding one: a token in steady
+      // use — or stolen and kept warm — does not live for ever.
+      var tooOld = issued && (now.getTime() - issued.getTime()) > DS_SESSION_MAX_HOURS * 3600 * 1000;
+      if (!expires || expires < now || tooOld) {
         var m0 = dc_headerMap_(sh);
         sh.getRange(i + 1, m0["Status"] + 1).setValue("EXPIRED");
         return null;

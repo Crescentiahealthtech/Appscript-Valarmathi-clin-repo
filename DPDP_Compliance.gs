@@ -809,6 +809,9 @@ function dpdpVerifyRequester(requestId, method, note, sessionToken) {
  *   * it is rate-limited per browser, because an open write endpoint that is
  *     not rate-limited is a way to fill a spreadsheet.
  */
+/** Public data-principal requests accepted per hour, from everybody together. */
+var DPDP_PUBLIC_HOURLY_CAP = 40;
+
 function dpdpSubmitPublicRequest(payload) {
   var lock = LockService.getScriptLock();
   try {
@@ -846,6 +849,19 @@ function dpdpSubmitPublicRequest(payload) {
                           'Please call the clinic instead.' };
       }
       cache.put('DPDP_PUB_' + dpdp_str_(payload.formId), String(seen + 1), 3600);
+
+      // AND A CEILING FOR THE WHOLE DEPLOYMENT. The per-browser key is
+      // whatever the page sends, so a script that invents a new formId per
+      // request was never slowed at all — and every request is a row in the
+      // clinic's spreadsheet. Forty an hour is far beyond any real clinic's
+      // data-principal traffic and small enough that a flood fills nothing.
+      var all = parseInt(cache.get('DPDP_PUB_ALL'), 10) || 0;
+      if (all >= DPDP_PUBLIC_HOURLY_CAP) {
+        return { success: false,
+                 message: 'The request form is receiving more requests than usual. ' +
+                          'Please call or email the clinic; your request will be taken there.' };
+      }
+      cache.put('DPDP_PUB_ALL', String(all + 1), 3600);
     } catch (e) { /* the cache is best effort; never block a statutory right on it */ }
 
     var now = dpdp_now_();
@@ -855,9 +871,11 @@ function dpdpSubmitPublicRequest(payload) {
 
     // The patient ID is whatever they typed, and it is NOT trusted — it is a
     // lead for the person who verifies them, not an identification.
+    // Every field here was typed by somebody with no login: each is written as
+    // text, never as a formula (cresc_cellText_, RBAC.gs).
     dpdp_requestSheet_().appendRow([
-      id, dpdp_str_(payload.patientId).toUpperCase(), name, type,
-      details + '\n[submitted through the public form by ' + name + ', ' + contact + ']',
+      id, cresc_cellText_(dpdp_str_(payload.patientId).toUpperCase()), cresc_cellText_(name), type,
+      cresc_cellText_(details + '\n[submitted through the public form by ' + name + ', ' + contact + ']'),
       'PUBLIC_FORM', now, due, 'OPEN', '', '', '',
       'UNVERIFIED', '', '', 'PUBLIC_FORM'
     ]);

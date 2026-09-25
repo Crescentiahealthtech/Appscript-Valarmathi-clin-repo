@@ -215,7 +215,8 @@ function updatePatientProfile(patientId, patch, sessionToken) {
         : ppe_str_(oldRaw);
 
       if (oldVal === newVal) return;          // not a change; not logged as one
-      after[spec.col] = newVal;
+      // Text, never a formula: this is patient-typed on the portal.
+      after[spec.col] = cresc_cellText_(newVal);
       changed.push({ field: spec.label, from: oldVal, to: newVal });
     });
 

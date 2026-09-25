@@ -103,6 +103,18 @@ function _phSchedule_(v) {
   return PH_SCHEDULES[k] ? k : "";
 }
 
+/**
+ * Makes sure the sheet's grid is at least `n` columns wide. getRange() past
+ * the last column of the GRID throws, and a sheet whose unused columns were
+ * deleted by hand is exactly as wide as its data.
+ */
+function _phEnsureWidth_(sheet, n) {
+  try {
+    var max = sheet.getMaxColumns();
+    if (max < n) sheet.insertColumnsAfter(max, n - max);
+  } catch (e) { /* a fake sheet in a test, or no permission: the write reports itself */ }
+}
+
 /** The zero-based Schedule column on Pharmacy_Inventory; -1 if absent and not ensured. */
 function _phScheduleCol_(sheet, ensure) {
   var width = Math.max(1, sheet.getLastColumn());
@@ -112,6 +124,7 @@ function _phScheduleCol_(sheet, ensure) {
   if (i !== -1 || !ensure) return i;
   // Column O at the earliest: the fourteen before it are read by position.
   var col = Math.max(width, 14) + 1;
+  _phEnsureWidth_(sheet, col);
   sheet.getRange(1, col).setValue(PH_SCHEDULE_HEADER).setFontWeight("bold").setBackground("#f4cccc");
   return col - 1;
 }
@@ -1334,6 +1347,7 @@ function _ensureInvoiceItemsSheet_(ss) {
   }
   // The Schedule column (P) is new: lines are written sixteen wide, and a
   // column with no header would be invisible to every reader.
+  _phEnsureWidth_(sheet, PH_ITEM_HEADERS.length);
   var width = Math.max(sheet.getLastColumn(), PH_ITEM_HEADERS.length);
   var head = sheet.getRange(1, 1, 1, width).getValues()[0];
   for (var c = 0; c < PH_ITEM_HEADERS.length; c++) {

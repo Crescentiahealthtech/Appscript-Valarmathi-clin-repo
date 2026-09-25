@@ -174,6 +174,28 @@ function acc_lockedSet_() {
 }
 function acc_isLocked_(period) { return acc_lockedSet_().indexOf(period) !== -1; }
 
+/**
+ * '' when money may be moved on this date, or the sentence saying why not.
+ *
+ * Locking a month in the Finance Hub froze its manual entries and its
+ * settlements — and nothing else. A hospital invoice from a closed month
+ * could still be cancelled, and a lab bill voided, each one silently
+ * rewriting the income of a month the accountant had already signed off.
+ * Every desk that raises, takes payment on, or voids a bill asks this.
+ *
+ * @param {*} when  a date (default: now)
+ */
+function acc_periodLockReason_(when) {
+  try {
+    var p = acc_period_(when || new Date());
+    if (p && acc_isLocked_(p)) {
+      return 'The books for ' + p + ' are locked in the Finance Hub, so nothing dated in that ' +
+             'month can be raised, paid or voided. Ask accounts to unlock it if this must change.';
+    }
+  } catch (e) { /* no Finance Hub, no lock */ }
+  return '';
+}
+
 // Append an immutable audit line. Never throws upward (best-effort logging).
 function acc_audit_(user, action, module, refId, oldVal, newVal, reason) {
   try {

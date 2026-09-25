@@ -793,6 +793,8 @@ function hb_saveInvoice(token, payload) {
 
     var totals = hb_total_(items, payload.billDiscount);
     if (totals.net <= 0) return hb_err_('The net amount is zero. Price at least one line.');
+    var lockedNow = (typeof acc_periodLockReason_ === 'function') ? acc_periodLockReason_(new Date()) : '';
+    if (lockedNow) return hb_err_(lockedNow);
 
     var mode = hb_mode_(payload.paymentMode || 'Cash');
     if (!mode) return hb_err_('Choose how it was paid: ' + HB_PAY_MODES.join(', ') + '.');
@@ -909,6 +911,8 @@ function hb_recordPayment(token, invoiceNo, amount, mode, ref) {
     if (!payMode || payMode === 'Credit') {
       return hb_err_('Choose how it was paid: Cash, UPI, Card or Bank Transfer.');
     }
+    var lockedPay = (typeof acc_periodLockReason_ === 'function') ? acc_periodLockReason_(new Date()) : '';
+    if (lockedPay) return hb_err_(lockedPay);
 
     lock.waitLock(HB_CFG.LOCK_MS);
 
@@ -977,6 +981,11 @@ function hb_cancelInvoice(token, invoiceNo, reason) {
     })[0];
     if (!hit) return hb_err_('Invoice ' + want + ' was not found.');
     if (hb_upper_(hit['Status']) === 'CANCELLED') return hb_err_('Invoice ' + want + ' is already cancelled.');
+    // Cancelling rewrites the income of the month the invoice belongs to.
+    if (typeof acc_periodLockReason_ === 'function') {
+      var lockedInv = acc_periodLockReason_(hb_toDate_(hit['Timestamp']) || hb_toDate_(hit['Invoice_Date']));
+      if (lockedInv) return hb_err_(lockedInv);
+    }
 
     if (map['Status'] !== undefined) sh.getRange(hit._row, map['Status'] + 1).setValue('CANCELLED');
     if (map['Cancel_Reason'] !== undefined) sh.getRange(hit._row, map['Cancel_Reason'] + 1).setValue(why);

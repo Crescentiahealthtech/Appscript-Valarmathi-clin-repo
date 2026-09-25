@@ -18,4 +18,7 @@ jobs:
     - uses: actions/setup-node@v4
       with:
         node-version: 20.x
+    # tools/undef.js (names used but defined nowhere) needs ESLint; without it
+    # that one check reports itself skipped.
+    - run: npm install -g eslint@9
     - run: bash tools/check.sh

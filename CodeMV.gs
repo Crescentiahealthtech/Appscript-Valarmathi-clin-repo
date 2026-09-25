@@ -149,30 +149,33 @@ function registerPatient(data, sessionToken, consent) {
     const regDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Kolkata", "yyyy-MM-dd HH:mm:ss");
 
     // 4. APPEND ROW - STRICTLY MAPPED TO PRESERVE COLUMNS A THROUGH J, NEW FIELDS K TO V
+    //    Free text goes through cresc_cellText_ (RBAC.gs): a name or address
+    //    beginning with "=" would otherwise be stored as a live formula, and a
+    //    mobile typed "+91…" as a number with its "+" gone.
     //    M, O and P are written empty on purpose: see the note above.
     sheet.appendRow([
       newId,                      // A: ID
       crescPwdEncode_(portalPassword), // B: Password — a digest, not a password
-      data.name || "",            // C: Name
+      cresc_cellText_(data.name || ""),            // C: Name
       data.age || "",             // D: Age
       data.gender || "",          // E: Gender
       data.dob || "",             // F: DOB
-      data.mobile || "",          // G: Mobile
-      data.whatsapp || "",        // H: WhatsApp
-      data.address || "",         // I: Address
-      data.comorb || "Nil",       // J: Conditions
+      cresc_cellText_(data.mobile || ""),          // G: Mobile
+      cresc_cellText_(data.whatsapp || ""),        // H: WhatsApp
+      cresc_cellText_(data.address || ""),         // I: Address
+      cresc_cellText_(data.comorb || "Nil"),       // J: Conditions
       regDate,                    // K: Registration_Date
       data.salutation || "",      // L: Salutation
       "",                         // M: Marital_Status — no longer collected (DPDP M1)
       data.bloodGroup || "",      // N: Blood_Group
       "",                         // O: Occupation — no longer collected (DPDP M1)
       "",                         // P: Education — no longer collected (DPDP M1)
-      data.email || "",           // Q: Email
+      cresc_cellText_(data.email || ""),           // Q: Email
       data.relationType || "",    // R: Relation_Type
-      data.relationName || "",    // S: Relation_Name
-      data.emergencyName || "",   // T: Emergency_Contact_Name
-      data.emergencyNumber || "", // U: Emergency_Number
-      data.referredBy || ""       // V: Referred_By
+      cresc_cellText_(data.relationName || ""),    // S: Relation_Name
+      cresc_cellText_(data.emergencyName || ""),   // T: Emergency_Contact_Name
+      cresc_cellText_(data.emergencyNumber || ""), // U: Emergency_Number
+      cresc_cellText_(data.referredBy || "")       // V: Referred_By
     ]);
 
     // The digest column must be text, or Sheets reformats a value that starts

@@ -315,6 +315,10 @@ function labCancelBill(payload, sessionToken) {
       var mode = labx_str_(data[i][map["PaymentMode"]]);
       var admissionId = labx_str_(data[i][map["AdmissionID"]]);
       var paidSoFar = (map["PaidAmount"] === undefined) ? 0 : (Number(data[i][map["PaidAmount"]]) || 0);
+      if (typeof acc_periodLockReason_ === "function") {
+        var lockedBill = acc_periodLockReason_(data[i][map["BilledAt"]]);
+        if (lockedBill) return { success: false, message: lockedBill };
+      }
       if (paidSoFar > 0 && !mayVoidPaid) {
         return { success: false, code: "NEEDS_BILLING_CANCEL",
                  message: "Bill " + billId + " has \u20b9" + paidSoFar.toFixed(2) + " paid on it. " +

