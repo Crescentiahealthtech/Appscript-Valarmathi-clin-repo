@@ -496,12 +496,15 @@
       return;
     }
     box.innerHTML = list.slice(0, all ? 25 : 6).map(function (a) {
+      // A future booking is not shown by default, but it can still be billed
+      // in advance from "show all visits" — as it could before.
+      var pick = a.billable || (a.future && !a.billed);
       var chip = a.billed ? '<span class="hb-chip hb-chip-PAID">billed</span>'
                : a.future ? '<span class="hb-chip hb-chip-CANCELLED">upcoming</span>'
                : !a.billable ? '<span class="hb-chip hb-chip-CANCELLED">' + esc(a.status) + '</span>'
                : '<span class="label-bright small">₹' + (a.tariff || 0) + '</span>';
-      return '<div class="hb-visit' + (a.billable ? '' : ' hb-used') + '"' +
-             (a.billable ? ' role="button" tabindex="0" onclick="hbUseAppointment(\'' + esc(a.apptId) + '\')"' +
+      return '<div class="hb-visit' + (pick ? '' : ' hb-used') + '"' +
+             (pick ? ' role="button" tabindex="0" onclick="hbUseAppointment(\'' + esc(a.apptId) + '\')"' +
                            ' onkeydown="if(event.key===\'Enter\'){hbUseAppointment(\'' + esc(a.apptId) + '\');}"' : '') + '>' +
         '<div class="d-flex justify-content-between align-items-center">' +
           '<span class="fw-semibold" style="color: var(--text-main);">' + esc(a.dateText) +
@@ -535,7 +538,7 @@
   /** Puts an appointment's consultation on the bill and links the two. */
   function useAppointment(apptId) {
     var appt = HB.appointments.filter(function (a) { return a.apptId === apptId; })[0];
-    if (!appt || !appt.billable) return;
+    if (!appt || appt.billed || (!appt.billable && !appt.future)) return;
 
     HB.apptId = appt.apptId;
     $('hb-appt').value = appt.apptId + ' · ' + appt.dateText;
